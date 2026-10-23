@@ -2,12 +2,13 @@
 // themselves, transpiled from src/, fed by a barcoded 2D canvas):
 //
 //   node scripts/rec/adverse.mjs --out DIR [--chrome BIN] [--pw DIR]
+//   node scripts/rec/adverse.mjs --decode DIR   (judge a run's video where a full ffmpeg is)
 //
 // - R2-7, the video clock: an ordinary segment; a stall before a segment's
 //   first picture; a stall right after its first hand-over; a video restart;
-//   rotations (2 s segments); a CPU-throttled stretch; a hidden tab (another
-//   page brought to the front; whether the page really reported "hidden" is
-//   recorded, not assumed). Every encoded frame is decoded (ffmpeg: its time
+//   rotations (2 s segments); a CPU-throttled stretch; a hidden tab (its
+//   window minimized; whether the page really reported "hidden" is recorded,
+//   not assumed). Every encoded frame is decoded (ffmpeg: its time
 //   and the barcode it shows): a frame showing picture k at page time T must
 //   satisfy draw(k) − 2 ms ≤ T ≤ draw(k+1) + 2 ms, where T is the segment's
 //   recorded origin plus the frame's time in the file. Any compressed,
@@ -19,7 +20,7 @@
 //   DPR 2 canvas sizes through resizes.
 //
 // Writes DIR/adverse.json; exits 1 when a check fails.
-import { spawnSync } from "node:child_process";
+import { execFileSync, spawnSync } from "node:child_process";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
@@ -31,8 +32,58 @@ import { unzip } from "./unzip.mjs";
 import { timelineHtml } from "./timeline.mjs";
 
 const args = process.argv.slice(2), arg = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
+
+/** An ffmpeg that decodes VP9 and has the crop/scale/showinfo filters: the system's when it has them (Playwright's build only remuxes). */
+function decoder() {
+  for (const ff of ["ffmpeg", findFfmpeg()].filter(Boolean)) {
+    try { if (/showinfo/.test(execFileSync(ff, ["-hide_banner", "-filters"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] })) && /vp9/.test(execFileSync(ff, ["-hide_banner", "-decoders"], { encoding: "utf8", stdio: ["ignore", "pipe", "ignore"] }))) return ff; } catch { /* next */ }
+  }
+  return null;
+}
+/** Each frame's time in the file and the 16-bit barcode it shows, in one ffmpeg pass. */
+function decode(ff, file) {
+  const run = spawnSync(ff, ["-hide_banner", "-threads", "1", "-i", file, "-vf", "crop=iw:2:0:40,scale=16:1:flags=neighbor,showinfo",
+    "-vsync", "passthrough", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: 1 << 26 });
+  const times = [...String(run.stderr).matchAll(/pts_time:([\d.]+)/g)].map((m) => Number(m[1]));
+  const ids = [];
+  for (let i = 0; i + 48 <= run.stdout.length; i += 48) { let id = 0; for (let b = 0; b < 16; b++) if (run.stdout[i + b * 3] > 128) id |= 1 << b; ids.push(id); }
+  return { times, ids };
+}
+/** R2-7's verdict from a run's raw facts and recording: every frame dated within its picture's lifetime. */
+function judgeClock(raw, rec, failed) {
+  const ff = decoder(), draws = raw.draws, cutoff = raw.header.exported.cutoff;
+  if (!ff) { failed.push("clock: no ffmpeg here decodes VP9 with showinfo; judge this run with --decode where one does"); return { undecoded: true }; }
+  const byId = new Map(draws.map((d, i) => [d.id, { t: d.t, next: draws[i + 1]?.t ?? Infinity }]));
+  const segments = [];
+  for (const seg of raw.header.video?.segments ?? []) {
+    const file = path.join(rec, seg.file), fixed = `${file}.remux.webm`;
+    if (!remux(file, fixed)) { segments.push({ ...seg, error: "remux failed" }); continue; }
+    const { times, ids } = decode(ff, fixed);
+    const frames = times.map((pt, i) => {
+      const d = byId.get(ids[i]), T = seg.start + pt * 1000;
+      return { pt, id: ids[i], T: +T.toFixed(1), drawn: d?.t ?? null, ok: !!d && T >= d.t - 2 && T <= d.next + 2 };
+    });
+    const bad = frames.filter((f) => !f.ok);
+    segments.push({ file: seg.file, start: seg.start, end: seg.end, frames: frames.length, barcodes: ids.length, misdated: bad.length, firstBad: bad.slice(0, 3),
+      firstT: frames[0]?.T ?? null, lastT: frames.at(-1)?.T ?? null });
+  }
+  const lastT = Math.max(...segments.map((s) => s.lastT ?? -Infinity));
+  if (!segments.length) failed.push("clock: no video segments");
+  for (const s of segments) if (s.error || s.misdated || !s.frames || s.frames !== s.barcodes) failed.push(`clock: ${s.file} ${s.error ?? `${s.misdated} of ${s.frames} frames misdated (${s.barcodes} barcodes)`}`);
+  if (!(lastT >= cutoff - 2)) failed.push(`clock: the video ends at ${lastT}, before the export cutoff ${cutoff}`);
+  return { decoder: ff, segments, cutoff, lastT, reachesCutoff: lastT >= cutoff - 2 };
+}
+
+if (arg("decode")) {
+  const dir = arg("decode"), raw = JSON.parse(readFileSync(path.join(dir, "raw.json"), "utf8")), result = JSON.parse(readFileSync(path.join(dir, "adverse.json"), "utf8"));
+  result.failed = result.failed.filter((f) => !f.startsWith("clock:"));
+  result.clock = { ...result.clock, ...judgeClock(raw, path.join(dir, "recording"), result.failed) };
+  writeFileSync(path.join(dir, "adverse.json"), JSON.stringify(result, null, 1));
+  console.log(JSON.stringify({ failed: result.failed, segments: result.clock.segments?.map((s) => `${s.file}: ${s.frames} frames, ${s.misdated} misdated`), reachesCutoff: result.clock.reachesCutoff }));
+  process.exit(result.failed.length ? 1 : 0);
+}
 const out = arg("out");
-if (!out) { console.error("usage: adverse.mjs --out DIR [--chrome BIN] [--pw DIR]"); process.exit(2); }
+if (!out) { console.error("usage: adverse.mjs --out DIR [--chrome BIN] [--pw DIR] | --decode DIR"); process.exit(2); }
 const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const www = path.join(out, "www"), mods = path.join(www, "modules");
 mkdirSync(mods, { recursive: true });
@@ -53,16 +104,6 @@ const result = { clock: null, workers: null, timeline: null, dpr2: null, errors:
 const c = await composer({ chrome: arg("chrome"), pw: arg("pw") });
 c.page.on("pageerror", (e) => result.errors.push(e.message.slice(0, 300)));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
-
-/** Each frame's time in the file and the 16-bit barcode it shows, in one ffmpeg pass. */
-function decode(file) {
-  const run = spawnSync(findFfmpeg(), ["-hide_banner", "-threads", "1", "-i", file, "-vf", "crop=iw:2:0:40,scale=16:1:flags=neighbor,showinfo",
-    "-fps_mode", "passthrough", "-f", "rawvideo", "-pix_fmt", "rgb24", "-"], { maxBuffer: 1 << 26 });
-  const times = [...String(run.stderr).matchAll(/pts_time:([\d.]+)/g)].map((m) => Number(m[1]));
-  const ids = [];
-  for (let i = 0; i + 48 <= run.stdout.length; i += 48) { let id = 0; for (let b = 0; b < 16; b++) if (run.stdout[i + b * 3] > 128) id |= 1 << b; ids.push(id); }
-  return { times, ids, status: run.status };
-}
 
 try {
   // --- R2-7: the video clock ---------------------------------------------------
@@ -111,15 +152,14 @@ try {
   await cdp.send("Emulation.setCPUThrottlingRate", { rate: 1 });
   await mark("CPU throttle off");
   await sleep(1500);
-  // A hidden tab: another page in front.
-  const other = await c.page.context().newPage();
-  await mark("another page brought to the front");
-  await other.bringToFront();
+  // A hidden tab: its window minimized (headless Chrome keeps a page in front visible).
+  const { windowId } = await cdp.send("Browser.getWindowForTarget");
+  await mark("window minimized");
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "minimized" } });
   await sleep(2500);
   const hiddenSeen = await c.page.evaluate(() => document.visibilityState);
-  await c.page.bringToFront();
-  await other.close();
-  await mark("back in front");
+  await cdp.send("Browser.setWindowBounds", { windowId, bounds: { windowState: "normal" } });
+  await mark("window restored");
   await sleep(2000);
   const data = await c.page.evaluate(async () => {
     const exp = await window.cap.exportZip(), bytes = new Uint8Array(await exp.blob.arrayBuffer());
@@ -130,26 +170,8 @@ try {
   const rec = path.join(out, "recording");
   writeFileSync(path.join(out, "recording.zip"), Buffer.from(data.zip, "base64"));
   unzip(path.join(out, "recording.zip"), rec);
-  const draws = data.draws, cutoff = data.header.exported.cutoff;
-  const byId = new Map(draws.map((d, i) => [d.id, { t: d.t, next: draws[i + 1]?.t ?? Infinity }]));
-  const segments = [];
-  for (const seg of data.header.video?.segments ?? []) {
-    const file = path.join(rec, seg.file), fixed = `${file}.remux.webm`;
-    if (!remux(file, fixed)) { segments.push({ ...seg, error: "remux failed" }); continue; }
-    const { times, ids } = decode(fixed);
-    const frames = times.map((pt, i) => {
-      const d = byId.get(ids[i]), T = seg.start + pt * 1000;
-      return { pt, id: ids[i], T: +T.toFixed(1), drawn: d?.t ?? null, ok: !!d && T >= d.t - 2 && T <= d.next + 2 };
-    });
-    const bad = frames.filter((f) => !f.ok);
-    segments.push({ file: seg.file, start: seg.start, end: seg.end, frames: frames.length, barcodes: ids.length, misdated: bad.length, firstBad: bad.slice(0, 3),
-      firstT: frames[0]?.T ?? null, lastT: frames.at(-1)?.T ?? null });
-  }
-  const lastT = Math.max(...segments.map((s) => s.lastT ?? -Infinity));
-  result.clock = { marks: data.marks, visibility: data.vis, hiddenSeen, segments, cutoff, lastT, reachesCutoff: lastT >= cutoff - 2, codec: data.header.video?.codec ?? null };
-  if (!segments.length) result.failed.push("clock: no video segments");
-  for (const s of segments) if (s.error || s.misdated || !s.frames || s.frames !== s.barcodes) result.failed.push(`clock: ${s.file} ${s.error ?? `${s.misdated} of ${s.frames} frames misdated (${s.barcodes} barcodes)`}`);
-  if (!result.clock.reachesCutoff) result.failed.push(`clock: the video ends at ${lastT}, before the export cutoff ${cutoff}`);
+  writeFileSync(path.join(out, "raw.json"), JSON.stringify({ draws: data.draws, marks: data.marks, vis: data.vis, header: data.header }));
+  result.clock = { marks: data.marks, visibility: data.vis, hiddenSeen, codec: data.header.video?.codec ?? null, ...judgeClock(data, rec, result.failed) };
 
   // --- R2-5: superseded recordings retire their workers ----------------------
   await c.page.evaluate(async () => {
@@ -215,6 +237,6 @@ try {
   await new Promise((r) => server.close(r));
 }
 console.log(JSON.stringify({ failed: result.failed, clock: result.clock && { codec: result.clock.codec, hiddenSeen: result.clock.hiddenSeen, reachesCutoff: result.clock.reachesCutoff,
-  segments: result.clock.segments.map((s) => `${s.file}: ${s.frames} frames, ${s.misdated} misdated`) }, workers: result.workers,
+  segments: result.clock.segments?.map((s) => `${s.file}: ${s.frames} frames, ${s.misdated} misdated`) }, workers: result.workers,
   timeline: result.timeline && { loadMs: result.timeline.loadMs, seekMs: result.timeline.seekMs, errors: result.timeline.errors.length }, dpr2: result.dpr2 }));
 process.exit(result.failed.length ? 1 : 0);

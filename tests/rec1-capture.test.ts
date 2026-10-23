@@ -58,7 +58,9 @@ function browser(search = ""): void {
     for (const f of older) { const [s, ...rest] = f.name.split("/"); if (base === "flight") sessions.set(s!, [...(sessions.get(s!) ?? []), { name: rest.join("/"), size: f.size }]); }
     return { async *entries() { for (const [s, fs] of sessions) yield [s, { kind: "directory", ...fileDir(fs) }]; }, getDirectoryHandle: async () => fileDir([]), getFileHandle: async () => ({ getFile: async () => new Blob(["zip"]) }) };
   };
-  Object.assign(g, {
+  // Defined, not assigned: newer Node has a getter-only `navigator`.
+  const install = (values: Record<string, unknown>) => { for (const [k, v] of Object.entries(values)) Object.defineProperty(g, k, { value: v, configurable: true, writable: true }); };
+  install({
     location: { search },
     document: { querySelector: () => null },
     navigator: { userAgent: "test", platform: "test", webdriver: false, storage: { estimate: async () => ({ quota: 100 * 1024 ** 3 }), getDirectory: async () => ({ getDirectoryHandle: async (n: string) => nested(n) }) } },
@@ -127,10 +129,10 @@ test("R2-2: every ring's overwritten entries are in the ledger and the header, a
 test("R2-2: no private storage: the memory export carries what the rings overwrote", async () => {
   browser();
   const g = globalThis as Record<string, unknown>, worker = g.Worker;
-  g.Worker = undefined;
+  Object.defineProperty(g, "Worker", { value: undefined, configurable: true, writable: true });
   const { FlightCapture } = await import("../src/runtime/flight/capture.js");
   const c = new FlightCapture(canvas, "playtest", false, build);
-  g.Worker = worker;
+  Object.defineProperty(g, "Worker", { value: worker, configurable: true, writable: true });
   for (let i = 0; i < c.recorder.events.capacity + 5; i++) c.recorder.event("action", `action ${i}`, { snapshot: false });
   await c.exportZip();
   assert.ok((c.header.retention as { ringLost: { events: number } }).ringLost.events >= 5);

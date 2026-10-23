@@ -361,6 +361,8 @@ export class FlightCapture {
     if (this.stopped || this.video) return;
     const allowed = videoAllowed(this.mode, this.spool !== null, this.budget, this.minVideo);
     if (!allowed.ok) { this.recorder.event("warning", `warning: recording without video: ${allowed.why}`, { snapshot: false }); return; }
+    // The video is encoded and written in the spool's worker: without it (a driver), the driver records its own.
+    if (!this.spool) { this.recorder.event("warning", "warning: the in-game video needs the playtest spool; recording without it", { snapshot: false }); return; }
     if (typeof VideoEncoder === "undefined" || typeof VideoFrame === "undefined") {
       this.recorder.event("warning", "warning: this browser has no WebCodecs video encoder; recording without video", { snapshot: false });
       return;
