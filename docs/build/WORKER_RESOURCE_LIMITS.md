@@ -64,7 +64,7 @@ H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 **Soaks take only leftover capacity:**
 - A soak starts only when nothing else is waiting. It never ages, and it never takes the express slot or the 10-minute reservation.
 - Its CPU runs at idle weight, so it never slows other jobs.
-- **Yielding:** when its memory or GPU is what keeps a waiting job out, `$SILTWAKE_JOB_YIELD` appears. A soak driver should then write its final sample and exit 0. Five minutes later the soak is stopped (exit **75**, `preempted`).
+- **Yielding:** when its memory or GPU is what keeps a waiting job out, `$SILTWAKE_JOB_YIELD` appears. A soak driver should then write its final sample and exit (`scripts/soak/run.mjs` reports `yielded` and exits 75). Five minutes later the soak is stopped anyway (exit **75**, `preempted`). Soak goals and pass rules: `scripts/soak/` (SCHED-2).
 - Long soaks belong on quiet periods, or on the second worker (SCHED-2b).
 
 Options:
