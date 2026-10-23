@@ -58,6 +58,20 @@ if [ -e "$jobdir/cancelled" ]; then
   : >"$jobdir/not-started"
   exit 75
 fi
+# The job's contention counters (TST-16, contention.mjs), on /proc/uptime's
+# clock: just before the payload starts and just after it ends, while the
+# scope still exists, so the holder judges the whole run, ends included.
+counters() {
+  { echo "uptime $(cut -d' ' -f1 /proc/uptime)"
+    sed -n 's/^some .*total=\([0-9]*\)/cpu_some \1/p; s/^full .*total=\([0-9]*\)/cpu_full \1/p' "$cg/cpu.pressure"
+    sed -n 's/^some .*total=\([0-9]*\)/mem_some \1/p; s/^full .*total=\([0-9]*\)/mem_full \1/p' "$cg/memory.pressure"
+    sed -n 's/^pgmajfault /job_majflt /p; s/^workingset_refault_anon /job_swapins /p' "$cg/memory.stat"
+    sed -n 's/^usage_usec /job_usec /p' "$cg/cpu.stat"
+    sed -n '1s/^cpu  */host_stat /p' /proc/stat
+    sed -n 's/^pswpin /pswpin /p; s/^pswpout /pswpout /p; s/^pgmajfault /pgmajfault /p' /proc/vmstat
+  } >"$jobdir/$1.tmp" 2>/dev/null && mv "$jobdir/$1.tmp" "$jobdir/$1"
+}
+counters counters-start
 : >"$jobdir/started"
 flock -u 5
 exec 5>&-
@@ -65,6 +79,7 @@ exec 5>&-
 # the ticket's holder (holder.mjs) the reservation, until the cgroup is empty.
 sh -c 'cg=$1 d=$2; shift 2; echo $$ >"$cg/cgroup.procs" && exec timeout --kill-after=10s "${d}s" "$@"' run "$cg/job" "$deadline" "$@"
 rc=$?
+counters counters-end
 {
   echo "rc=$rc"
   echo "stopped=${stopped:-0}"
