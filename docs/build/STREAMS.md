@@ -684,3 +684,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - add a timeline-scoped export-and-repair action in this stream;
     - fold in the STEW-1 headless writer-lock split now.
 - **TST-16 done at `2ada5062`** (R6): fail-closed `unitPopulated` for removal and install refusal; `cpu.stat` throttle deltas, where any throttling means DISTURBED; endpoint limits documented. Suites pass 23/23, 24/24 and 27/27, and the fast tier 1405/1405. Short Sol R7 running (`siltwake-tst16-review-r7-sol-2ada506`).
+- **Usage limit, ~19:44–22:00 UTC:** the SIM-1 R5 fixes, STEW-1 R2 fixes and CW-1 runs failed on the rate limit and auto-resumed at 22:00. All builder threads were checked and are running.
+- **TST-16 R7** (Sol on `2ada5062`, report on `review/tst-16-r7` `4aa06738`): REQUEST CHANGES.
+  - **P2:** the install refusal isn't inside the admission transaction, and it skips fileless slices.
+  - **P2:** missing throttle counters certify clean.
+  - **P3:** incomplete events text counts as empty.
+  - All mechanical; sent back.
