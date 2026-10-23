@@ -108,6 +108,10 @@ export interface FrameParts {
   gpuDone: readonly { tag: number; ms: number }[];
   /** The legacy per-frame `#ocean` counters (two reduces over every mesh), ms. */
   dom?: number;
+  /** CW-1: the streaming unit behind the frame's longest build step, the lights the selection considered, and the slowest light placement over 2 ms. */
+  stepUnit: string | null;
+  lightsIn: number;
+  lightSlow: { name: string; ms: number; instances: number; clusters: number; frozen: boolean } | null;
   lightScan: number; lightPlace: number; lightSelect: number; lightCount: number; evicted: number;
   buildMs: number; maxStepMs: number; uploadMs: number; uploads: number; caveBuildMs: number;
   /** A jump during play: from and to, metres. */
