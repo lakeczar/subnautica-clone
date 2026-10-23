@@ -11,6 +11,7 @@ import { createWorldQueries } from "../src/sim/world.js";
 import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { validState } from "../src/save/validation.js";
 import type { GameState } from "../src/sim/types.js";
+import { play } from "./step-support.js";
 
 const world = createWorldQueries();
 const meta = { sessionId: "renewal-rules-01", createdAt: "2026-10-19T00:00:00.000Z", savedAt: "2026-10-19T00:10:00.000Z" };
@@ -20,8 +21,7 @@ const progress = (s: GameState, id: SourceId) => s.world.renewal.find((r) => r.i
 function opened(): GameState { const s = createGame(); completeOpening(s); return s; }
 /** Hold position at the source; the only commands are an idle move. */
 function steps(s: GameState, n: number): GameState {
-  for (let i = 0; i < n; i++) s = stepGame(s, [{ type: "move", forward: 0, right: 0, vertical: 0, sprint: false }], world).state;
-  return s;
+  return play(s, n, [{ type: "move", forward: 0, right: 0, vertical: 0, sprint: false }], world);
 }
 function atSource(s: GameState, id: SourceId): GameState {
   s.player.pose.position = { ...SOURCES[id].position };
