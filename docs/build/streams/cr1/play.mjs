@@ -245,7 +245,7 @@ const SCENES = {
     const h = homeOf("divide_skate_saddle"), y = layerY("divide_dense_layer");
     // Wait above the skates' reach; watch them settle (CRE-05: their outlines lie still on the mirror), go down to the
     // mirror and look across it at a grazing angle, then cross.
-    await approach("divide", [{ x: h.x - 44, y: y + 12, z: h.z, dwell: 8, shot: "resting-seen-from-above" }, { x: h.x - 44, y: y + 1.5, z: h.z, dwell: 2, shot: "resting-seen-across-the-mirror" }, { x: h.x + 30, y: y + 1.5, z: h.z }, { x: h.x + 30, y: y + 12, z: h.z }], { x: h.x, y, z: h.z }, "layer_skate",
+    await approach("divide", [{ x: h.x - 44, y: y + 12, z: h.z, dwell: 8, shot: "resting-seen-from-above" }, { x: h.x - 40, y: y + 1.5, z: h.z, dwell: 2, shot: "resting-seen-across-the-mirror" }, { x: h.x + 30, y: y + 1.5, z: h.z }, { x: h.x + 30, y: y + 12, z: h.z }], { x: h.x, y, z: h.z }, "layer_skate",
       [{ x: h.x - 44, y: y + 12, z: h.z }]);
   },
   async "approach-meridian"() {

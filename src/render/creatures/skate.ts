@@ -52,8 +52,12 @@ export function createLayerSkate(scene: Scene, cel: Material, name: string, laye
   // CRE-05: a resting skate lies still just under the mirror; its dark outline
   // (body, wings, tail) shows on the surface, from the crest and to a diver crossing.
   const outline = parts.part("rest-outline", b => {
-    b.face([[0, 0, -2.4], [3.3, 0, 0.1], [0, 0, 1.9], [-3.3, 0, 0.1]], "#13242b");
-    b.face([[0, 0.002, -1.9], [2.6, 0.002, 0.1], [0, 0.002, 1.5], [-2.6, 0.002, 0.1]], "#0d1a20");
+    // Faces are one-sided: wind each both ways so it shows from above and from under the mirror.
+    for (const flip of [false, true]) {
+      const wind = (q: [number, number, number][]) => flip ? [...q].reverse() : q;
+      b.face(wind([[0, 0, -2.4], [3.3, 0, 0.1], [0, 0, 1.9], [-3.3, 0, 0.1]]), "#13242b");
+      b.face(wind([[0, 0.002, -1.9], [2.6, 0.002, 0.1], [0, 0.002, 1.5], [-2.6, 0.002, 0.1]]), "#0d1a20");
+    }
     b.tube([[0, 0.01, 1.9], [0, 0.01, 3.4], [0.15, 0.01, 4.5]], 0.08, "#13242b", 4);
     // The back and both wingtips just break the surface: low humps that read at a grazing angle.
     b.ellipsoid([0, 0, -0.2], [0.9, 0.22, 1.6], "#1b3038", 8);
