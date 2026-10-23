@@ -15,7 +15,7 @@ for (const [bands, segments] of [[10, 18], [40, 80], [80, 160], [100, 200]] as c
     let r = null;
     for (let i = 0; i < 3; i++) {
       const t = performance.now();
-      r = depenetrate({ sweep: col.escapeSweep, blocked: (p, e) => col.overlaps(p, e), containing: col.containing, candidates: col.escapeCandidates, partDistance: col.partDistance, trace }, c, DIVER, 3);
+      r = depenetrate({ sweep: col.escapeSweep, blocked: (p, e) => col.overlaps(p, e), containing: col.containing, candidates: col.escapeCandidates, exitBound: col.exitBound, trace }, c, DIVER, 3);
       ms.push(performance.now() - t);
     }
     console.log(JSON.stringify({ triangles: m.indices.length / 3, centre: c, medianMs: ms.sort((a, b) => a - b)[1], maxMs: ms[2], perCall: { tried: trace.tried / 3, sweeps: trace.sweeps / 3 }, distance: r?.distance ?? null, clear: r ? !col.overlaps(r, DIVER) : null }));

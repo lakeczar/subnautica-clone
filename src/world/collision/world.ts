@@ -219,7 +219,7 @@ export function composeStaticWorld(options: StaticWorldOptions): StaticWorld {
         },
         blocked: cc => !world.clearance(poseOf(cc, shape), shape),
         containing: p => collider.containing(p),
-        partDistance: (part, p, reach) => collider.partDistance(part, p, reach),
+        exitBound: (p, inside, reach) => collider.exitBound(p, inside, reach),
         candidates(cc, ee, inside, reach, push) {
           collider.escapeCandidates(cc, ee, inside, reach, push);
           for (const sd of nearSolids({ min: { x: cc.x - ee.x, y: cc.y - ee.y, z: cc.z - ee.z }, max: { x: cc.x + ee.x, y: cc.y + ee.y, z: cc.z + ee.z } }))

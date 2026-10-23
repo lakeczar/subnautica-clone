@@ -70,6 +70,9 @@ export function solidPiecesShape(id: string, pieces: readonly VistaPiece[]): Sta
   }
   if (!idx.length) return null;
   if (part > 65535) throw new Error(`${id}: ${part} solid parts exceed 65,535`);
+  // Recovery's one-sided rule needs every closed part closed and coherently wound.
+  const problems = orientationProblems(id, { positions: new Float32Array(pos), indices: new Uint32Array(idx) }, true, parts);
+  if (problems.length) throw new Error(`${id}: a closed piece is not closed and coherently wound:\n- ${problems.join("\n- ")}`);
   if (pos.length / 3 > MAX_SHAPE_VERTICES) throw new Error(`${id}: ${pos.length / 3} vertices; bake its pieces as several sets`);
   return buildShape(id, new Float32Array(pos), idx, { interior: "solid", facing: 1, parts: part > 1 ? parts : null });
 }
@@ -149,10 +152,41 @@ export function meshShapes(id: string, mesh: TriangleMesh, options: MeshShapeOpt
   return out;
 }
 
-/** Which way a closed mesh's winding faces: 1 when (b - a) x (c - a) points
- * out of the solid, -1 when in, by majority over up to `samples` triangles
- * of `isSolid` a hair either side. Throws when the vote is not clear. */
+/** Orientation problems of a mesh, per part. A coherently wound surface
+ * uses each undirected edge equally often in both directions (a manifold
+ * edge once each way; a non-manifold one, as surface nets can leave, twice
+ * each way), except, on an open mesh, once at its boundary. So a flipped
+ * triangle shows as an edge used two more times one way than the other, and
+ * with `closed`, any imbalance is a hole or seam. Empty when coherent.
+ * Vertices are compared by index, so merge equal positions first (`facetMesh` does). */
+export function orientationProblems(id: string, mesh: TriangleMesh, closed: boolean, parts?: ArrayLike<number> | null): string[] {
+  const I = mesh.indices, n = I.length / 3, nv = mesh.positions.length / 3, out: string[] = [];
+  // Net uses of each undirected edge, per part: + for low -> high, - for high -> low.
+  const net = new Map<number, number>();
+  for (let t = 0; t < n; t++) {
+    const p = parts ? parts[t]! : 0;
+    for (let k = 0; k < 3; k++) {
+      const a = I[t * 3 + k]!, b = I[t * 3 + (k + 1) % 3]!, lo = Math.min(a, b), hi = Math.max(a, b), e = (p * nv + lo) * nv + hi;
+      net.set(e, (net.get(e) ?? 0) + (a < b ? 1 : -1));
+    }
+  }
+  const allowed = closed ? 0 : 1;
+  for (const [e, v] of net) {
+    if (Math.abs(v) <= allowed) continue;
+    const hi = e % nv, lo = Math.floor(e / nv) % nv, p = Math.floor(e / (nv * nv));
+    if (out.length < 12) out.push(`${id}: edge ${lo}-${hi} (part ${p}) is used ${Math.abs(v)} more times one way than the other: ${closed && Math.abs(v) === 1 ? "not closed" : "a flipped triangle"}`);
+  }
+  return out;
+}
+
+/** Which way a coherently wound mesh faces: 1 when (b - a) x (c - a) points
+ * out of the solid, -1 when in. The mesh must be coherently oriented
+ * (`orientationProblems`, so every face agrees with its neighbours); then up
+ * to `samples` triangles vote with `isSolid` a hair either side, and every
+ * decisive vote must agree. Throws, naming the mesh, otherwise. */
 export function meshFacing(id: string, mesh: TriangleMesh, isSolid: (p: Vec3) => boolean, samples = 96): 1 | -1 {
+  const problems = orientationProblems(id, mesh, false);
+  if (problems.length) throw new Error(`${id}: winding is not coherent:\n- ${problems.join("\n- ")}`);
   const P = mesh.positions, I = mesh.indices, n = I.length / 3, step = Math.max(1, Math.floor(n / samples));
   let out = 0, inward = 0;
   for (let t = 0; t < n; t += step) {
@@ -165,9 +199,9 @@ export function meshFacing(id: string, mesh: TriangleMesh, isSolid: (p: Vec3) =>
     if (minus && !plus) out++;
     else if (plus && !minus) inward++;
   }
-  if (out > 3 * inward && out > 0) return 1;
-  if (inward > 3 * out && inward > 0) return -1;
-  throw new Error(`${id}: winding vote unclear (${out} out, ${inward} in)`);
+  if (out > 0 && inward === 0) return 1;
+  if (inward > 0 && out === 0) return -1;
+  throw new Error(`${id}: winding votes disagree or are absent (${out} out, ${inward} in)`);
 }
 
 /** Most a collar's floor may stand above its lattice between the

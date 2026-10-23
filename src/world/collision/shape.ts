@@ -130,6 +130,8 @@ export function buildShape(id: string, positions: Float32Array, indices: ArrayLi
 // --- Traversal --------------------------------------------------------------------
 
 const STACK = new Int32Array(STACK_DEPTH * 2);
+/** Work counter (tests): triangles emitted by candidate walks and visited by nearest searches. */
+export const TRAVERSAL = { triangles: 0 };
 let CAND = new Int32Array(1024);
 /** Triangles (leaf-order indices) whose leaf boxes meet the box, into the
  * shared candidate buffer; returns the count. Read them before the next call. */
@@ -150,6 +152,7 @@ export function candidates(s: StaticShape, minX: number, minY: number, minZ: num
       const first = leafFirst(l), end = first + leafCount(l);
       if (count + 128 > CAND.length) { const g = new Int32Array(CAND.length * 2); g.set(CAND); CAND = g; }
       for (let t = first; t < end; t++) CAND[count++] = t;
+      TRAVERSAL.triangles += end - first;
       continue;
     }
     STACK[sp++] = l; STACK[sp++] = id + 1;
@@ -216,17 +219,19 @@ const HIT: SweepHit = { t: 0, nx: 0, ny: 0, nz: 0, start: false };
 
 const ON = { x: 0, y: 0, z: 0 };
 /** Earliest contact of a box (centre c, half extents e) moving by d.
- * `oriented`: for a facing shape, only contacts that enter it (see below). */
+ * `oriented`: for a closed solid, only contacts that enter it (see below). */
 export function sweepShape(s: StaticShape, cx: number, cy: number, cz: number, ex: number, ey: number, ez: number,
   dx: number, dy: number, dz: number, skin: number, out: SweepHit, oriented = false): boolean {
   // The skin sphere fits in a cube of its radius; a centimetre more for rounding.
   const r = skin + 0.01;
   const n = sweptCandidates(s, cx, cy, cz, ex + r, ey + r, ez + r, dx, dy, dz);
   let found = false;
-  const P = s.positions, orient = oriented && s.facing !== 0, tau = 1e-9 * Math.hypot(dx, dy, dz) + 1e-15;
+  // Only a closed solid guarantees a volume behind each face; open skin
+  // (plates, panels, open shells) stays two-sided whatever its facing.
+  const P = s.positions, orient = oriented && s.interior === "solid" && s.facing !== 0, tau = 1e-9 * Math.hypot(dx, dy, dz) + 1e-15;
   for (let i = 0; i < n; i++) {
     const t = CAND[i]!;
-    // Oriented (a facing shape, for recovery): a face counts only while the
+    // Oriented (a closed solid, for recovery): a face counts only while the
     // box moves against its outward normal, the only way in through it.
     if (orient && triangleNormal(s, t, ON) && dx * ON.x + dy * ON.y + dz * ON.z >= -tau) continue;
     if (!sweepBoxTriangle(cx, cy, cz, ex, ey, ez, dx, dy, dz, P, vA(s, t), vB(s, t), vC(s, t), skin, HIT)) continue;
@@ -414,6 +419,7 @@ export function nearestDistance(s: StaticShape, p: Vec3, reach: number, part: nu
     if (boxDistance(id) >= best) continue;
     const l = L[id]!;
     if (isLeaf(l)) {
+      TRAVERSAL.triangles += leafCount(l);
       for (let t = leafFirst(l), e = t + leafCount(l); t < e; t++) {
         if (part !== null && parts && parts[t] !== part) continue;
         const q = closestOnTriangle(p, P, vA(s, t), vB(s, t), vC(s, t)), d = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z);

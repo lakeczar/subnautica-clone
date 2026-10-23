@@ -9,7 +9,7 @@ import {
   type StaticHeightfield,
 } from "./heightfield.js";
 import {
-  candidate, candidates, crossesShape, crossingsAbove, deepestShapeContact, insideShape, nearestDistance, nearestSurface, partsAt,
+  candidate, candidates, closestOnTriangle, crossesShape, crossingsAbove, deepestShapeContact, insideShape, nearestDistance, nearestSurface, partsAt,
   segmentClearShape, supportShape, sweepShape, triangleNormal, triangleVertex,
   type StaticShape,
 } from "./shape.js";
@@ -120,8 +120,8 @@ export interface StaticCollider {
   containing(p: Vec3): PartRef[];
   /** Escape candidates (see `DepenetrationQueries.candidates`). */
   escapeCandidates(c: Vec3, e: Vec3, inside: readonly PartRef[], reach: number, push: (x: number, y: number, z: number, distance: number) => void): void;
-  /** The distance from p to the part's surface, within `reach` (else `reach`). */
-  partDistance(part: PartRef, p: Vec3, reach: number): number;
+  /** The admissible lower bound on any escape of p from the `inside` parts (see `DepenetrationQueries.exitBound`). */
+  exitBound(p: Vec3, inside: readonly PartRef[], reach: number): number;
   readonly triangles: number;
   readonly boxCount: number;
   readonly samples: number;
@@ -258,8 +258,8 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     touches: (minX, minY, minZ, maxX, maxY, maxZ) => gather(minX, minY, minZ, maxX, maxY, maxZ).length > 0,
     sweep, overlaps, support, segmentClear,
     move: (c, e, d, skin = SKIN) => slideMove((cc, rem, out) => sweep(cc, e, rem, skin, out), c, d),
-    depenetrate: (c, e, maxDistance) => depenetrate({ sweep: escapeSweep, blocked: (p, x) => overlaps(p, x), containing, candidates: escapeCandidates, partDistance }, c, e, maxDistance),
-    escapeSweep, containing, escapeCandidates, partDistance,
+    depenetrate: (c, e, maxDistance) => depenetrate({ sweep: escapeSweep, blocked: (p, x) => overlaps(p, x), containing, candidates: escapeCandidates, exitBound }, c, e, maxDistance),
+    escapeSweep, containing, escapeCandidates, exitBound,
     contact: (c, e, tolerance) => deepest(c, e, tolerance),
     solidAt: p => hasSolids ? solidAt(p) : null,
     surfaceNear: (solid, p, reach) => surfaceNear(solid, p, reach),
@@ -332,17 +332,29 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
 
   const N3 = { x: 0, y: 0, z: 0 };
   const supportOf = (e: Vec3, n: Vec3): number => e.x * Math.abs(n.x) + e.y * Math.abs(n.y) + e.z * Math.abs(n.z);
+  /** The containing parts grouped by shape: the part ids routed to each, or null for all of it. */
+  function byShape(inside: readonly PartRef[]): Map<StaticShape, Set<number> | null> {
+    const out = new Map<StaticShape, Set<number> | null>();
+    for (const ref of inside) for (const s of ref.shapes) {
+      if (ref.part === null) { out.set(s, null); continue; }
+      const set = out.get(s);
+      if (set === null) continue;
+      (set ?? out.set(s, new Set()).get(s)!).add(ref.part);
+    }
+    return out;
+  }
   function escapeCandidates(c: Vec3, e: Vec3, inside: readonly PartRef[], reach: number,
     push: (x: number, y: number, z: number, distance: number) => void): void {
     const along = (n: Vec3, d: number): void => push(c.x + n.x * d, c.y + n.y * d, c.z + n.z * d, d);
     // Exits through each face of the parts holding the centre: past the
     // face's plane by the box's reach along its outward normal.
+    // Each shape is enumerated once, its triangles routed to the parts holding the centre.
     const ext = Math.max(e.x, e.y, e.z);
-    for (const ref of inside) for (const s of ref.shapes) {
+    for (const [s, parts] of byShape(inside)) {
       const n = candidates(s, c.x - reach - ext, c.y - reach - ext, c.z - reach - ext, c.x + reach + ext, c.y + reach + ext, c.z + reach + ext);
       const ts = Array.from({ length: n }, (_, i) => candidate(i));
       for (const t of ts) {
-        if (ref.part !== null && s.parts && s.parts[t] !== ref.part) continue;
+        if (parts && s.parts && !parts.has(s.parts[t]!)) continue;
         if (!triangleNormal(s, t, N3)) continue;
         const v = triangleVertex(s, t), P = s.positions;
         const plane = N3.x * (P[v]! - c.x) + N3.y * (P[v + 1]! - c.y) + N3.z * (P[v + 2]! - c.z);
@@ -377,10 +389,37 @@ export function createStaticCollider(id: string, members: readonly StaticMember[
     }
   }
 
-  function partDistance(part: PartRef, p: Vec3, reach: number): number {
-    let best = reach;
-    for (const s of part.shapes) best = nearestDistance(s, p, best, part.part);
-    return best;
+  /** The admissible lower bound (see `DepenetrationQueries.exitBound`): the
+   * farthest of the containing parts' nearest surfaces. One traversal per
+   * shape: branch and bound for a single part, else one accumulating pass
+   * keeping every part's own minimum. */
+  function exitBound(p: Vec3, inside: readonly PartRef[], reach: number): number {
+    // A part's distance is its minimum over all its shapes (a split group's fragments).
+    const dist = new Map<string, number>();
+    for (const ref of inside) dist.set(ref.key, reach);
+    const refsOf = new Map<StaticShape, PartRef[]>();
+    for (const ref of inside) for (const s of ref.shapes) (refsOf.get(s) ?? refsOf.set(s, []).get(s)!).push(ref);
+    for (const [s, refs] of refsOf) {
+      if (refs.length === 1) {
+        const ref = refs[0]!;
+        dist.set(ref.key, nearestDistance(s, p, dist.get(ref.key)!, ref.part));
+        continue;
+      }
+      // Several parts of one shape: one pass, routed by part.
+      const slot = new Map<number, PartRef>();
+      for (const ref of refs) slot.set(ref.part ?? -1, ref);
+      const n = candidates(s, p.x - reach, p.y - reach, p.z - reach, p.x + reach, p.y + reach, p.z + reach), P = s.positions;
+      for (let i = 0; i < n; i++) {
+        const t = candidate(i), ref = slot.get(s.parts ? s.parts[t]! : -1);
+        if (!ref) continue;
+        const a = s.indices[t * 3]! * 3, b = s.indices[t * 3 + 1]! * 3, d = s.indices[t * 3 + 2]! * 3;
+        const q = closestOnTriangle(p, P, a, b, d), r = Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z);
+        if (r < dist.get(ref.key)!) dist.set(ref.key, r);
+      }
+    }
+    let bound = 0;
+    for (const d of dist.values()) bound = Math.max(bound, d);
+    return bound;
   }
   return collider;
 }
@@ -461,9 +500,10 @@ export interface DepenetrationQueries {
    * the `inside` parts, and push-outs from every surface, box and wall the
    * box overlaps. `push(x, y, z, distance)` each. */
   candidates(c: Vec3, e: Vec3, inside: readonly PartRef[], reach: number, push: (x: number, y: number, z: number, distance: number) => void): void;
-  /** The distance from p to a part's surface (within `reach`, else `reach`):
-   * the centre must leave every part holding it, so no escape is shorter. */
-  partDistance(part: PartRef, p: Vec3, reach: number): number;
+  /** A lower bound on any escape (within `reach`, else `reach`): the centre
+   * must leave every part holding it, so no escape is shorter than the
+   * farthest of their nearest surfaces. */
+  exitBound(p: Vec3, inside: readonly PartRef[], reach: number): number;
   /** Optional counters (tests): candidates tried and escape sweeps run. */
   readonly trace?: { tried: number; sweeps: number };
 }
@@ -497,18 +537,21 @@ const DIRECTIONS: readonly Vec3[] = (() => {
  *   part it left. Skin and boxes keep their sweep semantics, so a contact the
  *   box starts in may only separate.
  *
+ * The budget must be finite (the candidate ring is built out to it).
+ *
  * Best-effort, not a proof of the nearest pose: a shorter escape off every
  * candidate is not found. Returns null when no candidate validates: the
  * caller rescues (a save pose deep in new rock, a box wedged between walls).
  * Never a teleport. */
 export function depenetrate(q: DepenetrationQueries, c: Vec3, e: Vec3, maxDistance: number): Depenetration | null {
+  if (!(Number.isFinite(maxDistance) && maxDistance >= 0)) throw new RangeError(`depenetrate: the budget must be finite and nonnegative, got ${maxDistance}`);
+  if (!Number.isFinite(c.x) || !Number.isFinite(c.y) || !Number.isFinite(c.z)) throw new RangeError("depenetrate: the centre must be finite");
   if (!q.blocked(c, e)) return { ...c, distance: 0 };
   const inside = q.containing(c), hit = createHit(), trace = q.trace;
   // A configuration-space lower bound: the centre must leave every part
   // that holds it, so no candidate nearer than the farthest of their
   // surfaces can be legal, and none is tried.
-  let floor = 0;
-  for (const part of inside) floor = Math.max(floor, q.partDistance(part, c, maxDistance));
+  const floor = inside.length ? q.exitBound(c, inside, maxDistance) : 0;
   if (floor >= maxDistance) return null;
   const legal = (p: Vec3): boolean => {
     if (trace) trace.tried++;

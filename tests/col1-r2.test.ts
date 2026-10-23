@@ -85,7 +85,7 @@ test("N4: recovery from a 25,280-triangle sphere validates in a handful of sweep
   assert.ok(col.solidAt(c));
   const trace = { tried: 0, sweeps: 0 };
   const r = depenetrate({ sweep: col.escapeSweep, blocked: (p, e) => col.overlaps(p, e), containing: col.containing, candidates: col.escapeCandidates,
-    partDistance: col.partDistance, trace }, c, DIVER, 3)!;
+    exitBound: col.exitBound, trace }, c, DIVER, 3)!;
   assert.ok(r && !col.overlaps(r, DIVER), JSON.stringify(r));
   // R1's validation took the 2.561 m ring exit after 5,991 rejected face exits.
   assert.ok(r.distance < 2.5, `distance ${r.distance}`);
