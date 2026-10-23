@@ -415,3 +415,46 @@ test("R1-C1: an export or a save never seals or rotates the live recorder", () =
   assert.deepEqual([rec.sealed.length, rec.events.length, rec.seq], [sealed, open, seq]);
   assert.equal(x.events.at(-1)!.kind, "idle", "the open span closes into the export only");
 });
+
+/** Export, parse and resume: what a reload of the stored timeline gives. */
+function reload(rec: TimelineRecorder, s: GameState): TimelineRecorder {
+  const parsed = parseTimeline(exportTimelineText(rec, s));
+  assert.ok(parsed.ok, parsed.ok ? "" : parsed.error);
+  return resumeRecorder((parsed as { value: TimelineExport }).value, { regionAt });
+}
+const allNotes = (rec: TimelineRecorder, s: GameState): string[] => {
+  const x = exportTimeline(rec, s);
+  return [...(x.rotated ?? []).flatMap((r) => r.kept), ...x.events].filter((e) => e.kind === "note").map((e) => e.text!).sort();
+};
+
+test("R1-F1: an export at the full window with 998 or 999 open events and open travel or idle keeps every note once, and reloads whole", () => {
+  for (const open of [998, 999]) for (const spans of [["idle"], ["travel"], ["travel", "idle"]]) {
+    const label = `${open} open, closing ${spans.join("+")}`;
+    const s = createGame(); completeOpening(s);
+    const rec = createRecorder(SESSION);
+    addNote(rec, s, "old note");
+    for (let i = 1; i < TIMELINE_CHUNK_EVENTS * TIMELINE_RETAINED_CHUNKS + open - 1; i++) { s.tick += 3; rec.playTicks += 3; recordEvent(rec, s, { kind: "gather", what: "silica_glass", id: "src", quantity: 1 }); }
+    addNote(rec, s, "recent note");
+    if (spans.includes("travel")) rec.travel = { hull: "dart", vehicleId: "dart_1", last: { x: 0, y: 0, z: 0 }, piece: { tick: s.tick - 600, play: 1, movingTicks: 600, stationaryTicks: 30, metres: 120 } };
+    if (spans.includes("idle")) rec.idle = { tick: s.tick - 900, play: 2, waiting: new Set(["decode"]) };
+    const back = reload(rec, s);
+    assert.deepEqual([rec.sealed.length, rec.events.length], [TIMELINE_RETAINED_CHUNKS, open], `${label}: the live partition is untouched`);
+    assert.deepEqual(allNotes(back, s), ["old note", "recent note"], label);
+    const a = analyseTimeline(exportTimeline(back, s)), b = analyseTimeline(exportTimeline(rec, s));
+    for (const key of ["newCount", "gathering", "notes", "travel", "idle"] as const) assert.deepEqual(a[key], b[key], `${label}: ${key}`);
+  }
+});
+
+test("R2-F2: a rotated export round-trips with one numbering, then keeps recording and reloading", () => {
+  const s = createGame(), rec = createRecorder(SESSION);
+  for (let i = 0; i < 23_000; i++) addNote(rec, s, `note ${i}`);
+  const back = reload(rec, s);
+  const numbers = [...back.rotated.map((r) => r.n), ...back.sealed.map((c) => c.n)];
+  assert.equal(new Set(numbers).size, numbers.length, "unique numbers");
+  assert.ok(numbers.every((n) => n! < back.nextChunk), "nextChunk beyond every number");
+  assert.equal(allNotes(back, s).length, 23_000);
+  for (let i = 0; i < 1500; i++) addNote(back, s, `later ${i}`);
+  const again = reload(back, s);
+  assert.equal(allNotes(again, s).length, 24_500);
+  assert.equal(new Set(allNotes(again, s)).size, 24_500, "every note once");
+});

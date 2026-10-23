@@ -95,8 +95,7 @@ export class ExpeditionSession {
     this.operation = null;
     this.events.changed();
   }
-  /** Asks the player to confirm; `accept` runs only on Confirm (and only while idle). */
-  ask(prompt: SessionConfirmation, accept: () => void): void {
+  private ask(prompt: SessionConfirmation, accept: () => void): void {
     if (!this.idle) return;
     this.choice = { prompt, accept };
     this.events.pause();

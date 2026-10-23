@@ -31,8 +31,6 @@ export interface UiActions {
   exportTimeline(): void;
   exportBackup(): void;
   exportRaw(): void;
-  /** Replace an unreadable local play-timeline store (SIM-1), after exporting it. */
-  repairTimeline(): void;
   importFile(file: File): void;
   confirm(): void;
   cancelConfirm(): void;
@@ -107,7 +105,7 @@ export class GameView {
                 <div class="settings"><label>Rendering <select id="quality"><option value="rich">Rich · full viewport</option><option value="light">Light · lower resolution</option></select></label>
                 <label>Sensitivity <output id="sensitivity-value">1.0</output><input id="sensitivity" type="range" min="0.4" max="2.5" step="0.1" value="1" /></label><label>Mouse look<select id="mouse-mode"><option value="captured">Captured</option><option value="drag">Drag</option></select></label><label>Key turn speed <output id="key-turn-value">1.0</output><input id="key-turn" type="range" min="0.5" max="2" step="0.1" value="1" /></label><label class="check"><input id="invert" type="checkbox" /> Invert mouse look</label></div>
                 <div class="settings"><label>Volume <output id="volume-value">55%</output><input id="volume" type="range" min="0" max="1" step="0.05" value="0.55" /></label><label class="check"><input id="muted" type="checkbox" /> Mute</label><label class="check"><input id="subtitles" type="checkbox" checked /> Opening captions</label><label class="check"><input id="hud-objective-toggle" type="checkbox" checked /> Objective on the HUD</label></div>
-                <div class="settings save-safety"><span>Autosave every 30 s of play · previous valid save kept</span><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button><button id="repair-timeline" data-action="repair-timeline" hidden>Repair play timeline</button></div></div>
+                <div class="settings save-safety"><span>Autosave every 30 s of play · previous valid save kept</span><div class="menu-tools"><button id="export-backup" data-action="backup" hidden>Export previous save</button><button id="export-raw" data-action="raw" hidden>Export local record</button></div></div>
               </div>
             </div>
           </section>
@@ -159,7 +157,6 @@ export class GameView {
       timeline: actions.exportTimeline,
       backup: actions.exportBackup,
       raw: actions.exportRaw,
-      "repair-timeline": actions.repairTimeline,
       confirm: actions.confirm,
       cancel: actions.cancelConfirm,
       lock: actions.lockMouse,
@@ -341,9 +338,6 @@ export class GameView {
       slot.kind === "empty" || slot.kind === "unavailable";
     this.get("export-game").hidden = !hasSession && slot.save === null;
   }
-
-  /** Shows Repair play timeline while the local play-timeline store is protected. */
-  timelineRepair(visible: boolean): void { this.get("repair-timeline").hidden = !visible; }
 
   persistence(
     message: string,

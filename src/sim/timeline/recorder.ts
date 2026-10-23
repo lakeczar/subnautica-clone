@@ -94,23 +94,14 @@ export function createRecorder(session: { id: string; started: string; build?: s
     options: { idleAfterSeconds: options.idleAfterSeconds ?? 15, ...(options.regionAt ? { regionAt: options.regionAt } : {}) },
   };
 }
-/** Continues a stored timeline after a reload: play time and history carry on.
- * `sealed`, when the store kept the partition, is the sealed chunks as stored
- * and `t.events` the open chunk; otherwise `t.events` is re-chunked. */
-export function resumeRecorder(t: TimelineExport, options: RecorderOptions = {},
-  stored?: { sealed: { n: number; events: TimelineEvent[] }[]; nextChunk: number }): TimelineRecorder {
+/** Continues a stored timeline after a reload: play time and history carry on. */
+export function resumeRecorder(t: TimelineExport, options: RecorderOptions = {}): TimelineRecorder {
   const rec = createRecorder({ id: t.session.id, started: t.session.started, ...(t.session.build ? { build: t.session.build } : {}) }, options);
   const summaries = (t.rotated ?? []).map((r) => structuredClone(r));
-  if (stored) {
-    rec.sealed = stored.sealed.map((c) => ({ n: c.n, events: [...c.events] }));
-    rec.events = [...t.events];
-    rec.nextChunk = Math.max(stored.nextChunk, ...summaries.map((r) => (r.n ?? -1) + 1), ...stored.sealed.map((c) => c.n + 1));
-  } else {
-    // One numbering (SIM-1 R2): the summaries first, in order, then the chunks re-chunked from the events.
-    summaries.forEach((r, i) => { r.n = i; });
-    rec.nextChunk = summaries.length;
-    for (const e of t.events) push(rec, e);
-  }
+  // One numbering (SIM-1 R2): the summaries first, in order, then the chunks re-chunked from the events.
+  summaries.forEach((r, i) => { r.n = i; });
+  rec.nextChunk = summaries.length;
+  for (const e of t.events) push(rec, e);
   // Summaries come ahead of any that re-chunking rotated.
   rec.rotated.unshift(...summaries);
   const kept = retainedEvents(rec);
@@ -142,15 +133,15 @@ function push(rec: TimelineRecorder, e: TimelineEvent): void {
   while (rec.sealed.length > TIMELINE_RETAINED_CHUNKS) rotateOldest(rec);
 }
 /** Folds the oldest sealed chunk into a summary (its kept events stay whole).
- * Also the storage's answer to a full quota. Returns false with nothing to rotate. */
-export function rotateOldest(rec: TimelineRecorder): boolean {
+ * Returns false with nothing to rotate. */
+function rotateOldest(rec: TimelineRecorder): boolean {
   const oldest = rec.sealed.shift();
   if (!oldest) return false;
   rec.rotated.push({ n: oldest.n, ...summarizeChunk(oldest.events) });
   return true;
 }
 /** Every event kept in full, oldest first. */
-export const retainedEvents = (rec: TimelineRecorder): TimelineEvent[] => [...rec.sealed.flatMap((c) => c.events), ...rec.events];
+const retainedEvents = (rec: TimelineRecorder): TimelineEvent[] => [...rec.sealed.flatMap((c) => c.events), ...rec.events];
 /** Events recorded since `cursor` (an earlier `seq`), oldest first, and the
  * cursor to pass next time. Costs only the new events; `missed` counts any that
  * rotated into summaries before they were read. */
@@ -229,9 +220,9 @@ function idleEvent(rec: TimelineRecorder, s: GameState): TimelineEvent | null {
   return i && { kind: "idle", tick: i.tick, play: i.play, seconds: (s.tick - i.tick) / STEPS, waiting: [...i.waiting].sort(), region: rec.region };
 }
 /** What closing the open travel piece and idle span now would record, in that
- * order, without recording it: exports and the store end open spans this way,
- * so they never seal or rotate the live history. */
-export function closingEvents(rec: TimelineRecorder, s: GameState): TimelineEvent[] {
+ * order, without recording it: an export ends open spans this way, so it never
+ * seals or rotates the live history. */
+function closingEvents(rec: TimelineRecorder, s: GameState): TimelineEvent[] {
   return [pieceEvent(rec), idleEvent(rec, s)].filter((e): e is TimelineEvent => e !== null);
 }
 function closePiece(rec: TimelineRecorder): void {
@@ -384,10 +375,10 @@ export function exportTimeline(rec: TimelineRecorder, s: GameState): TimelineExp
   const closing = closingEvents(rec, s);
   return { ...exportHead(rec, s.tick, closing.length), events: [...retainedEvents(rec), ...closing] };
 }
-/** An export's head, ending at `tick`: everything but `events` (the store adds
- * its own partition). `closing` events end the export's events; its `seq`
- * counts them, since a resumed recorder holds them as recorded events. */
-export function exportHead(rec: TimelineRecorder, tick: number, closing: number): Omit<TimelineExport, "events"> {
+/** An export's head, ending at `tick`: everything but `events`. `closing` events
+ * end the export's events; its `seq` counts them, since a resumed recorder holds
+ * them as recorded events. */
+function exportHead(rec: TimelineRecorder, tick: number, closing: number): Omit<TimelineExport, "events"> {
   return {
     format: TIMELINE_FORMAT, version: TIMELINE_VERSION,
     session: { ...rec.session, end: { tick, play: rec.playTicks / STEPS, idle: rec.idleTicks / STEPS }, pending: clonePending(rec.pending) },
