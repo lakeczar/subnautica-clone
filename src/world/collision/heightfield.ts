@@ -53,6 +53,9 @@ export interface StaticHeightfield {
   readonly bytes: number;
   /** Largest conservative lift of any sample, metres (0 when not lifted). */
   readonly lift: number;
+  /** Most the sampled floor stands above the surface between the
+   * conservative points (`SampleOptions.measure`; 0 when not measured). */
+  readonly residual: number;
 }
 
 export const TILE = 8;
@@ -67,8 +70,13 @@ export interface SampleOptions {
    * nine half-cell points (corners, edge midpoints, centre: the points the
    * old collar columns took their maximum of). A curved floor sags under
    * its chords; this keeps the lattice on or above the floor the exterior
-   * world tests clearance against, within millimetres. */
+   * world tests clearance against at those points. Between them a floor
+   * that curves within a cell can still stand above the lattice: `residual`
+   * measures that. */
   readonly conservative?: boolean;
+  /** Measure `residual`: the most the floor stands above the stored surface
+   * at a 4 x 4 grid of interior points per cell (offsets 1/8 .. 7/8). */
+  readonly measure?: boolean;
 }
 
 /** Sample `floor` on a lattice over `rect` (snapped outwards to `cell`). */
@@ -106,7 +114,15 @@ export function sampleHeightfield(id: string, rect: Rect, cell: number, floor: (
   const field = createHeightfield(id, x0, z0, cell, nx, nz, heights, holes);
   let most = 0;
   for (const l of lift) most = Math.max(most, l);
-  return { ...field, lift: most };
+  let residual = 0;
+  if (options.measure) for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) {
+    if (!solidCell(field, i, k)) continue;
+    for (let a = 0; a < 4; a++) for (let b = 0; b < 4; b++) {
+      const x = x0 + (i + (2 * a + 1) / 8) * cell, z = z0 + (k + (2 * b + 1) / 8) * cell;
+      residual = Math.max(residual, floor(x, z) - cellHeightAt(field, i, k, x, z));
+    }
+  }
+  return { ...field, lift: most, residual };
 }
 
 export function createHeightfield(id: string, x0: number, z0: number, cell: number, nx: number, nz: number, heights: Float32Array,
@@ -133,7 +149,7 @@ export function createHeightfield(id: string, x0: number, z0: number, cell: numb
   return {
     kind: "heightfield", id, x0, z0, cell, nx, nz, heights, holes, tx, tz, tileMin, tileMax,
     bounds: { min: { x: x0, y: lo - SOLID_DEPTH, z: z0 }, max: { x: x0 + nx * cell, y: hi, z: z0 + nz * cell } },
-    bytes: heights.byteLength + (holes?.byteLength ?? 0) + tileMin.byteLength + tileMax.byteLength, lift: 0,
+    bytes: heights.byteLength + (holes?.byteLength ?? 0) + tileMin.byteLength + tileMax.byteLength, lift: 0, residual: 0,
   };
 }
 

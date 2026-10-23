@@ -170,15 +170,25 @@ export function meshFacing(id: string, mesh: TriangleMesh, isSolid: (p: Vec3) =>
   throw new Error(`${id}: winding vote unclear (${out} out, ${inward} in)`);
 }
 
+/** Most a collar's floor may stand above its lattice between the
+ * conservative points, metres: half the exterior world's 2 cm floor
+ * tolerance, so a box resting on the collar is never called buried. */
+export const COLLAR_RESIDUAL = 0.01;
 /** The exterior seabed round a cave footprint as a heightfield (the collar),
  * sampled from the same floor the seabed art is drawn from and the exterior
- * world tests clearance against, lifted where the floor curves so it never
- * sags below it (`conservative`). Cells whose centre any owned footprint
- * holds are holes, as the old collar columns skipped them. */
+ * world tests clearance against. It is lifted where the floor curves
+ * (`conservative`), so it is on or above the floor at each cell's nine
+ * half-cell points, and the sag left between them is measured: a floor that
+ * curves more than `COLLAR_RESIDUAL` inside a 0.5 m cell throws, naming the
+ * collar, rather than leave a hidden float or sink. Cells whose centre any
+ * owned footprint holds are holes, as the old collar columns skipped them. */
 export function collarHeightfield(id: string, footprint: Rect, band: number, floor: (x: number, z: number) => number,
   owned: readonly Rect[], cell = 0.5): StaticHeightfield {
   const rect = { minX: footprint.minX - band, maxX: footprint.maxX + band, minZ: footprint.minZ - band, maxZ: footprint.maxZ + band };
-  return sampleHeightfield(id, rect, cell, floor, {
-    conservative: true, hole: (x, z) => owned.some(r => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ),
+  const h = sampleHeightfield(id, rect, cell, floor, {
+    conservative: true, measure: true, hole: (x, z) => owned.some(r => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ),
   });
+  if (h.residual > COLLAR_RESIDUAL)
+    throw new Error(`collar ${id}: the floor stands ${(h.residual * 1000).toFixed(1)} mm above the ${cell} m lattice between samples; use a finer cell`);
+  return h;
 }
