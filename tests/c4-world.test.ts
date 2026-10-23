@@ -234,20 +234,6 @@ test("the shelf race is placed by the CY content rules: strong, cued, in water, 
   }
 });
 
-test("a powerless diver anywhere in the shelf race reaches still water within 25 s, unharmed", () => {
-  const still = (p: Vec3, tick: number): boolean => flowAt(p, tick).speed < 0.1;
-  for (const t of [0.05, 0.3, 0.55, 0.8]) for (const [side, lift] of [[0, 1.5], [3.5, 1], [-3.5, 1], [0, 4]] as const) {
-    const p0 = along(t, lift), p = { ...p0, x: p0.x + side };
-    if (!world.clearance(p, DIVER) || volumeWeight(race, p) < 0.3) continue;
-    let s = diverAt(p);
-    const health = s.player.vitals.health;
-    let seconds = 0;
-    while (!still(s.player.pose.position, s.tick) && seconds < 25) { s = stepGame(s, idle(), world).state; seconds += DT; }
-    assert.ok(seconds < 25, `stuck in the race from ${JSON.stringify(p)} at ${JSON.stringify(s.player.pose.position)}`);
-    assert.equal(s.player.vitals.health, health, "a current never harms a diver");
-  }
-});
-
 test("a diver swimming across the shelf race is swept downslope but gets across", () => {
   const mid = along(0.45, 1.5);
   let s = diverAt({ ...mid, x: mid.x + 10 });
@@ -364,4 +350,22 @@ test("entering a current shows its cue once", () => {
     for (const e of out.events) if (e.type === "notice" && e.message.startsWith(race.label)) cues.push(e.message);
   }
   assert.equal(cues.length, 1, cues.join(" | "));
+});
+
+test("smoke: a powerless diver at two points in the shelf race reaches still water within 25 s, unharmed", () => {
+  // Sixteen starts along and across the race: tests/c4-world.heavy.test.ts (TT-1).
+  const still = (p: Vec3, tick: number): boolean => flowAt(p, tick).speed < 0.1;
+  let checked = 0;
+  for (const t of [0.3, 0.8]) {
+    const p = along(t, 1.5);
+    if (!world.clearance(p, DIVER) || volumeWeight(race, p) < 0.3) continue;
+    checked++;
+    let s = diverAt(p);
+    const health = s.player.vitals.health;
+    let seconds = 0;
+    while (!still(s.player.pose.position, s.tick) && seconds < 25) { s = stepGame(s, idle(), world).state; seconds += DT; }
+    assert.ok(seconds < 25, `stuck in the race from ${JSON.stringify(p)} at ${JSON.stringify(s.player.pose.position)}`);
+    assert.equal(s.player.vitals.health, health, "a current never harms a diver");
+  }
+  assert.ok(checked >= 1, "at least one start lies in the race");
 });

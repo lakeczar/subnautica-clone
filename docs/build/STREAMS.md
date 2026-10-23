@@ -362,3 +362,54 @@ The host is muted. Verify with offline rendering (OfflineAudioContext in the bro
   - the rule becomes "admitted through the queue", with performance numbers from exclusive mode only;
   - VM: ask for 8 vCPU and keep 16 GiB.
 - **SCHED-1** (Opus, `t3/sched-1-heavy-queue`) is building it. Next after it: the `stepGame` state-copy speed-up.
+
+### 2026-10-22 ~22:10Z — paused for the VM CPU upgrade (6 → 8 vCPU)
+All builders are paused at a pushed checkpoint, with no jobs running and the lock free. Resume order after the restart:
+1. **Coordinator:** check `nproc` is 8, then run `task_status` on every task below.
+2. **SCHED-1** `t3/sched-1-heavy-queue` @ `12ff032`: resume, and check that tokens come out at 6. Then Sol review, then switch the fleet over.
+3. **CW-1** `t3/enable-authored-cave-streaming` @ `f55254f`: resume. The completion wake was disposed, so reconcile by hand.
+4. **CR-1** `t3/natural-threat-windows` @ `2ab8db7`: root merged, 1,287 fast tests pass. Resume to finish the economy scripts (the m1 roster pin may need the crown recipes) and the split playthrough, then Sol R1.
+5. **TT-1** `feat/tt-1-test-speed` @ `34c08a0`: resume the R1 fixes (four P2s plus one P3), then a fresh Sol R2.
+Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the four cave biomes, UX-1, lost sites, the atmosphere pass, then the owner's playtest.
+
+### 2026-10-22 22:20Z — VM back with 8 vCPU; builders resumed
+`nproc` is 8, about 15 GiB is visible, and the 3090 is OK. SCHED-1, CW-1, CR-1 and TT-1 are resumed through new tracked thread-send tasks, so their wakes work again. The fifth slot is held: OP-1 waits for CW-1 (shared island and cave streaming), and the `stepGame` speed-up waits for CR-1 and SCHED-1 (`step.ts` overlap).
+
+### 2026-10-23 — TT-1 merged
+- **Review:** TT-1 was accepted by Sol R3 (`review/tt-1-r3` `267bd0b`) after R1 Fix and R2 Fix.
+- **Merged into root:** fast tests pass 1,264/1,264 in 79 s from a cold cache; the build is OK.
+- **Effect:** `npm test` takes about 1 minute; the heavy tier runs 59 files, 440 tests, in about 5 minutes, with per-file cgroups.
+- **Follow-up:** apply `docs/build/streams/sched1/tt1-test-build-guard.patch` when SCHED-1 merges.
+- **CW-1 and CR-1** must merge root before handoff: TT-1 moved tests out of their files into `*.heavy.test.ts` and `*-support.ts`.
+- **SCHED-1:** in Sol R4 at `8759122`.
+
+### 2026-10-23 ~00:25Z — owner decisions on job limits and saves
+- **Jobs have goals, not time limits** (owner). The 20–30 min cap was a fairness rule for the single v1 lock. After the SCHED-1 cut-over:
+  - jobs run until their goal is done;
+  - the queue kills only on a **stall** (no output or heartbeat for about 15 min) or a generous runaway ceiling;
+  - exclusive performance drains keep a cap.
+  - Planned as the SCHED-1 follow-up (SCHED-2) once R4 accepts. Soak runs for long-session problems come with it.
+- **Save library approved:** after each root merge, the playthrough exports standard milestone, adverse and gear-variant saves to a shared store tagged by commit, for tests, reviews and 3090 sessions. **SAVE-1** starts after SCHED-1 merges.
+- **Second machine:** switch the queue on first, measure for a day, then decide.
+
+### 2026-10-23 ~01:00Z — compromise audit started; worker plan
+- **Owner question:** did builders sacrifice quality to fit memory, time or loading limits instead of fixing root flaws for scale?
+- **Audit:** Sol evidence audit `siltwake-compromise-audit-sol-562a8a0`, written to `research/compromise-audit:docs/build/audits/COMPROMISE-AUDIT-SOL.md`. After it, an Opus verdict on what to fix and in what order, presented side by side.
+- **Web workers (client side) planned:**
+  1. Sol profiles a Dart traversal on the 3090 after the SCHED-1 cut-over.
+  2. An Opus decision on which jobs move and the pool size.
+  3. WK-1 builds it after CW-1.
+  - **Rule:** workers build only rebuildable data, the sim never waits on them for correctness, and collision admission is kept.
+- **SCHED-1:** R4 found one P2 (an OOM can kill the anchor alone). The fix is under way: `OOMPolicy=kill` on the job scope.
+
+### 2026-10-23 ~02:20Z — SCHED-1 merged and live; audit verdict started
+- **Builders:** usage limit hit about 00:52Z; CW-1, CR-1 and UX-1 auto-resumed at 02:00Z.
+- **SCHED-1 accepted** by Sol R5 (`review/sched-1-r5` `59d2a4b`) after R1–R4 Fix rounds. Merged into root as `b03cb9d`: 1,286 fast tests pass in 63 s; the build is OK.
+- **Cut-over:**
+  - installed v2 `afad2b8a688f` with the user slice; serial first;
+  - acceptance 6, 6b, 6c and 15 rerun privately and pass;
+  - switched to **normal** mode.
+  - The v1 lock inode is preserved (527188).
+  - CW-1, CR-1 and UX-1 are told to merge root at a safe point and move to v2. v1 waiters pause v2 until they do.
+  - The 2 h canary observation is under way (ledger at `/work/tmp/siltwake-sched/ledger.jsonl`).
+- **Compromise audit:** Sol evidence `4e81ac9` on `research/compromise-audit` has 107 findings: A 30, B 32, C 19, D 26. The Opus verdict (`siltwake-compromise-verdict-opus-4e81ac9`) is running.

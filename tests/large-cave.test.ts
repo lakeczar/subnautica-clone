@@ -1,30 +1,21 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import type { Vec3 } from "../src/sim/types.js";
-import { actorBox } from "../src/sim/ribCollision.js";
 import { lampVisible } from "../src/render/caves/lightField.js";
 import { buildChunkMesh } from "../src/world/caves/large/mesh.js";
-import { COLLISION_BAND } from "../src/world/caves/large/build.js";
 import { bakeChunk, encodeBake, readBake } from "../src/world/caves/large/bake.js";
 import { buildCollider, caveRockAt, caveSegmentClear, chunkIndex, createCandidates, gatherTriangles, boxOverlapsTriangle } from "../src/world/caves/large/collision.js";
 import { compileField, validateOwnership } from "../src/world/caves/large/field.js";
 import { buildWindow } from "../src/world/caves/large/lampWindow.js";
 import { placeLife } from "../src/world/caves/large/life.js";
 import { buildLightGrid, vertexLight } from "../src/world/caves/large/light.js";
-import { CREEL, DART, DIVER, VAULT, VAULT_OFFSET, boxSamples, composedWith, random, seek, vault, vaultFloor } from "./large-cave-support.js";
+import { CREEL, DART, DIVER, VAULT, boxSamples, random, seek, vaultFloor } from "./large-cave-support.js";
+import { buried, cave, solidAt, VAULT_OWNED, world } from "./large-cave-vault-support.js";
+import { actorBox } from "../src/sim/ribCollision.js";
+import { COLLISION_BAND } from "../src/world/caves/large/build.js";
 
 // LC: the large-cave technology on a small synthetic biome (2 x 2 x 2 chunks).
-const cave = vault();
-const world = composedWith(cave, vaultFloor, VAULT_OFFSET);
 const centre: Vec3 = { x: 28, y: -73, z: 24 };
-
-/** In cave rock or under the exterior seabed where no cave owns the point. */
-function solidAt(p: Vec3): boolean {
-  if (cave.field.owned(p.x, p.y, p.z)) return caveRockAt(cave.collision, p);
-  return p.y < vaultFloor(p.x, p.z) - 0.02;
-}
-const buried = (p: Vec3, s: typeof DIVER): Vec3 | undefined => boxSamples(p, s).find(solidAt);
-const VAULT_OWNED = (p: Vec3): boolean => cave.field.owned(p.x, p.y, p.z);
 
 test("LC fixture: ownership validates; carved water above the cap is rejected", () => {
   assert.deepEqual(validateOwnership(cave.field), []);
@@ -60,15 +51,6 @@ test("LC mesh: deterministic, and chunk seams share their border vertices exactl
     return !onCollar && !onDomain;
   });
   assert.equal(open.length, 0, `open edges inside the cave: ${open.slice(0, 5).map(([k, n]) => `${k} x${n}`).join("; ")}`);
-});
-
-test("LC sampling: skipping bricks no primitive reaches changes no vertex", () => {
-  for (const c of cave.chunks) for (const lod of ["fine", "coarse"] as const) {
-    const fast = cave.mesh(c, lod), full = buildChunkMesh(cave.field, cave.lattice, c, lod, { band: lod === "fine" ? COLLISION_BAND : 0, exhaustive: true });
-    assert.deepEqual([...full.positions], [...fast.positions], `chunk ${fast.key} ${lod}`);
-    assert.deepEqual([...full.indices], [...fast.indices], `chunk ${fast.key} ${lod}`);
-    assert.ok(fast.stats.skipped > 0 || lod === "coarse", "the fixture exercises skipping");
-  }
 });
 
 test("LC agreement: art is the collision mesh; independent dense probes agree within 0.35 m", () => {
@@ -159,37 +141,6 @@ test("LC sweeps: grazing slides keep moving; a crease slides along it; the squee
   assert.ok(!creel.reached && creel.poses.every(q => q.x > 17), "a craft cannot enter the squeeze");
 });
 
-test("LC mouth: a craft straddling the collar edge never buries a corner in either owner", () => {
-  // From open water above the seabed, down the shaft and back out, and
-  // sliding along the seabed across the collar edge, through the composed world.
-  const rnd = random(11);
-  for (let trial = 0; trial < 120; trial++) {
-    const shape = trial % 3 === 0 ? DIVER : trial % 3 === 1 ? DART : CREEL;
-    let p = { x: 12 + rnd() * 40, y: -38 - rnd() * 4, z: 20 + rnd() * 40 };
-    if (!world.clearance(p, shape)) continue;
-    for (let i = 0; i < 90; i++) {
-      const d = { x: (rnd() - 0.5) * 0.6, y: -0.2 - rnd() * 0.3, z: (rnd() - 0.5) * 0.6 };
-      p = world.moveCapsule(p, d, shape).position;
-      // Shapes the exterior answers keep its policy (centre-sampled, unswept
-      // floor, lifted by the caller): only cave-answered poses are checked
-      // against both owners; cave rock is checked always.
-      const cave = world.caveAt(actorBox(p, shape));
-      if (!cave) {
-        // As `hullFloor`: the highest seabed under the footprint's nine points.
-        let g = -Infinity;
-        for (const q of boxSamples(p, shape)) g = Math.max(g, vaultFloor(q.x, q.z));
-        p = { ...p, y: Math.max(p.y, g - (shape.bottom ?? 0)) };
-      }
-      const b = cave ? buried(p, shape) : boxSamples(p, shape).find(q => cave !== null && solidAt(q)) ??
-        boxSamples(p, shape).find(q => VAULT_OWNED(q) && solidAt(q));
-      assert.equal(b, undefined, `trial ${trial}: ${JSON.stringify(shape)} buried at ${JSON.stringify(b)} near ${JSON.stringify(p)}`);
-    }
-  }
-  // Down the shaft into the chamber with ordinary seeking.
-  const down = seek(world, VAULT.routes[0]!.path, DIVER, 4);
-  assert.ok(down.reached && down.poses.every(q => !buried(q, DIVER)), "down the shaft");
-});
-
 test("LC-01 clearance: a box buried in exterior ground beside a collar is refused on both sides, for diver and hull", () => {
   // The R1 repro: centre unowned at X 21.8, box reaching into the collar at X 22.
   assert.equal(world.clearance({ x: 21.8, y: -45, z: 40 }, DIVER), false);
@@ -277,4 +228,36 @@ test("LC bake: a decoded collider equals the live one bit for bit", () => {
   assert.deepEqual([...baked.tris], [...live.tris]);
   assert.deepEqual([...back.occupancy], [...m.occupancy!]);
   void gatherTriangles;
+});
+
+// --- Fast smokes (TT-1): prefixes of the every-chunk sampling comparison and
+// the 120 mouth trials, which run in full in tests/large-cave-vault.heavy.test.ts.
+
+test("smoke: skipping bricks changes no vertex in every 4th chunk", () => {
+  for (const c of cave.chunks.filter((_, i) => i % 4 === 0)) for (const lod of ["fine", "coarse"] as const) {
+    const fast = cave.mesh(c, lod), full = buildChunkMesh(cave.field, cave.lattice, c, lod, { band: lod === "fine" ? COLLISION_BAND : 0, exhaustive: true });
+    assert.deepEqual([...full.positions], [...fast.positions], `chunk ${fast.key} ${lod}`);
+    assert.deepEqual([...full.indices], [...fast.indices], `chunk ${fast.key} ${lod}`);
+  }
+});
+
+test("smoke: the first 20 seeded mouth trials never bury a corner in either owner", () => {
+  const rnd = random(11);
+  for (let trial = 0; trial < 20; trial++) {
+    const shape = trial % 3 === 0 ? DIVER : trial % 3 === 1 ? DART : CREEL;
+    let p = { x: 12 + rnd() * 40, y: -38 - rnd() * 4, z: 20 + rnd() * 40 };
+    if (!world.clearance(p, shape)) continue;
+    for (let i = 0; i < 90; i++) {
+      const d = { x: (rnd() - 0.5) * 0.6, y: -0.2 - rnd() * 0.3, z: (rnd() - 0.5) * 0.6 };
+      p = world.moveCapsule(p, d, shape).position;
+      const owner = world.caveAt(actorBox(p, shape));
+      if (!owner) {
+        let g = -Infinity;
+        for (const q of boxSamples(p, shape)) g = Math.max(g, vaultFloor(q.x, q.z));
+        p = { ...p, y: Math.max(p.y, g - (shape.bottom ?? 0)) };
+      }
+      const b = owner ? buried(p, shape) : boxSamples(p, shape).find(q => VAULT_OWNED(q) && solidAt(q));
+      assert.equal(b, undefined, `trial ${trial}: buried at ${JSON.stringify(b)} near ${JSON.stringify(p)}`);
+    }
+  }
 });

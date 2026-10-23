@@ -4,6 +4,7 @@ import { BASIN_GEOMETRY, CANOPY_MARGIN_RIBS, CANOPY_STOP, CREEL_SLIP_SOLIDS, LEG
 import { STRUCTURE_SOLIDS } from "../content/regions/structures.js";
 import { VISTA_SOLIDS } from "../content/vistas.js";
 import { worldFloor } from "../content/regions/worldFloor.js";
+import { cachedBuild, floorKey, nameFloor } from "../content/buildCache.js";
 import { caves, type CaveDef } from "../content/regions/caves.js";
 import { LEGACY_PRESERVE } from "../content/regions/terrain.js";
 import { WORLD_ENVELOPE } from "../world/frame.js";
@@ -85,6 +86,7 @@ export const POD_RAMP = {
   lowY: -1.2,
   highY: 0.18,
 } as const;
+nameFloor(surfaceHeight, "surfaceHeight", [import.meta.url]);
 export function surfaceHeight(x: number, z: number): number {
   const terrain = terrainHeight(x, z);
   if (
@@ -715,6 +717,13 @@ const union = (a: BoxBounds, b: BoxBounds): BoxBounds => ({
 /** Exterior ground in the collar band as columns: each 0.5 m cell outside
  * every footprint, topped at the highest of nine floor samples plus 2 cm. */
 function collarColumns(cave: CaveOwner, floor: (x: number, z: number) => number, band: number,
+  all: readonly CaveOwner[]): Solid[] {
+  // Pure in the footprints, band and floor, so a named floor's columns may come from the build cache.
+  const key = floorKey("collar", floor, [cave.id, cave.baseY, cave.footprint, band, all.map(c => c.footprint)], import.meta.url);
+  return cachedBuild(key, () => generateCollarColumns(cave, floor, band, all));
+}
+
+function generateCollarColumns(cave: CaveOwner, floor: (x: number, z: number) => number, band: number,
   all: readonly CaveOwner[]): Solid[] {
   const f = cave.footprint, out: Solid[] = [];
   for (let x = f.minX - band; x < f.maxX + band - 1e-9; x += COLLAR_CELL)

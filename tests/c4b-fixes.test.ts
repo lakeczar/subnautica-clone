@@ -3,11 +3,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { WORLD_CYCLES } from "../src/content/currents/cycles.js";
 import { at as siteAt, sitePosition } from "../src/content/ecology/sites.js";
-import { createEnvelope, decodeSave, encodeSave } from "../src/save/codec.js";
 import { validState } from "../src/save/validation.js";
 import { launchPoint, fixtureGame } from "../src/sim/carrier.js";
-import { observeWorldCycles, CYCLE_VIEW_RANGE } from "../src/sim/cyclesLink.js";
-import { period, sampleCycleAt } from "../src/sim/cycles/cycle.js";
+import { observeWorldCycles } from "../src/sim/cyclesLink.js";
+import { sampleCycleAt } from "../src/sim/cycles/cycle.js";
 import { updateEcology } from "../src/sim/ecologyLink.js";
 import { fitTarget, hazardsAt, launchLockPosition, upgradeRemovePreview, vehicleProfile } from "../src/sim/fittings.js";
 import { addItem } from "../src/sim/inventory.js";
@@ -16,21 +15,14 @@ import { executeCommand, stepGame } from "../src/sim/step.js";
 import { createRecorder, observe } from "../src/sim/timeline/recorder.js";
 import { controlsActive } from "../src/sim/timeline/activity.js";
 import type { GameCommand, GameEvent, GameState } from "../src/sim/types.js";
-import { createWorldQueries, gameWorld } from "../src/sim/world.js";
+import { createWorldQueries } from "../src/sim/world.js";
 import { PanelProbe } from "../src/ui/panelProbe.js";
 import { PlayerInput } from "../src/runtime/input.js";
 import { at, creelFirst, creelOf, fund, meta, parkCreel, pilotCreel } from "./b1-support.js";
 import { faceTarget, NORMAL_VIEWS } from "./targeting-support.js";
+import { roundTrip, world } from "./c4b-fixes-support.js";
 
-const world = gameWorld();
 const LEDGE = { x: -44, y: -8.09, z: 8 } as const;
-function roundTrip(s: GameState): GameState {
-  assert.ok(validState(s), "valid before saving");
-  const e = encodeSave(createEnvelope(s, meta)); assert.ok(e.ok, e.ok ? "" : e.error);
-  const d = decodeSave(e.value); assert.ok(d.ok, d.ok ? "" : d.error);
-  assert.deepEqual(d.value.state, JSON.parse(JSON.stringify(s)));
-  return d.value.state;
-}
 const run = (s: GameState, c: GameCommand): GameState => {
   const out = executeCommand(s, c, world), no = out.events.find((e) => e.type === "notice" && e.error);
   assert.equal(no && "message" in no ? no.message : null, null, `${c.type} refused`);
@@ -200,57 +192,6 @@ test("C4B-06: the runtime's sampled controls: an untouched span becomes idle, re
 
 // --- C4B-07: cycles are learned by watching -------------------------------------------------------
 
-test("C4B-07: watching the chimney logs it without gathering; timings only after a phase start and end were seen; reload continues", () => {
-  const chimney = sitePosition(siteAt("rift_split_chimney")), cycle = WORLD_CYCLES.find((c) => c.id === "cycle.rift.chimney_pulse")!;
-  let s: GameState = creelFirst();
-  const scans = s.knowledge.scans.length;
-  assert.deepEqual(s.knowledge.cycles, []);
-  const watch = { x: chimney.x + 30, y: -280, z: chimney.z }, away = { x: chimney.x + 30 + CYCLE_VIEW_RANGE + 40, y: -280, z: chimney.z };
-  const phaseAt = (tick: number) => sampleCycleAt(cycle, tick).phase;
-  const record = () => s.knowledge.cycles.find((r) => r.cycleId === cycle.id);
-  const step = (n: number, p = watch) => { for (let i = 0; i < n; i++) { at(s, p, "swimming"); observeWorldCycles(s, world, []); s.tick++; } };
-  /** Steps until the phase changes (the next edge has just been observed). */
-  const toEdge = (p = watch) => { const from = phaseAt(s.tick); let n = 0; while (phaseAt(s.tick) === from) { step(1, p); assert.ok(++n < 60 * 120); } step(1, p); };
-  // Seen part-way through a phase: that phase is never timed.
-  s.tick = 41 * 60;
-  const first = phaseAt(s.tick);
-  step(1);
-  assert.ok(record(), "seen without any scan"); assert.deepEqual(record()!.measured, []);
-  assert.equal(s.knowledge.scans.length, scans, "nothing gathered or scanned");
-  toEdge();
-  assert.deepEqual(record()!.measured, [], `${first} began out of view: untimed`);
-  // The next phase, watched from its start to its end, is timed.
-  const second = phaseAt(s.tick - 1);
-  toEdge();
-  assert.deepEqual(record()!.measured, [second]);
-  // Interrupted: looking away mid-phase forgets the watch; that phase stays untimed.
-  const third = phaseAt(s.tick - 1);
-  step(30, away);
-  assert.equal(record()!.watching, null);
-  toEdge();
-  assert.ok(!record()!.measured.includes(third), `${third} was interrupted`);
-  // Reload mid-watch, then watch two whole periods: every phase timed.
-  s = roundTrip(s);
-  step(Math.round(period(cycle) * 2 * 60));
-  assert.deepEqual([...record()!.measured].sort(), cycle.phases.map((p) => p.id).sort());
-  // The journal's cycles tab states the watched timings.
-  const probe = new PanelProbe(world);
-  probe.journalTab("cycles");
-  const journal = probe.text("notebook", s);
-  assert.match(journal, /Split chimney pulse/);
-  assert.match(journal, /every 75 s|every 1 min/);
-  assert.match(journal, /venting: 18 s/);
-  roundTrip(s);
-  // Through the real step too: a diver watching for a moment logs it.
-  let live = creelFirst(); at(live, watch, "swimming");
-  live = stepGame(live, [], world).state;
-  // (CR-1: the stalkers' vent feeding is watched from here too, as its own record.)
-  assert.ok(live.knowledge.cycles.some((r) => r.cycleId === cycle.id));
-  // A tampered record is refused, not repaired.
-  const bad = structuredClone(s); (bad.knowledge.cycles[0] as unknown as { measured: string[] }).measured = ["boiling"];
-  assert.equal(validState(bad), false);
-});
-
 // --- CA-1 P3: the swim step-up at the surface ------------------------------------------------
 
 test("CA-1 P3: a diver 5 mm under the surface swims forward onto a wading shelf, but never climbs onto dry rock", () => {
@@ -267,4 +208,30 @@ test("CA-1 P3: a diver 5 mm under the surface swims forward onto a wading shelf,
   // A ledge whose top is dry (0, one voxel up) is the jump's, not the swim step-up's.
   const dry = swimAt(shelf(0));
   assert.ok(dry.player.pose.position.z > -10.5, `stopped at the dry ledge's face: ${JSON.stringify(dry.player.pose.position)}`);
+});
+
+test("smoke: watching the chimney logs it without gathering, a phase begun out of view stays untimed, and a reload keeps the record", () => {
+  // Timed phases and two whole watched periods: tests/c4b-fixes.heavy.test.ts (TT-1).
+  const chimney = sitePosition(siteAt("rift_split_chimney")), cycle = WORLD_CYCLES.find((c) => c.id === "cycle.rift.chimney_pulse")!;
+  let s: GameState = creelFirst();
+  const scans = s.knowledge.scans.length;
+  const watch = { x: chimney.x + 30, y: -280, z: chimney.z };
+  const phaseAt = (tick: number) => sampleCycleAt(cycle, tick).phase;
+  const record = () => s.knowledge.cycles.find((r) => r.cycleId === cycle.id);
+  const step = (n: number) => { for (let i = 0; i < n; i++) { at(s, watch, "swimming"); observeWorldCycles(s, world, []); s.tick++; } };
+  s.tick = 41 * 60;
+  const first = phaseAt(s.tick);
+  step(1);
+  assert.ok(record(), "seen without any scan"); assert.deepEqual(record()!.measured, []);
+  assert.equal(s.knowledge.scans.length, scans, "nothing gathered or scanned");
+  for (let n = 0; phaseAt(s.tick) === first; n++) { step(1); assert.ok(n < 60 * 120); }
+  step(1);
+  assert.deepEqual(record()!.measured, [], `${first} began out of view: untimed`);
+  s = roundTrip(s);
+  assert.ok(record(), "the record survives a reload");
+  let live = creelFirst(); at(live, watch, "swimming");
+  live = stepGame(live, [], world).state;
+  assert.equal(live.knowledge.cycles.length, 1, "a diver watching for a moment through the real step logs it");
+  const bad = structuredClone(s); (bad.knowledge.cycles[0] as unknown as { measured: string[] }).measured = ["boiling"];
+  assert.equal(validState(bad), false, "a tampered record is refused");
 });

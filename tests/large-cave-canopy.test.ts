@@ -8,10 +8,11 @@ import { buildCollision, chunksNear, COLLISION_BAND, createLargeCave } from "../
 import { buildChunkMesh } from "../src/world/caves/large/mesh.js";
 import { caveRockAt } from "../src/world/caves/large/collision.js";
 import { validateOwnership } from "../src/world/caves/large/field.js";
-import { DIVER, boxSamples, productionWorld, random, seek } from "./large-cave-support.js";
+import { DIVER, boxSamples, productionWorld, random } from "./large-cave-support.js";
 
 // LC: the Canopy root caves' authored guarantees, read from the field (fast),
-// plus real sweeps along the diver-only spurs.
+// plus smokes of the real sweeps along the diver-only spurs, which run in full
+// in tests/large-cave-canopy.heavy.test.ts.
 const cave = createLargeCave(S, worldFloor);
 const field = cave.field;
 const water = (p: Vec3): boolean => field.rock(p.x, p.y, p.z) > 0;
@@ -49,17 +50,6 @@ test("Canopy field: continuous round every surface (no primitive culled while it
   assert.ok(worst < 0.3, `field steps ${worst.toFixed(2)} m over 0.1 m near ${at}`);
 });
 
-test("Canopy sampling: the hall's and the Crown hollow's chunks are identical with no brick skipped", () => {
-  for (const at of [{ x: 742, y: -126, z: -100 }, { x: 756, y: -100, z: -84 }]) {
-    const c = chunksNear(cave, [at], 0).find(k => cave.lattice.origin.y + k.cy * 32 <= at.y && at.y < cave.lattice.origin.y + (k.cy + 1) * 32 &&
-      cave.lattice.origin.x + k.cx * 32 <= at.x && at.x < cave.lattice.origin.x + (k.cx + 1) * 32 && cave.lattice.origin.z + k.cz * 32 <= at.z && at.z < cave.lattice.origin.z + (k.cz + 1) * 32)!;
-    const fast = cave.mesh(c, "fine"), full = buildChunkMesh(field, cave.lattice, c, "fine", { band: COLLISION_BAND, exhaustive: true });
-    assert.ok(fast.stats.skipped > 0, "skipping happened");
-    assert.deepEqual([...full.positions], [...fast.positions]);
-    assert.deepEqual([...full.indices], [...fast.indices]);
-  }
-});
-
 test("Canopy portals: each clear rectangle is open water and admits exactly its profiles", () => {
   for (const p of S.portals) {
     const n = p.normal, nl = Math.hypot(n.x, n.y, n.z), u = Math.abs(n.y / nl) > 0.9 ? { x: 1, y: 0, z: 0 } : { x: -n.z / Math.hypot(n.x, n.z), y: 0, z: n.x / Math.hypot(n.x, n.z) };
@@ -92,49 +82,38 @@ test("Canopy routes: every route's profile box is in open water along its whole 
   }
 });
 
-test("Canopy LC-01: the R1 buried collar-straddling poses are refused through the production world", () => {
-  const points = [[727.8, -60], [727.8, -90], [781.9, -60], [826.2, -190], [833.8, -60]] as const;
-  buildCollision(cave, chunksNear(cave, points.map(([x, z]) => ({ x, y: worldFloor(x, z), z })), 12));
-  const world = productionWorld(cave), hull = CRAFT_PROFILES.medium;
-  for (const [x, z] of points) {
-    const feet = { x, y: worldFloor(x, z) - 1.3, z };
-    assert.equal(world.clearance(feet, DIVER), false, `diver buried at ${JSON.stringify(feet)}`);
-    const keel = { x: x + (x < 760 ? -3.5 : 3.5), y: worldFloor(x, z) - 1, z };
-    assert.equal(world.clearance(keel, hull), false, `hull keel 1 m under the seabed at ${JSON.stringify(keel)}`);
-  }
-  // Control: a pose 0.5 m above the seabed at the first point is accepted.
-  const [x, z] = points[0];
+// --- Fast smokes (TT-1). The exhaustive sampling comparison and the full
+// collision sweeps are in tests/large-cave-canopy.heavy.test.ts.
+
+test("smoke: at one R1 collar point, buried poses are refused, a pose above the seabed is accepted, and probes agree with collision", () => {
+  const [x, z] = [727.8, -60];
+  buildCollision(cave, chunksNear(cave, [{ x, y: worldFloor(x, z), z }], 2));
+  const world = productionWorld(cave);
+  const feet = { x, y: worldFloor(x, z) - 1.3, z };
+  assert.equal(world.clearance(feet, DIVER), false, `diver buried at ${JSON.stringify(feet)}`);
+  assert.equal(world.clearance({ x: x - 3.5, y: worldFloor(x, z) - 1, z }, CRAFT_PROFILES.medium), false, "hull keel 1 m under the seabed");
   let top = -Infinity;
   for (const q of boxSamples({ x, y: 0, z }, DIVER)) top = Math.max(top, worldFloor(q.x, q.z));
   assert.equal(world.clearance({ x, y: top + 0.5, z }, DIVER), true);
-});
-
-test("Canopy diver spurs: real sweeps thread the squeeze, the crawl, the tangle and the grotto", () => {
-  const spurs = S.routes.filter(r => r.profile === "diver");
-  buildCollision(cave, chunksNear(cave, spurs.flatMap(r => r.path), 14));
-  const world = productionWorld(cave);
-  for (const r of spurs) {
-    const run = seek(world, r.path, DIVER, 3.4);
-    assert.ok(run.reached, `${r.id}: the diver did not get through`);
-    const buried = run.poses.flatMap(p => boxSamples(p, DIVER)).find(q => caveRockAt(cave.collision, q));
-    assert.equal(buried, undefined, `${r.id}: diver inside rock at ${JSON.stringify(buried)}`);
-  }
-  // Cost guard: the composer must broad-phase the production world's
-  // thousands of exterior solids (a linear scan made every move ~0.5 ms).
-  const route = S.routes.find(r => r.id === "canopy_roots.route.squeeze")!.path;
-  const started = performance.now(), run = seek(world, route, DIVER, 3.4);
-  const perMove = (performance.now() - started) / run.poses.length;
-  assert.ok(perMove < 0.15, `a diver move costs ${(perMove * 1000).toFixed(0)} µs`);
-  // Independent dense probes round the squeeze agree with the collision mesh.
-  const rnd = random(19);
+  const rnd = random(19), y = worldFloor(x, z);
   let checked = 0;
-  for (let i = 0; i < 6000; i++) {
-    const p = { x: 680 + rnd() * 50, y: -146 + rnd() * 20, z: -135 + rnd() * 30 };
+  for (let i = 0; i < 400; i++) {
+    const p = { x: x - 1.5 + rnd() * 3, y: y - 1.5 + rnd() * 3, z: z - 1.5 + rnd() * 3 };
     if (!field.owned(p.x, p.y, p.z)) continue;
     const f = field.rock(p.x, p.y, p.z);
     if (Math.abs(f) < 0.35) continue;
     checked++;
     assert.equal(caveRockAt(cave.collision, p), f < 0, `probe (${p.x.toFixed(2)}, ${p.y.toFixed(2)}, ${p.z.toFixed(2)}) field ${f.toFixed(2)}`);
   }
-  assert.ok(checked > 3000);
+  assert.ok(checked > 50, `${checked} probes`);
+});
+
+test("smoke: the hall's chunk is identical with no brick skipped", () => {
+  const at = { x: 742, y: -126, z: -100 };
+  const c = chunksNear(cave, [at], 0).find(k => cave.lattice.origin.y + k.cy * 32 <= at.y && at.y < cave.lattice.origin.y + (k.cy + 1) * 32 &&
+    cave.lattice.origin.x + k.cx * 32 <= at.x && at.x < cave.lattice.origin.x + (k.cx + 1) * 32 && cave.lattice.origin.z + k.cz * 32 <= at.z && at.z < cave.lattice.origin.z + (k.cz + 1) * 32)!;
+  const fast = cave.mesh(c, "fine"), full = buildChunkMesh(field, cave.lattice, c, "fine", { band: COLLISION_BAND, exhaustive: true });
+  assert.ok(fast.stats.skipped > 0, "skipping happened");
+  assert.deepEqual([...full.positions], [...fast.positions]);
+  assert.deepEqual([...full.indices], [...fast.indices]);
 });

@@ -20,11 +20,13 @@ import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { createServer } from "vite";
+import { requireGpuLease } from "../scripts/heavy/gpu-lease.mjs";
 
 const port = Number(process.argv[2] ?? 5288), out = process.argv[3] ?? "/work/tmp/lc/gpu", what = process.argv[4] ?? "all";
 mkdirSync(out, { recursive: true });
 const require = createRequire(import.meta.url);
 const { chromium } = require(process.env.LC_PLAYWRIGHT ?? "/work/tmp/gpu-enable/node_modules/playwright-core");
+requireGpuLease("tools/large-cave-lab.gpu.mjs");
 const chrome = process.env.LC_CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`;
 const server = await createServer({ server: { port, strictPort: true, host: "127.0.0.1", hmr: false, watch: null }, logLevel: "warn" });
 await server.listen();
