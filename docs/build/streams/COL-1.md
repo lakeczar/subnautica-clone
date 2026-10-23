@@ -106,6 +106,11 @@ Vertex-index displacement overstates the change: up to 28.5 m fine and 30.9 m co
 - `tests/col1-r6-floor.heavy.test.ts`: all 12 group caves, both LODs, three orders.
 - The art sweep (`col1-art.heavy.test.ts`) adds, for all 55: parity on the fine shell, and the seam at both LODs through both checkers.
 
+**Reuse** (the new stewardship rule):
+- **`segmentThrough`** (in `caveGeometry.ts`) is strict: a triangle that only touches at an edge isn't a fold. COL-1's `segmentTriangle` (`boxTriangle.ts`) includes edges, as a sweep needs. Importing it would also be a cycle, since `world/collision/caveShapes.ts` imports `caveGeometry.ts`. So the two stay separate.
+- **`shellSeamProblems`** (product) and **`seamGaps`** (tests) are deliberately independent, so the test oracle doesn't share the product's code.
+- **`pointMemo`** replaces the old `Map` memo, so no parallel memo is left.
+
 **Cross-check note:** the art sweep's isolated contrary probes rose 9 → 17, all within 6 of about 400 per component. The skirts are new vertical faces right next to the probes' voxel cells. This is diagnostic only: orientation is by provenance, and the final-mesh check above is exact.
 
 **Compromises:**
