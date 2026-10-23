@@ -19,19 +19,27 @@ const waitFor = (c, id) => hc(c, ["wait", id]);
 const git = (dir, ...args) => spawnSync("git", ["-C", dir, ...args], { encoding: "utf8" });
 const REMOTE = "RTX 4070 Laptop (alickers, shared desktop host)";
 
+/** One health probe of the context's (fake) sandbox, as a waiting supervisor makes. */
+async function probeNow(c) {
+  const { loadConfig } = await import("./state.mjs");
+  const { probe } = await import("./remote.mjs");
+  return probe(loadConfig(c.env));
+}
 /** A context with a fake second worker and a committed worktree. */
-function lane(name, extra = {}) {
+async function lane(name, extra = {}) {
   const c = context(name);
   const remote = fakeSandbox(c, extra);
   writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, remote }));
   c.repoDir = c.repo("r");
+  c.fake.clone(c.repoDir);
   c.head = git(c.repoDir, "rev-parse", "HEAD").stdout.trim();
+  await probeNow(c); // a running queue has a health reading; any never waits for one (R1-F6)
   return c;
 }
 const commit = (dir, file, text) => { writeFileSync(join(dir, file), text); git(dir, "add", file); git(dir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", file); return git(dir, "rev-parse", "HEAD").stdout.trim(); };
 
 test("B1: an any job runs on alickers at its commit; the worktree stays free; an evidence pack comes back whole", async () => {
-  const c = lane("any-remote");
+  const c = await lane("any-remote");
   const head = commit(c.repoDir, "make-pack.sh", "mkdir -p pack/shots; echo one > pack/shots/a.png; echo summary > pack/summary.md; echo result > single.json\n");
   const id = submit(c, c.repoDir, "--class", "playthrough", "--artifact", "pack", "--artifact", "single.json", "--", "sh", "-c", "sh make-pack.sh; echo ran-on-$(hostname)-in-$(git rev-parse HEAD); sleep 2");
   await running(c, id);
@@ -42,7 +50,7 @@ test("B1: an any job runs on alickers at its commit; the worktree stays free; an
   assert.equal(w.code, 0, w.err);
   const r = result(c, id);
   assert.deepEqual([r.remote, r.machine, r.machineTag, r.evidence.commit, r.evidence.bound], [true, REMOTE, "any", head, true]);
-  assert.match(log(c, id), new RegExp(`alickers-job: testing ${head} on fake-alickers\\n(.*\\n)*ran-on-.*-in-${head}`));
+  assert.match(log(c, id), new RegExp(`alickers-job: testing ${head} on \\S+\\n(.*\\n)*ran-on-.*-in-${head}`));
   assert.ok(result(c, local).admittedAt < r.endedAt, "the local job ran while the remote one did");
   const pack = join(c.dir, "artifacts", id, "pack");
   assert.equal(readFileSync(join(pack, "shots", "a.png"), "utf8"), "one\n");
@@ -60,7 +68,7 @@ test("B1: an any job runs on alickers at its commit; the worktree stays free; an
 });
 
 test("B2: paused alickers: a 4070 job waits (remote-paused) and runs when it resumes; an any job runs here at once", async () => {
-  const c = lane("paused");
+  const c = await lane("paused");
   c.fake.pause(true);
   const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "echo on-the-4070");
   const a = submit(c, c.wt("other"), "--class", "playthrough", "--", "sh", "-c", "echo here");
@@ -81,7 +89,7 @@ test("B2: paused alickers: a 4070 job waits (remote-paused) and runs when it res
 });
 
 test("B3: paused after dispatch (its 75 comes before 'testing'): an any job falls back here keeping its place; a 4070 job waits again", async () => {
-  const c = lane("fallback");
+  const c = await lane("fallback");
   // The health says up, but the owner paused between the probe and the dispatch.
   const healthUp = () => writeFileSync(join(c.sched, "remote.json"), JSON.stringify({ state: "up", at: Date.now() + 3600000, failures: 0 }));
   healthUp();
@@ -105,7 +113,7 @@ test("B3: paused after dispatch (its 75 comes before 'testing'): an any job fall
 });
 
 test("B4: unreachable: a 4070 job waits (remote-down), any runs here; dirty trees and local paths stay here; a 4070 job is refused for them", async () => {
-  const c = lane("down");
+  const c = await lane("down");
   c.fake.unreachable(true);
   const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "true");
   await until("down seen", () => blockedBy(c, g) === "remote-down", 30000);
@@ -129,7 +137,7 @@ test("B4: unreachable: a 4070 job waits (remote-down), any runs here; dirty tree
 });
 
 test("B5: stall detection on alickers: silence stops it (123) once it has started; relayed heartbeats keep a quiet job alive", async () => {
-  const c = lane("stall");
+  const c = await lane("stall");
   const s = submit(c, c.repoDir, "--class", "playthrough", "--stall", "4", "--", "sh", "-c", "echo started; sleep 60");
   const w = waitFor(c, s);
   assert.equal(w.code, 123, w.err);
@@ -152,7 +160,7 @@ test("B5: stall detection on alickers: silence stops it (123) once it has starte
 
 test("B6: memory.high throttling on alickers is reported after the notice window and stopped at the stall window ('throttled')", async (t) => {
   if (spawnSync("python3", ["-c", "1"]).status !== 0) { t.skip("no python3"); return; }
-  const c = lane("throttle");
+  const c = await lane("throttle");
   c.env.FAKE_MEMORY_HIGH = "96M";
   const id = submit(c, c.repoDir, "--class", "playthrough", "--stall", "10", "--", "python3", "-c",
     "import time\nkeep=bytearray(140<<20)\nwhile True:\n  b=bytearray(8<<20); print('working', flush=True); time.sleep(0.2)");
@@ -165,10 +173,10 @@ test("B6: memory.high throttling on alickers is reported after the notice window
 });
 
 test("B7: cancel stops a running remote job on the sandbox; a cancel while it waits for the sandbox's lock means it never runs", async () => {
-  const c = lane("cancel");
+  const c = await lane("cancel");
   const id = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "while :; do echo .; sleep 0.5; done");
-  await until("started remotely", () => existsSync(join(c.fake.dir, "lane", "jobs", id, "pid")) && log(c, id).includes("alickers-job: testing"), 30000);
-  const [pid, start] = readFileSync(join(c.fake.dir, "lane", "jobs", id, "pid"), "utf8").trim().split(" ").map(Number);
+  await until("started remotely", () => existsSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid")) && log(c, id).includes("alickers-job: testing"), 30000);
+  const [pid, start] = readFileSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid"), "utf8").trim().split(" ").map(Number);
   hc(c, ["cancel", id]);
   assert.equal(result(c, id).code, 75);
   assert.equal(result(c, id).stopReason, "cancelled");
@@ -190,10 +198,10 @@ test("B7: cancel stops a running remote job on the sandbox; a cancel while it wa
 });
 
 test("B8: the remote holder SIGKILLed: recovery finishes the ticket (137) and stops its job on the sandbox", async () => {
-  const c = lane("holder-dies");
+  const c = await lane("holder-dies");
   const id = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "while :; do echo .; sleep 0.5; done");
-  await until("started remotely", () => existsSync(join(c.fake.dir, "lane", "jobs", id, "pid")) && log(c, id).includes("testing"), 30000);
-  const [pid, start] = readFileSync(join(c.fake.dir, "lane", "jobs", id, "pid"), "utf8").trim().split(" ").map(Number);
+  await until("started remotely", () => existsSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid")) && log(c, id).includes("testing"), 30000);
+  const [pid, start] = readFileSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid"), "utf8").trim().split(" ").map(Number);
   const tk = await holderOf(c, id);
   killOwned(tk.holder);
   const w = waitFor(c, id);
@@ -204,7 +212,7 @@ test("B8: the remote holder SIGKILLed: recovery finishes the ticket (137) and st
 });
 
 test("B9: a soak takes alickers first and yields it to a waiting 4070 job; while alickers is paused a soak runs here", async () => {
-  const c = lane("soak");
+  const c = await lane("soak");
   const s = submit(c, c.repoDir, "--class", "soak", "--", "sh", "-c", "while :; do echo tick; [ -e \"$SILTWAKE_JOB_YIELD\" ] && { echo saw-yield; exit 0; }; sleep 0.5; done");
   await running(c, s);
   await until("on alickers", () => log(c, s).includes("alickers-job: testing"), 30000);
@@ -223,7 +231,7 @@ test("B9: a soak takes alickers first and yields it to a waiting 4070 job; while
 });
 
 test("B10: a remote job's own exit codes pass through after 'testing'; units and leftovers are clean", async () => {
-  const c = lane("codes");
+  const c = await lane("codes");
   const a = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "exit 7");
   assert.equal(waitFor(c, a).code, 7);
   const b = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "exit 255");

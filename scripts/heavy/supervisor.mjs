@@ -16,7 +16,7 @@ import { fileURLToPath } from "node:url";
 import { plan, resolveRequest, tokensFor } from "./policy.mjs";
 import { refreshHealth } from "./remote.mjs";
 import {
-  flockFd, gpuUsers, hostFor, jobDir, ledger, loadConfig, readFileSafe, readJson,
+  flockFd, gpuUsers, hostFor, jobDir, ledger, loadConfig, readFileSafe, readJson, readState,
   readMode, reconcile, self, transaction, writeJsonAtomic,
 } from "./state.mjs";
 
@@ -82,8 +82,16 @@ const remoteBound = Boolean(request.req.goal?.remoteOk) && ["any", "4070", "soak
 // it, re-check every 2 s.
 let lastSeen = -1, lastTry = 0, every = 15000;
 const healthFile = join(cfg.dir, "remote.json");
+let refreshing = false;
 for (;;) {
-  if (remoteBound) await refreshHealth(cfg);
+  // Health is refreshed beside the loop, never awaited before planning: the
+  // plan uses the cached reading, so an any ticket with room here is admitted
+  // here at once, whatever the network does (R1-F6). A fresh reading changes
+  // remote.json, which wakes the loop.
+  if (remoteBound && !refreshing && !readState(cfg).tickets[id]?.fellBack) {
+    refreshing = true;
+    refreshHealth(cfg).catch(() => {}).finally(() => { refreshing = false; });
+  }
   const m = mtime(cfg.paths.state) + mtime(healthFile);
   if (m !== lastSeen || Date.now() - lastTry >= every) {
     const out = tryAdmit();

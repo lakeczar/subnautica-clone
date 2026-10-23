@@ -121,80 +121,108 @@ export async function uploadWrapper(cfg) {
   return res.code === 0 ? path : null;
 }
 
-/** Stops a ticket's job on the sandbox: marks it cancelled (a job not started
- * yet never starts) and TERMs the wrapper if it runs, checked by PID and start
- * time. `r` is the lane the job was sent to (its remote holder's snapshot).
- * Returns { reached, stopped }. */
-export async function remoteStop(cfg, ticket, r = remoteConfig(cfg)) {
-  const d = `${r.laneDir}/jobs/${ticket}`;
-  const res = await ssh(r, `d=${q(d)}; mkdir -p "$d" && : > "$d/cancelled"; if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); ` +
-    `[ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && kill -TERM "$1" && echo stopped; fi; true`, { timeoutS: 30 });
-  return { reached: res.code === 0, stopped: /stopped/.test(res.out) };
-}
+/** A ticket's and an attempt's directories on the sandbox. */
+export const ticketDir = (r, ticket) => `${r.laneDir}/jobs/${ticket}`;
+export const attemptDir = (r, ticket, attempt) => `${r.laneDir}/jobs/${ticket}/a${attempt}`;
 
-/** One out-of-band look at a running job on the sandbox, from outside its
- * cgroup: its scope's memory.high count and its heartbeat file's mtime.
- * { high, beat } (null where unreadable), or null if unreachable. */
-export async function remoteWatch(cfg, ticket) {
-  const r = remoteConfig(cfg), d = `${r.laneDir}/jobs/${ticket}`;
-  const res = await ssh(r, `d=${q(d)}; cg=$(cat "$d/cgroup" 2>/dev/null); echo "high $(sed -n 's/^high //p' "$cg/memory.events" 2>/dev/null)"; echo "beat $(stat -c %Y "$d/heartbeat" 2>/dev/null)"`, { timeoutS: 20 });
-  if (res.code !== 0) return null;
-  const num = (k) => { const v = new RegExp(`^${k} (\\d+)$`, "m").exec(res.out)?.[1]; return v == null ? null : Number(v); };
-  return { high: num("high"), beat: num("beat") };
+/** Parses a receipt (alickers-job.sh --receipt, plus lane-run.sh's lines). */
+export function parseReceipt(text) {
+  const rc = { admitted: false, sha: null, setup: null, setupFailed: null, started: false, exit: null, refused: null, staged: [], stageMissing: [], stageFailed: [], stageDone: false };
+  for (const line of String(text ?? "").split("\n")) {
+    const [k, ...v] = line.trim().split(/\s+/);
+    if (k === "admitted") rc.admitted = true;
+    else if (k === "sha" && /^[0-9a-f]{40}$/.test(v[0] ?? "")) rc.sha = v[0];
+    else if (k === "setup" && v[0] === "ok") rc.setup = "ok";
+    else if (k === "setup" && v[0] === "failed") { rc.setup = "failed"; rc.setupFailed = { step: v[1] ?? "?", code: Number(v[2]) }; }
+    else if (k === "started") rc.started = true;
+    else if (k === "exit" && /^\d+$/.test(v[0] ?? "")) rc.exit = Number(v[0]);
+    else if (k === "refused") rc.refused = v.join(" ");
+    else if (k === "staged") rc.staged.push(v.join(" "));
+    else if (k === "stage-missing") rc.stageMissing.push(v.join(" "));
+    else if (k === "stage-failed") rc.stageFailed.push(v.join(" "));
+    else if (k === "stage" && v[0] === "done") rc.stageDone = true;
+  }
+  return rc;
 }
 
 /**
- * After the job: its lane directory on the sandbox is removed, and so are
- * artifacts it wrote inside the shared checkout (relative paths), which must
- * not leak into the next job's tree. One that could not be fetched is moved to
- * /work/results/lane-<ticket>/ on the sandbox instead, so nothing is lost.
+ * One out-of-band look at an attempt on the sandbox, from outside its cgroup:
+ * its receipt, its wrapper's liveness (PID and start time), its scope's
+ * memory.high count and its heartbeat file's mtime. Null if unreachable.
  */
-export async function remoteCleanup(cfg, ticket, fetched) {
-  const r = remoteConfig(cfg), parts = [`rm -rf ${q(`${r.laneDir}/jobs/${ticket}`)}`];
-  for (const a of fetched) {
-    if (!a.remote.startsWith(`${r.repo}/`)) continue; // outside the checkout: the job's own output place
-    const rel = a.remote.slice(r.repo.length + 1);
-    if (rel.split("/").includes("..")) continue;
-    parts.push(a.error ? `[ -e ${q(a.remote)} ] && mkdir -p ${q(`/work/results/lane-${ticket}`)} && mv ${q(a.remote)} ${q(`/work/results/lane-${ticket}/`)}` : `rm -rf ${q(a.remote)}`);
-  }
-  return (await ssh(r, `${parts.join("; ")}; true`, { timeoutS: 60 })).code === 0;
+export async function remoteRead(r, ticket, attempt) {
+  const d = attemptDir(r, ticket, attempt);
+  const res = await ssh(r, `d=${q(d)}; echo "@@receipt"; cat "$d/receipt" 2>/dev/null; echo "@@end";` +
+    ` alive=0; if [ -f "$d/pid" ]; then set -- $(cat "$d/pid"); [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] && alive=1; fi; echo "alive $alive";` +
+    ` cg=$(cat "$d/cgroup" 2>/dev/null); echo "high $(sed -n 's/^high //p' "$cg/memory.events" 2>/dev/null)"; echo "beat $(stat -c %Y "$d/heartbeat" 2>/dev/null)"`, { timeoutS: 20 });
+  if (res.code !== 0) return null;
+  const receipt = parseReceipt(/@@receipt\n([\s\S]*?)@@end/.exec(res.out)?.[1] ?? "");
+  const num = (k) => { const v = new RegExp(`^${k} (\\d+)$`, "m").exec(res.out)?.[1]; return v == null ? null : Number(v); };
+  return { receipt, alive: num("alive") === 1, high: num("high"), beat: num("beat") };
 }
 
-/** Asks a running soak to yield ($SILTWAKE_JOB_YIELD appears on the sandbox). */
-export async function remoteYield(cfg, ticket, on) {
-  const r = remoteConfig(cfg), f = `${r.laneDir}/jobs/${ticket}/yield`;
+/**
+ * Stops work on the sandbox, checked by PID and start time.
+ * - `cancel: true`: the logical ticket is cancelled (a not-yet-started attempt never starts).
+ * - otherwise only `attempt` is retired: a later attempt is unaffected (R1-F4).
+ * Returns { reached, alive } (alive: the attempt's wrapper still runs after the TERM).
+ */
+export async function remoteStop(cfg, ticket, { attempt = null, cancel = false, r = remoteConfig(cfg) } = {}) {
+  const t = ticketDir(r, ticket), d = attempt == null ? null : attemptDir(r, ticket, attempt);
+  const res = await ssh(r, `t=${q(t)}; mkdir -p "$t"; ${cancel ? `: > "$t/cancelled";` : ""}` +
+    (d ? ` d=${q(d)}; mkdir -p "$d"; ${cancel ? "" : `: > "$d/retired";`} if [ -f "$d/pid" ]; then set -- $(cat "$d/pid");` +
+      ` if [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ]; then kill -TERM "$1"; for i in 1 2 3 4 5 6 7 8 9 10; do sleep 1;` +
+      ` [ "$(cut -d' ' -f22 /proc/$1/stat 2>/dev/null)" = "$2" ] || { echo "alive 0"; exit 0; }; done; echo "alive 1"; exit 0; fi; fi; echo "alive 0"` : ` echo "alive 0"`), { timeoutS: 40 });
+  return { reached: res.code === 0, alive: /alive 1/.test(res.out) };
+}
+
+/** Removes an attempt's directory on the sandbox (its staged outputs included). */
+export async function removeAttempt(r, ticket, attempt) {
+  const d = attemptDir(r, ticket, attempt);
+  return (await ssh(r, `d=${q(d)}; [ -d "$d" ] && chmod -R u+w "$d"; rm -rf "$d"; rmdir ${q(ticketDir(r, ticket))} 2>/dev/null; true`, { timeoutS: 60 })).code === 0;
+}
+
+/** Asks a running soak attempt to yield ($SILTWAKE_JOB_YIELD appears on the sandbox). */
+export async function remoteYield(r, ticket, attempt, on) {
+  const f = `${attemptDir(r, ticket, attempt)}/yield`;
   return (await ssh(r, on ? `: > ${q(f)}` : `rm -f ${q(f)}`, { timeoutS: 30 })).code === 0;
 }
 
 /**
- * Fetches each artifact whole (a file, or a directory such as an evidence
- * pack) into <artifactsDir>/<ticket>/<name>. Relative paths are the job's cwd
- * in the sandbox checkout. Returns [{ remote, local, bytes }] or
- * [{ remote, error }]: a failed fetch is reported, never dropped.
+ * Fetches an attempt's staged outputs (lane-run.sh stage/, immutable, written
+ * inside the sandbox's lock) into <dest>, each whole. Bounded (R1-F7): the
+ * transfer is aborted, both ends killed, when no bytes arrived for
+ * inactivityS, after ceilingS, or as soon as cancelled() says so. Returns
+ * { ok, bytes, error }; on failure the staged outputs stay on the sandbox.
  */
-export async function fetchArtifacts(cfg, ticket, paths, cwdRel) {
-  const r = remoteConfig(cfg), dest = join(r.artifactsDir, ticket), out = [];
-  for (const p of paths) {
-    const remotePath = isAbsolute(p) ? p : `${r.repo}/${cwdRel === "." ? "" : `${cwdRel}/`}${p}`;
-    mkdirSync(dest, { recursive: true });
-    const res = await new Promise((done) => {
-      const s = spawn(r.ssh[0], [...r.ssh.slice(1), `p=${q(remotePath)}; [ -e "$p" ] || { echo "no such file on the sandbox" >&2; exit 3; }; cd "$(dirname "$p")" && tar -cf - "$(basename "$p")"`], { stdio: ["ignore", "pipe", "pipe"] });
-      const t = spawn("tar", ["-xf", "-", "-C", dest], { stdio: ["pipe", "ignore", "pipe"] });
-      s.stdout.pipe(t.stdin);
-      let err = "";
-      s.stderr.on("data", (d) => { err += d; });
-      t.stderr.on("data", (d) => { err += d; });
-      let sc = null, tc = null;
-      const end = () => { if (sc != null && tc != null) done({ code: sc || tc, err }); };
-      s.on("close", (c) => { sc = c ?? 255; end(); });
-      t.on("close", (c) => { tc = c ?? 1; end(); });
-    });
-    const local = join(dest, p.split("/").filter(Boolean).at(-1));
-    if (res.code !== 0 || !existsSync(local)) { out.push({ remote: remotePath, error: (res.err.trim() || `exit ${res.code}`).slice(0, 200) }); continue; }
-    const du = spawnSync("du", ["-sb", local], { encoding: "utf8" }).stdout;
-    out.push({ remote: remotePath, local, bytes: Number(du.split("\t")[0]) || statSync(local).size });
-  }
-  return out;
+export function fetchStage(r, ticket, attempt, dest, { inactivityS = 60, ceilingS = 1800, cancelled = () => false } = {}) {
+  mkdirSync(dest, { recursive: true });
+  const stage = `${attemptDir(r, ticket, attempt)}/stage`;
+  return new Promise((done) => {
+    const s = spawn(r.ssh[0], [...r.ssh.slice(1), `cd ${q(stage)} && tar -cf - .`], { stdio: ["ignore", "pipe", "pipe"], detached: true });
+    const t = spawn("tar", ["-xf", "-", "-C", dest], { stdio: ["pipe", "ignore", "pipe"], detached: true });
+    let err = "", bytes = 0, last = Date.now(), aborted = null, sc = null, tc = null;
+    const kill = () => { for (const p of [s, t]) { try { process.kill(-p.pid, "SIGKILL"); } catch { /* gone */ } } };
+    s.stdout.on("data", (d) => { bytes += d.length; last = Date.now(); if (!t.stdin.write(d)) s.stdout.pause(); });
+    t.stdin.on("drain", () => s.stdout.resume());
+    t.stdin.on("error", () => {});
+    s.stdout.on("end", () => t.stdin.end());
+    s.stderr.on("data", (d) => { err += d; });
+    t.stderr.on("data", (d) => { err += d; });
+    const started = Date.now();
+    const watch = setInterval(() => {
+      const why = cancelled() ? "cancelled" : Date.now() - last > inactivityS * 1000 ? `no data for ${inactivityS} s` : Date.now() - started > ceilingS * 1000 ? `over ${ceilingS} s` : null;
+      if (why && !aborted) { aborted = why; kill(); }
+    }, 500);
+    const end = () => {
+      if (sc == null || tc == null) return;
+      clearInterval(watch);
+      const ok = !aborted && sc === 0 && tc === 0;
+      done({ ok, bytes, error: ok ? null : aborted ? `transfer aborted: ${aborted}` : (err.trim() || `exit ${sc || tc}`).slice(0, 200) });
+    };
+    s.on("close", (c) => { sc = c ?? 255; end(); });
+    t.on("close", (c) => { tc = c ?? 1; end(); });
+  });
 }
 
 /** Build outputs a command reads that a commit doesn't carry: `.test-build*`

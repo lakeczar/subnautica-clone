@@ -315,18 +315,19 @@ export function reconcile(cfg, state) {
   for (const t of Object.values(state.tickets)) {
     if (t.state === "queued" && alive(t.supervisor)) continue;
     if (t.state === "running" && t.remote) {
-      // A remote ticket's job runs on the second worker; only its remote holder
-      // (and, before the claim, its supervisor) lives here.
-      if ((!t.holder && alive(t.supervisor)) || [t.supervisorUnit, t.holderUnit].some((u) => u && scopePopulated(u))) continue;
-      if (t.holder && alive(t.holder)) continue;
-      // Its holder died: stop the job on the sandbox too (detached; ssh never runs under this lock).
-      spawn(process.execPath, [join(dirname(fileURLToPath(import.meta.url)), "remote-holder.mjs"), "--stop", t.id], { detached: true, stdio: "ignore", env: process.env }).unref();
-      const exitFile = join(jobDir(cfg, t.id), "exit.json");
-      const result = { code: 137, label: "killed: its remote holder died; the job on alickers was asked to stop", stopReason: "killed", remote: true, machineTag: t.goal?.machine };
-      if (!existsSync(exitFile)) writeJsonAtomic(exitFile, { ticket: t.id, class: t.req.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(),
-        evidence: { commit: null, bound: false, why: "recovered: no observer saw the job end", snapshot: false }, ...result });
-      ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...result });
-      delete state.tickets[t.id];
+      // A remote ticket is supervised by its remote holder's process, not by
+      // whatever its scope still holds (R1-F3): a surviving transport is no
+      // observer. Before the claim its supervisor owns it.
+      if (!t.holder ? alive(t.supervisor) || [t.supervisorUnit, t.holderUnit].some((u) => u && scopePopulated(u)) : alive(t.holder)) continue;
+      // Holder gone: one recovery process (remote-holder.mjs --recover) stops the
+      // job on the sandbox and finishes the ticket; the reservation is kept until then.
+      if (alive(t.recovering)) continue;
+      const rec = spawn("systemd-run", ["--user", "--scope", "--quiet", "--collect", `--unit=${cfg.supervisorPrefix}-recover-${t.id}-${Date.now() % 100000}`,
+        process.execPath, join(dirname(fileURLToPath(import.meta.url)), "remote-holder.mjs"), "--recover", t.id], { detached: true, stdio: "ignore", env: process.env });
+      rec.unref();
+      // systemd-run execs into the scope: its PID is the recovery process's.
+      t.recovering = { pid: rec.pid, start: procStart(rec.pid) };
+      if (!t.orphaned) { t.orphaned = Date.now(); ledger(cfg, { event: "orphaned", ticket: t.id, worktree: t.worktree, remote: true }); }
       changed = true;
       continue;
     }

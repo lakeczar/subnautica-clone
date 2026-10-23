@@ -6,7 +6,7 @@
 import { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { alive } from "./state.mjs";
@@ -103,24 +103,31 @@ export function v1Script(c) {
 
 /**
  * A fake second worker for the remote lane's tests (SCHED-2b), entirely in the
- * context's directory: an ssh stand-in (runs the command here, or exits 255
- * while FAKE/unreachable exists), a transport with alickers-job.sh's protocol
- * (pins the commit in FAKE/repo, prints "testing" and "tested" lines) and a
- * siltwake-job copy (its one-job lock, the owner's pause flag giving 75, its
- * own user scope with MemoryHigh at 85% of MemoryMax, or FAKE_MEMORY_HIGH, and
- * no swap). Returns the remote config and env for context().
+ * context's directory, driven by the REAL transport (scripts/alickers-job.sh)
+ * through its test seams: ALICKERS_SSH is an ssh stand-in (runs the command
+ * here, with the sandbox's PATH and HOME, or exits 255 while FAKE/unreachable
+ * exists), ALICKERS_REPO the sandbox checkout (a clone of the test worktree,
+ * so the transport's own `git fetch origin` finds the commit) and ALICKERS_TMP
+ * its scratch directory. `siltwake-job` is a copy of the sandbox's (its one-job
+ * lock, the owner's pause flag giving 75, its own user scope with MemoryHigh
+ * at 85% of MemoryMax, or FAKE_MEMORY_HIGH, and no swap). FAKE/npm, if written,
+ * replaces npm on the sandbox. Returns the remote config for config.json.
  */
 export function fakeSandbox(c, extra = {}) {
   const f = join(c.dir, "fake-alickers");
   mkdirSync(join(f, "home", ".local", "state", "siltwake"), { recursive: true });
+  mkdirSync(join(f, "bin"), { recursive: true });
+  mkdirSync(join(f, "tmp"), { recursive: true });
   const w = (name, body) => { writeFileSync(join(f, name), body, { mode: 0o755 }); return join(f, name); };
   const ssh = w("ssh", `#!/bin/bash
 # fake ssh: the last argument is the remote command
 [ -e "$FAKE/unreachable" ] && { echo "ssh: connect to host siltwake-alickers: Connection refused" >&2; exit 255; }
+[ -n "$FAKE_SSH_DELAY" ] && [ -e "$FAKE/slow-probe" ] && case "\${@: -1}" in *flock\ -n*) sleep "$FAKE_SSH_DELAY" ;; esac
+[ -e "$FAKE/stall-fetch" ] && case "\${@: -1}" in *"tar -cf"*) sleep 3600 ;; esac
 cmd="\${@: -1}"
-HOME="$FAKE/home" exec bash -c "$cmd"
+HOME="$FAKE/home" PATH="$FAKE/bin:$PATH" exec bash -c "$cmd"
 `);
-  const job = w("siltwake-job", `#!/usr/bin/env bash
+  w("bin/siltwake-job", `#!/usr/bin/env bash
 # siltwake-job, as on the sandbox, with private paths and unit names
 set -euo pipefail
 memory=8G deadline=1800
@@ -137,26 +144,19 @@ systemd-run --user --scope --quiet --unit="$unit" -p MemoryHigh="\${FAKE_MEMORY_
   -p MemorySwapMax=0 -p CPUQuota=600% -p Delegate=yes timeout --kill-after=10s "\${deadline}s" "$@" || status=$?
 exit "$status"
 `);
-  const transport = w("alickers-job.sh", `#!/usr/bin/env bash
-# alickers-job.sh's protocol against the fake sandbox
-set -euo pipefail
-sha="" deadline=1800 memory=8G
-while [[ $# -gt 0 ]]; do case "$1" in --sha) sha="$2"; shift 2;; --deadline) deadline="$2"; shift 2;; --memory) memory="$2"; shift 2;; --) shift; break;; *) break;; esac; done
-[ -e "$FAKE/unreachable" ] && { echo "alickers-job: worker unreachable (ssh 255); rerun on factory-worker" >&2; exit 255; }
-sha="$(git rev-parse --verify "\${sha:-HEAD}^{commit}")"
-[ -d "$FAKE/repo/.git" ] || git clone -q --no-checkout "$PWD" "$FAKE/repo"
-git -C "$FAKE/repo" fetch -q "$PWD" "$sha" 2>/dev/null || git -C "$FAKE/repo" fetch -q "$PWD"
-cd "$FAKE/repo"
-exec "$FAKE/siltwake-job" --deadline "$deadline" --memory "$memory" bash -c '
-  git checkout -q --detach "$0"
-  echo "alickers-job: testing $0 on fake-alickers"
-  "$@"; rc=$?
-  echo "alickers-job: tested $0 exit $rc"; exit $rc' "$sha" "$@"
-`);
-  const remote = { transport, ssh: [ssh], repo: join(f, "repo"), laneDir: join(f, "lane"), lock: join(f, "lock"), artifactsDir: join(c.dir, "artifacts"),
-    tickS: 1, throttleNoticeS: 3, recheckS: { up: 2, paused: 2, unreachable: 2, unreachableMax: 4 }, ...extra };
-  c.env.FAKE = f;
-  c.fake = { dir: f, job, pause: (on) => (on ? writeFileSync(join(f, "home", ".local", "state", "siltwake", "paused"), "") : rmSync(join(f, "home", ".local", "state", "siltwake", "paused"), { force: true })),
-    unreachable: (on) => (on ? writeFileSync(join(f, "unreachable"), "") : rmSync(join(f, "unreachable"), { force: true })) };
+  const repo = join(f, "repo");
+  const remote = { ssh: [ssh], repo, laneDir: join(f, "lane"), lock: join(f, "lock"), artifactsDir: join(c.dir, "artifacts"),
+    tickS: 1, throttleNoticeS: 3, fetchInactivityS: 3, recheckS: { up: 2, paused: 2, unreachable: 2, unreachableMax: 4 }, ...extra };
+  Object.assign(c.env, { FAKE: f, ALICKERS_SSH: ssh, ALICKERS_REPO: repo, ALICKERS_TMP: join(f, "tmp") });
+  c.fake = { dir: f, repo,
+    /** The sandbox's checkout, cloned from a worktree (its origin), as the real sandbox's is from GitHub. */
+    clone: (from) => { if (!existsSync(join(repo, ".git"))) spawnSync("git", ["clone", "-q", from, repo]); },
+    pause: (on) => (on ? writeFileSync(join(f, "home", ".local", "state", "siltwake", "paused"), "") : rmSync(join(f, "home", ".local", "state", "siltwake", "paused"), { force: true })),
+    unreachable: (on) => (on ? writeFileSync(join(f, "unreachable"), "") : rmSync(join(f, "unreachable"), { force: true })),
+    flag: (name, on) => (on ? writeFileSync(join(f, name), "") : rmSync(join(f, name), { force: true })),
+    npm: (body) => (body == null ? rmSync(join(f, "bin", "npm"), { force: true }) : w("bin/npm", `#!/bin/bash\n${body}\n`)),
+    /** A direct caller: siltwake-job run by hand in the sandbox checkout, as another agent's alickers-job.sh would. */
+    direct: (script) => spawn("bash", ["-c", `cd ${repo} && siltwake-job --deadline 120 bash -c ${JSON.stringify(script)}`], { env: { ...c.env, HOME: join(f, "home"), PATH: `${join(f, "bin")}:${process.env.PATH}` }, stdio: "ignore" }),
+  };
   return remote;
 }

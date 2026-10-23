@@ -191,7 +191,8 @@ const byOrder = (now, cfg) => (a, b) =>
  * through the last exclusive start), worktree, head (pools reserved for an old
  * ticket), cpu, memory, gpu, host-memory, leftover (a soak waiting for idle
  * capacity), remote (alickers' slot is busy: a lane job, or another agent's
- * direct alickers-job.sh call), remote-paused, remote-down, remote-unknown.
+ * direct alickers-job.sh call), remote-paused, remote-down, remote-unknown,
+ * remote-retry (a 4070 ticket backing off after a failed dispatch).
  */
 export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false } = {}) {
   const T = tokensFor(host.nproc), M = cfg.poolMiB;
@@ -211,6 +212,8 @@ export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false 
     if (!m || m === "3090") continue;
     // A commit only (the transport sends commits); an any or soak ticket that fell back runs here.
     if (!t.goal.remoteOk || (t.fellBack && m !== "4070")) continue;
+    // A 4070 ticket backing off after a failed dispatch waits for its next try (R1-F5).
+    if (t.notBefore && now < t.notBefore) { result.blocked[t.id] = "remote-retry"; remoteHandled.add(t.id); continue; }
     if (slotFree) { result.admit.push({ id: t.id, express: false, remote: true }); slotFree = false; remoteHandled.add(t.id); continue; }
     if (m === "any") continue; // prefers alickers, never waits for it
     if (m === "soak" && ["paused", "unreachable", "off"].includes(rstate)) continue; // here while alickers is away
