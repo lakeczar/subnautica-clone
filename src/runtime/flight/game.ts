@@ -64,21 +64,23 @@ export function recordCommand(rec: FlightRecorder, s: GameState | null, command:
   rec.event("action", command.type, { ...(s ? { tick: s.tick } : {}), detail: { command: command.type }, snapshot: false });
 }
 
-/** What the recorder reads of the play timeline: the entries after `cursor`,
- * the cursor to pass next, and how many went before they were read. The cursor
- * counts entries ever recorded, never an index into `events`, so it survives a
- * timeline that seals and resets its open chunk (SIM-1). This is the one place
- * that knows the timeline's layout: SIM-1's `timelineSince` replaces the body. */
+// The seam: the only code that knows the timeline's layout. A cursor counts
+// entries ever recorded, never an index into `events`, so it survives a
+// timeline that seals and resets its open chunk (SIM-1). SIM-1 replaces the two
+// bodies with its `seq` and `timelineSince`.
+/** The cursor at the timeline's present. Root's timeline only appends (past its
+ * cap it drops the new entry), so its length counts every entry it kept. */
+export const timelineHead = (t: TimelineRecorder): number => t.events.length;
+/** The entries after `cursor`, the cursor to pass next, and how many went before they were read. */
 export function timelineSince(t: TimelineRecorder, cursor: number): { events: readonly TimelineEvent[]; cursor: number; missed: number } {
-  // Root's timeline only appends (past its cap it drops the new entry), so its length counts every entry it kept.
-  return { events: cursor < t.events.length ? t.events.slice(cursor) : [], cursor: t.events.length, missed: 0 };
+  return { events: t.events.slice(cursor), cursor: t.events.length, missed: 0 };
 }
-/** The cursor at the timeline's present: a new session's recording starts there. */
-export const timelineHead = (t: TimelineRecorder): number => timelineSince(t, Number.MAX_SAFE_INTEGER).cursor;
 
 const MILESTONE_KINDS = new Set(["new", "death", "recovery", "system"]);
 /** New play-timeline entries since `cursor`: milestones (with a snapshot), the rest for pacing. Returns the new cursor. */
 export function recordTimeline(rec: FlightRecorder, t: TimelineRecorder, cursor: number): number {
+  // Most calls find nothing new: answered from the head, allocating nothing.
+  if (timelineHead(t) <= cursor) return cursor;
   const read = timelineSince(t, cursor);
   if (read.missed > 0) rec.event("warning", `play timeline: ${read.missed} entries went before the recorder read them`, { detail: { missed: read.missed }, snapshot: false });
   for (const e of read.events) {
