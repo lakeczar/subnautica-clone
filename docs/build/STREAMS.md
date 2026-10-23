@@ -701,3 +701,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Fixes:** one `TS_EXTENSIONS` set and recursive headless roots; value-edge traversal through modules outside sim/content; a failing waiter fails its step; headless TextEncoder/TextDecoder/AbortSignal declarations.
   - **Evidence:** the gate passed 10/10 at 0c9b2ff, npm test 1,415/1,415.
   - **Review:** short Sol R3 running (`siltwake-stew1-review-r3-sol-1c17c4a`).
+- **SIM-1 R6** (Sol on `f6fee338`, report on `review/sim-1-r6` `802b99e6`): REQUEST CHANGES, 2 P1s, 4 P2s and 1 P3.
+  - **Findings:** the commit-ID validation cache permits writes and GC over post-validation damage; malformed heads throw before protection; repair failure handling; live-commit protection; failure-mode retry; the pending notice.
+  - **Decision: split.**
+    - **SIM-1a merges now:** the in-place step, StepGuard, SIM-02, the chunked recorder with note-keeping rotation, the cursor, the lock split, and root's own single-key atomic persistence. That's no regression vs root, and notes are now kept.
+    - **SIM-1b follows:** the incremental journal (parked from f6fee338), with the R6 rulings: no cache and a fresh head parse per commit; a total reader; repair supersedes v1; a rejected lock or quota failure retries, while conflict and protection don't.
