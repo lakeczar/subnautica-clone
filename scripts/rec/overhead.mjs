@@ -1,0 +1,69 @@
+#!/usr/bin/env node
+// REC-1: what recording costs. The same stretch of the same route, from the
+// same save, under each recording mode, interleaved (ABCD, then DCBA, …) so
+// drift cancels; every mode carries the same small rAF probe (run.mjs), so
+// frame gaps and the game's own frame work compare like for like.
+//
+//   $H --class exclusive -- node scripts/rec/overhead.mjs --dist DIST --save SAVE \
+//      --plan PLAN --segment N --seconds 120 --rounds 2 --out DIR [run.mjs options]
+//
+// Modes: off (?rec=off, nothing captured) · perf (recorder on, snapshots, no
+// video: an exclusive performance run) · screencast (recorder on + the CDP
+// screencast video: functional runs and soaks) · game-video (recorder on +
+// the in-game MediaRecorder video: an owner playtest).
+import { spawnSync } from "node:child_process";
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+
+const args = process.argv.slice(2), arg = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
+const out = arg("out"), rounds = Number(arg("rounds", 2));
+if (!out || !arg("dist") || !arg("save")) { console.error("usage: overhead.mjs --dist DIST --save SAVE --plan PLAN --segment N --seconds S --rounds R --out DIR"); process.exit(2); }
+mkdirSync(out, { recursive: true });
+const MODES = { off: ["--rec", "off"], perf: ["--rec", "on", "--video", "off"], screencast: ["--rec", "on", "--video", "on"], "game-video": ["--rec", "game-video"] };
+const order = Object.keys(MODES);
+const pass = [];
+for (const name of ["plan", "segment", "seconds", "chrome", "pw", "gpu", "machine", "size"]) if (arg(name) !== undefined) pass.push(`--${name}`, arg(name));
+const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), "run.mjs");
+const runs = [];
+for (let r = 0; r < rounds; r++) {
+  for (const mode of r % 2 ? [...order].reverse() : order) {
+    const dir = path.join(out, `r${r + 1}-${mode}`);
+    const t = Date.now();
+    const p = spawnSync(process.execPath, [runner, "--dist", arg("dist"), "--save", arg("save"), "--out", dir, ...MODES[mode], ...pass, "--no-pack"], { stdio: "inherit" });
+    const run = JSON.parse(readFileSync(path.join(dir, "run.json"), "utf8"));
+    runs.push({ round: r + 1, mode, dir, exit: p.status, seconds: Math.round((Date.now() - t) / 1000), probe: run.probe, recorder: run.header?.recorderOverhead ?? null, video: run.header?.video ?? null, errors: run.errors.length });
+    console.log(`[overhead] round ${r + 1} ${mode}: ${JSON.stringify(run.probe)}`);
+  }
+}
+// Pool each mode's raw probe samples across rounds, then compare with off.
+const pooled = {};
+for (const x of runs) {
+  const p = JSON.parse(readFileSync(path.join(x.dir, "probe.json"), "utf8"));
+  const m = (pooled[x.mode] ??= { gaps: [], work: [], recMean: [] });
+  m.gaps.push(...p.gaps); m.work.push(...p.work);
+  if (x.recorder) m.recMean.push(x.recorder.meanMs);
+}
+const q = (xs, f) => { const s = [...xs].sort((a, b) => a - b); return s.length ? s[Math.min(s.length - 1, Math.floor(s.length * f))] : null; };
+const stats = Object.fromEntries(Object.entries(pooled).map(([k, m]) => [k, {
+  frames: m.gaps.length, gapP50: +q(m.gaps, 0.5).toFixed(2), gapP99: +q(m.gaps, 0.99).toFixed(2), over33: m.gaps.filter((g) => g > 33.4).length,
+  workP50: +q(m.work, 0.5).toFixed(3), workP99: +q(m.work, 0.99).toFixed(3), workMean: +(m.work.reduce((a, b) => a + b, 0) / m.work.length).toFixed(3),
+  recorderSelfMs: m.recMean.length ? +(m.recMean.reduce((a, b) => a + b, 0) / m.recMean.length).toFixed(4) : null,
+}]));
+const base = stats.off, d = (a, b) => (a == null || b == null ? null : +(a - b).toFixed(3));
+const deltas = Object.fromEntries(Object.entries(stats).filter(([k]) => k !== "off").map(([k, s]) => [k, {
+  gapP50: d(s.gapP50, base?.gapP50), gapP99: d(s.gapP99, base?.gapP99), workP50: d(s.workP50, base?.workP50), workP99: d(s.workP99, base?.workP99),
+  workMean: d(s.workMean, base?.workMean), pctOfFrame: base ? +((100 * (s.workMean - base.workMean)) / 16.667).toFixed(2) : null,
+}]));
+const job = process.env.SILTWAKE_JOB_TICKET ?? "none";
+writeFileSync(path.join(out, "overhead.json"), JSON.stringify({ job, rounds, runs, stats, deltas }, null, 1));
+const md = [
+  `# Recorder overhead (${rounds} rounds, interleaved; ticket ${job})`, "",
+  "| Mode | Frames | Gap p50 | Gap p99 | Over 33 ms | Work p50 | Work p99 | Work mean | Recorder self (mean/frame) |", "| --- | --- | --- | --- | --- | --- | --- | --- | --- |",
+  ...Object.entries(stats).map(([k, s]) => `| ${k} | ${s.frames} | ${s.gapP50} | ${s.gapP99} | ${s.over33} | ${s.workP50} | ${s.workP99} | ${s.workMean} | ${s.recorderSelfMs ?? "—"} |`), "",
+  "Deltas against off (ms; % of a 16.67 ms frame from the mean work):", "", "| Mode | Gap p50 | Gap p99 | Work p50 | Work p99 | Work mean | % of frame |", "| --- | --- | --- | --- | --- | --- | --- |",
+  ...Object.entries(deltas).map(([k, x]) => `| ${k} | ${x.gapP50} | ${x.gapP99} | ${x.workP50} | ${x.workP99} | ${x.workMean} | ${x.pctOfFrame} |`), "",
+  "Work: the game's frame callback (simulation, streaming, render, HUD, and the recorder when on), timed by the same wrapper in every mode. Gap: the rAF interval a player sees.",
+];
+writeFileSync(path.join(out, "overhead.md"), md.join("\n") + "\n");
+console.log(md.join("\n"));
