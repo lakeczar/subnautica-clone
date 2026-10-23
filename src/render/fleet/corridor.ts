@@ -24,6 +24,12 @@ export function createLaunchCorridor(scene: Scene) {
   ghost.material = material;
   ghost.isPickable = false;
   ghost.renderingGroupId = 2;
+  // Compile now with a placeholder quad, so the first helm frame does not stall on it.
+  const seed = new VertexData();
+  seed.positions = [0, -1e4, 0, 1, -1e4, 0, 1, -1e4, 1];
+  seed.indices = [0, 1, 2];
+  seed.applyToMesh(ghost, true);
+  material.forceCompilation(ghost);
   ghost.setEnabled(false);
   return {
     update(s: GameState | null, world: WorldQueries): void {
