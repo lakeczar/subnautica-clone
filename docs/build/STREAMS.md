@@ -413,3 +413,19 @@ Queued after these: OP-1 opening pass, the `stepGame` state-copy speed-up, the f
   - CW-1, CR-1 and UX-1 are told to merge root at a safe point and move to v2. v1 waiters pause v2 until they do.
   - The 2 h canary observation is under way (ledger at `/work/tmp/siltwake-sched/ledger.jsonl`).
 - **Compromise audit:** Sol evidence `4e81ac9` on `research/compromise-audit` has 107 findings: A 30, B 32, C 19, D 26. The Opus verdict (`siltwake-compromise-verdict-opus-4e81ac9`) is running.
+
+### 2026-10-23 ~02:45Z — second worker; compromise verdict adopted; COL-1 and SCHED-2 started
+- **Second worker `siltwake-alickers`** (WSL2 plus RTX 4070 Laptop on the owner's PC) is integrated as best-effort through `scripts/alickers-job.sh`, at a pinned SHA.
+  - Verified: fast tests 1,286/1,286 in 52 s; the 4070 GPU probe passes with no leftovers.
+  - The full playthrough qualification run is under way at `12ecbc8`.
+  - Rules are in `WORKER_RESOURCE_LIMITS.md`.
+- **Compromise verdict** (Opus `cd6993a`, on Sol `4e81ac9`) **adopted** by the owner:
+  - five roots: box-only collision (COL-1), runtime building (a wider WK-1), an underived memory budget (MEM-1 and LC-2), frozen paths (NAV-1), and evidence that measured the setup (SCHED-2, SAVE-1, PT-0);
+  - every art restoration approved;
+  - queue changes approved; early opening-hours playtest after OP-1 approved;
+  - the memory floor is pending an owner discussion: RAM or VRAM, and quality.
+- **Started:** COL-1 stage A (`siltwake-col1-static-collider-opus-fe27757`, new modules only) and SCHED-2 then SAVE-1 (`siltwake-sched2-save1-opus-fe27757`). Builders are 5 of 5: CW-1, CR-1, UX-1, COL-1, SCHED-2.
+- **Folded in:**
+  - CW-1: 8 segments at 1080p, `Infinity`-finish counting, pack-hash rejection, mast and seam shots;
+  - CR-1: visible skate rest, out-of-view laying swap, continuous approaches, the hunter sight line.
+- **Next:** MEM-1 (Sol), after CW-1 merges; it measures RAM and VRAM on the 3090 and the 4070.
