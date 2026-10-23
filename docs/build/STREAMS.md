@@ -607,3 +607,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **F2:** rotated chunks and the v1 key are deleted before the new head commits, so a failed save or migration loses previously saved history.
   - **What holds:** the in-place step, StepGuard, indexes and aliasing are clean; the independent oracle, reload and fault checks match; fast tier 140/140.
   - **C1 contract:** SIM-1 exposes a monotonic event cursor, and REC-1 consumes it behind a seam (REC-1's array offset loses events at 1,000-event seals). Whichever merges second wires it. Both builders told.
+- **SIM-1 done at `3b797af3`** (R1 fixes in `047846b4`): the head-as-commit-point store, fold-in-place compaction, one shared span-closing helper, and the `timelineSince` monotonic cursor for REC-1. A focused Sol R2 on the persistence paths is running (`siltwake-sim1-review-r2-sol-3b797af`).
