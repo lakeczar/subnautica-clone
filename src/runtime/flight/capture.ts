@@ -12,7 +12,7 @@
 import { FlightRecorder, FLIGHT_FORMAT, FLIGHT_VERSION, FRAME_COLUMNS, HOLD_CODES } from "./recorder.js";
 import type { FlightEvent, FlightSample, FlightSnapshot, SnapshotRequest } from "./recorder.js";
 import { zipBlob, type ZipEntry } from "./zip.js";
-import { DEFAULT_RUNGS, describeCodec, encoderConfig, ladder, type EncoderRung } from "./encoders.js";
+import { DEFAULT_RUNGS, describeCodec, ladder, softwareAllowed, supportedConfig, type EncoderRung } from "./encoders.js";
 import { budgetFor, DEFAULT_BUDGET_BYTES, MIN_VIDEO_BUDGET_BYTES, planRetention, videoAllowed, type RetentionPlan, type StoredFile, type StoredKind } from "./retention.js";
 
 export type FlightMode = "off" | "driver" | "playtest";
@@ -124,6 +124,10 @@ export class FlightCapture {
   private softwareWidth: number = SOFTWARE_VIDEO_WIDTH;
   /** The ladder's rungs this recording may use (encoders.ts); measurements narrow it. */
   private videoRungs: string[] = [...DEFAULT_RUNGS];
+  private captureFrame = false;
+  private encodeVideo = true;
+  /** Software encoding allowed here (owner policy: Linux test machines only). */
+  private software = false;
   /** The encoder chosen for this recording (R3b): hardware at VIDEO_SIZE, else software at the fallback's width. Decided once, on the page. */
   private videoPlan: { rung: EncoderRung | null; width: number } | null = null;
   private videoWanted = false;
@@ -153,6 +157,10 @@ export class FlightCapture {
     if (Number(q.get("recvideowidth")) >= 320) this.softwareWidth = Math.round(Number(q.get("recvideowidth")) / 2) * 2;
     if (q.get("reccodec")) this.videoRungs = q.get("reccodec")!.split(",");
     if (q.get("rechw") === "0") this.videoRungs = ladder(this.videoRungs, false).map((r) => r.key);
+    // Measurement overrides: the capture path (`?reccapture=frame`), capture without encoding (`?recencode=0`), software where it is otherwise not allowed (`?recsoftware=1`).
+    this.captureFrame = q.get("reccapture") === "frame";
+    this.encodeVideo = q.get("recencode") !== "0";
+    this.software = softwareAllowed((navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform) || q.get("recsoftware") === "1";
     const gl = canvas.getContext("webgl2");
     const info = gl?.getExtension("WEBGL_debug_renderer_info");
     const script = document.querySelector<HTMLScriptElement>("script[type=module][src]")?.src ?? "";
@@ -228,7 +236,13 @@ export class FlightCapture {
       if (now >= v.next) {
         v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
         if (v.inflight + v.capturing >= VIDEO_INFLIGHT_MAX) { v.skipped++; this.ledger.videoDrops.skipped++; this.videoGap(now, "lost", "the video was behind on the main thread", v.lastKept ?? v.lastSent); }
-        else {
+        else if (this.captureFrame) {
+          // `?reccapture=frame` (R3b, the research's §4): the canvas wrapped as a VideoFrame now, in the frame that drew
+          // it (a GPU shared image where the browser can), transferred whole; the encoder scales it.
+          let frame: VideoFrame | null = null;
+          try { frame = new VideoFrame(this.canvas, { timestamp: Math.round(now * 1000), alpha: "discard" } as VideoFrameInit); } catch { frame = null; }
+          if (frame) this.sendFrame(v, now, frame);
+        } else {
           const seg = v.segment;
           v.capturing++;
           void createImageBitmap(this.canvas, { resizeWidth: seg.width, resizeHeight: seg.height, resizeQuality: "low" }).then((bitmap) => {
@@ -269,7 +283,7 @@ export class FlightCapture {
 
   /** One picture (or, without one, the last again) to the encoder, stamped with
    * the page time it shows. Times only go forward. */
-  private sendFrame(v: Video, t: number, bitmap?: ImageBitmap): void {
+  private sendFrame(v: Video, t: number, bitmap?: ImageBitmap | VideoFrame): void {
     const s = this.spool;
     if (!s || t <= v.lastSent) { bitmap?.close(); return; }
     // No frame drawn at all for a while (a stall, or the tab hidden): the screen held too; the file holds its last picture (R3-3).
@@ -430,12 +444,20 @@ export class FlightCapture {
   private async planVideo(): Promise<void> {
     let chosen: EncoderRung | null = null;
     const probe = (globalThis as { VideoEncoder?: { isConfigSupported?(c: unknown): Promise<{ supported?: boolean }> } }).VideoEncoder?.isConfigSupported;
-    for (const r of ladder(this.videoRungs)) {
+    for (const r of ladder(this.videoRungs, true, this.software)) {
       const size = r.hardware ? VIDEO_SIZE : this.scaled(this.softwareWidth);
-      try { if (!probe || (await probe.call(VideoEncoder, encoderConfig(r, size.width, size.height, VIDEO_BITS, VIDEO_FPS))).supported) { chosen = r; break; } }
-      catch { /* not this rung */ }
+      if (!probe || (await supportedConfig(r, size.width, size.height, VIDEO_BITS, VIDEO_FPS, (c) => probe.call(VideoEncoder, c)))) { chosen = r; break; }
     }
     this.videoPlan = { rung: chosen, width: chosen?.hardware ? VIDEO_SIZE.width : this.softwareWidth };
+    if (!chosen) {
+      // No encoder this recording may use (owner policy: no CPU encoding off Linux): telemetry continues, the video is unavailable, and the ledger says so.
+      const why = this.software ? "no video encoder in this browser" : "no hardware video encoder in this browser, and CPU encoding is not used here (owner policy)";
+      this.ledger.lost.push({ file: null, bytes: 0, why: `no video in this recording: ${why}` });
+      this.recorder.event("warning", `warning: recording without video: ${why}`, { snapshot: false });
+      this.videoWanted = false;
+      this.ledgerChanged = true;
+      return;
+    }
     if (this.videoWanted && !this.stopped && !this.measurePaused) { this.videoWanted = false; this.setVideo(true); }
   }
   /** Measurement only (R3b, `?recmeasure=1`): paused, the recorder is off in place: its video segment
@@ -459,12 +481,12 @@ export class FlightCapture {
     const file = `video/${String(index).padStart(3, "0")}.${this.videoPlan?.rung?.container === "matroska" ? "mkv" : "webm"}`;
     this.segments.push({ file, start: null, end: null, ...size });
     this.stored.set(file, { session: this.session, file, kind: "video", bytes: 0 });
-    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, rungs: this.rungsFromPlan() });
+    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, rungs: this.rungsFromPlan(), encode: this.encodeVideo });
     return { file, index, start: null, began: now, ...size };
   }
   /** The rungs the worker may open: the planned one, then those below it (should the browser refuse it after all). */
   private rungsFromPlan(): string[] {
-    const keys = ladder(this.videoRungs).map((r) => r.key), at = this.videoPlan?.rung ? keys.indexOf(this.videoPlan.rung.key) : 0;
+    const keys = ladder(this.videoRungs, true, this.software).map((r) => r.key), at = this.videoPlan?.rung ? keys.indexOf(this.videoPlan.rung.key) : 0;
     return keys.slice(Math.max(0, at));
   }
   private videoHeader(): void {

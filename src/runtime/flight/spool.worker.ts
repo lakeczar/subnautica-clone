@@ -25,7 +25,7 @@
  *   unprompted: { wrote: file, bytes } after each cluster; { failed: file, ... } as above. */
 import { crc32, zipLayout, type ZipLayoutEntry } from "./zip.js";
 import { WebmClusters, webmHead, type WebmCodec } from "./webm.js";
-import { encoderConfig, ladder, type Container } from "./encoders.js";
+import { ladder, supportedConfig, type Container } from "./encoders.js";
 
 interface SyncHandle {
   getSize(): number;
@@ -43,8 +43,8 @@ type Message =
   | { op: "export"; dir: string; out: string; id: number }
   | { op: "barrier"; id: number }
   | { op: "release"; dir: string; id: number }
-  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; rungs: string[] }
-  | { op: "video-frame"; t: number; bitmap?: ImageBitmap }
+  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; rungs: string[]; encode?: boolean }
+  | { op: "video-frame"; t: number; bitmap?: ImageBitmap | VideoFrame }
   | { op: "video-flush"; id: number }
   | { op: "video-close"; id: number; final: boolean };
 
@@ -118,7 +118,9 @@ const ENCODE_QUEUE_MAX = 2;
 /** A key frame this often (frames), and at every segment's start: seeking stays cheap. */
 const KEY_EVERY = 24;
 type Segment = { dir: string; file: string; h: SyncHandle; clusters: WebmClusters; origin: number | null; frames: number; broken: boolean; headWritten: boolean };
-let encoder: VideoEncoder | null = null, encoderSize = "", codec: WebmCodec = "V_VP9", lastPicture: ImageBitmap | null = null, lastT = -Infinity;
+let encoder: VideoEncoder | null = null, encoderSize = "", codec: WebmCodec = "V_VP9", lastPicture: ImageBitmap | VideoFrame | null = null, lastT = -Infinity;
+/** Measurement only (`?recencode=0`, R3b's decomposition): pictures arrive and are released, nothing is encoded. */
+let encodeOff = false;
 /** The one segment being written. A close drains the encoder first, so every chunk belongs to it. */
 let segment: Segment | null = null;
 
@@ -148,10 +150,8 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
   if (typeof VideoEncoder === "undefined") throw new Error("this browser has no WebCodecs video encoder");
   // A rung's container must be this file's: Matroska carries every codec, WebM no H.264.
   for (const r of ladder(keys).filter((x) => container === "matroska" || x.container === "webm")) {
-    const config = encoderConfig(r, width, height, bitrate, fps);
-    let ok = false;
-    try { ok = (await VideoEncoder.isConfigSupported(config)).supported === true; } catch { ok = false; }
-    if (!ok) continue;
+    const config = await supportedConfig(r, width, height, bitrate, fps, (c) => VideoEncoder.isConfigSupported(c));
+    if (!config) continue;
     codec = r.codecId; hardware = r.hardware; rungKey = r.key;
     encoderSize = want;
     encoder = new VideoEncoder({
@@ -178,7 +178,8 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
 }
 async function videoOpen(m: Extract<Message, { op: "video-open" }>): Promise<void> {
   try {
-    await openEncoder(m.width, m.height, m.fps, m.bitrate, m.rungs, m.file.endsWith(".mkv") ? "matroska" : "webm");
+    encodeOff = m.encode === false;
+    if (!encodeOff) await openEncoder(m.width, m.height, m.fps, m.bitrate, m.rungs, m.file.endsWith(".mkv") ? "matroska" : "webm");
     const h = await handle(m.dir, m.file);
     h.truncate(0);
     const seg: Segment = { dir: m.dir, file: m.file, h, clusters: null as unknown as WebmClusters, origin: null, frames: 0, broken: false, headWritten: false };
@@ -194,6 +195,13 @@ function videoFrame(m: Extract<Message, { op: "video-frame" }>): void {
   // Times only go forward; a segment's first picture is always kept (its key frame and its origin).
   const behind = encoder !== null && encoder.encodeQueueSize > ENCODE_QUEUE_MAX && seg !== null && seg.frames > 0;
   // A refused picture is reported with its time and why: the main thread keeps it as a gap in the video (R3-3).
+  if (encodeOff && seg) {
+    // The decomposition's capture-only control: the picture was taken and handed over, and is released here.
+    if (seg.origin === null) seg.origin = m.t;
+    lastT = Math.max(lastT, m.t); seg.frames++;
+    scope.postMessage({ videoFrame: 1, kept: true, t: m.t });
+    return;
+  }
   const why = !encoder || encoder.state !== "configured" ? "no encoder" : !seg || seg.broken ? "no segment to write" : !picture ? "no picture yet"
     : m.t <= lastT ? "out of order" : behind ? "the encoder was behind" : null;
   if (why || !encoder || !seg) { scope.postMessage({ videoFrame: 1, kept: false, t: m.t, why }); return; }

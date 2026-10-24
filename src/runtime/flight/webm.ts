@@ -8,7 +8,7 @@
  * (it is appended to as it goes), every Cluster is written whole with its
  * size, and there are no Cues (a pack's remux adds them). DOM-free. */
 
-export type WebmCodec = "V_VP9" | "V_VP8" | "V_AV1" | "V_MPEG4/ISO/AVC";
+export type WebmCodec = "V_VP9" | "V_VP8" | "V_AV1" | "V_MPEG4/ISO/AVC" | "V_MPEGH/ISO/HEVC";
 
 const CLUSTER_MAX_MS = 30_000;
 

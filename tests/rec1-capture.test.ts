@@ -43,7 +43,7 @@ class FakeWorker {
     else if (m.op === "video-open") {
       // The worker opens the first rung it is offered (the page planned it).
       const key = (m as Msg & { rungs: string[] }).rungs[0] ?? "vp9";
-      const id = key.startsWith("h264") ? "V_MPEG4/ISO/AVC" : key.startsWith("av1") ? "V_AV1" : key.startsWith("vp8") ? "V_VP8" : "V_VP9";
+      const id = key.startsWith("h264") ? "V_MPEG4/ISO/AVC" : key.startsWith("hevc") ? "V_MPEGH/ISO/HEVC" : key.startsWith("av1") ? "V_AV1" : key.startsWith("vp8") ? "V_VP8" : "V_VP9";
       this.reply({ videoOpened: m.file, codec: id, hardware: key.endsWith("-hw"), rung: key });
     }
     else if (m.op === "video-frame") {
@@ -62,6 +62,8 @@ class FakeWorker {
 /** Pictures whose encoding the test finishes (or fails) when it chooses. */
 const encodings: { resolve: (b: Blob) => void; reject: (e: Error) => void }[] = [];
 let older: { name: string; size: number }[] = [];
+/** The fake browser's platform (software encoding is allowed only on Linux). */
+let fakePlatform = "Linux x86_64";
 /** The fake browser's hardware encoders, by codec family. */
 let hardwareEncoders = new Set<string>();
 
@@ -83,7 +85,7 @@ function browser(search = ""): void {
   install({
     location: { search },
     document: { querySelector: () => null },
-    navigator: { userAgent: "test", platform: "test", webdriver: false, storage: { estimate: async () => ({ quota: 100 * 1024 ** 3 }), getDirectory: async () => ({ getDirectoryHandle: async (n: string) => nested(n) }) } },
+    navigator: { userAgent: "test", platform: fakePlatform, webdriver: false, storage: { estimate: async () => ({ quota: 100 * 1024 ** 3 }), getDirectory: async () => ({ getDirectoryHandle: async (n: string) => nested(n) }) } },
     screen: { width: 1280, height: 720 }, devicePixelRatio: 1, crossOriginIsolated: false,
     addEventListener: () => {}, Worker: FakeWorker,
     createImageBitmap: async () => ({ width: 480, height: 270, close() {} }),
@@ -405,4 +407,23 @@ test("R3b: the measurement pause is off in place: the segment ends and its encod
   c.pauseForMeasurement(false);
   await play(c, 2000, 6);
   assert.equal(opens(worker).length, 2, "a new segment after the pause");
+});
+
+
+test("R3b (owner policy): off Linux, no hardware encoder means no video, recorded in the ledger; never CPU encoding", async () => {
+  fakePlatform = "Win32";
+  try {
+    const { c, worker } = await capture("", true);
+    await play(c, 0, 6);
+    assert.equal(opens(worker).length, 0, "no segment opened");
+    const ledger = c.header.retention as { lost: { why: string }[] };
+    assert.ok(ledger.lost.some((l) => /no video in this recording: no hardware video encoder.*owner policy/.test(l.why)), JSON.stringify(ledger.lost));
+  } finally { fakePlatform = "Linux x86_64"; }
+  hardwareEncoders = new Set(["avc1"]);
+  fakePlatform = "Win32";
+  try {
+    const { c, worker } = await capture("", true);
+    await play(c, 0, 6);
+    assert.deepEqual(opens(worker).map((m) => [m.file, m.rungs[0]]), [["video/000.mkv", "h264-hw"]], "Windows with a hardware H.264 encoder records it");
+  } finally { fakePlatform = "Linux x86_64"; hardwareEncoders = new Set(); }
 });
