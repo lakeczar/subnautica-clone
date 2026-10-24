@@ -903,3 +903,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P2:** the tiling validator accepts an equal-area wrong cap, so it must verify the directed boundary.
   - **P2:** production falls back to the synchronous live builder on a missing or refused bake. Decision: keep the fallback but count and report it, test that normal builds never hit it, and record it as a production compromise with WK-1 owning the root fix.
   - **P3:** a snap-guard collapse control.
+- **SIM-1b R3 fix at `06094260`** (fix `c690de5e`): the timeline warning is at rank 1.5, below general errors, with the status-line fallback; real failed-import tests in both orders; an exact `seq` reload check added to the model; regression scripts split out for the fast-tier budget. Short Sol R4 running (`siltwake-sim1b-review-r4-sol-0609426`).
