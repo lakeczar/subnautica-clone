@@ -15,7 +15,7 @@ import { board, eatIfHungry, move, reach } from "./actions.js";
 import { Blocked, where } from "./driver.js";
 import type { Driver } from "./driver.js";
 import { KINDS, LOW_AIR_PERCENT } from "./kinds.js";
-import { boardCraft, provision } from "./later.js";
+import { boardCraft, coreFromRift, provision } from "./later.js";
 import { dockAndService, ISLES, make, PUMPHOUSE_RUN, stowHold, workFrom } from "./live.js";
 import type { Phase } from "./live.js";
 import { breathe, enter, surface, surfaceTo } from "./nav.js";
@@ -98,6 +98,8 @@ export const tourFit: Phase = {
   missing: () => [],
   play(d) {
     const cores = TOUR_UPGRADES.reduce((n, k) => n + (RECIPES[k].cost.thermal_core ?? 0), 0);
+    // PACE-1: the late game leaves no spare core at home, so the tour fetches its own.
+    coreFromRift(d, cores);
     if (d.count("thermal_core", ["diver", "workshop_locker"]) < cores)
       throw new Blocked(`The tour upgrades need ${cores} thermal cores; home holds ${d.count("thermal_core", ["diver", "workshop_locker"])}`, where(d.state));
     // The depletion laps run about three quarters of an hour: three meals aboard.

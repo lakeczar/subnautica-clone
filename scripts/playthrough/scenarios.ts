@@ -95,11 +95,11 @@ export const SCENARIOS: readonly Scenario[] = [
   },
   {
     id: "tour", strategy: "creel", description: "The tour Dart fitted for range, flown until its battery dies (TST-23), home on its cells",
-    from: { scenario: "creel", milestone: "divide" }, phases: [tourFit, depleted, powerRecovery], options: MAIN,
+    from: { scenario: "creel", milestone: "deep-records" }, phases: [tourFit, depleted, powerRecovery], options: MAIN,
   },
   {
     id: "over-geared", strategy: "creel", description: "Late gear in an early region: the 800 m Creel back to the Canopy",
-    from: { scenario: "creel", milestone: "divide" }, phases: [overGeared], options: MAIN,
+    from: { scenario: "creel", milestone: "deep-records" }, phases: [overGeared], options: MAIN,
     captures: [{ label: "canopy-entry", when: inGearRegion }],
   },
 ];

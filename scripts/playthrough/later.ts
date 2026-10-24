@@ -397,13 +397,13 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     lip("rift_ceramic_lip_south");
     followS2(d, "route.rift.ceramic", true);
     lip("rift_ceramic_lip_north");
-    // Core: suit 450 K1, Creel 450 K2, Creel 800 K3, suit 800 K1, power assembly K2
-    // (carrier: keel K2, Mantle K4). C4 (CB): the shoulder's inclusions are too thin;
-    // the first workable core is the 350 m lower ledge below it.
-    // PACE-1: this core count still includes the power assembly's 2 before its plan is
-    // read. It stays until LS-1 1a merges and the tour gathers its own core
-    // (coordinator, 2026-10-24); the stage-1 figures are labelled "B4 and core pending".
-    harvest(d, "rift_core_lower_north", 10, { sort: true });
+    // Core: suit 450 K1, Creel 450 K2, Creel 800 K3, suit 800 K1 (carrier: keel K2,
+    // suit 450 K1, Mantle K4, suit 800 K1). C4 (CB): the shoulder's inclusions are too
+    // thin; the first workable core is the 350 m lower ledge below it. PACE-1 R2: not the
+    // power assembly's, whose plan is read only at the Divide (Sol R1 F1's twin).
+    const core = (planned(d, toMake(d, strategy === "creel" ? ["suit_450", "creel_450", "creel_800", "suit_800"]
+      : ["hearthline_keel", "suit_450", "mantle_base", "suit_800"]), ["thermal_core"]).thermal_core ?? 0) - d.count("thermal_core");
+    if (core > 0) harvest(d, "rift_core_lower_north", core, { sort: true });
     if (strategy === "creel") {
       // C4: the restored station does the 450 m refits; the forward outpost at the
       // anchorage charges the Creel.
@@ -511,18 +511,31 @@ const divide: Phase = {
     ...plans(d, "bp_deep_service", "C07", "rift_station_ledger"),
   ],
   play(d, o) {
-    // C4: from the forward outpost, or from home with the dock's common materials
-    // (PACE-1 R2: the plan read at the Rift ledger, carried now).
-    const forward = forwardBase(d) !== null && Math.hypot(d.state.player.pose.position.x - FORWARD_BASE.x, d.state.player.pose.position.z - FORWARD_BASE.z) < 40;
+    // PACE-1 R2: the plans read at the Rift ledger (the dock, Creel 800, suit 800), stocked
+    // at home: the dock's restoration in the diver hold (one diver load), the refits' stock
+    // in the Creel's hold for the dock's bench. Lattice is the Divide's own.
     const dock = planned(d, ["restore_divide_stop"]), dockCommons = Object.fromEntries(COMMONS(dock).map((k) => [k, dock[k]!]));
-    if (!forward) { stockUp(d, dockCommons); carryFromWorkshop(d, dockCommons); }
+    const refit = planned(d, toMake(d, ["creel_800", "suit_800"]));
+    const refitStock = Object.fromEntries(Object.keys(refit).filter((k) => k !== "brine_lattice").map((k) => [k, refit[k]!])) as Record<string, number>;
+    provision(d);
+    stockUp(d, addStock({ ...dockCommons }, refitStock) as Record<string, number>);
+    carryFromWorkshop(d, dockCommons);
+    packMeals(d, 3);
+    enter(d, "workshop");
+    const hold = d.vehicle("creel")!.cargoId;
+    for (const [k, n] of Object.entries(refitStock)) {
+      const left = n - d.count(k as ItemKind, [hold]);
+      if (left > 0) move(d, k as ItemKind, left, "workshop_locker", hold);
+    }
     boardCraft(d, "creel");
-    if (!forward) {
-      fly(d, "creel_out");
-      fly(d, "basin_outbound");
-      followS2(d, "route.basin.legacy_anchorage");
-      // The forward outpost on the anchorage ledge charges the Creel on its way past.
-      if (forwardBase(d)) atForwardBase(d, "charge", () => {});
+    fly(d, "creel_out");
+    fly(d, "basin_outbound");
+    followS2(d, "route.basin.legacy_anchorage");
+    // The forward outpost charges the Creel on its way past, then packs: the kit keeps its
+    // identity for the next frontier, and nothing brings the Creel back this way.
+    if (forwardBase(d)) {
+      atForwardBase(d, "charge", () => {});
+      atForwardBase(d, "pack it", (id) => { d.command({ type: "pack-outpost", outpostId: id, to: "diver" }); });
     }
     followS2(d, "route.basin.divide");
     // PACE-1 R2: lattice for the plans held (the dock, Creel 800, suit 800), not for
@@ -549,24 +562,22 @@ const divide: Phase = {
     if (lattice() > 0) harvest(d, "divide_lattice_flank_north", lattice(), { sort: true });
     pilotTo(d, "back to the east ledge", DIVIDE_EAST_LEDGE);
     followS2(d, "route.divide.lattice_east", true);
-    topUp(d, "divide.lee_mooring", 75);
-    followS2(d, "route.basin.divide", true);
-    // Packed on the way home: the kit keeps its identity for the next frontier.
-    if (forwardBase(d)) atForwardBase(d, "pack it", (id) => { d.command({ type: "pack-outpost", outpostId: id, to: "diver" }); });
-    // PACE-1 B4 (pending): the restored dock offers both refits, but the library's
-    // `creel@divide` branches need this phase to end at home (coordinator, 2026-10-24).
-    logReturn(d, "pending", "the 800 m refits at the workshop: B4 waits for LS-1 1a's merge and the branch moves", ["creel_800", "suit_800"], binsHere(d));
-    homeAndUnload(d, [["route.basin.legacy_anchorage", true]]);
-    make(d, "creel_800" as RecipeId, "workshop", ISLES);
-    make(d, "suit_800" as RecipeId, "workshop", ISLES);
+    // PACE-1 B4 (R3): the restored dock's bench does both 800 m refits; no trip home.
+    for (const recipe of ["creel_800", "suit_800"] as const) siteCraft(d, "divide_dock", recipe);
   },
 };
 
-/** The isles field shelter (C11, reachable early, read here) and the Divide
- * turbine hall (C12, about 600 m): the 800 m Creel on its route, or the Mantle
- * launched from the 550 m Hearthline at the Divide lee mooring on the carrier route. */
+/** The isles field shelter (C11) and the Divide turbine hall (C12).
+ * - Creel (PACE-1): after the district's records, the forced return home for the works
+ *   (scenario A): lattice from the Divide's east flank and core from the Rift on the way
+ *   (their plans read only past them), the assemblies and the stock at the workshop, the
+ *   pod buffer fitted and C11 read while home. C12 was read at the Divide dock. Ends home,
+ *   with the 800 m Creel: the library's `tour` and `over-geared` branch here.
+ * - Carrier: the Mantle launched from the 550 m Hearthline at the Divide lee mooring reads
+ *   C12, and the carrier stays forward. C11 was read on the yard visit. */
 const deepRecords = (strategy: Strategy): Phase => ({
-  id: "deep-records", title: "Field shelter (C11) and the Divide turbine hall (C12)",
+  id: "deep-records", title: strategy === "creel" ? "Home for the works: assemblies and stock; the pod record and the field shelter (C11)"
+    : "The Divide turbine hall (C12) by Mantle from the carrier",
   verify: (d) => ["C11", "C12"].filter((id) => !d.knows(id) && !d.deferred.includes(id)).map((id) => `${id} was neither found nor deferred`),
   missing: (d) => [
     ...anyPlaced("C11", "C12", "mara_last_page"),
@@ -576,6 +587,7 @@ const deepRecords = (strategy: Strategy): Phase => ({
   ],
   play(d, o) {
     provision(d);
+    if (strategy === "creel" && d.knows("district_controller")) { worksReturn(d, o); return; }
     // PACE-1: the carrier route reads the shelter on its yard visit; the Dart goes only while it's unread.
     if (!d.knows("C11")) headlandRun(d, o);
     // PACE-1 R3: the Creel route reads C12 at the Divide dock, 70 m from the recorder.
@@ -602,6 +614,33 @@ const deepRecords = (strategy: Strategy): Phase => ({
     }
   },
 });
+/** `n` thermal core from the Rift's lower ledges by the Creel, from home and back (sorting
+ * their reserve when the exposed stock is out). The library's tour fits its own upgrades
+ * with it: no late phase leaves spare core at home (PACE-1 R2). */
+export function coreFromRift(d: Driver, n: number): void {
+  const short = (): number => n - d.count("thermal_core", ["diver", "workshop_locker", d.vehicle("creel")!.cargoId]);
+  if (short() <= 0) return;
+  provision(d);
+  boardCraft(d, "creel");
+  fly(d, "creel_out");
+  fly(d, "basin_outbound");
+  followS2(d, "route.basin.legacy_anchorage");
+  followS2(d, "route.basin.rift");
+  for (const id of ["rift_core_lower_north", "rift_core_lower_west"] as const) if (short() > 0) harvest(d, id, short(), { sort: true });
+  followS2(d, "route.basin.rift", true);
+  homeAndUnload(d, [["route.basin.legacy_anchorage", true]]);
+}
+/** PACE-1 R1: `n` more meals in the Creel's hold for a long expedition away from home. */
+function packMeals(d: Driver, n: number): void {
+  const creel = d.vehicle("creel")!;
+  enter(d, "workshop");
+  const wild = (Object.keys(SOURCES) as SourceId[]).filter((id) => SOURCES[id].item === "meal" && ISLES.includes(SOURCES[id].region))
+    .reduce((m, id) => m + (d.state.world.resources.find((r) => r.id === id)?.stock ?? 0), 0);
+  const want = Math.min(n, wild) - d.count("meal", ["workshop_locker"]);
+  if (want > 0) procure(d, { meal: want }, "workshop", ISLES);
+  enter(d, "workshop");
+  move(d, "meal", Math.min(n, d.count("meal", ["workshop_locker"])), "workshop_locker", creel.cargoId);
+}
 /** PACE-1 R1: the carrier leaves home for the district, so meals ride in its stores and
  * no phase begins with a trip home to eat. */
 function rideAboard(d: Driver): void {
@@ -708,10 +747,14 @@ type Strategy = "creel" | "carrier";
 function toMeridian(d: Driver, strategy: Strategy): void {
   if (strategy === "creel") {
     boardCraft(d, "creel");
-    fly(d, "creel_out");
-    fly(d, "basin_outbound");
-    followS2(d, "route.basin.legacy_anchorage");
-    followS2(d, "route.basin.divide");
+    // PACE-1 B4: after the Divide's refits the Creel goes straight down the service ledge.
+    const p = d.state.player.pose.position;
+    if (Math.hypot(p.x - DIVIDE_LEE.x, p.z - DIVIDE_LEE.z) > 500) {
+      fly(d, "creel_out");
+      fly(d, "basin_outbound");
+      followS2(d, "route.basin.legacy_anchorage");
+      followS2(d, "route.basin.divide");
+    }
     // C3: S2's moorings charge; top up before the service ledge and the terraces
     // (PACE-1 R7: when the charge is short of the district's legs).
     topUp(d, "divide.lee_mooring", 75);
@@ -727,13 +770,6 @@ function launchMantle(d: Driver): void {
   walkAboard(d, CARRIER_LAYOUT.vestibule, "to the vestibule");
   d.command({ type: "carrier", action: "leave-interior" });
   boardCraft(d, "mantle");
-}
-/** The Creel home from the district, charged for the 3 km on the way (R7). */
-function creelHomeFromDistrict(d: Driver): void {
-  topUp(d, "meridian.staging_shelf", 90);
-  followS2(d, "route.divide.service_ledge", true);
-  topUp(d, "divide.lee_mooring", 70);
-  homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
 }
 
 const meridian = (strategy: Strategy): Phase => ({
@@ -879,6 +915,31 @@ function fitPodBuffer(d: Driver, gather = true): void {
   enter(d, "pod");
   if (!d.knows("C14")) { interact(d, "C14"); if (!d.knows("C14")) throw new Blocked("C14 recorded nothing", where(d.state)); }
 }
+/** PACE-1 scenario A, Creel: back from the district for the works. The two assemblies are
+ * made only at the workshop or the crown (not restored on this route), from common
+ * materials that lie only behind; the air assembly's lattice and the power assembly's
+ * core lie only past the bot (their plans were read at C08 and C07), so it takes them on
+ * the way: the Divide's east flank, then a detour into the Rift. */
+function worksReturn(d: Driver, o: PlayOptions): void {
+  const fabricate: Plannable[] = ["service_power_assembly", "service_air_assembly"];
+  const short = (item: string): number => (planned(d, fabricate, [item])[item] ?? 0) - d.count(item as ItemKind);
+  logReturn(d, "forced", "the works' two assemblies are made only behind the Divide, from common materials that lie only behind", fabricate, binsHere(d));
+  if (short("brine_lattice") > 0) { pilotTo(d, "over the north flank", DIVIDE_FLANK_PARK); harvest(d, "divide_lattice_flank_north", short("brine_lattice"), { sort: true }); }
+  topUp(d, "meridian.staging_shelf", 90);
+  followS2(d, "route.divide.service_ledge", true);
+  topUp(d, "divide.lee_mooring", 70);
+  followS2(d, "route.basin.divide", true);
+  if (short("thermal_core") > 0) {
+    logReturn(d, "forced", "the power assembly's core lies only in the Rift, and its plan was read at C07, past it", ["service_power_assembly"], binsHere(d));
+    followS2(d, "route.basin.rift");
+    for (const id of ["rift_core_lower_north", "rift_core_lower_west"] as const) if (short("thermal_core") > 0) harvest(d, id, short("thermal_core"), { sort: true });
+    followS2(d, "route.basin.rift", true);
+  }
+  homeAndUnload(d, [["route.basin.legacy_anchorage", true]]);
+  stageWorksCargo(d, d.crafted("pod_buffer") ? {} : costOf("pod_buffer"));
+  fitPodBuffer(d, false);
+  if (!d.knows("C11")) headlandRun(d, o);
+}
 /** The works by strategy, after the district's records (PACE-1):
  * - Both routes return home: the two assemblies are made only at the workshop or the
  *   crown, and their common materials lie only behind. The crown is no nearer in
@@ -908,13 +969,10 @@ const works = (strategy: Strategy): Phase => ({
     // R2: the air assembly's lattice was not stocked before its plan was read here.
     const lattice = (): number => (planned(d, ["service_air_assembly"], ["brine_lattice"]).brine_lattice ?? 0) - d.count("brine_lattice");
     if (strategy === "creel") {
-      logReturn(d, "forced", "the works' two assemblies are made only behind the Divide, from common materials that lie only behind", fabricate, binsHere(d));
-      if (lattice() > 0) { pilotTo(d, "over the north flank", DIVIDE_FLANK_PARK); harvest(d, "divide_lattice_flank_north", lattice(), { sort: true }); }
-      creelHomeFromDistrict(d);
-      const cargo = stageWorksCargo(d, d.crafted("pod_buffer") ? {} : costOf("pod_buffer"));
-      fitPodBuffer(d, false);
-      if (!d.knows("C11")) headlandRun(d, o);
-      const assemblies: Cargo = { ids: cargo.ids, stock: {} }, stock: Cargo = { ids: [], stock: cargo.stock };
+      // The cargo staged on the visit home (deep-records): the assemblies and the hall stock in the Creel's hold.
+      const hold = d.vehicle("creel")!.cargoId;
+      const ids = d.state.inventory.items.filter((i) => i.containerId === hold && fabricate.includes(i.kind as Plannable)).map((i) => i.id);
+      const assemblies: Cargo = { ids, stock: {} }, stock: Cargo = { ids: [], stock: { ...HALL_STOCK } };
       toMeridian(d, "creel");
       down(); worksVisit(d, gate1, assemblies); up();
       worksVisit(d, hall, stock);
@@ -926,10 +984,21 @@ const works = (strategy: Strategy): Phase => ({
     // Held above the flank at the station carrier-deep used (400 m), and the suit dives the rest.
     if (lattice() > 0) carrierHarvest(d, "divide_lattice_flank_north", lattice(), { sort: true, above: 400 });
     if (lattice() > 0) carrierHarvest(d, "divide_lattice_flank_south", lattice(), { sort: true, above: 400 });
-    for (const id of legsFrom(d, CARRIER_TO_SHELF, true)) followS2(d, id, true);
-    // The air assembly's lattice rode home in the stores: ashore with the diver to the bench.
-    const air = planned(d, ["service_air_assembly"], ["brine_lattice"]).brine_lattice ?? 0;
-    move(d, "brine_lattice", Math.min(air, d.count("brine_lattice", [carrier(d).cargoId])), carrier(d).cargoId, "diver");
+    // Home by the lanes, with a detour from the Basin anchorage into the Rift for the power
+    // assembly's core when it is short (its plan was read at C07, past the Rift).
+    for (const id of legsFrom(d, ["route.basin.divide", "route.divide.meridian_broad"], true)) followS2(d, id, true);
+    const core = (planned(d, ["service_power_assembly"], ["thermal_core"]).thermal_core ?? 0) - d.count("thermal_core");
+    if (core > 0) {
+      logReturn(d, "forced", "the power assembly's core lies only in the Rift, and its plan was read at C07, past it", ["service_power_assembly"], [...binsHere(d), carrier(d).cargoId]);
+      followS2(d, "route.basin.rift");
+      carrierHarvest(d, "rift_core_lower_north", core, { sort: true });
+      followS2(d, "route.basin.rift", true);
+    }
+    for (const id of ["route.canopy_east.basin", "route.isles.canopy_east"]) followS2(d, id, true);
+    // The lattice and core rode home in the stores: ashore with the diver to the bench.
+    const stores = carrier(d).cargoId, aboard = planned(d, fabricate, ["brine_lattice", "thermal_core"]);
+    for (const k of ["brine_lattice", "thermal_core"] as const)
+      move(d, k, Math.min(aboard[k] ?? 0, d.count(k, [stores])), stores, "diver");
     ashoreFromCarrier(d);
     const cargo = stageWorksCargo(d);
     boardCraft(d, "creel");
@@ -1229,5 +1298,5 @@ const carrierDeep: Phase = {
   },
 };
 
-export const CREEL_LATER: readonly Phase[] = [rift("creel"), divide, deepRecords("creel"), meridian("creel"), works("creel"), ending("creel")];
+export const CREEL_LATER: readonly Phase[] = [rift("creel"), divide, meridian("creel"), deepRecords("creel"), works("creel"), ending("creel")];
 export const CARRIER_LATER: readonly Phase[] = [rift("carrier"), hearthline, carrierDeep, deepRecords("carrier"), meridian("carrier"), works("carrier"), ending("carrier")];
