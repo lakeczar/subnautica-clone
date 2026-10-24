@@ -190,6 +190,14 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
   - Root, and the merge trees of CW-1, COL-1, SIM-1 and TST-16 with this branch, pass. COL-1's current head no longer has `col1/r7-shots.mjs` plumbing.
   - **REC-1's merge fails, correctly:** its new `docs/build/streams/rec1/r1/idle-video-experiment.mjs` has `chromium.launch`, `createServer` and `gpu-prep` outside `scripts/rec`. REC-1 resolves it on its side (coordinator). No allowlist entry was added.
 
+## R5 fixes (Sol 6.1 xhigh R5, `26163769`: two P2s)
+- **A missing JSON import passed.** JSON under `src` is now collected, and the exemption holds only for a JSON file that exists. A missing one is a missing module and fails closed, with its chain.
+- **A symlink alias hid the real layer** (the coordinator's decision: don't resolve, refuse).
+  - Any symlink anywhere under `src/`, file or directory, fails with one rule (`symlink: … is a symlink; src holds real files only`). The collector never reads through a link, and one outside `src` is ignored. `src` has none today.
+- **Scope, stated** in the guard's header and in CORE-HELPERS: a fail-closed regression rail over honest repository code, not a sandbox against deliberately adversarial constructions (the headless typecheck and review cover those).
+- **What fails today: nothing.** Root and the merge trees of CW-1, REC-1, COL-1, SIM-1 and TST-16 with this branch pass; REC-1 has resolved its driver since R4.
+- **Test** (disk-backed): a missing JSON import fails and an existing one passes; a file symlink and a directory symlink under `src` each fail; a link in `tools/` is ignored and never read.
+
 ## Compromises (each with its root fix and cost)
 1. **The guard's region-lookup and driver rules are name and text patterns,** not semantics. A lookup named otherwise (`whereIs`), or a driver hidden behind a helper, passes; a delegating adapter must have the exact delegation shape.
    - **Root fix:** the per-wave review, and REC-2 moving every driver onto `scripts/rec`, which leaves nothing to hide.

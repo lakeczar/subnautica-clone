@@ -25,6 +25,11 @@
 //
 //   node scripts/guard-architecture.mjs [--quiet]
 // Allowlists only shrink. To retire an entry, remove it here in the change that removes the code.
+//
+// Scope: a fail-closed regression rail over honest repository code. Every rule reads real
+// paths and source text (it also refuses symlinks under src, and JSON leaves that don't
+// exist). It is not a sandbox against deliberately adversarial constructions; the headless
+// typecheck and review cover those.
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -182,6 +187,8 @@ function cycles(graph) {
 /** The whole analysis over `files` (repository path → text). Pure, so tests can plant violations. */
 export function analyse(files, allow = ALLOW) {
   const failures = [], notes = [];
+  // A symlink under src would let one file stand for another: every rule here reads paths.
+  for (const link of files.symlinks ?? []) failures.push(`symlink: ${link} is a symlink; src holds real files only, so every rule sees the module it names`);
   const exists = (p) => files.has(p);
   const sources = [...files.keys()].filter(isSource).sort();
   const info = new Map(sources.map((f) => [f, analyseSource(f, files.get(f), exists)]));
@@ -201,7 +208,7 @@ export function analyse(files, allow = ALLOW) {
       const spec = shown(t), name = spec.startsWith("@") ? spec.split("/").slice(0, 2).join("/") : spec.split("/")[0];
       return PORTABLE_PACKAGES.has(name) ? "ok" : `the package or builtin ${spec}, not on the guard's PORTABLE_PACKAGES list`;
     }
-    if (t.endsWith(".json")) return "ok"; // data, not code
+    if (t.endsWith(".json")) return files.has(t) ? "ok" : "a JSON file the guard can't find or read"; // data, not code, if it is there
     if (!files.has(t)) return "a module the guard can't find or read";
     if (hasExt(t, [".js", ".mjs", ".cjs"])) return "JavaScript, which the headless typecheck doesn't check";
     if (!hasExt(t, TS_EXTENSIONS)) return "a file type the guard can't analyse";
@@ -286,7 +293,7 @@ export function analyse(files, allow = ALLOW) {
   for (const [f, text] of files) for (const m of text.matchAll(/^\s*\/\/\s*FORK\(([^)]+)\)/gm)) if (f !== SELF[1]) forks.push({ id: m[1], file: f });
   const roots = SHARED_ROOTS.filter((f) => files.has(f)).map((f) => [f, files.get(f).split("\n").length]);
   const words = new Map();
-  for (const [f, text] of files) if (!SELF.includes(f)) words.set(f, new Set(text.match(/[A-Za-z_$][\w$]*/g) ?? []));
+  for (const [f, text] of files) if (!SELF.includes(f) && !f.endsWith(".json")) words.set(f, new Set(text.match(/[A-Za-z_$][\w$]*/g) ?? []));
   // An exported value no other file names and its own file uses only where it declares it.
   const unused = [];
   for (const [f, i] of info) for (const name of new Set(i.exports)) {
@@ -302,17 +309,21 @@ export function analyse(files, allow = ALLOW) {
 const SKIP = new Set(["node_modules", ".git", "dist", "public", ".test-build"]);
 /** Every file the guard reads, by repository path. */
 export function repositoryFiles(root = ROOT) {
-  const files = new Map();
+  const files = new Map(), symlinks = [];
   const walk = (dir) => {
     for (const e of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
       if (SKIP.has(e.name) || e.name.startsWith(".test-build")) continue;
       const rel = dir ? `${dir}/${e.name}` : e.name;
+      // Never followed: under src one is a failure (analyse), elsewhere it is ignored.
+      if (e.isSymbolicLink()) { if (rel.startsWith("src/")) symlinks.push(rel); continue; }
       if (e.isDirectory()) walk(rel);
-      else if (hasExt(e.name, [...SCRIPT_EXTENSIONS, ".html"])) files.set(rel, fs.readFileSync(path.join(root, rel), "utf8"));
+      // JSON only under src, where sim and content's data lives (a JSON leaf must exist).
+      else if (hasExt(e.name, [...SCRIPT_EXTENSIONS, ".html"]) || (rel.startsWith("src/") && e.name.endsWith(".json"))) files.set(rel, fs.readFileSync(path.join(root, rel), "utf8"));
     }
   };
   for (const top of ["src", "tests", "scripts", "tools", "docs"]) if (fs.existsSync(path.join(root, top))) walk(top);
   for (const f of ["index.html", "vite.config.ts"]) if (fs.existsSync(path.join(root, f))) files.set(f, fs.readFileSync(path.join(root, f), "utf8"));
+  Object.defineProperty(files, "symlinks", { value: symlinks });
   return files;
 }
 

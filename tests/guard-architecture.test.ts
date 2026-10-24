@@ -351,3 +351,30 @@ test("R4-1: inside sim and content only analysed TypeScript is skipped; JavaScri
     assert.equal(failures.length, expect.length, failures.join("\n"));
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("R5: a JSON import must name a real file, and a symlink anywhere under src fails", () => {
+  const dir = scratchRepo({
+    "src/content/table.json": "[]\n",
+    "src/content/present.ts": `import t ${from("./table.json")} with { type: "json" };\nexport const rows = t;\n`,
+    "src/sim/absent.ts": `import t ${from("../content/gone.json")} with { type: "json" };\nexport const rows = t;\n`,
+    "src/render/browser.ts": "export const title = (): string => document.title;\n",
+    "tools/real.ts": "export const x = 1;\n",
+  });
+  try {
+    // A file and a directory aliased under src, and one outside src (ignored, never followed).
+    fs.symlinkSync(join(dir, "src/render/browser.ts"), join(dir, "src/sim/alias.ts"));
+    fs.symlinkSync(join(dir, "src/render"), join(dir, "src/content/renderAlias"));
+    fs.symlinkSync(join(dir, "tools/real.ts"), join(dir, "tools/alias.ts"));
+    const files = G.repositoryFiles(dir);
+    assert.ok(!files.has("src/sim/alias.ts") && !files.has("tools/alias.ts"), "links are never read through");
+    const { failures } = G.analyse(files, none);
+    const expect: [RegExp, string][] = [
+      [/layering: src\/sim\/absent\.ts imports src\/content\/gone\.json \(a JSON file the guard can't find or read/, "a missing JSON import"],
+      [/symlink: src\/sim\/alias\.ts is a symlink/, "a file symlink under src"],
+      [/symlink: src\/content\/renderAlias is a symlink/, "a directory symlink under src"],
+    ];
+    for (const [re, what] of expect) assert.ok(failures.some((f) => re.test(f)), `${what}:\n${failures.join("\n")}`);
+    assert.ok(!failures.some((f) => /present\.ts|tools\/alias/.test(f)), failures.join("\n"));
+    assert.equal(failures.length, expect.length, failures.join("\n"));
+  } finally { fs.rmSync(dir, { recursive: true, force: true }); }
+});

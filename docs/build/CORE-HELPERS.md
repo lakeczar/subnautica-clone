@@ -28,7 +28,9 @@ Owned by the coordinator; each per-wave architecture review updates it (STEW-1, 
 - a package on the guard's `PORTABLE_PACKAGES` list (each with its reason; empty today);
 - TypeScript the guard analyses.
 
-Render, UI, audio, Babylon, any other package or Node builtin, JavaScript, a missing module or a computed `import()`/`require()` anywhere on the path fails, naming the chain. They use no DOM: `tsconfig.headless.json` typechecks them, and everything they reach, with no DOM library; `scripts/headless-platform.d.ts` declares the few platform APIs every headless runtime has.
+Render, UI, audio, Babylon, any other package or Node builtin, JavaScript, a missing module or JSON file or a computed `import()`/`require()` anywhere on the path fails, naming the chain.
+
+**The guard's scope:** it's a fail-closed regression rail over honest repository code. Every rule reads real paths and source text, and it refuses symlinks under `src`. It isn't a sandbox against deliberately adversarial constructions; the headless typecheck and review cover those. A bypass that ordinary code wouldn't write is out of scope. They use no DOM: `tsconfig.headless.json` typechecks them, and everything they reach, with no DOM library; `scripts/headless-platform.d.ts` declares the few platform APIs every headless runtime has.
 
 Value-import cycles are frozen at today's two groups: the 3-module render group (`biomes/scatter`, `biomes/vistas`, `poi/landmarks`) and the 13-module sim group around `carrier` and `progression`. **Each cycle must match its allowance exactly.** A change that shrinks or retires a cycle lowers its allowance in the same commit (the guard fails until it does), so it can never regrow. No new cycle may form.
 
