@@ -4,7 +4,7 @@ Branch `t3/sig-1-signatures`, from root `1662e5a0` (SIM-1a merged). Brief: the c
 
 ## Stage 0: one inventory authority (steward F12)
 
-**Code `f2bdb984`, R1 fixes `cc7f55f7`.** Reported separately so it can be reviewed before anything builds on it.
+**Code `f2bdb984`, R1 fixes `cc7f55f7`, R2 fix `a4e1834e`.** Reported separately so it can be reviewed before anything builds on it.
 
 ### Outcome
 `src/sim/inventory.ts` is the only inventory arithmetic. The temporary ledger fork (`src/sim/systems/ledger.ts`, `FORK(ledger)` in STEW-1's CORE-HELPERS) is deleted, and every one of its seven importers now calls the authority.
@@ -67,6 +67,18 @@ All bound to `f2bdb984` and run on the RTX 4070 Laptop (alickers), because of CW
   - **`npm test`:** **1,424/1,424**. The new regressions cover an unpaid multi-material cost (refused, state unchanged), a stale plan and an over-asked stack (all or nothing), and the chosen bio-cell (its ID gone, the other cell kept, the feed from its charge).
   - **Economy:** all six scripts exit 0.
   - **Playthrough:** 8/8 complete with all 122 reloads equal and the minutes unchanged. All **122** save hashes are in root's library, and all **73** library states are reproduced: still bit-identical.
+
+### R2 fix (Sol `review/sig-1-stage0-r2`, request changes; code `a4e1834e`)
+- **Cooking room comes from the spend plan.** `cookPlan` summed freed *quantities* as freed CU, outside the authority. It now asks `hasRoomAfter(s, pay, container, cuOf("meal") * meals)`, keeping the destination order (the cooker's store, then the diver hold) and the acceptance checks. The refusal names the meals' CU from the same size.
+- **No result changes:** fish, roe and meals are 1 CU each.
+- **Regressions** (`tests/cr-1-creatures.test.ts`):
+  - an exact fit from the locker cooks there;
+  - raw from the diver beside a full locker cooks into the diver hold;
+  - one CU short everywhere refuses with the meals' CU and changes nothing.
+- **Checks (`a4e1834e`, RTX 4070 Laptop on alickers):**
+  - `npm test`: **1,425/1,425**;
+  - economy: all six scripts exit 0;
+  - playthrough: 8/8 complete, with 122/122 reloads equal and the minutes unchanged. All **122** save hashes are in root's library, and all **73** library states are reproduced: still bit-identical.
 
 ### Follow-ups for the coordinator
 - **CORE-HELPERS** lives on STEW-1's branch. When STEW-1 merges, delete the `ledger` row from *Open forks*, since this stage retired it. If STEW-1 merges first, I'll remove the row in my root merge.
