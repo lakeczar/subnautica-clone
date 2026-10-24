@@ -5,14 +5,18 @@
 # (relative shares between variants), not the acceptance measurement.
 #   bash scripts/rec/decomp.sh OUT_DIR [SECONDS_PER_VARIANT] [SAVE_KIND]
 # Builds the game inside the job. The save comes from the SAVE-1 library (`saves.js pick`, default kind
-# tour-ready: the tour-fit Dart), and its library commit and kind are recorded in OUT_DIR/save.json.
+# tour-ready: the tour-fit Dart), or is a fixture in the repository (a path, e.g.
+# docs/build/streams/rec1/fixtures/hold-refuge-reef.json: CW-1's refuge-reef pose, steadier for holds);
+# what was used is recorded in OUT_DIR/save.json.
 set -u
 out="${1:?usage: decomp.sh OUT_DIR [SECONDS] [SAVE_KIND]}"; secs="${2:-300}"; kind="${3:-tour-ready}"
 cd "$(dirname "$0")/../.."; mkdir -p "$out"
 npm run build > "$out/build.log" 2>&1 || { tail -5 "$out/build.log"; exit 1; }
 git rev-parse HEAD > dist/COMMIT
 npx tsc -p scripts/playthrough/tsconfig.json > "$out/saves-build.log" 2>&1 || { tail -5 "$out/saves-build.log"; exit 1; }
-node .test-build/scripts/playthrough/saves.js pick "$kind" --json > "$out/save.json" || { echo "the save library refused $kind (see above)"; exit 3; }
+# A path in the repository (a fixture) is used as it is; anything else is a library kind.
+if [ -f "$kind" ]; then printf '{"path":"%s","commit":"fixture %s"}\n' "$PWD/$kind" "$(git log -1 --format=%h -- "$kind")" > "$out/save.json"
+else node .test-build/scripts/playthrough/saves.js pick "$kind" --json > "$out/save.json" || { echo "the save library refused $kind (see above)"; exit 3; }; fi
 save=$(node -e 'const p=require(require("path").resolve(process.argv[1]));console.log(p.path ?? p.file)' "$out/save.json")
 echo "save: $kind $(node -e 'const p=require(require("path").resolve(process.argv[1]));console.log(p.commit ?? "", p.path ?? p.file)' "$out/save.json")"
 run() { local name="$1"; shift
@@ -35,6 +39,7 @@ for v in ${VARIANTS:-telemetry capture-bitmap capture-frame vp9-bitmap vp8-bitma
     vp8-frame) run "$v" --codec vp8 --capture frame ;;
     telemetry-profile) run "$v" --video off --profile-windows ;;
     telemetry-notiming-profile) run "$v" --video off --no-timing --profile-windows ;;
+    playtest) run "$v" ;;
     vp9-profile) run "$v" --codec vp9 --profile-windows ;;
     bench-sample) node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack --rec playtest --video off --hold 5 --bench-sample --out "$out/$v" 2>&1 | grep --line-buffered -E 'bench-sample|Error' ;;
     *) echo "unknown variant $v" ;;
