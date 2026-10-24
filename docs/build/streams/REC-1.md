@@ -1,5 +1,10 @@
 # REC-1: the flight recorder and evidence pack (handoff)
 
+> **RESUME (paused for the host reboot, 2026-10-24 19:00 CDT).**
+> - **Where:** the R3b 6 fps acceptance (261024-231132-692c) failed at +0.120 [0.015, 0.224]. Its wide interval comes from slow windows on a 5-minute period, locked to the wall clock (hh:m1:55–m2:30 and hh:m6:50–m7:30, the same in 692c and 5c1c), so probably host-side, not the game. The R3b draft is `rec1/r3b/handoff-r3b-draft.md`. The per-process sampler (`scripts/rec/proc-sample.mjs`, data in `/work/tmp/rec1/r3b/p300/samples.ndjson`) was stopped before its first window was read.
+> - **Next** (coordinator decision (b)): name the 300 s source (read the samples around 18:56:50–18:57:30; if they're gone, sample again over one event). Then one pre-declared, powered duet acceptance after the reboot: n from the measured variance, margin, and an exclusion rule applied to both arms. Then fast tier, handoff, "done at <sha>" with the owner steps (`scripts/rec/owner-check-serve.sh`).
+> - **Resubmit:** nothing queued. 4e09 was cancelled by the coordinator; 692c and 7c3b had finished.
+
 Opus 5.5 high. Branch `t3/rec-1-flight-recorder`, from CW-1's head `7dc9cc9`; root merged at `f2fd628` (CR-1, UX-1, TT-1, SCHED-1), `51a6b27` (SCHED-2a live), `1bdcc39` and `990e5c1` (the soak's fact reducer, `--snapshot` with a linked `node_modules`); CW-1 merged up to its R1 fixes `14c7a02` (CW-1 is not in root yet). The evidence below ran at `2bf9b14e`, `67e8394d` and `3a07c189`, before the last two merges; a recorded run at the handoff head confirms the recorder against them (below). Story-neutral; `docs/spoilers/*` not read. **The R3 section next is the current state, R2 and R1 below it;** sections from Outcome on are the first handoff, with the compromises, checks and missing lists brought up to date.
 
 ## R3 (Sol R3 `31378375` on `becc169f`: four P2s, one P3)
