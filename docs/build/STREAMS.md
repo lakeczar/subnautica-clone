@@ -869,3 +869,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Evidence sent via the owner:** 6/16 exclusive runs disturbed by steal of 5–8.5%, five of them outside the backup window.
   - **Before the reboot:** the coordinator pauses builders (WIP committed) and drains the queue once fleet names a time.
   - **After:** health checks (3090 passthrough, queue), resume, then a before/after steal comparison on the same route.
+- **SIM-1b R2 fixes at `16961a67`** (code `80b11146`):
+  - **Fixes:** full known-field validation; a rewritten independent-oracle harness (read snapshots, full fault and lock families, 40-step replay; all 12 mutants killed in the fast tier, plus a heavy self-check); the timeline warning at rank 2.5, below hazards and game-save warnings; scoped resolution of timeline warnings.
+  - **New defect found by the harness:** a 1,001-event seal on reload, now fixed.
+  - **Review:** Sol R3 running with fresh mutants (`siltwake-sim1b-review-r3-sol-16961a6`).
