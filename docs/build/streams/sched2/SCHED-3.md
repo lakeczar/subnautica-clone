@@ -34,3 +34,16 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - an explicit `--machine 4070` with the same dirty tree is refused;
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
+
+## Checks
+
+At `79d6bc13`, on root `7479e188`:
+- **Full suites, local and sequential (concurrency 1):** SCHED-1 **23/23**, SCHED-2 **27/27**, SCHED-2b **29/29**. They ran while CW-1's 3090 exclusives were running, under the coordinator's allowance for acceptance suites at concurrency 1. No units, slices or unit files were left behind.
+- **Fast tier:** through the queue on alickers (`--machine 4070`, ticket `261024-144534-a52d`, exit 0, 146 files); the policy units are in it. B28 also passed three runs in a row on its own.
+- **Run history:** the first full SCHED-2b run had one failure, B28's own setup. It dirtied the tree before the worktree-holding job had started, so the holder rejected that job. B28 now waits for the job's output first.
+
+## Compromises and missing evidence
+
+- **Production:** not installed (nothing is until accepted). The default change was checked only against the fake second worker and private state.
+- **Build-only rule:** it recognizes three spellings: `npm run build`, `vite build` and `node scripts/test-build.mjs`, each bare, optionally after `sh -c`. A build-only command spelled otherwise (a custom script) still goes to alickers. It can be pinned with `--machine 3090`, or the rule widened when a case appears.
+- **The 4070 queue today:** with many jobs pinned `4070` (exclusive-window guidance), the second worker is now the bottleneck. With the default `any` those jobs would run on whichever machine frees first. Pinning `4070` should go back to being for 4070-specific questions once windows end.
