@@ -2,7 +2,8 @@
 //   node --test docs/build/streams/cw1/frame-class.test.mjs
 // Negative controls are the reviews' (Sol R3-1's three counterexamples and its
 // uncertainty cases; Sol R4-1's three: VM-wide clearance, stale state across an
-// observer outage, a futex taken for a GPU dependency) and SIM-PERF-1's two R1
+// observer outage, a futex taken for a GPU dependency; Sol R5-2's runnable-GPU
+// version of it) and SIM-PERF-1's two R1
 // cases, restated for frames; the r12 boundary arithmetic shows why tours 3 and 7
 // were unresolved. Positive cases show what the proof does excuse.
 import test from "node:test";
@@ -159,9 +160,14 @@ test("Sol R4-1 #3: a renderer in an unrelated futex, the GPU thread asleep on it
   assert.ok(!excused(classifyFrame({ e0: 0, e1: 80 }, rows({ t1: 100, tick: pause(1) }), [[-1, 82]], { renderer: thread("S", "futex", 0), gpu: thread("R", "", 3) })));
 });
 
-test("positive: the renderer waits in a futex while the GPU main thread is runnable on its stolen vCPU, the canary agreeing: host", () => {
+test("Sol R5-2: an unrelated renderer futex while the GPU thread is runnable on its stolen vCPU earns nothing; the GPU figure is a diagnostic", () => {
+  // The renderer waits on some other condition variable; nothing in the input names the GPU thread as its dependency.
   const v = classifyFrame({ e0: 0, e1: 80 }, rows({ t1: 100, tick: pause(1) }), [[-1, 82]], { renderer: thread("S", "futex", 0), gpu: thread("R", "", 1) });
-  assert.equal(v.cause, "host", JSON.stringify(v));
+  assert.ok(!excused(v), JSON.stringify(v));
+  assert.equal(v.excusedMs, 0);
+  assert.equal(v.remainderMs, 80);
+  assert.ok(OURS.has(v.cause));
+  assert.ok(v.gpuCandidateMs >= 70, "what GPU credit would have been, kept for diagnosis");
 });
 
 test("a migration the rows can't see (vCPU 0 → 2 → 0 between rows) shows in the state polls and removes the credit", () => {

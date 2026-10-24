@@ -22,11 +22,12 @@
 //     interval if it could have held at any time in it. Each state poll also reads the
 //     thread's vCPU, so residency is checked at the poll period, not only at the rows;
 //   - the renderer's vCPU counts only for time it was runnable on that vCPU throughout
-//     (a sleeping thread's last-run vCPU says nothing about delay); the GPU process's
-//     vCPU counts only while the renderer was in a futex wait throughout AND the GPU
-//     main thread was runnable on that vCPU throughout (a futex alone names no
-//     dependency; R4-1), never against renderer-side work; without observed states
-//     neither counts;
+//     (a sleeping thread's last-run vCPU says nothing about delay); without observed
+//     states it doesn't count;
+//   - the GPU process's vCPU never counts (R5-2): a renderer futex and a runnable GPU
+//     thread on a stolen vCPU don't show the renderer was waiting on that thread (an
+//     unrelated condition variable gives the same input). What it would have been is
+//     kept as a diagnostic, `gpuCandidateMs`, until dependency can be shown;
 //   - one jiffy is taken off the total (steal is charged at the next tick), and
 //     it is capped at the time the samples cover;
 //   - the canary must agree: what is excused is at most the canary's own stall
@@ -93,7 +94,7 @@ export function classifyFrame({ e0, e1 }, rows, canary = [], threads = {}, gpuBu
   if (first < 0 || lastAfter < 0 || lastAfter <= first || e0 - t0Of(rows[first]) > MAX_GAP_MS || t1Of(rows[lastAfter]) - e1 > MAX_GAP_MS)
     return { cause: "unsampled", remainderMs: round(gap) };
   const ncpu = rows[first].steal.length;
-  let covered = 0, stolen = 0, vmStolen = 0, migrations = 0, gaps = 0, unknown = 0, stealSeen = false;
+  let covered = 0, stolen = 0, vmStolen = 0, migrations = 0, gaps = 0, unknown = 0, gpuCandidate = 0, stealSeen = false;
   for (let k = first; k < lastAfter; k++) {
     const a = rows[k], b = rows[k + 1];
     const wideA = t0Of(a), wideB = t1Of(b);
@@ -107,10 +108,13 @@ export function classifyFrame({ e0, e1 }, rows, canary = [], threads = {}, gpuBu
     if (wideB - wideA > MAX_GAP_MS) { gaps++; continue; }
     let d = 0;
     if (observedThroughout(threads.renderer, lo, hi, runnableOn(a.cpu))) d = Math.max(0, (b.steal[a.cpu] - a.steal[a.cpu]) * JIFFY_MS - outside);
-    else if (a.gpuCpu >= 0 && a.gpuCpu === b.gpuCpu && a.gpuCpu !== a.cpu && observedThroughout(threads.renderer, lo, hi, futexWait) &&
-      observedThroughout(threads.gpu, lo, hi, runnableOn(a.gpuCpu)))
-      d = Math.max(0, (b.steal[a.gpuCpu] - a.steal[a.gpuCpu]) * JIFFY_MS - outside);
-    else if (!observedThroughout(threads.renderer, lo, hi, () => true)) unknown++;
+    else {
+      // Diagnostic only (R5-2): steal on a runnable GPU thread's vCPU while the renderer waits in a futex.
+      if (a.gpuCpu >= 0 && a.gpuCpu === b.gpuCpu && a.gpuCpu !== a.cpu && observedThroughout(threads.renderer, lo, hi, futexWait) &&
+        observedThroughout(threads.gpu, lo, hi, runnableOn(a.gpuCpu)))
+        gpuCandidate += Math.max(0, (b.steal[a.gpuCpu] - a.steal[a.gpuCpu]) * JIFFY_MS - outside);
+      if (!observedThroughout(threads.renderer, lo, hi, () => true)) unknown++;
+    }
     stolen += d;
   }
   const provableMs = Math.max(0, Math.min(stolen - JIFFY_MS, covered, gap));
@@ -119,7 +123,7 @@ export function classifyFrame({ e0, e1 }, rows, canary = [], threads = {}, gpuBu
   const vmProvableMs = Math.max(0, vmStolen - ncpu * JIFFY_MS);
   const ourCpuMs = (rows[lastAfter].run - rows[first].run) + (rows[lastAfter].grun - rows[first].grun);
   const detail = { provableStolenMs: round(provableMs), canaryMs: round(canaryMs), excusedMs: round(excusedMs), remainderMs: round(remainderMs),
-    coveredMs: round(covered), vmProvableMs: round(vmProvableMs), ourCpuMs: round(ourCpuMs), migrations, gaps, unknownState: unknown };
+    coveredMs: round(covered), vmProvableMs: round(vmProvableMs), ourCpuMs: round(ourCpuMs), migrations, gaps, unknownState: unknown, gpuCandidateMs: round(gpuCandidate) };
   if (excusedMs > 0 && remainderMs <= BUDGET_MS) return { cause: "host", ...detail };
   // A diagnostic label only: it stays ours (R4-1).
   if (vmProvableMs >= 0.5 * covered * ncpu && canaryMs >= 0.5 * gap && ourCpuMs <= BUDGET_MS && gpuBusy !== true)

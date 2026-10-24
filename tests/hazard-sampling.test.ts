@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import { HAZARD_FIELDS } from "../src/content/ecology/hazards.js";
 import type { HazardFieldDefinition, HazardFieldId, HazardKind } from "../src/content/ecology/hazards.js";
 import { sitePosition } from "../src/content/ecology/sites.js";
-import { fieldLevel, sampleHazards, shapeWeight } from "../src/sim/ecology/hazards.js";
+import { caveFieldLevel, cycleLevel, fieldLevel, sampleHazards, shapeWeight } from "../src/sim/ecology/hazards.js";
+import { DEEP_CAVE_HAZARDS } from "../src/content/regions/caves/deepCaves.js";
 import { hazardsAt } from "../src/sim/fittings.js";
 import type { Vec3 } from "../src/sim/types.js";
 
@@ -26,6 +27,11 @@ function referenceSample(p: Vec3, tick: number) {
       flow = { x: flow.x + f.flow.x * k, y: flow.y + f.flow.y * k, z: flow.z + f.flow.z * k };
     }
   }
+  // CW-1's cave fields, as CW-1 wrote them.
+  for (const f of DEEP_CAVE_HAZARDS) {
+    const level = caveFieldLevel(f, p, tick);
+    if (level > 1e-9) out[f.kind] = Math.max(out[f.kind], level);
+  }
   return { heat: out.heat, brine: out.brine, sediment: out.sediment, darkness: out.darkness, flow, fields };
 }
 function referenceHazardsAt(p: Vec3, tick: number) {
@@ -36,6 +42,13 @@ function referenceHazardsAt(p: Vec3, tick: number) {
     const level = shapeWeight(f.shape, f.edge, p) * fieldLevel(id, tick) * f.intensity;
     if (level <= 1e-9) continue;
     heat.push({ level, kind: !("cycle" in f) ? "ambient" : fieldLevel(id, tick) > ((f as { baseline?: number }).baseline ?? 0) + 1e-9 ? "burst" : "core" });
+  }
+  for (const f of DEEP_CAVE_HAZARDS) {
+    if (f.kind !== "heat") continue;
+    const level = caveFieldLevel(f, p, tick);
+    if (level <= 1e-9) continue;
+    const cycled = f.cycle ? cycleLevel(f.cycle, tick) > 1e-9 : false;
+    heat.push({ level, kind: !f.cycle ? "ambient" : cycled ? "burst" : "core" });
   }
   return { heat, brine: referenceSample(p, tick).brine };
 }
@@ -57,4 +70,16 @@ test("hazard samples and fit hazards are exactly the reference algorithm's in an
     }
   }
   assert.ok(contributing > points / 10, `${contributing} of ${points} samples meet a field`);
+  // And in and around every deep-cave field (CW-1).
+  let caves = 0;
+  for (const f of DEEP_CAVE_HAZARDS) {
+    const c = sitePosition(f.shape.center);
+    for (const dx of [-12, -3, 0, 4, 15]) for (const dy of [-6, 0, 3]) for (const dz of [-10, 0, 7]) for (const tick of [0, 9_000, 180_000]) {
+      const p = { x: c.x + dx, y: c.y + dy, z: c.z + dz }, { ambient: _a, visibility: _v, ...sample } = sampleHazards(p, tick);
+      assert.deepEqual(sample, referenceSample(p, tick), `cave field at ${JSON.stringify(p)}, tick ${tick}`);
+      assert.deepEqual(hazardsAt(p, tick), referenceHazardsAt(p, tick), `cave fit hazards at ${JSON.stringify(p)}, tick ${tick}`);
+      if (caveFieldLevel(f, p, tick) > 1e-9) caves++;
+    }
+  }
+  assert.ok(caves > 0, "cave fields contribute");
 });

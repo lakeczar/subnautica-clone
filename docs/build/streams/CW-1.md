@@ -1,5 +1,9 @@
 # CW-1: every authored cave in the game, streamed without pauses (handoff)
 
+> **Resume note (R5, paused for the host reboot):** R5-2 (GPU credit off, diagnostic only), R5-3 (budgets reverted to 1,024) and R5-5 (deep hazard reference restored) are done in the WIP commit; the handoff text below is still R4's.
+> **Next:** R5-1 (warmup after records and admission, readiness for every cave query, pending/slow/failing-pack tests), R5-4 (regenerate the r14 state summaries and prose), reclassify the retained evidence, the composed functional sweep of the seven segments, then the R5 handoff and "done at <sha>".
+> **Tickets to resubmit:** none (nothing of mine was queued or running at the pause).
+
 Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Root merged again at `21a1652` (SIM-1a, TST-16, SIG-1 stage 0, STEW-1) and, after review R4, at **`9029963e`** (SIM-1b, COL-1 A, SIM-PERF-1; root `732fe59c`). Code after R4: the R4-2/R4-3 fixes `6ee7bff3`, R4-1 and the sampler worker `8ba62f09`, evidence tooling `fc5059ff`, the bake's worker blocks `f9525447`; the evidence commits and this handoff follow. Runs:
 - the clean remeasure at `3779f59c` (r10);
 - the targeted remeasure of its failures at `6ca73311` (r12);
