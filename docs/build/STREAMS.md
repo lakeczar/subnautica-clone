@@ -828,3 +828,79 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Rulings and tests:** the R6 rulings are in, and their regressions fail on f6fee338. Note events carry `saveRef` for REC-2.
   - **Gate:** running inside 4070 jobs.
   - **Review:** Sol R1 dispatched in parallel (`siltwake-sim1b-review-r1-sol-5314f3e`).
+- **SIM-1b R1** (Sol on `5314f3ef`, report on `review/sim-1b-r1` `61a2e4a4`): REQUEST CHANGES, 2 P1s and 3 P2s.
+  - **Findings:** a failed repair collects against the uncommitted empty journal and deletes data; the reader isn't total (malformed v1 throws, a header admits unreadable history); a malformed summary bypasses fold validation; quota retries mutate before protecting; entry clears the protection warning.
+  - **Decision:** fix all five, and add one seeded model-based fault-and-corruption harness that asserts the invariants after every step, to end the case-by-case rounds.
+- **CW-1 remeasure, 09:04Z: 6/16 in.**
+  - **Lost tickets:** the submit client's 2 h limit killed 10 queued run-mode tickets; they're resubmitted detached.
+  - **Window:** tour 4 (in window) came back DISTURBED with steal max 5.3%, so it's rerun at the end; tour 5 (in window) was clean.
+  - **Gate:** tours 1–2 pass; 0, 3, 4 and 5 fail on 1–3 streaming frames each. Every segment reached all its caves, with 0 faults and 0 swap.
+  - **Two kinds of frame:**
+    - **off-CPU blocks** of 70+ ms (not steal, since PARAVIRT_TIME_ACCOUNTING is off); naming them needs an eBPF off-CPU stack (root), which is a fleet question;
+    - **on-CPU:** uncapped residency eviction (38–72 ms) and light placement (24–31 ms).
+  - **Plan:** finish the series and diagnostics, root-fix the on-CPU passes (slicing), then a targeted remeasure of the failing segments.
+- **SIM-1b R1 fixes at `b2aebd6d`:** F1–F5 fixed, plus a model-based fault harness (24 sequences fast, 2,000 heavy; seed replay). The harness found one more store bug (seed 66769815), now fixed. Gate parts and 5,000 more sequences queued on the 4070. Sol R2 dispatched in parallel, with mutation-testing of the harness as its main question (`siltwake-sim1b-review-r2-sol-b2aebd6`).
+- **REC-1 R3b:** the cost is the video path (software VP9 plus GPU readback contention), not timing or allocations. The confirmation design approved is within-run alternation (`?recmeasure=1`) plus off-versus-paused corroboration. Hardware encoder preferred, with a software fallback. The 540p fallback question is with the owner.
+- **Owner (2026-10-24), recorder video encoder:** the owner points out that every player machine has a GPU with a hardware encoder. Decision: a hardware ladder of AV1 → VP9 → H.264 (`prefer-hardware`; H.264 covers integrated GPUs, in MKV or MP4 if needed); the software fallback (effectively our Linux test machines) at 960×540; the pack states the encoder used. The 1% budget is judged on the owner's hardware path (owner-PC check) and on the 540p software path on our machines.
+- **Owner encoder policy (2026-10-24):** the owner's laptop uses the best encoder available; the sandbox may use something else; the CPU route at 960×540 is approved on Linux only if all else fails. A Sol research agent is studying browser hardware video encoding (`siltwake-research-webcodecs-hw-encode-sol`, writing `research/browser-hw-encode`) to give REC-1 concrete probes.
+- **SIM-1b R2** (Sol on `b2aebd6d`, report on `review/sim-1b-r2` `27a3f3ad`): REQUEST CHANGES, 3 P2s and 1 P3. R1's P1s are fixed, and the parse cost is 0.166 ms at 20k.
+  - **Findings:**
+    - the validator misses malformed known fields;
+    - the harness is weak: mutation testing showed the F3 and F4 mutants surviving 2,000 sequences, and its oracle follows production parsers;
+    - a timeline warning suppresses urgent hazard captions (player-facing);
+    - a stale failure warning remains after repair.
+  - **Fix plan:** an independent oracle, read snapshots, deterministic fault schedules, fast-tier seeds that kill the known mutants, and mutants kept as a heavy self-check.
+- **Hardware-encode research in** (`research/browser-hw-encode` `e212e70a`, pushed).
+  - **Windows 4070:** hardware AV1, H.264 or HEVC (no CPU fallback on Windows).
+  - **factory-worker:** no NVENC from Linux Chrome (nvidia-vaapi-driver is decode-only), so the approved 540p software path.
+  - **WSL2:** Mesa D3D12 VA-API H.264 is a real possible hardware path; probe `vainfo` first.
+  - **Capture:** direct `VideoFrame(canvas)` against the scaled bitmap, traced for readback.
+  - **Containers:** fMP4 for H.264/HEVC, WebM for VP8/VP9/AV1.
+  - Forwarded to REC-1 with its probes. The owner-PC probes are batched for one owner session.
+- **Owner suggestion (2026-10-24): GPU Screen Recorder** (native Linux NVENC/VA-API capture).
+  - **Fit:** viable as the "native NVENC recorder" route from the hw-encode research.
+  - **Not adopted now:** factory-worker's browsers are headless on a display-less GPU (it would need an X server on the 3090, a VM change); the timing is wall-clock only, not page-time; and its docs warn that NVENC causes memory downclocking on NVIDIA drivers before 580 (factory-worker runs 550), which would distort 3090 frame evidence.
+  - **Kept as the fallback** if the 540p software path is over budget on Linux. It would need owner/fleet approval for the X server and a 580+ driver.
+- **NVIDIA driver research in** (`research/nvidia-driver` `3079444c`, pushed):
+  - **Findings:** an upgrade isn't a demonstrated fix for the stalls and won't enable NVENC in Linux Chrome (no Vulkan Video encoder or NVENC backend in Chromium; nvidia-vaapi-driver is decode-only). Keep GL-EGL.
+  - **Cheap first steps on 550:** a task-owned GL shader disk cache with a cold/warm comparison (no VM change; handed to SIM-PERF-1); persistence mode and clock-lock diagnostics need root and owner approval.
+  - **Upgrade option, owner-approved maintenance only:** R595 production (595.112.07) via NVIDIA's Debian 13 APT repo, pinned, with a full guest rollback image. R580 has no Debian 13 vendor repo.
+- **Owner approves fleet option B (2026-10-24):** move ZFS write threads, remaining host kernel work and tailscaled to host CPUs 0–3. This needs boot parameters and a host reboot.
+  - **Evidence sent via the owner:** 6/16 exclusive runs disturbed by steal of 5–8.5%, five of them outside the backup window.
+  - **Before the reboot:** the coordinator pauses builders (WIP committed) and drains the queue once fleet names a time.
+  - **After:** health checks (3090 passthrough, queue), resume, then a before/after steal comparison on the same route.
+- **SIM-1b R2 fixes at `16961a67`** (code `80b11146`):
+  - **Fixes:** full known-field validation; a rewritten independent-oracle harness (read snapshots, full fault and lock families, 40-step replay; all 12 mutants killed in the fast tier, plus a heavy self-check); the timeline warning at rank 2.5, below hazards and game-save warnings; scoped resolution of timeline warnings.
+  - **New defect found by the harness:** a 1,001-event seal on reload, now fixed.
+  - **Review:** Sol R3 running with fresh mutants (`siltwake-sim1b-review-r3-sol-16961a6`).
+- **CW-1 diagnostic D1 (key finding):**
+  - **What it shows:** all 20 frames over 34 ms coincide with VM-wide host steal of 410–670 ms across 8 vCPUs inside a 100 ms gap, i.e. **the VM is paused about 100 ms, several times a minute**. Steal sometimes shows as run time and sometimes not. Receipts read about 2% because pauses average out over 5 s windows.
+  - **Plan:**
+    - the CW-1 fixes stand (they break convention 4 regardless);
+    - the gate splits frames into host-paused, mixed (remainder after subtracting steal still over budget, which counts as ours) and clean ours;
+    - a targeted remeasure with per-vCPU steal follows.
+  - **Owner and fleet:** a question about what pauses the whole VM for about 100 ms; this strengthens the option-B case.
+  - **Surf cave stall:** a driver drift onto a shallow bump; root fix is the planner sweeping legs with lateral margin.
+- **SIM-1b R3** (Sol on `16961a67`, report on `review/sim-1b-r3` `9bacc5ff`): REQUEST CHANGES, one P2. The timeline warning (rank 2.5) hides failed-import errors (rank 2) in both arrival orders; fix is to put the timeline warning below general errors. Everything else passed: library saves under the stricter validator, the seal boundaries, all R2 mutants. Short check next.
+- **REC-1 R3b probes:**
+  - **Results:** no hardware encoder on either Linux machine (factory-worker Chrome 156.0.8078.4, alickers 156.0.8078.47), even with `AcceleratedVideoEncoder`. Software AV1, VP9, VP8 and H.264 are available. The media log identifies the encoder.
+  - **Sandbox VA-API:** there was no driver or `vainfo` at all, so the owner approved installing `mesa-va-drivers`, `vainfo` and `ffmpeg` inside the WSL sandbox only (no Windows or host changes), recorded with a removal path.
+  - **540p confirmation:** stopped by the stall detector (the hold printed nothing), now resubmitted with per-window logging.
+  - **Queued:** the decomposition. The owner-PC probe script is being prepared.
+- **13:03Z check (owner asked whether we're just waiting):**
+  - **Stalled builder:** COL-1 had been silent about 14 h. Its CW-1+R7 traversal was rejected (exit 3, tree changed) at 22:40Z yesterday and never resubmitted, its wake lost to the limit pauses. Nudged to resubmit detached on CW-1's current harness.
+  - **The 3090 is the bottleneck:** about 25 exclusive tickets queued (REC-1 11, SIM-PERF-1 6, CW-1 8), several hours deep.
+- **COL-1 A R7 fixes done at `79dff359`:**
+  - **Fixes:** a constructed seam boundary per side plane (`seamCap.ts`) with in-build exact-tiling and overlap checks; the clip duplicate-vertex fix; a frozen coarse ring (0 off-plane edges).
+  - **Art and tests:** fine art ≤0.31 m from pre-R6; coarse up to 1.44 m (closing cracks); bake 220/220; heavy tier on the 4070.
+  - **Build-cost answer:** shells are bake-time only (STR-13 refuses foreign bakes); the live path is a dev fallback only, recorded as a compromise (root fix WK-1).
+  - **Review:** 3090 confirmation pending; Sol R8 running (`siltwake-col1a-review-r8-sol-79dff35`).
+- **Queue balancing (owner question, 13:05Z):** the 3090 had about 26 exclusive tickets queued (until about 17:30Z) while the 4070 was idle from 13:30. Rule: only acceptance numbers need 3090 exclusive; attribution and diagnostics go to the 4070 as indicative `gpu` jobs. REC-1's decomposition and SIM-PERF-1's cold/warm shader-cache set are moving to the 4070; the 3090 keeps REC-1's 540p confirmation, SIM-PERF-1's before/after plus one cold and one warm run, CW-1's targeted remeasure and COL-1's two runs.
+- **Owner approves GPU self-balancing (2026-10-24):** a DIRECTION rule is added (only acceptance numbers are 3090 exclusive; everything else `--machine any`).
+  - **Next: SCHED-3**, a small queue change for the SCHED-2 builder: default `any` for non-exclusive test, gpu, playthrough and heavy classes when the command needs no factory-worker-only paths (falling back to `3090` automatically, with the reason printed, when it does). It keeps `bake` and express `quick` jobs local (shipping a commit costs more than they do), and runs the full SCHED suites.
+  - **Timing:** it starts when a builder slot frees (cap 5), likely when SIM-1b finishes.
+- **COL-1 A R8** (Sol on `79dff359`, report on `review/col-1a-r8` `32b9ac4a`): REQUEST CHANGES. The independent 110-shell audit is clean and 87/87 tests pass.
+  - **P2:** the tiling validator accepts an equal-area wrong cap, so it must verify the directed boundary.
+  - **P2:** production falls back to the synchronous live builder on a missing or refused bake. Decision: keep the fallback but count and report it, test that normal builds never hit it, and record it as a production compromise with WK-1 owning the root fix.
+  - **P3:** a snap-guard collapse control.
+- **SIM-1b R3 fix at `06094260`** (fix `c690de5e`): the timeline warning is at rank 1.5, below general errors, with the status-line fallback; real failed-import tests in both orders; an exact `seq` reload check added to the model; regression scripts split out for the fast-tier budget. Short Sol R4 running (`siltwake-sim1b-review-r4-sol-0609426`).
