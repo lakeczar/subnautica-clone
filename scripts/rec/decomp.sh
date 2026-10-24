@@ -37,6 +37,7 @@ for v in ${VARIANTS:-telemetry capture-bitmap capture-frame vp9-bitmap vp8-bitma
     vp8-bitmap) run "$v" --codec vp8 ;;
     h264-bitmap) run "$v" --codec h264 ;;
     vp8-frame) run "$v" --codec vp8 --capture frame ;;
+    vp9-frame) run "$v" --codec vp9 --capture frame ;;
     telemetry-profile) run "$v" --video off --profile-windows ;;
     telemetry-notiming-profile) run "$v" --video off --no-timing --profile-windows ;;
     playtest) run "$v" ;;
