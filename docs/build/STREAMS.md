@@ -881,3 +881,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - a targeted remeasure with per-vCPU steal follows.
   - **Owner and fleet:** a question about what pauses the whole VM for about 100 ms; this strengthens the option-B case.
   - **Surf cave stall:** a driver drift onto a shallow bump; root fix is the planner sweeping legs with lateral margin.
+- **SIM-1b R3** (Sol on `16961a67`, report on `review/sim-1b-r3` `9bacc5ff`): REQUEST CHANGES, one P2. The timeline warning (rank 2.5) hides failed-import errors (rank 2) in both arrival orders; fix is to put the timeline warning below general errors. Everything else passed: library saves under the stricter validator, the seal boundaries, all R2 mutants. Short check next.
