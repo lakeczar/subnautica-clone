@@ -22,7 +22,7 @@ import { berthLocal, carrierRooms, CARRIER_LAYOUT, fixtureGame, freeBerth, nextB
 import { createWorldQueries } from "../src/sim/world.js";
 import { playerView } from "../src/render/camera.js";
 import type { GameCommand, GameEvent, GameState, Vec3, VehicleState, WorldQueries } from "../src/sim/types.js";
-import { at, creelFirst, creelOf, fund, saveable } from "./b1-support.js";
+import { at, creelFirst, fund, saveable } from "./b1-support.js";
 
 const world = gameWorld();
 /** A hull of `hull` at `p` with `kinds` fitted, optionally piloted, facing `yaw`. */
@@ -65,7 +65,7 @@ const count = (s: GameState, kind: string, container: string): number =>
 
 test("no catalogue upgrade is inert: every one has a recipe (ART-09)", () => {
   for (const id of Object.keys(UPGRADES) as UpgradeId[])
-    assert.ok(Object.hasOwn(RECIPES, id) || Object.hasOwn(RECIPES, UPGRADES[id].registry ?? ""), `${id} is fabricable`);
+    assert.ok(Object.hasOwn(RECIPES, id) || Object.hasOwn(RECIPES, (UPGRADES[id] as { registry?: string }).registry ?? ""), `${id} is fabricable`);
 });
 
 test("Dart wide-sweep sonar: a loud, charged sweep marks cave openings in range on the chart, then recharges", () => {

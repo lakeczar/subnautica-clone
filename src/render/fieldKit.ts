@@ -86,7 +86,7 @@ function moduleLook(s: GameState, itemId: string, kind: ModuleKind): ModuleLook 
     return { crop: crop ? Math.min(1, Math.floor((crop.progress / SEEDS[crop.seed].growSeconds) * 4) / 4) : 0 };
   }
   if (kind === "decoder") return { working: s.systems.decodes.some((j) => j.moduleId === itemId) };
-  if (kind === "trap") return { fish: Math.min(TRAP.cap, s.systems.traps.find((t) => t.moduleId === itemId)?.fish ?? 0) };
+  if (kind === "trap") return { fish: Math.min(TRAP.cap, s.systems.traps.find((t) => t.moduleId === itemId)?.held ?? 0) };
   return {};
 }
 const lookKey = (l: ModuleLook): string => `${l.crop ?? ""}${l.working ? "w" : ""}${l.fish ?? ""}`;
