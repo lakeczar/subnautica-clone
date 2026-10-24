@@ -1047,3 +1047,5 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Why not LS-1:** POI-1's noticeable-mark list lives in `tests/poi.test.ts`, and the landmark lights derive from render geometry the sim can't import. A proper reuse means lifting the list into one Babylon-free content module (light points precomputed from content or the bake), then adding a recorder "point of interest passed" event with a spatial index and throttled line of sight.
   - **REC-2 brief:** lift, event, then re-measure, so the ratchet lowers.
   - **LS-1's R1 fixes:** the debt ratchet fails when a route is better than recorded, and each row names its owner (PACE-1 logistics, REC-2 landmarks).
+- **REC-1: e706 lost to a stall kill** (a `cut` block-buffering the log), about 31 min of 3090 exclusive time lost today across f0df, e7fc and e706. Root fix `29df729f`: `run.mjs` touches `$SILTWAKE_JOB_HEARTBEAT` on every log line, proved on the 4070 first (a 300 s hold under a 200 s stall window). Resubmitted `8bf5`, `0ea8` and `9e9e`.
+  - **Rule for briefs:** rehearse any exclusive command on the 4070 with a shortened `--stall` before spending 3090 time.
