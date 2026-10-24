@@ -181,7 +181,10 @@ async function shot(name) {
  * blocked thread (neither: IPC, a lock, I/O). */
 // Samples as typed-array columns (a 30-minute run takes about 360k of them;
 // arrays of arrays had pushed runs past their memory reservation).
-const COLS = 7; // time, run, wait, minor, major, gpu run, gpu wait
+// Each vCPU's steal (jiffies, /proc/stat) and the CPU the thread last ran on:
+// a long frame inside a host pause of the VM is the host's, not the game's.
+const NCPU = (readFileSync("/proc/stat", "utf8").match(/^cpu\d+ /gm) ?? []).length;
+const COLS = 8 + NCPU; // time, run, wait, minor, major, gpu run, gpu wait, cpu, steal per vCPU
 const sched = { pid: null, gpu: null, n: 0, data: new Float64Array(COLS * 65536) };
 const sample = (i) => sched.data.subarray(i * COLS, i * COLS + COLS);
 /** The last sample at or before `t` (or the first at or after, `after`). */
@@ -213,7 +216,8 @@ function sampleSched() {
     // The GPU process's main thread too: busy while the renderer is blocked means the renderer waits on it.
     const g = sched.gpu ? readFileSync(`/proc/${sched.gpu}/task/${sched.gpu}/schedstat`, "utf8").split(" ").map(Number) : [0, 0];
     if ((sched.n + 1) * COLS > sched.data.length) { const grown = new Float64Array(sched.data.length * 2); grown.set(sched.data); sched.data = grown; }
-    sched.data.set([performance.timeOrigin + performance.now(), run / 1e6, wait / 1e6, +rest[7], +rest[9], g[0] / 1e6, g[1] / 1e6], sched.n * COLS);
+    const steal = readFileSync("/proc/stat", "utf8").split("\n").filter(l => /^cpu\d+ /.test(l)).map(l => +l.split(/\s+/)[8]);
+    sched.data.set([performance.timeOrigin + performance.now(), run / 1e6, wait / 1e6, +rest[7], +rest[9], g[0] / 1e6, g[1] / 1e6, +rest[36], ...steal], sched.n * COLS);
     sched.n++;
   } catch { sched.pid = null; }
 }
@@ -353,7 +357,10 @@ try {
     // The main thread over the gap (epoch ms): on CPU, waiting to run, faults.
     const t1 = data.origin + at, t0 = t1 - g, first = sampleAt(t0, false), last = sampleAt(t1, true);
     const thread = first && last ? { spanMs: +(last[0] - first[0]).toFixed(1), onCpuMs: +(last[1] - first[1]).toFixed(1), waitingMs: +(last[2] - first[2]).toFixed(1),
-      minorFaults: last[3] - first[3], majorFaults: last[4] - first[4], gpuOnCpuMs: +(last[5] - first[5]).toFixed(1), gpuWaitingMs: +(last[6] - first[6]).toFixed(1) } : null;
+      minorFaults: last[3] - first[3], majorFaults: last[4] - first[4], gpuOnCpuMs: +(last[5] - first[5]).toFixed(1), gpuWaitingMs: +(last[6] - first[6]).toFixed(1),
+      // Steal in the gap (10 ms jiffies): on the vCPU the thread was on at both ends, and summed over every vCPU.
+      cpus: [first[7], last[7]], stealOnThreadCpuMs: first[7] === last[7] ? (last[8 + last[7]] - first[8 + first[7]]) * 10 : null,
+      stealAllCpusMs: Array.from({ length: NCPU }, (_, c) => last[8 + c] - first[8 + c]).reduce((a, b) => a + b, 0) * 10 } : null;
     let hot = null;
     if (profileAt) {
       const counts = new Map();
@@ -370,10 +377,19 @@ try {
   // browser, reported but not streaming's.
   const streamingOf = (f) => (f?.parts ? (f.parts.chunks ?? 0) + (f.parts.caves ?? 0) + (f.parts.regions ?? 0) + (f.parts.lights ?? 0) : 0);
   for (const l of result.long) if (l.frame) l.streaming = l.frame.total > 16.7 && streamingOf(l.frame) >= 0.5 * l.frame.total;
+  // A host pause: the thread's own vCPU stolen for half the gap or more, or the
+  // VM as a whole losing two vCPU-gaps (CW-1 diagnosis: every long frame of a
+  // profiled run had 410-670 ms of steal across 8 vCPUs per 100 ms gap; the
+  // host's average is 2-16 ms). Such a frame is the host's, reported apart.
+  for (const l of result.long) l.hostPaused = !!l.thread && ((l.thread.stealOnThreadCpuMs ?? 0) >= 0.5 * l.gap || l.thread.stealAllCpusMs >= 2 * l.gap);
   result.longByCause = {
     over34: result.long.filter(l => l.gap > 34).length,
     streaming: result.long.filter(l => l.streaming).length,
     streamingOver34: result.long.filter(l => l.streaming && l.gap > 34).length,
+    // Streaming frames over 34 ms with no host pause in them: the game's own (the gate).
+    streamingOver34Ours: result.long.filter(l => l.streaming && l.gap > 34 && !l.hostPaused).length,
+    hostPausedOver34: result.long.filter(l => l.gap > 34 && l.hostPaused).length,
+    unsampled: result.long.filter(l => l.gap > 34 && !l.thread).length,
     simulation: result.long.filter(l => l.frame && !l.streaming && l.frame.sim >= 0.5 * l.frame.total && l.frame.total > 16.7).length,
     noWork: result.long.filter(l => !l.frame || l.frame.total <= 16.7).length,
     // Long gaps in which the heap shrank by over 2 MiB: a collection ran in them (whatever part it landed in).
@@ -417,7 +433,11 @@ try {
   const failures = [];
   if (travelSync > 0 || result.unsliced.some(u => u.traveling)) failures.push(`${Math.max(travelSync, result.unsliced.filter(u => u.traveling).length)} unsliced cave build(s) in travel`);
   if (result.holdFrames > 0) failures.push(`${result.holdFrames} hold frame(s)`);
-  if (result.longByCause.streamingOver34 > 0) failures.push(`${result.longByCause.streamingOver34} streaming frame(s) over 34 ms`);
+  // Streaming frames inside a host pause are reported, not failed; a frame with
+  // no thread sample cannot be cleared and counts as ours.
+  const ours = result.long.filter(l => l.streaming && l.gap > 34 && (!l.hostPaused || !l.thread)).length;
+  if (ours > 0) failures.push(`${ours} streaming frame(s) over 34 ms outside host pauses`);
+  result.hostPausedStreaming = result.long.filter(l => l.streaming && l.gap > 34 && l.hostPaused).length;
   // R2-2: a cave the craft is in whose light is not yet bound is drawn as open water; ordinary travel must have prefetched it.
   const travelLightPending = (data.stream.lightPendingFrames ?? 0) - pendingAtStart;
   if (travelLightPending > 0) failures.push(`${travelLightPending} frame(s) inside a cave whose light was not ready`);

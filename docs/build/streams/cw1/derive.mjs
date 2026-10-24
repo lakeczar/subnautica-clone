@@ -168,11 +168,19 @@ for (let i = 1; i < tour.length; i++) {
 // The game's movement keeps the hull's keel over the highest floor under its
 // whole footprint (hullFloor), which the swept solid test does not model: a
 // leg must also keep a metre over that floor every 2 m along it.
+// The keyboard driver drifts off the line by a metre or two (a surf-cave stall:
+// the hull ran onto a -2.2 m bump beside the planned leg), so the keel rule
+// holds LATERAL metres either side of the line too: on transit legs, not the
+// legs into and out of a cave stop (mouths can be under 4 m wide).
+const LATERAL = 2;
 const keelClear = (a, b) => {
-  const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.z - a.z) / 2));
+  const lateral = a.cave || b.cave ? [0] : [0, LATERAL, -LATERAL];
+  const len = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(len / 2));
+  const px = len > 1e-6 ? -(b.z - a.z) / len : 0, pz = len > 1e-6 ? (b.x - a.x) / len : 0;
   for (let i = 0; i <= n; i++) {
     const t = i / n, p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t, z: a.z + (b.z - a.z) * t };
-    if (p.y < hullFloor(world, p, DART) + KEEL) return false;
+    for (const o of lateral)
+      if (p.y < hullFloor(world, { x: p.x + px * o, y: p.y, z: p.z + pz * o }, DART) + KEEL) return false;
   }
   return true;
 };
