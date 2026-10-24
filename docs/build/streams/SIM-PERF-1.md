@@ -61,6 +61,8 @@ Phases over 1 ms, before → after: threat 2,423 → off the list; autosave 2,25
 
 **Browser, 3090** (profiled, `gpu` class, before-tree probe `81ee4a12`, segment 2): 52,969 steps, two over 8 ms: the 61.7 ms movement step (Chrome's sampler caught no movement code; the guest counted 86 ms of 100 on CPU) and a 12.2 ms step (presentation 5.7, upgrades 5.3). PENDING: the exclusive runs.
 
+**Harness equivalence (the 3090 decisive test).** The traversals ran on probe `9c36c647`: CW-1's `4ea4d4a7` (the streamed tracer, `stream-trace.mjs`, folded in from this stream) plus this stream's `SIMPERF_HOST` opt-ins as a private patch. CW-1 then folded those opt-ins into its tree at `6ca73311`, unchanged. `traverse.mjs`, `stream-trace.mjs` and `simperf-host-worker.mjs` are byte-identical between `9c36c647` and `6ca73311` (SHA-256 `39302a7d…`, `120d0925…`, `bde05d41…`), so these runs are the tree harness's. Later 3090 runs bind to `6ca73311` plus this branch's game merge, with no private patch.
+
 ## Contracts and merge notes
 - **New per-step work** marks its phase: add a `STEP_PHASES` entry and `meter?.mark(PHASE.x)` after it, or it is counted in the next phase.
 - **`__siltwakeStepCosts()`** is `FORK(step-costs-global)` (CORE-HELPERS): whichever of REC-1 and SIM-PERF-1 merges second makes it `__siltwake.steps()`.
