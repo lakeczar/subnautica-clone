@@ -46,8 +46,10 @@ export const SANDBOX = Object.freeze({ host: "siltwake-alickers", tool: "/usr/lo
 export const REFUSED_EXIT = 75;
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LOGGED = "SILTWAKE_LOCAL_OVERRIDE_LOGGED";
-/** Settings a routed command keeps only on factory-worker: the queue sends only the command line to alickers. */
-const ROUTING_ENV = new Set(["SILTWAKE_HEAVY_CHECK", "SILTWAKE_GUARD_STRICT", "SILTWAKE_LOCAL_OVERRIDE", LOGGED]);
+/** Not settings: the guard's own variables, and those every heavy-check job sets afresh. */
+const ROUTING_ENV = new Set(["SILTWAKE_HEAVY_CHECK", "SILTWAKE_GUARD_STRICT", "SILTWAKE_LOCAL_OVERRIDE", LOGGED, "SILTWAKE_LANE_TICKET", "SILTWAKE_GPU_LEASE",
+  "SILTWAKE_SOAK_MACHINE", "SILTWAKE_SCHED_DIR"]);
+const JOB_ENV = /^SILTWAKE_(JOB_|HEAVY_(LOCK_HELD|CGROUP|CONCURRENCY|POOL_MIB)$)/;
 
 /**
  * Whether a command may run directly here, from plain facts (testable):
@@ -100,7 +102,8 @@ export const shellWord = (w) => (/^[\w@%+=:,./-]+$/.test(w) ? w : `'${String(w).
  * (SILTWAKE_*, NODE_OPTIONS) that only a job here would see.
  */
 export function routeArgs(argv, { cls = "standard", machine = "any", env = process.env } = {}) {
-  const carried = Object.keys(env).filter((k) => (k.startsWith("SILTWAKE_") && !ROUTING_ENV.has(k)) || k === "NODE_OPTIONS");
+  // Settings a routed command keeps only here: the queue sends alickers the command line alone.
+  const carried = Object.keys(env).filter((k) => (k.startsWith("SILTWAKE_") && !ROUTING_ENV.has(k) && !JOB_ENV.test(k)) || k === "NODE_OPTIONS");
   const m = machine === "any" && carried.length ? "3090" : machine;
   return { args: ["run", "--class", cls, "--machine", m, "--", ...argv], note: m !== machine ? `on factory-worker, so it keeps ${carried.join(", ")}` : "" };
 }

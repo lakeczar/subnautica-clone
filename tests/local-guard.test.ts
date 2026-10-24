@@ -87,6 +87,8 @@ test("a routed command keeps settings only a job here would see by running here"
     assert.match(r.note, new RegExp(Object.keys(env)[0]!));
   }
   assert.equal(G.routeArgs(argv, { machine: "any", env: { SILTWAKE_GUARD_STRICT: "1", SILTWAKE_HEAVY_CHECK: "/q" } }).args[4], "any", "the guard's own settings don't count");
+  assert.equal(G.routeArgs(argv, { machine: "any", env: { SILTWAKE_JOB_CPUS: "6", SILTWAKE_LANE_TICKET: "t", SILTWAKE_HEAVY_CONCURRENCY: "4" } }).args[4], "any",
+    "nor do those a job sets afresh");
   assert.equal(G.routeArgs(argv, { machine: "3090", env: {} }).args[4], "3090");
 });
 
@@ -102,10 +104,9 @@ function standIn(code = 7): { queue: string; calls: () => { args: string[]; cwd:
 }
 /** An agent's shell on factory-worker: not in a job, no override, not on the sandbox. */
 function agentEnv(extra: Record<string, string> = {}): NodeJS.ProcessEnv {
-  const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_GUARD_STRICT: "1", SILTWAKE_SCHED_DIR: temp("siltwake-guard-sched-"), ...extra };
-  for (const k of ["SILTWAKE_JOB_TICKET", "SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_LOCAL_OVERRIDE", "SILTWAKE_LOCAL_OVERRIDE_LOGGED", "NODE_TEST_CONTEXT",
-    "SILTWAKE_TEST_BUILD", "NODE_OPTIONS"]) if (!(k in extra)) delete env[k];
-  return env;
+  const env: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of Object.keys(env)) if (k.startsWith("SILTWAKE_") || k === "NODE_OPTIONS" || k === "NODE_TEST_CONTEXT") delete env[k];
+  return { ...env, SILTWAKE_GUARD_STRICT: "1", SILTWAKE_SCHED_DIR: temp("siltwake-guard-sched-"), ...extra };
 }
 const run = (argv: string[], env: NodeJS.ProcessEnv, cwd = resolve(".")) => spawnSync(argv[0]!, argv.slice(1), { cwd, encoding: "utf8", env });
 const W = ["node", "scripts/local-guard.mjs"];
