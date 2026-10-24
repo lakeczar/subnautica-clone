@@ -491,10 +491,10 @@ export function createWorldQueries(
   const near = (box: { min: Vec3; max: Vec3 }): readonly Solid[] =>
     index ? index.inBox(box, ["solid"]).map(e => e.data!) : solids;
   // Whether some solid is non-finite or inverted (separated sweeps refuse then). The roster
-  // is immutable, so it is checked once (SIM-PERF-1: a full scan of the world's 11k solids on
-  // every hunter sweep slice), and an indexed roster passed this very check when it was built.
+  // is immutable, so it is checked once per world (SIM-PERF-1: a full scan of the world's
+  // 11k solids on every hunter sweep slice).
   let invalidRoster: boolean | undefined;
-  const rosterInvalid = (): boolean => invalidRoster ??= index === null && solids.some(s => !finitePoint(s.min) ||
+  const rosterInvalid = (): boolean => invalidRoster ??= solids.some(s => !finitePoint(s.min) ||
     !finitePoint(s.max) || AXES.some(a => s.min[a] > s.max[a]));
   return {
     lineOfSight(a, b, ignore = []) {
