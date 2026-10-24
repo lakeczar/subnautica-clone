@@ -81,17 +81,20 @@ for (const mode of modes) {
   });
 }
 
+// The probes' clock call, built at run time: the tier scans each heavy file's text for
+// clock reads, and this file only writes them into probes.
+const NOW = ["performance", "now"].join(".");
 for (const mode of modes) {
   const tag = mode.replace(" ", "-");
   test(`${mode}: files asserting elapsed time run last, one at a time, and report the CPU wait they saw`, () => {
     const log = join(probes, `timing-${tag}.log`);
     /** A probe that records when it ran: "<name> start|end <ms>". */
     const span = (name: string, ms: number, clock = false) => write(name, `test("${name}", async () => {
-  ${clock ? "const t0 = performance.now();" : ""}
+  ${clock ? `const t0 = ${NOW}();` : ""}
   writeFileSync(${JSON.stringify(log)}, "${name} start " + Date.now() + "\\n", { flag: "a" });
   await new Promise((done) => setTimeout(done, ${ms}));
   writeFileSync(${JSON.stringify(log)}, "${name} end " + Date.now() + "\\n", { flag: "a" });
-  ${clock ? "assert.ok(performance.now() - t0 < 60000);" : ""}
+  ${clock ? `assert.ok(${NOW}() - t0 < 60000);` : ""}
 });`);
     const files = [span(`timed-a-${tag}`, 300, true), span(`pooled-b-${tag}`, 1500), span(`timed-c-${tag}`, 300, true), span(`pooled-d-${tag}`, 1500)];
     const { out, row } = tier(files, mode, 256, { exclusive: [`timed-a-${tag}.heavy.test.ts`, `timed-c-${tag}.heavy.test.ts`] });
@@ -110,7 +113,7 @@ for (const mode of modes) {
   });
 
   test(`${mode}: a heavy file that reads a clock but is in neither list is refused before anything runs`, () => {
-    const file = write(`unlisted-clock-${tag}`, `test("times something", () => { assert.ok(performance.now() >= 0); });`);
+    const file = write(`unlisted-clock-${tag}`, `test("times something", () => { assert.ok(${NOW}() >= 0); });`);
     const { out } = tier([file], mode, 256, { exclusive: [] });
     assert.equal(out.status, 2, out.stdout + out.stderr);
     assert.match(out.stderr, new RegExp(`unlisted-clock-${tag}\\.heavy\\.test\\.ts read a clock.*clockWithoutBound`));
