@@ -11,6 +11,7 @@
  *     file in `dir` as it stands at this point in the queue (nothing appended later
  *     is in it, and nothing modifies `out` afterwards).
  *   { op: "barrier", id } → { barrier: id } once everything before it has been acknowledged or refused.
+ *   { op: "snapshot", dir, file, bitmap, id } → { snapshotWritten: id, bytes } or { snapshotWritten: id, error }: a picture encoded (JPEG) and written here.
  *   { op: "remove", ... } also answers { absent } (already gone) or { refused, error } (another tab or worker holds it: nothing was freed).
  *   { op: "release", dir, id } → { released: id }: the directory's open handles closed (a stopped recording; export reopens them).
  *   Any operation that throws is answered { opFailed: op, error } (with its request's reply key when it has one); the queue goes on.
@@ -42,6 +43,7 @@ type Message =
   | { op: "remove"; dir: string; file: string | null; id: number }
   | { op: "export"; dir: string; out: string; id: number }
   | { op: "barrier"; id: number }
+  | { op: "snapshot"; dir: string; file: string; bitmap: ImageBitmap; id: number }
   | { op: "release"; dir: string; id: number }
   | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; rungs: string[]; encode?: boolean }
   | { op: "video-frame"; t: number; bitmap?: ImageBitmap | VideoFrame }
@@ -231,7 +233,7 @@ async function videoClose(m: Extract<Message, { op: "video-close" }>): Promise<v
 }
 
 /** The reply each request expects: a failed operation still answers it, with the error, so nothing waits forever (R3-1). */
-const REPLY_KEY: Partial<Record<Message["op"], string>> = { barrier: "barrier", export: "exported", remove: "removed", release: "released", "video-flush": "videoFlushed", "video-close": "videoClosed" };
+const REPLY_KEY: Partial<Record<Message["op"], string>> = { snapshot: "snapshotWritten", barrier: "barrier", export: "exported", remove: "removed", release: "released", "video-flush": "videoFlushed", "video-close": "videoClosed" };
 const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
 
 /** A video operation threw: its input and the encoder are closed, the segment
@@ -262,6 +264,21 @@ async function handleMessage(m: Message): Promise<void> {
       scope.postMessage({ failed: m.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: errorText(error) });
     }
   } else if (m.op === "barrier") scope.postMessage({ barrier: m.id });
+  else if (m.op === "snapshot") {
+    // A picture encoded here, off the page (R3b), and written once.
+    const out = new OffscreenCanvas(m.bitmap.width, m.bitmap.height);
+    out.getContext("bitmaprenderer")!.transferFromImageBitmap(m.bitmap);
+    const bytes = new Uint8Array(await (await out.convertToBlob({ type: "image/jpeg", quality: 0.72 })).arrayBuffer());
+    try {
+      const h = await handle(m.dir, m.file);
+      h.truncate(0); h.write(bytes, { at: 0 }); h.flush(); h.close(); handles.delete(`${m.dir}/${m.file}`);
+      scope.postMessage({ snapshotWritten: m.id, bytes: bytes.length });
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      scope.postMessage({ failed: m.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: errorText(error) });
+      scope.postMessage({ snapshotWritten: m.id, error: errorText(error) });
+    }
+  }
   else if (m.op === "release") { release(m.dir); scope.postMessage({ released: m.id }); }
   else if (m.op === "video-open") await videoOpen(m);
   else if (m.op === "video-flush") { await drain(); segment?.clusters.flush(); scope.postMessage({ videoFlushed: m.id }); }

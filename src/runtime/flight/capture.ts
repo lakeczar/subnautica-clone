@@ -97,7 +97,7 @@ type WorkerReply = {
   ack?: number; file?: string; failed?: string; bytes?: number; quota?: boolean; error?: string; video?: boolean;
   removed?: number; exported?: number; barrier?: number; videoFlushed?: number; videoClosed?: number;
   videoFrame?: number; kept?: boolean; videoOpened?: string; codec?: string; hardware?: boolean; videoError?: string; wrote?: string; videoOrigin?: string; t?: number;
-  frames?: number; firstMs?: number; lastMs?: number; why?: string; absent?: boolean; refused?: string; opFailed?: string; released?: number;
+  frames?: number; firstMs?: number; lastMs?: number; why?: string; snapshotWritten?: number; absent?: boolean; refused?: string; opFailed?: string; released?: number;
 };
 
 export class FlightCapture {
@@ -105,6 +105,8 @@ export class FlightCapture {
   readonly header: Record<string, unknown>;
   readonly session: string;
   private readonly blobs = new Map<number, Blob>();
+  /** Pictures the spool worker has encoded and written itself (a playtest): the index entry is all that remains. */
+  private readonly written = new Set<number>();
   /** Pictures read from the ring that are still encoding: written when they finish, and none waits for another (R1-S4). */
   private waiting: FlightSnapshot[] = [];
   /** Each picture's state (R1-S4): taken pictures are pending until encoded, then ok or failed. */
@@ -320,7 +322,18 @@ export class FlightCapture {
     this.snapState.set(snap.seq, { state: "pending", t: now });
     // Bounded when nobody drains it (a driver that never reads): the oldest states go.
     for (const old of this.snapState.keys()) { if (this.snapState.size <= 4 * SNAPSHOT_MEMORY) break; this.snapState.delete(old); }
-    void this.track(createImageBitmap(this.canvas, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "low" }).then((bitmap) => {
+    const bitmapJob = createImageBitmap(this.canvas, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "low" });
+    if (this.spool) {
+      // A playtest's pictures are encoded and written by the spool worker (R3b: JPEG encoding on the page cost it about 1 ms a second).
+      void this.track(bitmapJob.then((bitmap) => this.request({ op: "snapshot", dir: `${SPOOL_ROOT}/${this.session}`, file: snap.file, bitmap }, [bitmap])).then((reply) => {
+        if (reply.error || !reply.bytes) { this.snapState.set(snap.seq, { state: "failed", t: now, why: `encoding failed: ${reply.error ?? "no bytes"}` }); return; }
+        this.stored.set(snap.file, { session: this.session, file: snap.file, kind: "snapshot", bytes: reply.bytes });
+        this.written.add(snap.seq);
+        this.snapState.set(snap.seq, { state: "ok", t: now });
+      }, (error: unknown) => { this.snapState.set(snap.seq, { state: "failed", t: now, why: `encoding failed: ${error instanceof Error ? error.message : String(error)}` }); }));
+      return;
+    }
+    void this.track(bitmapJob.then((bitmap) => {
       const t0 = performance.now();
       const out = new OffscreenCanvas(bitmap.width, bitmap.height);
       out.getContext("bitmaprenderer")!.transferFromImageBitmap(bitmap);
@@ -565,19 +578,19 @@ export class FlightCapture {
       this.recorder.event("warning", `warning: the video encoder failed (${m.videoError.slice(0, 120)}); recording without video`, { snapshot: false });
       this.setVideo(false, "the encoder failed");
     }
-    const id = m.removed ?? m.exported ?? m.barrier ?? m.videoFlushed ?? m.videoClosed ?? m.released;
+    const id = m.removed ?? m.exported ?? m.barrier ?? m.videoFlushed ?? m.videoClosed ?? m.released ?? m.snapshotWritten;
     if (id !== undefined) { s.waiters.get(id)?.(m); s.waiters.delete(id); }
     this.backpressure();
   }
   /** One worker request, answered or given up after REQUEST_TIMEOUT_MS. */
-  private request(msg: Record<string, unknown>): Promise<WorkerReply> {
+  private request(msg: Record<string, unknown>, transfer: Transferable[] = []): Promise<WorkerReply> {
     const s = this.spool;
     if (!s) return Promise.resolve({ error: "no spool" });
     const id = ++s.seq;
     return new Promise((resolve) => {
       const timer = setTimeout(() => { s.waiters.delete(id); resolve({ error: "the spool did not answer" }); }, REQUEST_TIMEOUT_MS);
       s.waiters.set(id, (m) => { clearTimeout(timer); resolve(m); });
-      s.worker.postMessage({ ...msg, id });
+      s.worker.postMessage({ ...msg, id }, transfer);
     });
   }
   /** The other recordings on disk and the budget the browser's quota allows. */
@@ -754,7 +767,8 @@ export class FlightCapture {
       if (st?.state === "pending" && !expire) { still.push(snap); continue; }
       this.blobs.delete(snap.seq);
       this.snapState.delete(snap.seq);
-      if (st?.state === "ok" && blob) {
+      if (st?.state === "ok" && this.written.delete(snap.seq)) this.post("snapshots.ndjson", `${JSON.stringify(snap)}\n`);
+      else if (st?.state === "ok" && blob) {
         void this.track(blob.arrayBuffer().then((b) => this.post(snap.file, b, "append", "snapshot")));
         this.post("snapshots.ndjson", `${JSON.stringify(snap)}\n`);
       } else this.post("snapshots.ndjson", `${JSON.stringify({ ...snap, missing: st?.why ?? (st?.state === "pending" ? "still encoding when the recording ended" : "not kept") })}\n`);

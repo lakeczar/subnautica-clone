@@ -55,6 +55,8 @@ export interface GameRenderer {
   readonly settling: boolean;
   /** REC-1: time each present's parts (the flight recorder's frame split). */
   timing: boolean;
+  /** REC-1 R3b: a GPU timer query on one timed frame in this many (1: every frame; a player's recording samples, a driver's does not). */
+  gpuEvery: number;
   /** The last timed present's split, ms; null when not timing. */
   readonly parts: FrameParts | null;
   /** Scene and streaming counters, computed when asked (the test hook, the recorder's samples). */
@@ -86,8 +88,8 @@ function createGpuTimer(gl: WebGL2RenderingContext | undefined) {
       if (open) { gl.beginQuery(ext.TIME_ELAPSED_EXT, open); timer.tag = ++frames; }
     },
     end(): void {
-      timer.done = [];
-      if (!gl || !ext) return;
+      if (timer.done.length) timer.done = [];
+      if (!gl || !ext || (!open && !pending.length)) return;
       if (open) { gl.endQuery(ext.TIME_ELAPSED_EXT); pending.push({ q: open, tag: timer.tag }); open = null; }
       while (pending.length && gl.getQueryParameter(pending[0]!.q, gl.QUERY_RESULT_AVAILABLE)) {
         const { q, tag } = pending.shift()!;
@@ -400,7 +402,7 @@ export function createRenderer(
       generation = 0;
     let lastViewer: Vector3 | null = null, settleSince = -1;
     const gpuTimer = createGpuTimer((engine as unknown as { _gl: WebGL2RenderingContext })._gl);
-    let timing = false, parts: FrameParts | null = null, lastWorld: ReturnType<typeof art.stream> | null = null;
+    let timing = false, gpuEvery = 1, gpuFrame = 0, parts: FrameParts | null = null, lastWorld: ReturnType<typeof art.stream> | null = null;
     let whenReady: (() => void) | null = null;
     const cancelReady = (): void => {
       if (whenReady) scene.onReadyObservable.removeCallback(whenReady);
@@ -433,6 +435,8 @@ export function createRenderer(
     return {
       get settling() { return settleSince >= 0; },
       get timing() { return timing; },
+      get gpuEvery() { return gpuEvery; },
+      set gpuEvery(n: number) { gpuEvery = Math.max(1, Math.round(n)); },
       set timing(on: boolean) { timing = on; if (!on) parts = null; },
       get parts() { return parts; },
       stats() {
@@ -584,7 +588,8 @@ export function createRenderer(
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
         const tRender = timed ? performance.now() : 0;
         const tGpu0 = timed ? performance.now() : 0;
-        if (timed) gpuTimer.begin();
+        // Each query costs the page (begin, end, the result polls): a player's recording asks one frame in gpuEvery (R3b).
+        if (timed && ++gpuFrame % gpuEvery === 0) gpuTimer.begin(); else gpuTimer.tag = -1;
         const gpuBegin = timed ? performance.now() - tGpu0 : 0;
         if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
         else { scene.render(); canvas.dataset.settling = "false"; }

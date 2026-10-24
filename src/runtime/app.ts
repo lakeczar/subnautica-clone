@@ -190,7 +190,6 @@ export class SiltwakeApp {
   private readonly flightTimeline = new TimelineReader();
   private flightLast = 0;
   private flightHeap: number | null = null;
-  private flightHeapTurn = 0;
   private flightSampleAt = 0;
   private flightFrames = 0;
   private flightHidden = false;
@@ -518,7 +517,10 @@ export class SiltwakeApp {
     if (now >= this.flightSampleAt && this.flightSampling) {
       this.flightSampleAt = now + FLIGHT_SAMPLE_MS;
       const r = this.hookRead();
-      fl.sample(gameSample(now, this.state, this.renderer?.stats() ?? null, r?.camera ?? null, hold, this.active, this.flightFrames));
+      const sample = gameSample(now, this.state, this.renderer?.stats() ?? null, r?.camera ?? null, hold, this.active, this.flightFrames);
+      fl.sample(sample);
+      // The sample's heap reading is the next long frame's baseline (no second read).
+      if (sample.heapMiB != null) this.flightHeap = sample.heapMiB;
       this.flightFrames = 0;
       charge("sample");
     }
@@ -531,11 +533,11 @@ export class SiltwakeApp {
     }
     this.flightLast = now;
     charge("frame");
-    // The JS heap every fourth frame and on every long one: a collection shows as a drop
-    // there. (With the drivers' precise-memory flag each read computes real heap
-    // statistics; a player's Chrome caches it.)
+    // The JS heap on every long frame (a collection shows as a drop since the last
+    // reading); the 4 Hz sample reads it too. Not every frame: each read costs the
+    // page, even cached (R3b: about 40 µs on the 3090).
     let heapDrop = -1;
-    if (++this.flightHeapTurn % 4 === 0 || gap > 33) {
+    if (gap > 33) {
       const heap = fl.heapNow();
       heapDrop = heap !== null && this.flightHeap !== null ? Math.max(0, this.flightHeap - heap) : -1;
       this.flightHeap = heap;
@@ -599,6 +601,8 @@ export class SiltwakeApp {
       // The renderer's per-part timing and GPU timer queries feed the frame rows; `?rectiming=0` (measurement only) leaves them off.
       this.renderer.timing = new URLSearchParams(globalThis.location?.search ?? "").get("rectiming") !== "0";
       this.flightStartedAt = performance.now();
+      // GPU timer queries cost the page each frame: a player's recording samples one frame in eight; a driver's measures every one (R3b).
+      this.renderer.gpuEvery = mode === "playtest" ? 8 : 1;
       // `?recsample=0` (measurement only, R3b): no 4 Hz samples, to separate their cost.
       this.flightSampling = new URLSearchParams(globalThis.location?.search ?? "").get("recsample") !== "0";
     } catch (error) {

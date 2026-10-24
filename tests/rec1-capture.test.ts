@@ -28,16 +28,24 @@ class FakeWorker {
   terminate(): void { FakeWorker.alive.delete(this); }
   postMessage(m: Msg): void {
     this.posted.push(m);
-    this.chain = this.chain.then(() => new Promise<void>((done) => setTimeout(() => { this.handle(m); done(); }, 0)));
+    this.chain = this.chain.then(() => new Promise<void>((done) => setTimeout(async () => { await this.handle(m); done(); }, 0)));
   }
   private reply(data: unknown): void { this.onmessage?.({ data }); }
-  private handle(m: Msg): void {
+  private async handle(m: Msg): Promise<void> {
     if (m.op === "append" || m.op === "put") {
       const text = new TextDecoder().decode(m.data!), bytes = m.data!.byteLength;
       const refused = FakeWorker.refuse?.(m);
       if (refused) { this.reply({ failed: m.file, bytes, quota: refused.quota, error: "refused by the test" }); return; }
       this.files.set(m.file!, (m.op === "put" ? "" : this.files.get(m.file!) ?? "") + text);
       this.reply({ ack: bytes, file: m.file });
+    } else if (m.op === "snapshot") {
+      // The picture is encoded in the worker: the test finishes (or fails) the encoding when it chooses.
+      try {
+        const blob = await new Promise<Blob>((resolve, reject) => encodings.push({ resolve, reject }));
+        const text = await blob.text();
+        this.files.set(m.file!, text);
+        this.reply({ snapshotWritten: m.id, bytes: text.length });
+      } catch (e) { this.reply({ snapshotWritten: m.id, error: e instanceof Error ? e.message : String(e) }); }
     } else if (m.op === "remove") this.reply(FakeWorker.refuseRemove?.(m) ? { removed: m.id, refused: "NoModificationAllowedError", error: "in use" } : { removed: m.id });
     else if (m.op === "release") this.reply({ released: m.id });
     else if (m.op === "video-open") {
