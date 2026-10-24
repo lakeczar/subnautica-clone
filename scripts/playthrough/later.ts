@@ -1010,6 +1010,7 @@ const works = (strategy: Strategy): Phase => ({
     // The lattice and core rode home in the stores: ashore with the diver to the bench.
     const stores = carrier(d).cargoId, aboard = planned(d, fabricate, ["brine_lattice", "thermal_core"]);
     unload(d, "diver", stores);
+    move(d, "meal", d.count("meal", ["diver"]), "diver", stores);
     for (const k of ["brine_lattice", "thermal_core"] as const)
       move(d, k, Math.min(aboard[k] ?? 0, d.count(k, [stores])), stores, "diver");
     ashoreFromCarrier(d);
