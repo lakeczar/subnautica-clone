@@ -820,3 +820,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Timeline save:** 13–21 ms of stringify at 20k events, so SIM-1b gets assigned.
   - **Also asked for:** warm the cold costs behind "Resume when ready"; a systems-view revision counter.
 - **SIM-1b started:** the incremental timeline journal, on the SIM-1 builder, from the parked `t3/sim-1b-timeline-journal`. Spec: contract v2 plus the R5 decisions plus the R6 rulings. It must land before the owner's first playtest. Builders: CW-1, COL-1, REC-1, SIM-PERF-1, SIM-1b (5).
+- **REC-1 R3 fixes at `3eec4044`** (code `68d0d60c`): R3-1/2/3/5 fixed and checked with real workers and OPFS.
+  - **R3-4, inclusive cost measured** (fixed pose, 6 one-run pairs under the TST-16 slice): +0.42 ms per frame (95% CI −0.14 to +0.97), with a best estimate of 0.3–0.4 ms. That's **over the 0.167 ms budget**. It sits in the game's own frame callback with collection up, and the suspect is renderer per-part timing and GPU timer queries.
+  - **Decision:** fix it in R3b, not as a compromise; then one R4 covers everything.
