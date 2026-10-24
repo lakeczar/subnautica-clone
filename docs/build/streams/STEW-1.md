@@ -199,6 +199,11 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
 - **What fails today: nothing.** Root and the merge trees of CW-1, REC-1, COL-1, SIM-1 and TST-16 with this branch pass; REC-1 has resolved its driver since R4.
 - **Test** (disk-backed): a missing JSON import fails and an existing one passes; a file symlink and a directory symlink under `src` each fail; a link in `tools/` is ignored and never read.
 
+## Accepted (R6, `f3d82c64`), and merged with root
+- **Root `bf30169`** (with SIM-1a and TST-16) merged in. The `src/runtime/app.ts` conflict was resolved by keeping SIM-1a's `StepGuard`/`StepFault` import and timeline persistence, and STEW-1's semantic-region wiring (`regionAtPosition`); the file differs from root only by those three region lines.
+- **Root passes the guard and both typechecks** with no change: SIM-1a's portable `writer-lock.ts` port and `src/runtime/browserLock.ts` adapter clear the headless check.
+- **R6's optional P3, done:** symlinks are detected before the walk's skip list, so a link under `src` named like `node_modules`, `public` or a dot name fails too. Tested.
+
 ## Compromises (each with its root fix and cost)
 1. **The guard's region-lookup and driver rules are name and text patterns,** not semantics. A lookup named otherwise (`whereIs`), or a driver hidden behind a helper, passes; a delegating adapter must have the exact delegation shape.
    - **Root fix:** the per-wave review, and REC-2 moving every driver onto `scripts/rec`, which leaves nothing to hide.

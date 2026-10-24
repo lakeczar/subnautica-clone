@@ -365,6 +365,9 @@ test("R5: a JSON import must name a real file, and a symlink anywhere under src 
     fs.symlinkSync(join(dir, "src/render/browser.ts"), join(dir, "src/sim/alias.ts"));
     fs.symlinkSync(join(dir, "src/render"), join(dir, "src/content/renderAlias"));
     fs.symlinkSync(join(dir, "tools/real.ts"), join(dir, "tools/alias.ts"));
+    // Names the walk otherwise skips (R6's P3) are no hiding place.
+    fs.symlinkSync(join(dir, "tools"), join(dir, "src/public"));
+    fs.symlinkSync(join(dir, "tools"), join(dir, "src/node_modules"));
     const files = G.repositoryFiles(dir);
     assert.ok(!files.has("src/sim/alias.ts") && !files.has("tools/alias.ts"), "links are never read through");
     const { failures } = G.analyse(files, none);
@@ -372,6 +375,8 @@ test("R5: a JSON import must name a real file, and a symlink anywhere under src 
       [/layering: src\/sim\/absent\.ts imports src\/content\/gone\.json \(a JSON file the guard can't find or read/, "a missing JSON import"],
       [/symlink: src\/sim\/alias\.ts is a symlink/, "a file symlink under src"],
       [/symlink: src\/content\/renderAlias is a symlink/, "a directory symlink under src"],
+      [/symlink: src\/public is a symlink/, "a symlink with a name the walk skips"],
+      [/symlink: src\/node_modules is a symlink/, "a node_modules symlink under src"],
     ];
     for (const [re, what] of expect) assert.ok(failures.some((f) => re.test(f)), `${what}:\n${failures.join("\n")}`);
     assert.ok(!failures.some((f) => /present\.ts|tools\/alias/.test(f)), failures.join("\n"));

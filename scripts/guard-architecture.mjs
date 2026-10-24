@@ -312,10 +312,10 @@ export function repositoryFiles(root = ROOT) {
   const files = new Map(), symlinks = [];
   const walk = (dir) => {
     for (const e of fs.readdirSync(path.join(root, dir), { withFileTypes: true })) {
-      if (SKIP.has(e.name) || e.name.startsWith(".test-build")) continue;
       const rel = dir ? `${dir}/${e.name}` : e.name;
-      // Never followed: under src one is a failure (analyse), elsewhere it is ignored.
+      // Never followed: under src one is a failure (analyse), whatever its name; elsewhere it is ignored.
       if (e.isSymbolicLink()) { if (rel.startsWith("src/")) symlinks.push(rel); continue; }
+      if (SKIP.has(e.name) || e.name.startsWith(".test-build")) continue;
       if (e.isDirectory()) walk(rel);
       // JSON only under src, where sim and content's data lives (a JSON leaf must exist).
       else if (hasExt(e.name, [...SCRIPT_EXTENSIONS, ".html"]) || (rel.startsWith("src/") && e.name.endsWith(".json"))) files.set(rel, fs.readFileSync(path.join(root, rel), "utf8"));
