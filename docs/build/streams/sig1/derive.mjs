@@ -12,10 +12,9 @@ mkdirSync(out, { recursive: true });
 const { creelFirst, meta } = await import(B + "tests/b1-support.js");
 const { busyOutpost } = await import(B + "tests/c4-systems-support.js");
 const { addItem } = await import(B + "src/sim/inventory.js");
-const { makeVehicle } = await import(B + "src/sim/state.js");
-const { vehicleHoldCapacity } = await import(B + "src/sim/fittings.js");
-const { slotOf } = await import(B + "src/sim/upgrades/fitting.js");
-const { SOURCES, RECIPES, MATERIALS } = await import(B + "src/content/registry.js");
+// Paid staging (plans earned through their records or clues, recipes and needs recorded).
+const { earnPlan, fitPaid: fit, stagedHull } = await import(B + "tests/sig-1-support.js");
+const { SOURCES, MATERIALS } = await import(B + "src/content/registry.js");
 const { LOST_SITES } = await import(B + "src/content/systems/decodes.js");
 const { CAVE_FEATURES } = await import(B + "src/sim/signatures.js");
 const { hostKind } = await import(B + "src/sim/upgrades/tools.js");
@@ -31,14 +30,6 @@ function write(name, s, target) {
   writeFileSync(path.join(out, `${name}.json`), e.value);
   plan[name] = target;
   console.log("derived", name, JSON.stringify(target));
-}
-/** Fit `kinds` to `v` (rule-staged items) and seat the pilot facing `look`. */
-function fit(s, v, kinds) {
-  for (const k of kinds) {
-    const item = addItem(s, k, 1, v.cargoId, slotOf(v.hull, k) === "socket" ? null : "mount");
-    v.modules.push(item.id);
-  }
-  s.inventory.containers.find((c) => c.id === v.cargoId).capacity = vehicleHoldCapacity(s, v);
 }
 function pilot(s, v, at, look) {
   v.pose.position = { ...at }; v.velocity = { x: 0, y: 0, z: 0 };
@@ -56,31 +47,24 @@ const hullOf = (s, hull) => {
   v.berth = null;
   return v;
 };
-/** A staged hull of `hull` at its paid build cost (no route builds a Spindle). */
-function stagedHull(s, hull) {
-  const v = makeVehicle(`${hull}_sig1`, hull, { x: 0, y: -0.5, z: 0 }, `${hull}_sig1_hold`);
-  v.investment = { ...RECIPES[`${hull}_base`].cost };
-  s.fleet.vehicles.push(v);
-  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", capacity: 0, ownerId: v.id });
-  if (!s.knowledge.crafted.includes(`${hull}_base`)) s.knowledge.crafted.push(`${hull}_base`);
-  return v;
-}
-
-// 1. Dart: wide sonar and range tagger, 110 m east of the Fanvault north mouth, at its depth.
+// 1. Dart: wide sonar and range tagger. It holds 40 m from a material source (the tag
+// target) that lies within sonar range of the Fanvault north mouth.
 {
   const s = library(), v = hullOf(s, "dart"), mouth = CAVE_FEATURES.find((f) => f.id === "fanvault.mouth.north");
   fit(s, v, ["dart_wide_sonar", "dart_range_tagger"]);
-  const at = { x: mouth.position.x + 110, y: mouth.position.y - 2, z: mouth.position.z + 20 };
+  const near = Object.keys(SOURCES).map((id) => ({ id, p: SOURCES[id].position }))
+    .filter(({ p }) => p.y < -6 && Math.hypot(p.x - mouth.position.x, p.z - mouth.position.z) > 60 && Math.hypot(p.x - mouth.position.x, p.z - mouth.position.z) < 130)
+    .sort((a, b) => a.id.localeCompare(b.id))[0];
+  if (!near) throw new Error("no source near the Fanvault mouth");
+  const at = { x: near.p.x + 40, y: near.p.y + 3, z: near.p.z };
   pilot(s, v, at, mouth.position);
-  // A tag target: the nearest lost site, for a second aim.
-  const site = Object.entries(LOST_SITES).sort(([, a], [, b]) => Math.hypot(a.position.x - at.x, a.position.z - at.z) - Math.hypot(b.position.x - at.x, b.position.z - at.z))[0];
-  write("dart", s, { mouth: mouth.position, at, site: { id: site[0], position: site[1].position } });
+  write("dart", s, { mouth: mouth.position, at, target: { id: near.id, position: near.p } });
 }
 // 2. Creel: cutting arm at an island mineral host (arm 3 m off it).
 {
   const s = library(), v = hullOf(s, "creel");
-  const id = Object.keys(SOURCES).find((k) => SOURCES[k].region === "island_chain" && Object.hasOwn(MATERIALS, SOURCES[k].item) &&
-    hostKind(SOURCES[k].item) === "mineral" && (s.world.resources.find((r) => r.id === k)?.stock ?? 0) > 0);
+  const id = Object.keys(SOURCES).find((k) => ["island_chain", "refuge_reef", "suspended_garden"].includes(SOURCES[k].region) && Object.hasOwn(MATERIALS, SOURCES[k].item) &&
+    hostKind(SOURCES[k].item) === "mineral" && SOURCES[k].position.y < -8 && (s.world.resources.find((r) => r.id === k)?.stock ?? 0) > 0);
   fit(s, v, ["creel_cutting_arm"]);
   const src = SOURCES[id].position;
   pilot(s, v, { x: src.x, y: src.y + 2, z: src.z + 3.3 }, { x: src.x, y: src.y + 2, z: src.z - 5 });
@@ -90,19 +74,17 @@ function stagedHull(s, hull) {
 {
   const s = library(), v = hullOf(s, "creel");
   const id = Object.keys(SOURCES).find((k) => SOURCES[k].item === "tagged_frame" && (s.world.resources.find((r) => r.id === k)?.stock ?? 0) > 0);
-  const pod = addItem(s, "creel_drop_pod", 1, v.cargoId);
+  fit(s, v, ["creel_drop_pod", "creel_grapple"]);
+  const pod = s.inventory.items.find((i) => i.kind === "creel_drop_pod");
   s.inventory.containers.push({ id: `${pod.id}_pod`, kind: "locker", capacity: 16, ownerId: pod.id });
-  v.modules.push(pod.id);
-  fit(s, v, ["creel_grapple"]);
   const f = SOURCES[id].position, at = { x: f.x + 14, y: f.y + 10, z: f.z };
   pilot(s, v, at, f);
   write("creel-grapple", s, { frame: id, position: f, at });
 }
 // 4. Spindle (staged): deck crane, surfaced over the reef service scraps.
 {
-  const s = creelFirst(), v = stagedHull(s, "spindle");
-  fit(s, v, ["spindle_deck_crane"]);
-  const src = SOURCES.reef_service_scraps_east.position;
+  const s = creelFirst(), src = SOURCES.reef_service_scraps_east.position;
+  const v = stagedHull(s, "spindle", { x: src.x, y: -0.5, z: src.z + 4 }, ["spindle_deck_crane"], false);
   pilot(s, v, { x: src.x, y: -0.5, z: src.z + 4 }, { x: src.x, y: -0.5, z: src.z - 6 });
   write("spindle", s, { source: "reef_service_scraps_east", position: src });
 }
@@ -121,7 +103,7 @@ function stagedHull(s, hull) {
   const { s, outpost } = busyOutpost();
   const trap = addItem(s, "mod_fish_trap", 1, "diver");
   const inst = (await import(B + "src/sim/step.js")).executeCommand(s, { type: "install-host-module", hostId: outpost, socket: "s2", itemId: trap.id }, world).state;
-  if (!inst.knowledge.blueprints.includes("bp_rift_pressure")) inst.knowledge.blueprints.push("bp_rift_pressure");
+  earnPlan(inst, "bp_rift_pressure"); // the lattice's plan, through its real record or clue
   for (const [k, q] of Object.entries({ silica_glass: 2, conductive_crust: 1, structural_alloy: 1, thermal_core: 1 })) addItem(inst, k, q, "diver");
   const o = inst.systems.outposts.find((x) => x.id === outpost);
   inst.player.pose.position = { x: o.position.x + 4, y: o.position.y + 1.6, z: o.position.z + 3 };

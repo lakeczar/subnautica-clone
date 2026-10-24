@@ -100,7 +100,7 @@ const SCENARIOS = {
     r.checks.cooling = (await read()).actions;
     await page.keyboard.press("KeyO"); await page.waitForTimeout(600);
     r.checks.chart = await panelText(); await shot("chart-beacons"); await closePanel();
-    const at = plan.dart.at, site = plan.dart.site.position;
+    const at = plan.dart.at, site = plan.dart.target.position;
     await turnTo(bearingTo(at, site), Math.atan2(site.y - at.y, Math.hypot(site.x - at.x, site.z - at.z)) * 180 / Math.PI);
     r.checks.tag = (await action("Tag")).notices;
     await page.waitForTimeout(600); await shot("tagging");
@@ -124,7 +124,7 @@ const SCENARIOS = {
     await page.waitForTimeout(800); await turnTo(((await read()).bearing * Math.PI / 180), -60); await shot("pod-dropped");
     await page.keyboard.press("Tab"); await page.waitForTimeout(700);
     r.checks.cargo = await panelText(); await shot("cargo-filter");
-    await press("[data-action='cargo-filter:materials']", "Materials filter");
+    await page.locator("#cargo-filter").focus(); await page.locator("#cargo-filter").selectOption("materials"); await page.waitForTimeout(400);
     r.checks.cargoMaterials = await panelText(); await shot("cargo-materials");
     await closePanel();
     await context.close();
