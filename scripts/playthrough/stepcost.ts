@@ -26,7 +26,7 @@ import { gameWorld } from "../../src/sim/world.js";
 import { regionAtPoint } from "../../src/content/regions/layout.js";
 import { controlsActive } from "../../src/sim/timeline/activity.js";
 import * as timeline from "../../src/sim/timeline/recorder.js";
-import type { GameCommand, GameEvent, GameState } from "../../src/sim/types.js";
+import type { GameCommand, GameEvent, GameState, WorldQueries } from "../../src/sim/types.js";
 import { loadCampaign } from "./content.js";
 import { driverHooks } from "./driver.js";
 import type { Driver } from "./driver.js";
@@ -48,7 +48,14 @@ const gcObserver = new PerformanceObserver((list) => {
 });
 gcObserver.observe({ entryTypes: ["gc"] });
 
-interface Slow extends StepRecord { run: string; phase: string; mode: string; hull: string | null; region: string | null; position: [number, number, number]; gc?: number }
+interface Slow extends StepRecord {
+  run: string; phase: string; mode: string; hull: string | null; region: string | null; position: [number, number, number]; gc?: number;
+  /** Cave clusters built unsliced inside the step (CW-1's world; headless has no streamer to build them ahead). */
+  caveBuilds?: number;
+}
+/** CW-1's unsliced cave-cluster builds so far, when the world has kit caves. */
+const caveBuilds = (world: WorldQueries): number => (world as { kitCaves?: { stats: { syncBuilds: number } } }).kitCaves?.stats.syncBuilds ?? 0;
+let buildsAtOpen = 0;
 const slow: Slow[] = [];
 const SLOW_KEEP = 2000;
 
@@ -94,12 +101,13 @@ const LOCK: WriterLockPort = { runExclusive: async (_name, _signal, action) => a
 /** Keeps the latest timeline export reachable, as storage would. */
 const sink: string[] = [];
 
-function close(run: string, phase: string, s: GameState): void {
+function close(run: string, phase: string, s: GameState, world: WorldQueries): void {
   costs.close(s.tick);
   if (costs.lastMs <= SLOW_STEP_MS || slow.length >= SLOW_KEEP) return;
+  const built = caveBuilds(world) - buildsAtOpen;
   const v = s.fleet.vehicles.find((x) => x.id === s.player.controlledVehicleId) ?? null, p = s.player.pose.position;
   slow.push({ ...costs.lastStep(s.tick), run, phase, mode: s.player.mode, hull: v?.hull ?? null,
-    region: regionAtPoint(p.x, p.z), position: [+p.x.toFixed(1), +p.y.toFixed(1), +p.z.toFixed(1)] });
+    region: regionAtPoint(p.x, p.z), position: [+p.x.toFixed(1), +p.y.toFixed(1), +p.z.toFixed(1)], ...(built ? { caveBuilds: built } : {}) });
 }
 
 await loadCampaign();
@@ -118,10 +126,11 @@ if (saves) {
       const controls: GameCommand[] = [{ type: "look", yawDelta: 0.004, pitchDelta: t % 240 < 120 ? 0.002 : -0.002 },
         { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }];
       costs.open();
+      buildsAtOpen = caveBuilds(world);
       costs.mark(PHASE.input);
       const events = guard.step(s, controls, world);
       app.after(s, controls, events);
-      close(kind, "held", s);
+      close(kind, "held", s, world);
     }
     runs.push({ run: kind, ticks: s.tick - start, outcome: "held" });
   }
@@ -141,12 +150,13 @@ if (saves) {
         // A milestone reload hands the driver a new state: the app's session starts over too.
         if (d.state !== seen) { seen = d.state; app = new AppWork(d.run.scenario, d.state); }
         costs.open();
+        buildsAtOpen = caveBuilds(d.world);
         costs.mark(PHASE.input);
       },
       tick(_d, controls, events) {
         costs.skip(); // the driver's own bookkeeping
         app.after(d.state, controls, events);
-        close(d.run.scenario, d.phase, d.state);
+        close(d.run.scenario, d.phase, d.state, d.world);
       },
       command() { app.commanded(); },
     };
@@ -178,7 +188,7 @@ for (const w of snapshot.worst.slice(0, 16)) {
   const top = Object.entries(w.phases).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(", ");
   const ctx = slow.find((s) => s.at === w.at);
   console.log(`  ${w.ms.toFixed(2).padStart(7)} ms tick ${w.tick} ${ctx ? `${ctx.run}/${ctx.phase} ${ctx.mode}${ctx.hull ? `/${ctx.hull}` : ""} ${ctx.region} ` : ""}` +
-    `[${top}]${(w as { gc?: number }).gc ? ` gc ${(w as { gc?: number }).gc} ms` : ""}`);
+    `[${top}]${(w as { gc?: number }).gc ? ` gc ${(w as { gc?: number }).gc} ms` : ""}${ctx?.caveBuilds ? ` cave builds ${ctx.caveBuilds}` : ""}`);
 }
 const json = value("--json");
 if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, snapshot, slow, gcs }, null, 1) + "\n");
