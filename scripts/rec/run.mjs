@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp9,vp8,h264,…] [--video-width W] [--alternate W] [--paused] [--encode off] [--capture frame] [--no-sample] [--bench-sample]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp9,vp8,h264,…] [--video-width W] [--alternate W] [--paused] [--encode off] [--capture frame] [--no-sample] [--bench-sample] [--profile-windows]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -140,6 +140,7 @@ try {
   // --alternate W (with --rec playtest and --hold): the recorder paused and resumed in place every W s,
   // in on/off/off/on order, and each window's main-thread time per frame kept: the within-run A/B (R3b).
   const alternateS = Number(arg("alternate", 0)), alternation = [];
+  const profileWindows = flag("profile-windows"), windowProfiles = { on: { ms: new Map(), seconds: 0 }, off: { ms: new Map(), seconds: 0 } };
   if (holdS > 0 && alternateS > 0) {
     const ok = await g.page.evaluate(() => window.__siltwake.measure.pauseRecorder(false));
     if (!ok) throw new Error("--alternate: the page refused to pause its recorder (playtest mode and ?recmeasure=1 needed)");
@@ -147,7 +148,10 @@ try {
     for (let i = 0; i * alternateS < holdS; i++) {
       const on = [true, false, false, true][i % 4];
       await g.page.evaluate((p) => window.__siltwake.measure.pauseRecorder(p), !on);
+      // --profile-windows: a CPU profile of every window, merged by state (on, paused): what grows when the recorder runs.
+      if (profileWindows) { await g.cdp.send("Profiler.enable"); await g.cdp.send("Profiler.setSamplingInterval", { interval: 200 }); await g.cdp.send("Profiler.start"); }
       await g.page.waitForTimeout(alternateS * 1000);
+      if (profileWindows) { const { profile } = await g.cdp.send("Profiler.stop"); mergeProfile(windowProfiles[on ? "on" : "off"], profile); }
       const now = await metrics(), m = await g.page.evaluate(() => window.__recProbe.work.length);
       if (m > n) alternation.push({ on, frames: m - n, msPerFrame: +(((now.TaskDuration - at.TaskDuration) * 1000) / (m - n)).toFixed(4) });
       // A line per window: the job's stall detector hears the run is alive.
@@ -156,6 +160,16 @@ try {
     }
     await g.page.evaluate(() => window.__siltwake.measure.pauseRecorder(false));
     await stopProfile();
+    if (profileWindows) {
+      // Self time by function, ms per second, recorder on minus paused: the 60 largest increases and decreases.
+      const rate = (st) => new Map([...st.ms].map(([k, v]) => [k, v / Math.max(1e-9, st.seconds)]));
+      const on = rate(windowProfiles.on), off = rate(windowProfiles.off);
+      const keys = new Set([...on.keys(), ...off.keys()]);
+      const rows = [...keys].map((k) => ({ fn: k, on: +(on.get(k) ?? 0).toFixed(3), off: +(off.get(k) ?? 0).toFixed(3), delta: +((on.get(k) ?? 0) - (off.get(k) ?? 0)).toFixed(3) }))
+        .sort((x, y) => y.delta - x.delta);
+      writeFileSync(path.join(out, "profile-windows.json"), JSON.stringify({ seconds: { on: windowProfiles.on.seconds, off: windowProfiles.off.seconds }, up: rows.slice(0, 60), down: rows.slice(-30) }, null, 1));
+      log("profile-windows", JSON.stringify(rows.slice(0, 8).map((r) => `${r.fn.slice(0, 50)} +${r.delta}`)));
+    }
   } else if (holdS > 0) {
     let at = await metrics(), n = await g.page.evaluate(() => window.__recProbe.work.length);
     for (let left = holdS; left > 0; left -= HOLD_WINDOW_S) {
@@ -258,4 +272,16 @@ function alternationStats(w, seconds) {
   const r = (v) => (v == null ? null : +v.toFixed(4));
   return { windowS: seconds, windows: w, pairs: n, diffs: d.map(r), mean: r(mean), sd: r(sd), lo: r(half == null ? null : mean - half), hi: r(half == null ? null : mean + half),
     budget: half == null ? "not established" : mean + half < 16.667 / 100 ? "met" : "not shown" };
+}
+
+/** Adds a sampling profile's self time (ms) by script file:line and function into `into`. */
+function mergeProfile(into, profile) {
+  const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  const dt = profile.timeDeltas ?? [];
+  for (let i = 0; i < profile.samples.length; i++) {
+    const cf = byId.get(profile.samples[i])?.callFrame ?? {};
+    const key = `${(cf.url ?? "").split("/").pop() || "(native)"}:${(cf.lineNumber ?? -1) + 1} ${cf.functionName || "(anonymous)"}`;
+    into.ms.set(key, (into.ms.get(key) ?? 0) + (dt[i] ?? 0) / 1000);
+  }
+  into.seconds += (profile.endTime - profile.startTime) / 1e6;
 }
