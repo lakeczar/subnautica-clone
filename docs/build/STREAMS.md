@@ -1216,3 +1216,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **A 300 s periodic slowdown inside the job,** hitting both arms (frames 3.6–4.6 ms against a 2.9 median; job CPU 0.77→0.93 cores). It's probably game-side periodic work, not the recorder.
   - **Coordinator:** cancelled the requeue `4e09` (reboot coming). Next: (b) diagnose the 300 s source on the 4070 (GC, app timers, harness rotation), routing any game finding to its owner; then one decisive duet acceptance after the reboot, with a pre-declared n, margin and exclusion rule, "inconclusive" allowed.
   - `owner-check-serve.sh` works (`5803bae3`).
+- **CW-1 R5** (Sol on `42786dc4`, report on `review/cw-1-r5` `6a9d81ad`): REQUEST CHANGES, with exact provisional-integration conditions.
+  - **Passed:** R4 fixes; the composition (168/168); the r14 reclassification exact; the 4070 bake at 1,646/1,920 MiB at real budget.
+  - **Findings:** P2 entry warmup live-builds cave collision before admission (20k boxes, about 0.9 s unsliced); P2 GPU-vCPU credit lacks dependency evidence (disable it); P2 the budget raises and owner debts came from the 8,000 MiB override (revert to 1,024; remove the false debts); P3 summaries; P3 the deep hazard test.
+  - **Open compromises:** deep 2 open (Fleet plus harness); the 93 ms on-CPU render frame (an ATM-2/render debt); tour 1's regions frame open.
+  - **Next:** the fixes, then a fresh affected review and the coordinator gate. The steady-60 acceptance stays withheld.
