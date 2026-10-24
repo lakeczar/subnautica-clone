@@ -759,3 +759,14 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **STEW-1 merged locally** at `06442757` (ledger.ts stays deleted; its CORE-HELPERS row is removed). `npm run gate` was started locally and stopped at about 01:18Z because REC-1's exclusive overhead A/B was running (REC-1 told). It reruns when the lane is idle, followed by the TST-16 install.
 - **Usage limit, ~01:30–03:00 UTC:** CW-1 and SIG-1 runs failed on the rate limit and resumed at 03:00; all builder threads were checked. CW-1's exclusive series and REC-1's A/B are finished; the lane is idle at 03:00Z.
 - **TST-16b done at `75c659eb`** (code `d2e54642`): install.sh holds `install.lock` through publication (the helper verifies the inherited fd); production is decided by directory identity (`sameDir`); the R4-F3 flake is made deterministic. Suites pass 23/23, 27/27 and 27/27, fast tier on the 4070. Sol review running (`siltwake-tst16b-review-sol-75c659e`).
+- **CW-1 R1 fixes done at `699b575d`** (code `9c73272`):
+  - **Fixed:** R1 (admission held on the load screen) and R2 (per-session recovery reset), with 5 app tests.
+  - **Root-fixed costs:** terrain step 37.5 ms; far light placement; selection 1.15 MiB→15 KiB; sim queries 283→99 KiB per tick; light uploads sliced.
+  - **3090 run:** frame gate not met (18 frames over 34 ms, 17 DISTURBED); one quiet 53 ms streamer frame is open. Missing evidence is listed.
+  - **Review:** Sol R2 running (`siltwake-cw1-review-r2-sol-699b575`).
+  - **Infra follow-ups:**
+    - the 7,200 s default queue timeout is too short for exclusive series (consider a class default);
+    - the `gpu` class's 3 GiB reservation is too small for the deep traverse harness.
+  - **Design question:** the Creel's ~13 min air limit makes 4 Meridian east deep caves unreachable by cold approach. Decide whether that's intended (an upgrade gate) or a route or pacing issue.
+- **STEW-1 MERGED and pushed** (root `a7ca6054`). `npm run gate` passed 10/10 at a7ca6054 (playthrough ticket 261024-031515-c0ed on the 3090). The root merge gate is now `npm run gate`. The saves export follows.
+- **TST-16b ACCEPTED** (Sol `98940eed` on `review/tst-16b`), safe to install. P3 follow-ups: a missing-directory symlink alias can read as private; the fd check accepts an unlocked matching descriptor; the soak rewrite lacks window-end frame coverage.
