@@ -64,8 +64,17 @@ TT-1 already ran the four `exclusive` files alone within the tier, and CW-1's fa
 
 ## Evidence
 All checks ran through the queue, nothing locally beside the exclusive series that was running throughout (CW-1 r13 and REC-1).
-- **Fast tier, `--machine any`:** 1,646/1,646 on alickers at `73bb321` (`261024-173532-7ac2`), and at `f292345` before the economy-ordering commit (`261024-173249-80a7`). It includes the new `tests/local-guard.test.ts` (decisions; refusals of the real entry points before they compile; override and log; inside-job by scope; no-queue and unreadable state; leases), `tests/gate-routing.test.ts` (routing order, per-step verdicts, the real gate against a stand-in queue) and `tests/saves-export.test.ts` (the real script in a throwaway repo against a stand-in queue, with a `saves-build-at.sh` that records any call: none outside a job).
-- **Heavy tier, `--machine any`:** HEAVY_RESULT
+- **Fast tier, `--machine any`:** 1,646/1,646 on alickers at `c3f2aef` (`261024-175250-fa00`), the last code change; the later commits are docs only. Earlier passes: `73bb321` (`261024-173532-7ac2`) and `f292345` (`261024-173249-80a7`). It includes the new `tests/local-guard.test.ts` (decisions; refusals of the real entry points before they compile; override and log; inside-job by scope; no-queue and unreadable state; leases), `tests/gate-routing.test.ts` (routing order, per-step verdicts, the real gate against a stand-in queue) and `tests/saves-export.test.ts` (the real script in a throwaway repo against a stand-in queue, with a `saves-build-at.sh` that records any call: none outside a job).
+- **Heavy tier, `--machine any`:** all 67 files pass on alickers at `122c768` (`261024-182115-3db0`, 578 s, exit 0, bound). That includes `heavy-tier.heavy.test.ts`, 8/8: containment as before, plus the new timing-phase order and CPU-wait report and the unclassified-clock refusal, under both cgroup and process-group containment. The four timing files ran last, one at a time, all ok:
+
+  | File | CPU wait: job | CPU wait: host |
+  | --- | --- | --- |
+  | `caves-canopy-basin` | 0% | 0.2% |
+  | `caves-deep-perf` | 0% | 0.1% |
+  | `caves-reef-isles-game` | 0% | 0.1% |
+  | `large-cave-canopy` | 0.1% | 0.2% |
+
+  These are on a quiet sandbox. An earlier run at `73bb321` (`261024-173654-f12a`) showed the same, except for two new refusal tests whose test helper wrongly required a summary line; that was fixed at `c3f2aef`.
 - **Inside a real 3090 job** (`261024-175236-cee0`, `--snapshot`, at `c3f2aef`, admitted between CW-1's exclusive segments with the rest of the series still queued): `local-guard --status` printed `local work here: run (inside heavy-check job 261024-175236-cee0)`, and a guarded call ran. The production queue's own job scope is what the guard recognised.
 - **saves-export's in-job path for real:** `saves-export.sh --job-verify ac734b0` (the newest library) as a queued 3090 job (`261024-173723-788a`, at `73bb321`, 6.9 s). `saves-build-at.sh` built `ac734b0` from an archive (its guard let it run inside the job; that commit's lockfile differs, so it ran `npm ci`), and every file matched its manifest and decoded unchanged.
 - **End-to-end dry run against a private copy of the live queue state** (CW-1's and REC-1's real exclusive tickets; nothing written to the production state directory): [`stew2/dry-run.txt`](stew2/dry-run.txt).
