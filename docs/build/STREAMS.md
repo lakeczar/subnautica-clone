@@ -809,3 +809,22 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **SIG-1 stage 1 done at `5f557cbf`** (R1 fixes, code `a3e716f3`): saveable mid-actions; typed arm and berth events; drone launch clearance with atomic refusal; `rowById` lifts; a bounded line pool. Gate parts on the 4070 (fast 1,475, build, 6 economy, playthrough 8/8). Sol R2 running (`siltwake-sig1-stage1-review-r2-sol-5f557cb`).
 - **SIG-1 stage 1 R2** (Sol on `5f557cbf`, report on `review/sig-1-stage1-r2` `6e56048c`): REQUEST CHANGES. **P2:** the fitting memo survives a save load, showing the wrong hardware. **P3:** hardware thrashes at the 240 m threshold, so add hysteresis. R1–R4 pass and the bake skip was safe. Short re-check, then merge.
 - **SIG-1 stage 1 ACCEPTED and MERGED** (R3, Sol `9a7c44dc` on `review/sig-1-stage1-r3`). Root `2901fed1`; `npm run gate` passed 10/10 at 2901fed1. Saves export (schema 7) running. Every craft's signatures, the visible outposts, the action bar and the Cargo filter are on root. Open items: NAV-1 tow/pod paths, the sonar wavefront, the `armTarget` scan, and `sig1/play.mjs` (FORK stream-drivers). The SIG-1 slot is freed.
+- **SIM-PERF-1 started** in SIG-1's freed slot (`siltwake-simperf1-opus-168a508`, branch `t3/sim-perf-1`, from root `168a5084`): attribute and root-fix simulation steps over 8 ms (CW-1: 63–136 ms spikes far from caves; REC-1 A05: 68.8 ms). An attribution report comes first. Builders active: CW-1, COL-1, REC-1, SIM-PERF-1.
+- **CW-1 R2 fixes ready at `3779f59c`** (not yet "done"):
+  - **Fixed:** all 5 P2s; a measurement bug (shared timing object) fixed. The deep stall turned out to be a flat battery, and the planner now plans power.
+  - **Gate parts at 0f4d36fe:** fast 1,486, heavy 476/476 (CA-3 passes unloosened), 6 economy, playthrough 8/8, bake verify.
+  - **Clean remeasure:** greenlit at 06:50Z: 16 exclusive tickets under TST-16 priority. Segments in the 08:30–09:45Z backup window are flagged, which gives fleet the in-window versus out-of-window steal comparison.
+- **SIM-PERF-1 attribution at `3b9eef1e`:**
+  - **Large spikes (30–136 ms):** don't reproduce when the step is re-run. The builder attributes them to host or VM pauses; the coordinator is not yet convinced (steal is low under TST-16, and recorded idle samples point to a blocked main thread). A decisive canary-plus-per-vCPU-steal test and a 4070 control come after CW-1's series.
+  - **Real fixes:** a memoized `craftProfile` and single-pass hazard sampling (99→80 KiB a step); autosave no longer re-decodes its own record (3.4→1.2 ms commit); hunter solid validation once per world (threat p99 1.1 ms→21 µs).
+  - **Timeline save:** 13–21 ms of stringify at 20k events, so SIM-1b gets assigned.
+  - **Also asked for:** warm the cold costs behind "Resume when ready"; a systems-view revision counter.
+- **SIM-1b started:** the incremental timeline journal, on the SIM-1 builder, from the parked `t3/sim-1b-timeline-journal`. Spec: contract v2 plus the R5 decisions plus the R6 rulings. It must land before the owner's first playtest. Builders: CW-1, COL-1, REC-1, SIM-PERF-1, SIM-1b (5).
+- **REC-1 R3 fixes at `3eec4044`** (code `68d0d60c`): R3-1/2/3/5 fixed and checked with real workers and OPFS.
+  - **R3-4, inclusive cost measured** (fixed pose, 6 one-run pairs under the TST-16 slice): +0.42 ms per frame (95% CI −0.14 to +0.97), with a best estimate of 0.3–0.4 ms. That's **over the 0.167 ms budget**. It sits in the game's own frame callback with collection up, and the suspect is renderer per-part timing and GPU timer queries.
+  - **Decision:** fix it in R3b, not as a compromise; then one R4 covers everything.
+- **SIM-1b code complete at `5314f3ef`** (rebuilt on root `96255382`):
+  - **Bench at 20k on the 4070:** 2.96M chars and 9.36 ms per save → 64k chars and 0.80 ms steady; a sealing commit is 2.80 ms.
+  - **Rulings and tests:** the R6 rulings are in, and their regressions fail on f6fee338. Note events carry `saveRef` for REC-2.
+  - **Gate:** running inside 4070 jobs.
+  - **Review:** Sol R1 dispatched in parallel (`siltwake-sim1b-review-r1-sol-5314f3e`).
