@@ -12,11 +12,11 @@
     "typecheck": "tsc --noEmit && tsc -p tsconfig.headless.json",
     "test:build": "node scripts/test-build.mjs",
     "test:fast": "node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
-    "test:heavy": "scripts/heavy-check.sh --class heavy-suite -- sh -c 'node scripts/test-build.mjs && node scripts/test-tier.mjs heavy'",
+    "test:heavy": "scripts/heavy-check.sh --class heavy-suite --machine any -- sh -c 'node scripts/test-build.mjs && node scripts/test-tier.mjs heavy'",
     "test": "npm run test:fast",
     "check": "npm run test:fast && npm run test:heavy && node scripts/bake-terrain.mjs && vite build",
     "gate": "node scripts/gate.mjs",
-    "playthrough": "tsc -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js"
+    "playthrough": "node node_modules/typescript/bin/tsc -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js"
   },
   "dependencies": { "@babylonjs/core": "9.31.0" },
   "devDependencies": {

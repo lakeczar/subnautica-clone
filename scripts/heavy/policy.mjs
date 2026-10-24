@@ -73,8 +73,7 @@ export const defaultMachine = (cls) => (cls === "soak" ? "soak" : LOCAL_CLASSES.
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 const PORTABLE = [
   { name: "the fast tier", match: (a) => (same(a, ["npm", "test"]) ? ["--script", "test"] : same(a, ["npm", "run", "test:fast"]) ? ["--script", "test:fast"] : null) },
-  // test:heavy's own queued command (package.json); `npm run test:heavy` queues itself.
-  { name: "the heavy tier", match: (a) => (same(a, ["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]) ? ["--sh", a[2]] : null) },
+  // Not the heavy tier: package.json's test:heavy queues its own command with --machine any (R4-F2).
   // The gate's playthrough (scripts/gate.mjs): it compiles first and writes nothing back.
   { name: "the playthrough", match: (a) => (same(a.slice(0, 3), ["npm", "run", "playthrough"]) &&
     (a.length === 3 || (a[3] === "--" && a.slice(4).every((x, i, r) => x === "--quiet" || x === "--jobs" || (r[i - 1] === "--jobs" && /^\d+$/.test(x))))) ? ["--script", "playthrough", ...a.slice(4)] : null) },
@@ -92,25 +91,22 @@ export const UNDECLARED = "portability not declared: pass --machine any and --ar
 // `any` runs here as submitted (base behaviour), naming them. Not a list of
 // what changes each command: any SILTWAKE_* the queue doesn't own (a test
 // selector, a cache mode, …), any NODE_*, and any npm_config_* but npm's own
-// descriptive exports. userconfig, globalconfig and prefix select files, so
-// they pass only as npm's own exports inside an `npm run` (npm_lifecycle_event
-// set), where npm also exports every setting those files make.
+// descriptive exports. userconfig, globalconfig and prefix select config
+// files, so they always count, inside an `npm run` too (R4-F2): a default
+// submitted from an npm script runs here; a script that means to balance says
+// --machine any, as test:heavy does.
 /** The queue's own variables: its configuration, and what it sets for each job on either machine. */
 export const QUEUE_OWNED = (k) => /^SILTWAKE_(SCHED_|JOB_|LANE_)/.test(k) ||
   ["SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_HEAVY_CGROUP", "SILTWAKE_HEAVY_CONCURRENCY", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_HEAVY_CHECK",
     "SILTWAKE_GPU_LEASE", "SILTWAKE_SOAK_MACHINE", "SILTWAKE_TEST_BUILD", "BAKE_WORKERS"].includes(k);
 const NPM_DESCRIPTIVE = new Set(["global_prefix", "local_prefix", "npm_version", "cache", "init_module", "node_gyp", "noproxy", "user_agent", "allow_scripts", "loglevel"]);
-const NPM_FILES = new Set(["userconfig", "globalconfig", "prefix"]);
 /** The submitter's settings a default `any` must not drop, sorted. */
 export function intentEnv(env) {
-  const inNpm = Boolean(env.npm_lifecycle_event);
   return Object.keys(env).filter((k) => {
     if (env[k] == null || env[k] === "") return false;
     if (k.startsWith("SILTWAKE_")) return !QUEUE_OWNED(k);
     if (k.startsWith("NODE_")) return true;
-    if (!k.toLowerCase().startsWith("npm_config_")) return false;
-    const key = k.slice(11).toLowerCase();
-    return !(NPM_DESCRIPTIVE.has(key) || (inNpm && NPM_FILES.has(key)));
+    return k.toLowerCase().startsWith("npm_config_") && !NPM_DESCRIPTIVE.has(k.slice(11).toLowerCase());
   }).sort();
 }
 

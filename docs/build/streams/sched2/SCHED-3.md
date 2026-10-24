@@ -35,6 +35,35 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
 
+## R4 review responses
+
+Review `f8378439` on `review/sched-3-r4`, by Sol on `194dcdc8`: REQUEST CHANGES. The R3 probes and the focused checks pass. The findings:
+- **F1 (P1):** the resolver expanded only a literal leading `npm`. `CHECK=1 npm …`, `env npm …`, `/usr/bin/npm …` and `npx` passed through, newlines collapsed, and `--silent` was forwarded.
+- **F2 (P2):** a spoofed `npm_lifecycle_event` waived the config-file selectors.
+
+The coordinator's decisions applied:
+- **F1, a closed grammar.** `portable-run.mjs` `resolveScript` accepts only steps joined by ` && `, one line, each of:
+  - `node <repo-relative path> [plain args]`;
+  - `npm test` or `npm run <script>`, optionally `-- plain args`, expanded recursively under the same grammar.
+
+  Rules:
+  - **Words** are plain (`[A-Za-z0-9_@%+=:,./-]`).
+  - **A path** isn't absolute, doesn't start with `-` (a node option), and has no `..`.
+  - **Appended arguments** go to the last step: to a node step, or to an npm step only after its `--` (where npm forwards them). Before `--` they'd be npm's own options, so that's refused.
+  - **Anything else is refused,** and the job runs here as submitted with the reason: another head, an assignment, `env`, a path to npm, `npx`, an npm option, quoting, a newline or other separator, a doubled space, or pre/post scripts.
+
+  The runner now returns the `node` steps and runs them directly (no shell, no npm), each after the last succeeded.
+  - **Playthrough:** to stay in the grammar, `package.json`'s `playthrough` is now `node node_modules/typescript/bin/tsc -p … && node .test-build/scripts/playthrough/run.js`. That is the same file `node_modules/.bin/tsc` links to, so `npm run playthrough` is unchanged.
+- **F2, no exception.** The `npm_lifecycle_event` exception is deleted: `npm_config_userconfig`, `globalconfig` and `prefix` always count as intent. `npm run test:heavy` balances through its own declaration instead: `package.json` queues its command with `--machine any`. That's the repository declaring its own heavy inner command portable, and the command has no npm. So the heavy tier's registry entry and the runner's `--sh` mode are gone.
+- **Tests:**
+  - **Policy units:**
+    - **Sol's accepted cases refused:** all six, plus 17 more grammar exclusions, pre/post scripts, npm options before `--`, and non-plain arguments.
+    - **The real registered scripts, step by step:** `npm test` → `test:fast`, and the playthrough with its arguments.
+    - **F2:** a spoofed lifecycle marker changes nothing, and `test:heavy` declares `--machine any` with no npm in its command.
+  - **B41:** a spoofed lifecycle plus userconfig runs here as submitted (19). The heavy tier's declared submission goes to the 4070 even with npm's exports in the environment.
+  - **B42:** registered spellings whose scripts are `CHECK=1 npm run inner` and `npx …` run here as submitted, never through the runner.
+  - **Fixtures:** the R2/R3 fixture scripts became `node scripts/case.mjs` (a `sh` step is now outside the grammar).
+
 ## R3 review responses
 
 Review `7c188ded` on `review/sched-3-r3`, by Sol on `3850c9bd`: REQUEST CHANGES. E1–E5 and the base control pass 6/6. The findings:

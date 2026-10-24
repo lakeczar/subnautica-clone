@@ -739,7 +739,8 @@ const UNDECLARED = /portability not declared: pass --machine any and --artifact 
 test("B28 (SCHED-3, R1): a default any goes to alickers only for a registered command; an unregistered one is routed here (portability not declared), as are dirty trees, local paths and build output; the reason is printed, kept on the ticket, in status and the result; explicit tags win; quick stays here", async () => {
   const c = await lane("balance");
   // .test-build is ignored, as in the repo: a running local job's .heavy-job marker lives there.
-  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "echo fast-tier-ran" } }) + "\n" });
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "scripts/fast.mjs": "console.log('fast-tier-ran');\n",
+    "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "npm run test:fast", "test:fast": "node scripts/fast.mjs" } }) + "\n" });
   // Registered (the fast tier): default any, to the 4070, unrouted, no "runs here" line.
   const s = hc(c, ["submit", "--class", "standard", "--", "npm", "test"], { cwd: c.repoDir });
   assert.equal(s.code, 0, s.err);
@@ -747,7 +748,7 @@ test("B28 (SCHED-3, R1): a default any goes to alickers only for a registered co
   assert.equal(waitFor(c, s.out.trim()).code, 0);
   assert.deepEqual([result(c, s.out.trim()).remote, result(c, s.out.trim()).machineTag, result(c, s.out.trim()).goal.routed], [true, "any", undefined]);
   assert.deepEqual([result(c, s.out.trim()).argv, result(c, s.out.trim()).goal.portable], [["node", "scripts/heavy/portable-run.mjs", "--script", "test"], { name: "the fast tier", command: ["npm", "test"] }]);
-  assert.match(log(c, s.out.trim()), /portable-run: echo fast-tier-ran\n(.*\n)*fast-tier-ran/);
+  assert.match(log(c, s.out.trim()), /portable-run: node scripts\/fast\.mjs\n(.*\n)*fast-tier-ran/);
   // Declared by the caller (--machine any): to the 4070 too.
   const d0 = submit(c, c.repoDir, "--class", "gpu", "--machine", "any", "--", "sh", "-c", "echo declared");
   assert.equal(waitFor(c, d0).code, 0);
@@ -916,8 +917,8 @@ test("B33 (SCHED-3 R1-F3, Sol's R3): a routed ticket cancelled, expired or lost 
 
 test("B34 (SCHED-3 R2-F1, Sol's E1): local npm configuration that changes a registered command routes a default any here, where it applies; an explicit --machine any stays the caller's declaration", async () => {
   const c = await lane("npm-env");
-  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "sh scripts/case.sh" } }) + "\n",
-    "scripts/case.sh": 'if [ "$CASE" = REQUESTED ]; then echo CASE-REQUESTED; exit 19; fi; echo CASE-DEFAULT\n' });
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "node scripts/case.mjs" } }) + "\n",
+    "scripts/case.mjs": 'if (process.env.CASE === "REQUESTED") { console.log("CASE-REQUESTED"); process.exit(19); } console.log("CASE-DEFAULT");\n' });
   const shell = join(c.dir, "test-shell");
   writeFileSync(shell, "#!/bin/sh\nexport CASE=REQUESTED\nexec /bin/sh \"$@\"\n", { mode: 0o755 });
   const env = { npm_config_script_shell: shell };
@@ -1008,8 +1009,8 @@ test("B37 (SCHED-3 R2-F3, Sol's E4): remote recovery after the payload started k
 /** A registered `npm test` whose case script fails 19 when its setup (a script-shell) ran. */
 async function caseLane(name) {
   const c = await lane(name);
-  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "sh scripts/case.sh" } }) + "\n",
-    "scripts/case.sh": 'if [ "$CASE" = REQUESTED ]; then echo CASE-REQUESTED; exit 19; fi; echo CASE-DEFAULT\n' });
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "node scripts/case.mjs" } }) + "\n",
+    "scripts/case.mjs": 'if (process.env.CASE === "REQUESTED") { console.log("CASE-REQUESTED"); process.exit(19); } console.log("CASE-DEFAULT");\n' });
   c.shell = join(c.dir, "test-shell");
   writeFileSync(c.shell, "#!/bin/sh\nexport CASE=REQUESTED\nexec /bin/sh \"$@\"\n", { mode: 0o755 });
   return c;
@@ -1092,4 +1093,36 @@ test("B40 (SCHED-3 R3-F3, Sol's crash probe): a holder killed after its claim bu
   assert.deepEqual(r.goal, t.goal);
   assert.match(hc(c, ["wait", id]).err, /never ran; planned for RTX 3090/);
   assert.deepEqual(JSON.parse(hc(c, ["status", id]).out), r);
+});
+
+// SCHED-3 R4 ------------------------------------------------------------------
+
+test("B41 (SCHED-3 R4-F2, Sol's spoofed marker): an npm_lifecycle_event beside an explicit userconfig changes nothing: the default runs here as submitted; test:heavy's own declared command (--machine any) balances", async () => {
+  const c = await caseLane("spoofed-lifecycle");
+  const rc = join(c.dir, "npmrc");
+  writeFileSync(rc, `script-shell=${c.shell}\n`);
+  const x = await npmTest(c, [], { npm_lifecycle_event: "test:heavy", npm_config_userconfig: rc });
+  assert.match(x.err, /not on alickers: local configuration npm_config_userconfig changes this command/);
+  assert.deepEqual([x.r.code, x.r.remote, x.r.argv], [19, undefined, ["npm", "test"]]);
+  // As package.json's test:heavy queues its command, from inside `npm run` (npm's own exports included): declared, so it goes.
+  const heavy = hc(c, ["submit", "--class", "heavy-suite", "--machine", "any", "--", "sh", "-c", "echo heavy-tier-ran"], { cwd: c.repoDir,
+    env: { npm_lifecycle_event: "test:heavy", npm_config_userconfig: join(c.dir, "home-npmrc"), npm_config_prefix: c.dir, npm_config_user_agent: "npm/x" } });
+  assert.equal(heavy.code, 0, heavy.err);
+  assert.doesNotMatch(heavy.err, /runs here/);
+  assert.equal(waitFor(c, heavy.out.trim()).code, 0);
+  assert.deepEqual([result(c, heavy.out.trim()).remote, result(c, heavy.out.trim()).goal.machine], [true, "any"]);
+});
+
+test("B42 (SCHED-3 R4-F1): a registered command whose script falls outside the runner's grammar (Sol's npm entrypoints) runs here as submitted, never through the runner", async () => {
+  const c = await lane("grammar");
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "scripts/case.mjs": "console.log('CASE-RAN');\n",
+    "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "CHECK=1 npm run inner", "test:fast": "npx --no-install node scripts/case.mjs", inner: "node scripts/case.mjs" } }) + "\n" });
+  for (const argv of [["npm", "test"], ["npm", "run", "test:fast"]]) {
+    const s = hc(c, ["submit", "--class", "standard", "--", ...argv], { cwd: c.repoDir });
+    assert.equal(s.code, 0, s.err);
+    assert.match(s.err, /runs here \(factory-worker\), not on alickers: .*isn't one the portable runner runs; pass --machine any to declare it portable/, argv.join(" "));
+    const id = s.out.trim();
+    await done(c, id, 60000);
+    assert.deepEqual([argv.join(" "), result(c, id).remote, result(c, id).argv, result(c, id).goal.portable], [argv.join(" "), undefined, argv, undefined]);
+  }
 });

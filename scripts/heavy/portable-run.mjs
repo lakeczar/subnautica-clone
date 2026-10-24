@@ -1,21 +1,21 @@
 #!/usr/bin/env node
-// The queue's portable runner (SCHED-3 R3). A registered command (policy.mjs
-// PORTABLE) that the queue may place on either machine runs through this
-// file, from the commit being tested, so both machines run the same thing by
-// construction:
-// - the command is this commit's package.json script, its `npm test` and
-//   `npm run` steps expanded, so npm and its configuration (.npmrc files,
-//   prefixes, script-shell, node-options) are never involved;
+// The queue's portable runner (SCHED-3 R3, R4). A registered command
+// (policy.mjs PORTABLE) that the queue may place on either machine runs
+// through this file, from the commit being tested, so both machines run the
+// same thing by construction:
+// - the command is this commit's package.json script, read in a closed
+//   grammar (resolveScript) and run as plain node steps: npm and its
+//   configuration (.npmrc files, prefixes, script-shell, node-options), a
+//   shell, and anything else a script line could name are never involved;
 // - the environment is rebuilt from a fixed allowlist (portableEnv): PATH with
 //   the package's node_modules/.bin first (as npm adds it), the user, home,
 //   locale, temp and session variables, and the queue's own job variables.
 //   Nothing else of the submitter's or the machine's environment reaches it.
 //
 //   portable-run.mjs --script NAME [ARGS...]   a package.json script; ARGS appended as npm does
-//   portable-run.mjs --sh COMMAND              a command line of ours (the heavy tier's)
 //
-// It runs at the package root, as npm runs scripts, with `sh -c`, and exits
-// with the command's code.
+// It runs at the package root, as npm runs scripts, each step after the one
+// before succeeded (&&), and exits with the first failing step's code.
 import { spawn } from "node:child_process";
 import { readFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -32,44 +32,58 @@ export function portableEnv(env, root) {
   return out;
 }
 
-const quote = (a) => (/^[\w@%+=:,./-]+$/.test(a) ? a : `'${a.replace(/'/g, "'\\''")}'`);
+// The grammar's words: plain, never quoted, expanded or an option of node's own.
+const PLAIN = /^[A-Za-z0-9_@%+=:,./-]+$/;
+const repoPath = (w) => PLAIN.test(w) && !w.startsWith("/") && !w.startsWith("-") && !w.split("/").includes("..");
 
 /**
- * The command line a package.json script runs, its `npm test` / `npm run X`
- * steps expanded (their own arguments kept), with `args` appended as npm
- * appends them. { command } or { error }: a script that isn't plain `&&`
- * steps, has pre/post scripts, or still needs npm can't run without npm.
+ * A package.json script in a closed grammar (R4-F1). The script is steps
+ * joined by ` && `, on one line; each step is one of
+ *   node <repo-relative path> [plain args]
+ *   npm test [-- plain args]  |  npm run <script> [-- plain args]   (expanded, recursively)
+ * and `args` are appended to the last step as npm appends them (to an npm
+ * step only after its `--`, where npm forwards them). Anything else (another
+ * head, an assignment, env, a path to npm, npx, an npm option, quoting, a
+ * newline or any other separator, pre/post scripts) isn't portable:
+ * { error }, and the job runs where it was submitted, as typed.
+ * Returns { steps: [argv, …], command } or { error }.
  */
 export function resolveScript(scripts, name, args = [], depth = 0) {
   const body = scripts?.[name];
   if (typeof body !== "string") return { error: `package.json has no script ${name}` };
   if (scripts[`pre${name}`] != null || scripts[`post${name}`] != null) return { error: `${name} has pre/post scripts` };
-  if (depth > 8 || /['"`$\\;|<>()]|&(?!&)/.test(body.replace(/&&/g, ""))) return { error: `${name} isn't plain && steps` };
+  if (depth > 8) return { error: `${name} nests too deeply` };
+  if (!args.every((a) => PLAIN.test(a))) return { error: "its arguments aren't plain words" };
+  const lines = body.split(" && ");
   const steps = [];
-  for (const step of body.split("&&").map((s) => s.trim().split(/\s+/))) {
-    if (step[0] !== "npm") { steps.push(step.join(" ")); continue; }
-    const [inner, rest] = step[1] === "test" ? ["test", step.slice(2)] : step[1] === "run" && step[2] ? [step[2], step.slice(3)] : [null, null];
-    if (!inner) return { error: `${name} runs \`${step.join(" ")}\`, which needs npm` };
-    const r = resolveScript(scripts, inner, rest[0] === "--" ? rest.slice(1) : rest, depth + 1);
+  for (const [i, line] of lines.entries()) {
+    const w = line.split(" "), last = i === lines.length - 1, extra = last ? args : [];
+    if (!line || w.some((x) => !PLAIN.test(x))) return { error: `${name}'s step \`${line}\` isn't plain words` };
+    if (w[0] === "node" && repoPath(w[1] ?? "-")) { steps.push([...w, ...extra]); continue; }
+    const npm = w[0] === "npm" && (w[1] === "test" ? { inner: "test", rest: w.slice(2) } : w[1] === "run" && w[2] && !w[2].startsWith("-") ? { inner: w[2], rest: w.slice(3) } : null);
+    if (!npm || (npm.rest.length && npm.rest[0] !== "--") || (extra.length && !npm.rest.length)) return { error: `${name}'s step \`${line}\` isn't one the portable runner runs` };
+    const r = resolveScript(scripts, npm.inner, [...npm.rest.slice(1), ...extra], depth + 1);
     if (r.error) return r;
-    steps.push(r.command);
+    steps.push(...r.steps);
   }
-  const command = steps.join(" && ");
-  return { command: args.length ? `${command} ${args.map(quote).join(" ")}` : command };
+  return { steps, command: steps.map((s) => s.join(" ")).join(" && ") };
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1])).href) {
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
-  const [mode, first, ...rest] = process.argv.slice(2);
-  let command;
-  if (mode === "--sh" && first) command = first;
-  else if (mode === "--script" && first) {
-    const r = resolveScript(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts, first, rest);
-    if (r.error) { console.error(`portable-run: ${r.error}`); process.exit(2); }
-    command = r.command;
-  } else { console.error("usage: portable-run.mjs --script NAME [ARGS...] | --sh COMMAND"); process.exit(2); }
-  console.error(`portable-run: ${command}`);
-  const child = spawn("sh", ["-c", command], { cwd: root, env: portableEnv(process.env, root), stdio: "inherit" });
-  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => child.kill(sig));
-  child.on("exit", (code, signal) => process.exit(code ?? 128 + ({ SIGTERM: 15, SIGINT: 2, SIGHUP: 1, SIGKILL: 9 }[signal] ?? 1)));
+  const [mode, name, ...rest] = process.argv.slice(2);
+  if (mode !== "--script" || !name) { console.error("usage: portable-run.mjs --script NAME [ARGS...]"); process.exit(2); }
+  const r = resolveScript(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts, name, rest);
+  if (r.error) { console.error(`portable-run: ${r.error}`); process.exit(2); }
+  console.error(`portable-run: ${r.command}`);
+  const env = portableEnv(process.env, root);
+  const SIG = { SIGHUP: 1, SIGINT: 2, SIGKILL: 9, SIGTERM: 15 };
+  let child = null, stopped = null;
+  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => { stopped = sig; child?.kill(sig); });
+  for (const [cmd, ...argv] of r.steps) {
+    if (stopped) process.exit(128 + SIG[stopped]);
+    child = spawn(cmd, argv, { cwd: root, env, stdio: "inherit" });
+    const code = await new Promise((done) => child.on("exit", (c, signal) => done(c ?? 128 + (SIG[signal] ?? 1))));
+    if (code !== 0) process.exit(code);
+  }
 }

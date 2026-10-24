@@ -144,7 +144,7 @@ async function submit(opts, command, { quiet = false } = {}) {
   if (routed.machine === "any" && opts.machine == null && portable) {
     const show = (path) => spawnSync("git", ["-C", worktree, "show", `${tree.head}:${path}`], { encoding: "utf8", maxBuffer: 16 * 1048576 });
     let r = show("scripts/heavy/portable-run.mjs").status !== 0 ? { error: "this commit has no portable runner (scripts/heavy/portable-run.mjs)" } : {};
-    if (!r.error && portable.run[0] === "--script") {
+    if (!r.error) {
       try { r = resolveScript(JSON.parse(show("package.json").stdout).scripts, portable.run[1], portable.run.slice(2)); } catch { r = { error: "its package.json can't be read" }; }
     }
     if (r.error) Object.assign(routed, { machine: "3090", routed: { from: "any", reason: `${r.error}; pass --machine any to declare it portable` } });
