@@ -33,7 +33,7 @@
 - **The lead:** L14's `offeredBy` becomes `district_controller`.
 - **The plan:** `bp_pod_buffer` moves from C07's grants to `district_controller`'s. Left at C07, the recipe list would still point home early.
 - **The lead's text still reads right:** "The cradle at the Divide was made for this pod. Its spare buffer should fit." The player saw the cradle at C07, so it's legible in hindsight.
-- **Saves:** hint keys and open leads need no rule. The plan needs one narrow `LEGACY_GRANTS` row (`bp_pod_buffer` from C07) for saves that earned it before the move. It uses the same mechanism and rules as LS-1's planter-plan row. The coordinator composes it with the next schema step.
+- **Saves:** hint keys and open leads need no rule. The plan needs one narrow `LEGACY_GRANTS` row for saves that earned it before the move. The row has a `discovery` source, `{ blueprint: "bp_pod_buffer", source: { kind: "discovery", id: "C07" } }`, because C07 is a story discovery, not a scan. It lands atomically with a schema step (LS-1 1b's 7 → 8, or 8 → 9 if 1b has merged), as the plan's F10 section describes.
 
 **The bot's read order:**
 - **Stage 1** (no content change yet, so the lead is still at C07):
