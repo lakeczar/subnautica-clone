@@ -36,10 +36,12 @@ async function shot(name) {
 /** Every notice and toast as it appears (they are transient), recorded in the page. */
 const NOTICE_RECORDER = () => {
   window.__notices = [];
+  const last = {};
   setInterval(() => {
     for (const sel of ["#alert-stack", "#notification", "#action-result"]) {
-      const text = document.querySelector(sel)?.innerText.replace(/\s+/g, " ").trim();
-      if (text && window.__notices.at(-1) !== text) window.__notices.push(text);
+      const text = document.querySelector(sel)?.innerText.replace(/\s+/g, " ").trim() ?? "";
+      if (text && last[sel] !== text) window.__notices.push(text);
+      last[sel] = text;
     }
   }, 100);
 };
