@@ -82,6 +82,11 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
 - **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive` on the 3090.
   - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. Results from the 4070 are labelled indicative.
   - Pin a job to one machine only when the question needs that machine (e.g. factory-worker's host pauses, or a 4070 player-floor check).
+- **Graphics first; integrated graphics later** (owner, 2026-10-24):
+  - **Order:** build for the best graphics first; the dedicated-GPU gates stay (3090 at 60 fps, the 4070 laptop as the player floor). Integrated-graphics laptops come later, through a settings change (a lower preset), not as a target now.
+  - **The low preset, when it comes:** a steady **30 fps at a reduced internal resolution**, keeping readable exits, warning poses, lamp reach and landmark silhouettes.
+  - **Keep it reachable:** don't make choices that rule it out. Quality must stay scalable through settings (resolution scale, draw distance, effects), and memory and streaming budgets must stay parameterised rather than hard-wired to the 3090.
+  - **Still open:** the representative integrated-GPU device is chosen later.
 - **Evidence:**
   - Functional results count from either machine, bound to the exact SHA tested.
   - 3090 exclusive numbers are the target.

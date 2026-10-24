@@ -975,3 +975,23 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **Owner (2026-10-24): more agents allowed if helpful.** The cap of 5 is lifted for unblocked, non-overlapping work. The real limit is the critical path: the 3090 exclusive queue and CW-1's merge (OP-1, WK-1, BIO-1, COL-1 B, NAV-1 and LS-1 stage 2 wait on it). NAV-1 stays queued (it depends on COL-1 B).
 - **STEW-2 started** (`siltwake-stew2-exclusive-guard-opus-6ee488a`, branch `t3/stew-2-exclusive-guard`): a structural guard so local CPU commands can't disturb a running or queued exclusive. Also the gate's local steps into one queued job during exclusives, saves-export's local build through the queue, and per-step perf-bound heavy files run serially. Hands off `scripts/heavy` (SCHED-3).
 - **Builders:** CW-1, REC-1, SCHED-3 (in review), COL-1 (waiting), LS-1 (plan in review), STEW-2.
+- **SCHED-3 R2** (Sol on `fa2078a2`, report on `review/sched-3-r2` `0f6b3b2a`): REQUEST CHANGES, not installed. R1 repros 9/9; suites 23/23, 33/33; SCHED-2 27 across a full run and a focused recheck; migration faithful.
+  - **P1:** registered commands inherit invocation-changing local env (`npm_config_script_shell`), dropped remotely.
+  - **P2:** a build with `--outDir` plus a matching `--artifact` is refused (base allowed it).
+  - **P3:** holder and remote-recovery terminal writers bypass `terminalRecord`.
+  - **Decisions:** a clean env for the default `any`, else local with a reason; trailing build options make any declared artifact the contract; one terminal builder with `ran` true, false or unknown from the payload launch.
+  - **New F4:** SCHED suites independent of an enclosing queue job (S11, S17, S20 and S22 harness assumptions). The last edge-closing round before install.
+- **LS-1 plan R1** (Sol on `30ed003b`, report on `review/ls-1-r1` `4a9a56a6`): REQUEST CHANGES. Direction, reuse, inventory and stage-1a disjointness confirmed.
+  - **P1:** moving `bp_cultivation` breaks existing saves.
+  - **P2:** reward contracts (per-locker identity, air-line seam via CW-1's `airLineFor`, 27 m baseline); the decode-free route proof needs the playthrough phase refactor in 1a; pacing evidence via an `analyseTimeline` gap check with failing injected cases; the vault's at-door unlock isn't a real backtrack.
+  - **Decisions:** a narrow converted-save provenance in `bridge7`; contracts specified, with the reel deferred or seamed; LS-1 owns the `live.ts`/`scenarios.ts` refactor now (OP-1 inherits it); a reusable pacing check for REC-2; the vault as a true backtrack. R2 covers R1 plus the owner-answer deltas.
+- **LS-1 R1 fixes at `ffaa24e5`:**
+  - **Saves:** a narrow `knowledge.legacyGrants` (one row, validated against the sheet-read record).
+  - **Rewards:** per-reward contracts (locker extension per module; reel 27→40 m moved to stage 2 via `airLineFor`; caches as one fixed-container mechanism).
+  - **Route proof:** decodes-off scenarios for both strategies with a guard.
+  - **Pacing:** a `pacingAcceptance` check beside `analyseTimeline` (≤20 min gap, ≤90 s empty travel, no decode-only idle; injected failures).
+  - **Vault:** a true backtrack (code from the Divide decode two tiers later).
+  - **Review:** Sol R2 running (`siltwake-ls1-review-r2-sol-ffaa24e`).
+- **Session candidates research** (Sol `ebed4b78` on `research/session-candidates`): 9 candidates (laptop floor, presets and performance, accessibility and onboarding, swim and craft comfort, sound listening, fear and failure, storage envelope, mid/late payoffs, first external build). The engine is Babylon.js 9.31 with WebGL2.
+  - **Owner (2026-10-24):** graphics first; integrated-GPU laptops later via a settings preset (30 fps at a reduced resolution); device chosen later; keep quality scalable (DIRECTION rule added).
+  - **Started (Sol desk passes):** #3 access and onboarding (`siltwake-research-access-onboarding-sol-ebed4b7`), #7 storage envelope (`siltwake-research-storage-envelope-sol-ebed4b7`). #4–6 fold into one optional sitting after the first playtest; #8 into the mid-game debrief; #2 and #9 later.
