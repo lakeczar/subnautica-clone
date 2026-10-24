@@ -233,6 +233,7 @@ export function guardLocalRun(what = defaultWhat(), { leaseParent = false, env =
       `logged to ${logPath(env)}. ${d.exclusives.running.length ? "Tell the coordinator, with the ticket id and the time: this run can mark it DISTURBED." : ""}`.trim());
   }
   if (d.lease) {
+    liveLeases(env); // prunes the leases of ended runs (a package script's shell never removes its own)
     const pid = leaseParent ? process.ppid : process.pid;
     const path = writeLease(env, pid, what);
     if (path && !leaseParent) process.on("exit", () => rmSync(path, { force: true }));

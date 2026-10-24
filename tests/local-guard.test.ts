@@ -175,8 +175,11 @@ test("inside a job, on a machine with no queue, or with unreadable state it runs
 
 test("leases: a parent's lease covers its later steps, is listed by --status, and an in-process lease ends with its process", () => {
   const dir = privateRoot(state({}));
+  fs.mkdirSync(join(dir, "local-runs"));
+  fs.writeFileSync(join(dir, "local-runs", `${gone.pid}.json`), JSON.stringify({ ...gone, at: Date.now(), what: "an ended npm script" }));
   // The test process is the parent here, as a package script's shell is.
   assert.equal(guard(agentEnv(dir), "--lease-parent", "npm run build").status, 0);
+  assert.ok(!fs.existsSync(join(dir, "local-runs", `${gone.pid}.json`)), "an ended run's lease was pruned");
   const lease = JSON.parse(fs.readFileSync(join(dir, "local-runs", `${process.pid}.json`), "utf8")) as { pid: number; start: number; what: string };
   assert.deepEqual([lease.pid, lease.start, lease.what], [process.pid, me.start, "npm run build"]);
   const status = JSON.parse(guard(agentEnv(dir), "--status", "--json").stdout) as { leases: { pid: number }[] };
