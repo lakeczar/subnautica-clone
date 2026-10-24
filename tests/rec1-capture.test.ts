@@ -167,7 +167,8 @@ test("R2-2: bytes are counted as UTF-8; a refused write is in the ledger and the
   assert.equal(internals.stored.get("events.ndjson")!.bytes, Buffer.byteLength("汉字💧\n", "utf8"));
   FakeWorker.refuse = (m) => (m.file === "samples.ndjson" ? { quota: false } : null);
   internals.post("samples.ndjson", "ünïcødé\n");
-  await settle();
+  // The fake worker answers in order, a task per message: wait for its answers (a loaded machine is slower).
+  for (let i = 0; i < 100 && internals.spool.backlog !== 0; i++) await new Promise((r) => setTimeout(r, 10));
   assert.equal(internals.spool.backlog, 0, "acknowledged and refused writes both leave the backlog");
   assert.ok(internals.ledger.lost.some((l) => l.file === "samples.ndjson"));
 });
