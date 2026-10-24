@@ -52,6 +52,8 @@ const ASCENT_EPSILON = 1e-5;
 const IDLE_PREPARE_MS = 250;
 /** The menu's pause reason while an entered expedition waits for its caves (CW-1 R1). */
 const ENTRY_LOADING = "Loading the caves near your expedition…";
+/** Longest the entry waits for the light of a cave the view stands in, ms. */
+const ENTRY_LIGHT_WAIT_MS = 8000;
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 
@@ -112,7 +114,7 @@ export class SiltwakeApp {
   /** CW-1 R1: an entered expedition waits here, behind the menu's loading
    * presentation, until its caves are admitted (or its rescue or refuge is
    * applied); only then is it shown or resumed. */
-  private entryPending: { readonly generation: number } | null = null;
+  private entryPending: { readonly generation: number; readonly since: number } | null = null;
   /** The last frame's timestamp: admission's timers run on the frame clock. */
   private frameAt = 0;
   private readonly caves = createCaveRuntime({
@@ -611,7 +613,7 @@ export class SiltwakeApp {
     // CW-1 R1: the expedition stays behind the menu's loading presentation
     // (paused, busy, no HUD) until its caves are admitted: records installed,
     // admission clear, or a rescue or refuge applied. Usually that is now.
-    this.entryPending = { generation: this.sessionGeneration };
+    this.entryPending = { generation: this.sessionGeneration, since: this.frameAt };
     this.paused = true;
     this.clock.reset();
     this.view.showMenu(true, ENTRY_LOADING);
@@ -628,6 +630,10 @@ export class SiltwakeApp {
     const hold = this.caveAdmission(now, true);
     // Held: keep waiting (the refuge timeout bounds it). Relocated: admit again at the new pose next frame.
     if (hold?.holding) return;
+    // A cave the view stands in is lit before it is shown (never a pop of open
+    // water inside a cave, CW-1 R1); the view keeps presenting meanwhile, and
+    // the wait is bounded (an absent light field draws as before).
+    if (this.renderer?.caveLightPending && now - pending.since < ENTRY_LIGHT_WAIT_MS) { this.dirty = true; return; }
     this.entryPending = null;
     this.syncSessionUi();
     this.finishEntry();

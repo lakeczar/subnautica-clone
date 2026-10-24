@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";
 import { SaveRepository } from "../src/save/repository.js";
-import { GameView, browserFixture } from "./app-browser-support.js";
+import { GameView, TestRenderer, browserFixture } from "./app-browser-support.js";
 import { encoded, sample, settled } from "./persistence-support.js";
 import { completeOpening } from "../src/sim/progression.js";
 import { CAVE_SOURCES } from "../src/content/regions/caves.js";
@@ -185,4 +185,33 @@ test("R2: a replaced expedition never inherits the old one's remembered open wat
   assert.ok(Math.hypot(p.x - open.x, p.z - open.z) > 100, `C was not sent to A's open water (${p.x}, ${p.z})`);
   assert.ok(f.view.notices.some(n => /returned to your refuge/.test(n)), "C's own refuge");
   assert.ok(!f.view.notices.some(n => /open water you passed/.test(n)));
+});
+
+test("R1 (REC-1): an expedition loaded in a cave whose light has not landed waits for it behind the loading presentation, bounded", async (t) => {
+  // Open water, no cave hold: only the view's cave light is pending.
+  const open: Vec3 = { x: 1180, y: -100, z: -620 };
+  const pack = pendingStore();
+  pack.land([]);
+  const f = await app(t, swimmingAt(open), pack.store);
+  TestRenderer.current.caveLightPending = true;
+  f.view.actions.continueGame();
+  f.frames(60);
+  assert.equal(f.view.screen, "menu", "no HUD while the cave there draws as open water");
+  assert.equal(f.state().tick, 300);
+  TestRenderer.current.caveLightPending = false;
+  f.frames(1);
+  assert.equal(f.view.screen, "playing", "shown once the light lands");
+});
+
+test("R1 (REC-1): a cave light that never lands does not hold the load forever", async (t) => {
+  const open: Vec3 = { x: 1160, y: -100, z: -640 };
+  const pack = pendingStore();
+  pack.land([]);
+  const f = await app(t, swimmingAt(open), pack.store);
+  TestRenderer.current.caveLightPending = true;
+  f.view.actions.continueGame();
+  let frames = 0;
+  while (f.view.screen === "menu" && frames < 60 * 20) { f.frames(1); frames++; }
+  assert.equal(f.view.screen, "playing");
+  assert.ok(frames >= 60 * 8 - 2 && frames < 60 * 9, `released at the 8 s bound (${frames} frames)`);
 });

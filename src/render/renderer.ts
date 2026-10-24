@@ -53,6 +53,9 @@ export interface GameRenderer {
    * and the caller keeps the simulation clock paused. Never more than
    * `SETTLE_MAX_MS`. */
   readonly settling: boolean;
+  /** The cave the camera is in (or next to) draws as open water: its light
+   * field has not landed (CW-1 R1). The load waits on it, bounded. */
+  readonly caveLightPending: boolean;
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
@@ -354,6 +357,7 @@ export function createRenderer(
     });
     return {
       get settling() { return settleSince >= 0; },
+      get caveLightPending() { return caveView.lightPending; },
       present(state, overlay) {
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
@@ -418,7 +422,8 @@ export function createRenderer(
         const extraMs = cinematic || settleSince >= 0 ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
         const tStream = timed ? performance.now() : 0;
         const world = art.stream(camera.position, { ...(jumped && settleSince < 0 ? { nearRadius: NEAR_WORLD } : {}), extraMs });
-        if (settleSince >= 0 && (art.residency.isReady(NEAR_WORLD) || performance.now() - settleSince > SETTLE_MAX_MS)) settleSince = -1;
+        // Settled once the near world is drawn and the cave there (if any) is lit (CW-1 R1); bounded.
+        if (settleSince >= 0 && ((art.residency.isReady(NEAR_WORLD) && !caveView.lightPending) || performance.now() - settleSince > SETTLE_MAX_MS)) settleSince = -1;
         const chunkMs = timed ? performance.now() - tStream : 0;
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
         corridor.update(state, gameWorld());
@@ -466,6 +471,7 @@ export function createRenderer(
         const caveMs = timed ? performance.now() - tCaves : 0;
         const caveUpload = caveView.stats.uploads > uploadsBefore ? { ms: +caveUploadMs.toFixed(1), bytes: caveView.stats.textureBytes - bytesBefore } : null;
         canvas.dataset.cave = caveView.active ?? "";
+        canvas.dataset.caveLight = caveView.active ? (caveView.lightPending ? "pending" : "resident") : "";
         const ks = caveWorld.kitCaves.stats;
         canvas.dataset.caveStream = JSON.stringify({ sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
           stepMs: +ks.maxStepMs.toFixed(2), buildMs: +worstCaveBuildMs.toFixed(2), pending: streamFrame?.pending ?? -1,

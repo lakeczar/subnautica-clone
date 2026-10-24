@@ -41,6 +41,10 @@ export interface CaveView {
   update(camera: Vector3, forward: Vector3, lamp: boolean): void;
   /** The active cave's ID, or null. */
   readonly active: string | null;
+  /** The active cave is drawn as open water because its light field has not
+   * landed yet (CW-1 R1, REC-1: a pop of open water inside a cave). Captures
+   * and the load wait on it. */
+  readonly lightPending: boolean;
   /** Active frames whose field was not ready yet (drawn as open water). */
   readonly stats: { readonly missing: number; readonly uploads: number; readonly textureBytes: number };
   dispose(): void;
@@ -50,7 +54,7 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
   const lighting = new CaveLighting(scene, materials);
   const live = source === liveCaveFields;
   const built = new Map<string, CaveLightField>();
-  let active: string | null = null, missing = 0, near: readonly string[] = [];
+  let active: string | null = null, missing = 0, near: readonly string[] = [], lightPending = false;
   const field = (id: string): CaveLightField | null => {
     let f = built.get(id) ?? null;
     if (!f) { f = source.field(id); if (f && live) built.set(id, f); }
@@ -62,6 +66,7 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
   };
   return {
     get active() { return active; },
+    get lightPending() { return lightPending; },
     get stats() { return { missing, uploads: lighting.stats.uploads, textureBytes: lighting.stats.bytes }; },
     prepare() {
       // Live fields only: the nearest the streamer named that is not built.
@@ -94,6 +99,7 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
       const f = best ? field(best.id) : null;
       if (best && !f) missing++;
       lighting.setField(f);
+      lightPending = !!best && !(f && lighting.has(f));
       lighting.apply({ on: lamp, position: camera, direction: forward.lengthSquared() > 0 ? forward.normalizeToNew() : new Vector3(0, 0, -1) });
     },
     dispose() { lighting.dispose(); },

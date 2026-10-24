@@ -116,6 +116,8 @@ export class TestRenderer {
   disposed = false;
   /** The view settling after a jump (CW-1): the app keeps the clock paused. */
   settling = false;
+  /** The view's cave drawn as open water until its light lands (CW-1 R1). */
+  caveLightPending = false;
   constructor(
     private readonly canvas: TestCanvas,
     private readonly availability?: (available: boolean) => void,

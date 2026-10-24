@@ -6,7 +6,7 @@ import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { WORLD_ENVELOPE, CHUNK_SIZE } from "../src/world/frame.js";
 import { createSpatialIndex } from "../src/world/spatialIndex.js";
 import type { SpatialKind } from "../src/world/types.js";
-import { LIGHT_RANGE, MAX_LIGHTS, lightScore, selectLights, type PointLight } from "../src/render/lighting/localLights.js";
+import { LIGHT_RANGE, MAX_LIGHTS, lightOrder, lightScore, selectLights, type PointLight } from "../src/render/lighting/localLights.js";
 
 // CW-1 R1 frame audit: a chunk build step overran its 2 ms slice by 37 ms
 // inside one cell's error estimate (a fan of many triangles, each probing
@@ -30,7 +30,7 @@ test("tessellation yields within a cell's error estimate: one step probes at mos
   assert.deepEqual(r.value, w.value);
 });
 
-test("light selection keeps the best slots without a score object per light, choosing and ordering exactly as a stable sort of every candidate", () => {
+test("light selection keeps the best slots without a score object per light, choosing and ordering exactly as a sort of every candidate by score, then by the light itself", () => {
   // The previous algorithm, as the reference.
   const reference = (lights: readonly PointLight[], eye: { x: number; y: number; z: number }, slots = MAX_LIGHTS): PointLight[] => {
     const reserved: PointLight[] = [], scored: { l: PointLight; s: number }[] = [];
@@ -40,7 +40,7 @@ test("light selection keeps the best slots without a score object per light, cho
       if (d - l.radius > LIGHT_RANGE) continue;
       scored.push({ l, s: lightScore(l, eye) });
     }
-    scored.sort((a, b) => b.s - a.s);
+    scored.sort((a, b) => b.s - a.s || lightOrder(a.l, b.l));
     return [...reserved, ...scored.slice(0, Math.max(0, slots - reserved.length)).map(x => x.l)];
   };
   let seed = 7;
@@ -74,5 +74,26 @@ test("the allocation-free box query writes exactly inBox's solids, in its order,
     const box = { min: { x, y, z }, max: { x: x + s, y: y + rand() * 20, z: z + s } };
     const count = index.dataInBox(box, "solid", out);
     assert.deepEqual(out.slice(0, count), index.inBox(box, ["solid"]).map(e => e.data));
+  }
+});
+
+test("light selection is a pure function of the eye and the candidate set: any order of the same lights chooses and orders the same lights", () => {
+  // REC-1: the same pose on the same build drew a different light set (88% of
+  // a cave view's pixels), because equal scores went by mesh arrival order.
+  let seed = 11;
+  const rand = (): number => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  const key = (l: PointLight): string => `${l.x},${l.y},${l.z},${l.radius},${l.strength}`;
+  for (let round = 0; round < 30; round++) {
+    // A lattice of equal lights round the eye: nearly every score ties.
+    const lights: PointLight[] = [];
+    for (let i = -4; i <= 4; i++) for (let j = -4; j <= 4; j++)
+      lights.push({ x: i * 6, y: -20, z: j * 6, radius: 6, strength: 0.5, r: 1, g: 0.8, b: 0.6 });
+    const eye = { x: 0, y: -20, z: 0 };
+    const want = selectLights(lights, eye).map(key);
+    for (let shuffle = 0; shuffle < 5; shuffle++) {
+      const order = [...lights];
+      for (let i = order.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [order[i], order[j]] = [order[j]!, order[i]!]; }
+      assert.deepEqual(selectLights(order, eye).map(key), want, `round ${round}, shuffle ${shuffle}`);
+    }
   }
 });

@@ -110,9 +110,12 @@ export const MAX_LIGHTS = 12;
  * range edge fade out, so leaving range never pops. */
 export function selectLights(lights: readonly PointLight[], eye: Vec3Like, slots = MAX_LIGHTS): PointLight[] {
   // Allocation-free over the candidates (CW-1: thousands of lights a frame
-  // made a megabyte of score objects per frame): the best `slots` scores are
-  // kept in place, best first, equal scores in input order, exactly as a
-  // stable sort of every candidate would rank them.
+  // made a megabyte of score objects per frame): the best `slots` are kept in
+  // place, best first. A pure function of the eye and the set of candidates:
+  // equal scores are ordered by the lights themselves (`lightOrder`), never by
+  // the order meshes happened to arrive in, so the same pose over the same
+  // resident lights always chooses, and orders, the same lights (CW-1 R1,
+  // REC-1's view repeatability).
   if (bestScore.length < slots) { bestScore = new Float64Array(slots); bestLight = new Array<PointLight | null>(slots).fill(null); }
   const reserved: PointLight[] = [];
   let kept = 0;
@@ -122,9 +125,9 @@ export function selectLights(lights: readonly PointLight[], eye: Vec3Like, slots
     const dx = l.x - eye.x, dy = l.y - eye.y, dz = l.z - eye.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (d - l.radius > LIGHT_RANGE) continue;
     const s = scoreAt(l, d);
-    if (kept === slots && !(s > bestScore[slots - 1]!)) continue;
+    if (kept === slots && !ranksBefore(s, l, bestScore[slots - 1]!, bestLight[slots - 1]!)) continue;
     let i = kept < slots ? kept++ : slots - 1;
-    for (; i > 0 && bestScore[i - 1]! < s; i--) { bestScore[i] = bestScore[i - 1]!; bestLight[i] = bestLight[i - 1]!; }
+    for (; i > 0 && ranksBefore(s, l, bestScore[i - 1]!, bestLight[i - 1]!); i--) { bestScore[i] = bestScore[i - 1]!; bestLight[i] = bestLight[i - 1]!; }
     bestScore[i] = s; bestLight[i] = l;
   }
   const out = [...reserved];
@@ -138,6 +141,13 @@ export function selectLights(lights: readonly PointLight[], eye: Vec3Like, slots
   }
   return out;
 }
+/** A total order on lights by what they are (position, reach, strength,
+ * colour), for ties in score: negative when `a` goes first. */
+export function lightOrder(a: PointLight, b: PointLight): number {
+  return a.x - b.x || a.y - b.y || a.z - b.z || a.radius - b.radius || a.strength - b.strength ||
+    a.r - b.r || a.g - b.g || a.b - b.b || Number(!!a.noHalo) - Number(!!b.noHalo);
+}
+const ranksBefore = (s: number, l: PointLight, bs: number, bl: PointLight): boolean => s > bs || (s === bs && lightOrder(l, bl) < 0);
 /** Selection's reusable best-so-far buffers (never retained past a call). */
 let bestScore = new Float64Array(MAX_LIGHTS), bestLight = new Array<PointLight | null>(MAX_LIGHTS).fill(null);
 
