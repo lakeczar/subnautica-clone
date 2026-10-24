@@ -225,3 +225,32 @@ Every catalogue upgrade now has a recipe, and none is inert. Each is felt in pla
 - **Missing evidence:**
   - the cutting arm's completion toast wasn't captured by the driver; the HUD's hold and charge show the result;
   - no frame or perf numbers: these were functional sessions on a shared host.
+
+### R1 fixes (Sol `review/sig-1-stage1`, request changes)
+- **R1, saveability:**
+  - **Arm work:** saves validate arm work against the fitted arm's own rule, `armHost` and `armWork`. Cutting-arm minerals anywhere, and its 4 s, are now valid mid-action.
+  - **Tag aims:** `settleSignatures` runs after every command, in play and in menu transactions alike. It ends a tag aim as soon as its pilot leaves the Dart or the tagger comes off.
+  - **Regressions:** saving and reloading during mineral work; saving after each of tag, exit and unfit at the cradle; and a state that names a tag without its tagger is still refused.
+- **R2, typed outcomes:**
+  - The tool arms emit a typed `{ kind: "arm", phase: "start" | "done" | "stopped", sourceId, item, quantity, charge }`. Their notices and sound now come from that outcome, and the arm no longer writes `.feedback`. `updateAction` receives the step's events.
+  - A berth refit emits `{ kind: "berths", configuration, slots }` with its notice and sound (`berthRefitOutcome`), and the carrier no longer writes `.feedback` for it.
+  - Tests check the payloads, and that a cut fires exactly one completion notice and one sound. The bot never read either message, so its routes are unchanged.
+- **R3, drone launch:** `droneLaunchPoint` sweeps the drone's own capsule from the bay (under the hull's centre). It tries along the aim first, then straight down, then up, and takes the first path that is clear all the way and ends in clear water. If none is, the launch is refused before any charge is spent.
+  - **Regressions:** a clear-water launch; a block at the bow, where it launches below, clear of it; and full enclosure, refused with the state unchanged.
+- **R4, roster scans:**
+  - A running crane or clamp lift re-checks its own host with `rowById` (`sim/rows.ts`), as does the hooked frame on a grapple line. The source search (sorting the static source table) runs only on the command.
+  - **Regression:** a clamp lift runs to completion after the roster is replaced with new row objects whose `find` throws.
+- **R5, the field-kit line cache:**
+  - Lines come from a bounded pool per kind (grapple, tether, lift, tow; 4 slots each, at most 16 meshes, about 16 KiB), filled per frame. Slots not drawn that frame are disposed, so replaced or unloaded hulls keep nothing.
+  - Built art (outposts, racks, hardware) is marked seen each frame, and anything not seen is disposed.
+  - **Per-frame scratch:** the frame counter replaces the per-frame `Set` and key arrays, two scratch points replace the line endpoints, and rebuild closures are made only when a key changes. Hull hardware is recomputed only when its fitted modules change.
+  - **Remaining per-frame allocation:** one short key string per visible outpost, rack with modules, and fitted hull. That is bounded by the outpost limit, the 6 fixed hosts and the fleet.
+  - **Regressions:** 40 successive replacement Creels with lines stay within the bound and leave 0 lines; an unloaded state (`update(null)`) leaves 0 lines.
+- **Checks** (RTX 4070 Laptop on alickers, because the 3090 lane was draining for exclusives):
+  - **`npm run gate -- --only fast,build,economy:*` at `a3e716f3`:** a partial gate that passed fast (**1,475/1,475**, with the guard and headless typecheck), build (which runs the terrain bake itself) and all six economy steps.
+  - **Not run:** the gate's queued `bake` step.
+  - **The gate's playthrough step**, as its own 4070 job at `a3e716f3`: 8/8 complete, all reloads equal, and identical to stage 1 in outcomes, minutes, ticks, the gathered and spent ledgers, discoveries, refusals, legs and milestone ticks.
+  - **Field-kit NullEngine test:** passes.
+- **Browser, only the changed visuals** (`aa47e24f`, RTX 4070 Laptop through ANGLE and D3D12, the `creel-arm` and `mantle` scenarios, 0 page errors). Two images, `/work/tmp/261024-051825-df56/sig1-4070/`:
+  - **Does a cut report its result?** `03-creel-arm-cut-aboard.jpg`: the toast "Cutting arm · +3 Conductive crust", with the hold at 4 → 7 CU and the charge at 96%.
+  - **Does the drone start in clear water?** `05-mantle-drone-view.jpg`: the drone's camera opens in open water at the Basin frame stack, and its first scan is reported.
