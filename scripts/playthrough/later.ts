@@ -512,18 +512,18 @@ const divide: Phase = {
   ],
   play(d, o) {
     // PACE-1 R2: the plans read at the Rift ledger (the dock, Creel 800, suit 800), stocked
-    // at home: the dock's restoration in the diver hold (one diver load), the refits' stock
-    // in the Creel's hold for the dock's bench. Lattice is the Divide's own.
+    // at home into the Creel's hold: the dock's restoration (paid as one diver load from it)
+    // and the refits' stock for the dock's bench. Lattice is the Divide's own.
     const dock = planned(d, ["restore_divide_stop"]), dockCommons = Object.fromEntries(COMMONS(dock).map((k) => [k, dock[k]!]));
     const refit = planned(d, toMake(d, ["creel_800", "suit_800"]));
     const refitStock = Object.fromEntries(Object.keys(refit).filter((k) => k !== "brine_lattice").map((k) => [k, refit[k]!])) as Record<string, number>;
     provision(d);
-    stockUp(d, addStock({ ...dockCommons }, refitStock) as Record<string, number>);
-    carryFromWorkshop(d, dockCommons);
+    const load = addStock({ ...dockCommons }, refitStock) as Record<string, number>;
+    stockUp(d, load);
     packMeals(d, 3);
     enter(d, "workshop");
     const hold = d.vehicle("creel")!.cargoId;
-    for (const [k, n] of Object.entries(refitStock)) {
+    for (const [k, n] of Object.entries(load)) {
       const left = n - d.count(k as ItemKind, [hold]);
       if (left > 0) move(d, k as ItemKind, left, "workshop_locker", hold);
     }
@@ -990,8 +990,20 @@ const works = (strategy: Strategy): Phase => ({
     const core = (planned(d, ["service_power_assembly"], ["thermal_core"]).thermal_core ?? 0) - d.count("thermal_core");
     if (core > 0) {
       logReturn(d, "forced", "the power assembly's core lies only in the Rift, and its plan was read at C07, past it", ["service_power_assembly"], [...binsHere(d), carrier(d).cargoId]);
+      // The carrier holds at the lane's end; the Mantle works the narrow lower ledge, as the Creel does.
       followS2(d, "route.basin.rift");
-      carrierHarvest(d, "rift_core_lower_north", core, { sort: true });
+      d.command({ type: "carrier", action: "station-keep" });
+      d.command({ type: "carrier", action: "leave-helm" });
+      launchMantle(d);
+      for (const id of ["rift_core_lower_north", "rift_core_lower_west"] as const) {
+        const left = core - d.count("thermal_core", ["diver", d.vehicle("mantle")!.cargoId]);
+        if (left > 0) harvest(d, id, left, { sort: true });
+      }
+      // At the helm the hold and the diver are both local; mantleHome takes the diver's into the stores.
+      const mantleHold = d.vehicle("mantle")!.cargoId;
+      move(d, "thermal_core", d.count("thermal_core", [mantleHold]), mantleHold, "diver");
+      mantleHome(d);
+      boardCraft(d, "hearthline");
       followS2(d, "route.basin.rift", true);
     }
     for (const id of ["route.canopy_east.basin", "route.isles.canopy_east"]) followS2(d, id, true);
