@@ -300,7 +300,13 @@ function finalLine(e) {
   parts.push(`on ${e.machine ?? MACHINE_LABELS.local}`);
   if (e.artifacts?.length) parts.push(`artifacts: ${e.artifacts.map((a) => a.local ?? `${a.remote ?? a.path} (${a.error ?? "here"})`).join(", ")}`);
   if (e.gpuShared) parts.push(`GPU shared outside the lease with pid ${e.gpuShared.map((u) => u.pid).join(", ")}`);
-  if (e.context) parts.push(`exclusive context: load ≤${e.context.load1Max}, cpu PSI some ≤${e.context.cpuSomeMax}%${e.context.disturbed ? " — DISTURBED by work outside the lane" : ""}`);
+  if (e.context?.v === 2) {
+    const c = e.context, j = c.job;
+    parts.push(`exclusive context: ${j ? `job CPU wait ${j.cpuSomePct}% (worst ${j.cpuSomeWorstPct}%), memory stall ${j.memSomePct}% (worst ${j.memSomeWorstPct}%), ${j.majorFaults} major faults, ${j.swapIns} swap-ins` : "job contention unmeasured"}` +
+      (c.host ? `, steal ${c.host.stealWorstPct ?? "?"}% worst, other CPU ${c.host.otherCpuPct ?? "?"}%, host swap-in ${c.host.swapInPages ?? "?"} pages` : "") +
+      (c.boost ? `, ${c.boost.status === "applied" ? `CPU priority in ${c.boost.slice} (weight ${c.boost.weight})` : `no CPU priority (${c.boost.status})`}` : "") +
+      (c.disturbed ? ` — DISTURBED: ${c.reasons.join("; ")}` : ""));
+  } else if (e.context) parts.push(`exclusive context: load ≤${e.context.load1Max}, cpu PSI some ≤${e.context.cpuSomeMax}%${e.context.disturbed ? " — DISTURBED by work outside the lane" : ""}`);
   return parts.join("; ");
 }
 
@@ -325,6 +331,11 @@ function statusCmd(args) {
   process.stdout.write(`mode ${readMode(cfg)}; pool ${p.used.tokens}/${p.T} cpu, ${p.used.memMiB}/${M} MiB, GPU ${p.used.gpu ? "leased" : "free"}; ` +
     `express ${p.used.express ? "busy" : "free"}; MemAvailable ${host.memAvailableMiB} MiB, memory PSI full ${host.memFullAvg10}%` +
     `${host.legacy.holder ? `; v1 lock HELD (pid ${host.legacy.holders.join(",")})` : ""}${host.legacy.waiter ? "; v1 waiter present: v2 admissions paused" : ""}\n`);
+  if (state.maintenance) {
+    const m = state.maintenance, age = dur(now - (m.since ?? now));
+    process.stdout.write(`MAINTENANCE for ${age}: ${m.reason}${m.by ? ` (pid ${m.by.pid}${alive(m.by) ? ", still running" : ", ended"})` : ""}; nothing is admitted, queued tickets wait. ` +
+      `${m.recover ?? "Recover: rerun scripts/heavy/install.sh"}\n`);
+  }
   if (cfg.manageSlice) {
     const sc = sliceCheck(cfg, host.nproc);
     process.stdout.write(`slice ${cfg.slice}: cpu.max ${sc.cpuMax ?? "?"}, memory.max ${sc.memMax ?? "?"}` +
