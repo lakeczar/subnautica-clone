@@ -753,3 +753,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Follow-up TST-16b:** P3-F1 (publication under the installer lock), P3-F2 (production path identity), plus the soak-runner R4-F3 flake.
 - **TST-16 MERGED** to root `f5a1170f` and pushed (gate on the 4070, ticket 261024-004258-e7cf: 1,427/1,427, build, 5 economy scripts). Not installed yet: CW-1's series is still running at 00:53Z.
 - **STEW-1 done at `bdaef84`** (R5 fixes, code `d2617b1`): JSON must exist; symlinks under src fail; the scope is documented. All merge trees pass, including REC-1. The gate passed 10/10 on the 4070. Final Sol R6 running (`siltwake-stew1-review-r6-sol-bdaef84`).
+- **STEW-1 ACCEPTED** (R6, Sol `f3d82c64` on `review/stew-1-r6`; one nonblocking P3 about ignored-name symlinks). The builder merges root (SIM-1a + TST-16) into the branch, resolves app.ts and runs `npm run gate`; then the coordinator merges it and the root gate becomes `npm run gate`.
