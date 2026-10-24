@@ -32,7 +32,7 @@ These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.m
 - **Builder briefs:** about a page plus links, covering the player outcome, owned modules, shared interfaces, acceptance behaviors including one adverse case, checks and resource limits.
 
 ## Concurrency (owner, 2026-10-20)
-- **At most 5 Opus builder threads run at once.** The coordinator is not counted. Sol reviewers are separate and don't count toward the 5.
+- **At most 6 Opus builder threads run at once** (owner, 2026-10-24; was 5). The coordinator is not counted. Sol reviewers, short research agents and the owner's own discussion threads are separate and don't count toward the 6.
 - **Paused streams queue.** They commit, stop cleanly, and resume in priority order as slots free up.
 - **Priority:** the critical path (B1 and its composition), then GPU, then the world foundation (S1 → S2), then fixes that block finishing the game (S5), then the rest.
 
@@ -106,7 +106,7 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - **Stopping:** both stop early, with a report, on a broken rule. Stall detection applies; the numbers get tuned from MEM-1.
   - **When:** after each root merge that touches streaming, memory or saves, and a full soak before each playtest.
 - **Planning:**
-  - **Builders:** at most 5 Opus builders until the owner upgrades the subscription.
+  - **Builders:** at most 6 Opus builders (owner, 2026-10-24).
   - **Slots:** filled from the compromise verdict's priority list by dependencies.
   - **Owner updates:** at decisions, finished streams, problems, and with a roadmap update when each wave of work completes.
 - **Usage limits:**
