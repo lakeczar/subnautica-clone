@@ -1,0 +1,318 @@
+{
+ "query": "?rec=playtest",
+ "errors": [],
+ "exports": [
+  {
+   "label": "export-1",
+   "bytes": 9870725,
+   "entries": 11,
+   "pictures": 5,
+   "absent": [],
+   "declaredMissing": [],
+   "note": {
+    "found": true,
+    "t": 84934.70000000298,
+    "picture": {
+     "file": "snapshots/00005.jpg",
+     "present": true
+    }
+   },
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 950.4,
+      "seconds": 84.08
+     }
+    ],
+    "endsAt": 85030,
+    "coversUntil": 84946.20000000298
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": [],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [],
+    "stopped": null,
+    "exportOver": [],
+    "removalRefused": [],
+    "videoGaps": [
+     {
+      "from": 1034,
+      "to": 4667,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 950
+     },
+     {
+      "from": 4967,
+      "to": 5050,
+      "kind": "lost",
+      "why": "the video was behind on the main thread",
+      "pictures": 3,
+      "heldFrom": 4734
+     },
+     {
+      "from": 4817,
+      "to": 5067,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 4734
+     },
+     {
+      "from": 6150,
+      "to": 6584,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 6067
+     }
+    ],
+    "videoDrops": {
+     "skipped": 3,
+     "refused": 0
+    }
+   },
+   "lastFrameT": 85047.1,
+   "offAfter": null,
+   "ok": true
+  },
+  {
+   "label": "export-2",
+   "bytes": 12184859,
+   "entries": 13,
+   "pictures": 7,
+   "absent": [],
+   "declaredMissing": [],
+   "note": {
+    "found": true,
+    "t": 84934.70000000298,
+    "picture": {
+     "file": "snapshots/00005.jpg",
+     "present": true
+    }
+   },
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 950.4,
+      "seconds": 104.41
+     }
+    ],
+    "endsAt": 105360,
+    "coversUntil": 103835.70000000298
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": [],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [
+     {
+      "session": "export:siltwake-flight-2026-10-24T04-46-56-204Z.zip",
+      "file": "siltwake-flight-2026-10-24T04-46-56-204Z.zip",
+      "bytes": 9870725,
+      "why": "an earlier export (a copy), replaced by this one"
+     }
+    ],
+    "stopped": null,
+    "exportOver": [],
+    "removalRefused": [],
+    "videoGaps": [
+     {
+      "from": 1034,
+      "to": 4667,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 950
+     },
+     {
+      "from": 4967,
+      "to": 5050,
+      "kind": "lost",
+      "why": "the video was behind on the main thread",
+      "pictures": 3,
+      "heldFrom": 4734
+     },
+     {
+      "from": 4817,
+      "to": 5067,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 4734
+     },
+     {
+      "from": 6150,
+      "to": 6584,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 6067
+     }
+    ],
+    "videoDrops": {
+     "skipped": 3,
+     "refused": 0
+    }
+   },
+   "lastFrameT": 105379.6,
+   "offAfter": null,
+   "ok": true
+  },
+  {
+   "label": "export-3",
+   "bytes": 12192609,
+   "entries": 13,
+   "pictures": 7,
+   "absent": [],
+   "declaredMissing": [],
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 950.4,
+      "seconds": 104.58
+     }
+    ],
+    "endsAt": 105530,
+    "coversUntil": null
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": [],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [
+     {
+      "session": "export:siltwake-flight-2026-10-24T04-46-56-204Z.zip",
+      "file": "siltwake-flight-2026-10-24T04-46-56-204Z.zip",
+      "bytes": 9870725,
+      "why": "an earlier export (a copy), replaced by this one"
+     },
+     {
+      "session": "export:siltwake-flight-2026-10-24T04-46-56-204Z.zip",
+      "file": "siltwake-flight-2026-10-24T04-46-56-204Z.zip",
+      "bytes": 12184859,
+      "why": "an earlier export (a copy), replaced by this one"
+     }
+    ],
+    "stopped": null,
+    "exportOver": [],
+    "removalRefused": [],
+    "videoGaps": [
+     {
+      "from": 1034,
+      "to": 4667,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 950
+     },
+     {
+      "from": 4967,
+      "to": 5050,
+      "kind": "lost",
+      "why": "the video was behind on the main thread",
+      "pictures": 3,
+      "heldFrom": 4734
+     },
+     {
+      "from": 4817,
+      "to": 5067,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 4734
+     },
+     {
+      "from": 6150,
+      "to": 6584,
+      "kind": "still",
+      "why": "no frame was drawn (a stall, or the tab hidden)",
+      "pictures": 0,
+      "heldFrom": 6067
+     }
+    ],
+    "videoDrops": {
+     "skipped": 3,
+     "refused": 0
+    }
+   },
+   "lastFrameT": 105579.6,
+   "offAfter": 105587.5,
+   "ok": true
+  }
+ ],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "mode": "playtest",
+ "offMode": "off",
+ "pack": {
+  "verdict": "partial",
+  "failed": [],
+  "unproven": [
+   "no streaming frame over 33 ms",
+   "recording complete",
+   "frame times judged",
+   "memory flat",
+   "tab memory (RSS)",
+   "VRAM"
+  ],
+  "frame": {
+   "p50": 16.7,
+   "p99": 16.8,
+   "max": 516.7,
+   "over33": 7,
+   "frames": 4703
+  },
+  "work": {
+   "p50": 3.2,
+   "p99": 8.4
+  },
+  "rec": {
+   "mean": 0.096,
+   "p99": 0.5
+  },
+  "holds": 0,
+  "memory": {
+   "tab": null,
+   "heap": [
+    282.1,
+    235.6
+   ],
+   "vram": null,
+   "trend": -174.4
+  },
+  "errors": 0,
+  "warnings": 0,
+  "draws": {
+   "p50": 69,
+   "max": 207
+  },
+  "attention": 3,
+  "minutes": 1.3,
+  "machine": null,
+  "gpu": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+  "browser": "Chrome/156.0.0.0",
+  "commit": "68d0d60c4ea0",
+  "build": "index-L4ccxxC3.js"
+ },
+ "ok": true
+}

@@ -1,0 +1,227 @@
+{
+ "clock": {
+  "marks": [
+   {
+    "t": 2551.5,
+    "what": "restart, then a 1.5 s stall before the first picture"
+   },
+   {
+    "t": 6554.20000000298,
+    "what": "restart, then a 1.5 s stall after the first hand-over"
+   },
+   {
+    "t": 11059.5,
+    "what": "CPU throttled 6x"
+   },
+   {
+    "t": 13568.20000000298,
+    "what": "CPU throttle off"
+   },
+   {
+    "t": 18578.79999999702,
+    "what": "no frames (hidden-tab equivalent)"
+   },
+   {
+    "t": 21088.90000000596,
+    "what": "frames again"
+   }
+  ],
+  "visibility": [],
+  "hiddenSeen": "visible",
+  "codec": "V_VP9",
+  "decoder": "ffmpeg",
+  "segments": [
+   {
+    "file": "video/000.webm",
+    "start": 67.9,
+    "end": 2052,
+    "frames": 23,
+    "barcodes": 23,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 67.9,
+    "lastT": 2000.9
+   },
+   {
+    "file": "video/001.webm",
+    "start": 2084.5,
+    "end": 2552,
+    "frames": 6,
+    "barcodes": 6,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 2084.5,
+    "lastT": 2501.5
+   },
+   {
+    "file": "video/002.webm",
+    "start": 2551.1,
+    "end": 4568,
+    "frames": 9,
+    "barcodes": 9,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 2551.1,
+    "lastT": 4551.1
+   },
+   {
+    "file": "video/003.webm",
+    "start": 4650.9,
+    "end": 6554,
+    "frames": 23,
+    "barcodes": 23,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 4650.9,
+    "lastT": 6483.9
+   },
+   {
+    "file": "video/004.webm",
+    "start": 6567.6,
+    "end": 8568,
+    "frames": 8,
+    "barcodes": 8,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 6567.6,
+    "lastT": 8484.6
+   },
+   {
+    "file": "video/005.webm",
+    "start": 8584.2,
+    "end": 10585,
+    "frames": 24,
+    "barcodes": 24,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 8584.2,
+    "lastT": 10501.2
+   },
+   {
+    "file": "video/006.webm",
+    "start": 10584.1,
+    "end": 12607,
+    "frames": 25,
+    "barcodes": 25,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 10584.1,
+    "lastT": 12584.1
+   },
+   {
+    "file": "video/007.webm",
+    "start": 12717.3,
+    "end": 14618,
+    "frames": 24,
+    "barcodes": 24,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 12717.3,
+    "lastT": 14584.3
+   },
+   {
+    "file": "video/008.webm",
+    "start": 14667.3,
+    "end": 17084,
+    "frames": 29,
+    "barcodes": 29,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 14667.3,
+    "lastT": 17000.3
+   },
+   {
+    "file": "video/009.webm",
+    "start": 17083.9,
+    "end": 21101,
+    "frames": 18,
+    "barcodes": 18,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 17083.9,
+    "lastT": 18500.9
+   },
+   {
+    "file": "video/010.webm",
+    "start": 21100.3,
+    "end": null,
+    "frames": 26,
+    "barcodes": 26,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 21100.3,
+    "lastT": 23033.3
+   }
+  ],
+  "cutoff": 23093,
+  "lastT": 23033.3,
+  "reachesCutoff": true
+ },
+ "workers": {
+  "alive": 1,
+  "latestExportBytes": 2238
+ },
+ "encodeThrow": {
+  "exportMs": 20,
+  "drawErrors": [],
+  "lossFact": true,
+  "telemetryAfter": true,
+  "lost": [
+   "the video encoder failed (injected encode failure); no video after this moment"
+  ]
+ },
+ "removals": {
+  "aSession": "2026-10-24T04-45-50-009Z",
+  "aBytes": 640971,
+  "aExport": 641656,
+  "heldBytes": 3145728,
+  "bStopped": true,
+  "bStopWhy": "this recording's telemetry fills the storage budget (1 MiB) (3 MiB of older recordings could not be removed: in use elsewhere); recording stopped",
+  "removedOlder": [],
+  "removalRefused": [
+   {
+    "session": "1999-01-01-held",
+    "why": "an older recording, over the storage budget: removal refused (NoModificationAllowedError); nothing was freed"
+   }
+  ]
+ },
+ "backpressure": {
+  "packExit": 0,
+  "gaps": [
+   {
+    "from": 2090,
+    "to": 4006,
+    "pictures": 24,
+    "heldFrom": 2006,
+    "why": "the encoder was behind"
+   }
+  ],
+  "drops": {
+   "skipped": 0,
+   "refused": 24
+  },
+  "complete": "| recording complete | partial | 24 video pictures not captured in 1 stretch (2.0 s: the encoder was behind); the video holds an older picture there |",
+  "video": "| video | partial | 1 file(s) cover 67% of the measured window with fresh pictures; 2.0 s without a fresh picture (not captured) |",
+  "heldAtMid": "NO PICTURE (not captured) · held from 1.98s",
+  "stripFile": "/work/tmp/rec1/r3/adverse-d/behind-gap-strip.jpg",
+  "drawsInGap": 22
+ },
+ "timeline": {
+  "frameRows": 360000,
+  "memoryPoints": 288000,
+  "bytes": 508323,
+  "loadMs": 70,
+  "seekMs": 134,
+  "errors": []
+ },
+ "dpr2": {
+  "dpr": 2,
+  "stable": true,
+  "rows": [
+   "1712x360 1712x300 1712x80",
+   "1712x360 1712x300 1712x80"
+  ]
+ },
+ "errors": [],
+ "failed": []
+}

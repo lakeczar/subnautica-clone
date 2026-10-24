@@ -1,6 +1,48 @@
 # REC-1: the flight recorder and evidence pack (handoff)
 
-Opus 5.5 high. Branch `t3/rec-1-flight-recorder`, from CW-1's head `7dc9cc9`; root merged at `f2fd628` (CR-1, UX-1, TT-1, SCHED-1), `51a6b27` (SCHED-2a live), `1bdcc39` and `990e5c1` (the soak's fact reducer, `--snapshot` with a linked `node_modules`); CW-1 merged up to its R1 fixes `14c7a02` (CW-1 is not in root yet). The evidence below ran at `2bf9b14e`, `67e8394d` and `3a07c189`, before the last two merges; a recorded run at the handoff head confirms the recorder against them (below). Story-neutral; `docs/spoilers/*` not read. **The R2 section next is the current state, R1 below it;** sections from Outcome on are the first handoff, with the compromises, checks and missing lists brought up to date.
+Opus 5.5 high. Branch `t3/rec-1-flight-recorder`, from CW-1's head `7dc9cc9`; root merged at `f2fd628` (CR-1, UX-1, TT-1, SCHED-1), `51a6b27` (SCHED-2a live), `1bdcc39` and `990e5c1` (the soak's fact reducer, `--snapshot` with a linked `node_modules`); CW-1 merged up to its R1 fixes `14c7a02` (CW-1 is not in root yet). The evidence below ran at `2bf9b14e`, `67e8394d` and `3a07c189`, before the last two merges; a recorded run at the handoff head confirms the recorder against them (below). Story-neutral; `docs/spoilers/*` not read. **The R3 section next is the current state, R2 and R1 below it;** sections from Outcome on are the first handoff, with the compromises, checks and missing lists brought up to date.
+
+## R3 (Sol R3 `31378375` on `becc169f`: four P2s, one P3)
+
+Recorder code final at `68d0d60c` (the fixes below). After it: measuring options in `run.mjs` and `overhead.mjs`, and one measurement-only URL switch (`?rectiming=0`). Tests: `tests/rec1-capture.test.ts`, with four R3 cases added. Browser: `scripts/rec/adverse.mjs` gains three real-worker phases, and every phase is now bounded and logged.
+
+| Finding | What changed | Checked by |
+| --- | --- | --- |
+| **R3-1** a video exception rejected the shared queue | Each worker operation runs inside one handler whose failure the queue catches. A failed video operation closes its picture and the encoder, keeps the segment written so far, and reports `videoError`. Every request still gets its reply, with the error, so nothing waits. The capture ends the video and records a loss fact ("the video encoder failed …; no video after this moment") and a gap | `adverse.mjs` on the 3090 host, with a worker whose encoder throws on its tenth picture: the export finishes in 20 ms; the loss fact and the telemetry recorded after the failure are both in the export. `rec1-capture`: the same through the fake worker |
+| **R3-2** a locked older recording reported as removed | The worker tells a deletion that happened from an absent file (fine) and a refused one (`NoModificationAllowedError` and similar: nothing freed). Space is credited, and a removal recorded, only on confirmation. A refused file is recorded (`removalRefused`, with session, file, bytes and why), stays counted, and is never planned again; with it counted, an exhausted budget stops the recording and names it. Recordings this page still holds (the running one and the latest completed, exportable) are pinned against any other capture's budget. A stopped recording releases its file handles, which an export reopens | `adverse.mjs` against real OPFS bytes. Off → on with a 1 MiB budget: the previous recording keeps its bytes (640,971) and still exports. Another context holds a 3 MiB older file: its bytes stay on disk (3,145,728), its refusal is in the ledger, nothing is credited, and the new recording stops honestly. `rec1-capture`: refused and pinned cases |
+| **R3-3** encoder drops invisible | Every picture not captured is a timestamped stretch in the ledger (`videoGaps`), kept after Off with counts (`videoDrops`): `lost` (skipped on the main thread, refused by the encoder, or after an encoder failure) or `still` (no frame drawn: a stall or a hidden tab). Each names the picture the video holds. Completeness reports lost stretches. Coverage counts only fresh pictures. Strip tiles inside a stretch are dimmed and labelled ("NO PICTURE (not captured) · held from 1.98s"). The timeline marks stretches on its chart and names them over the video when the cursor is in one | `adverse.mjs`: an encoder held behind for 2 s while 22 barcodes were drawn. The exported pack says "recording complete: partial: 24 video pictures not captured in 1 stretch (2.0 s: the encoder was behind)" and "video: partial: 67% with fresh pictures; 2.0 s without". The gap strip's 24 tiles are marked held from the picture before the gap. `rec1-capture`: the gap, its counts after Off, completeness, coverage, the tile label |
+| **R3-4** the inclusive cost | **Measured; the budget is not met; not yet fixed.** See below | twelve exclusive tickets |
+| **R3-5** "conclusive" | `overhead.mjs` prints each mode's figures and, against off, the paired differences with their range and a paired t 95% interval, labelled with n and its assumptions. The owner's budget is a separate line. `--collect` builds the report from runs made one per ticket; renderer and GPU process CPU are columns | the reports below |
+
+
+### R3-4: the recorder's inclusive cost, measured
+
+**Design (declared before the runs):**
+- Same save and pose (`--hold`: no travel, 20 s settle, 60 s measured), same settings; owner-browser Chrome (no precise-memory flag); served as a static host serves it.
+- One run per exclusive ticket under TST-16's priority slice, in ABBA, then ABBA and BAAB order. Each run is one unit, paired with its neighbour.
+- Criterion: the 1% budget (0.167 ms per frame) is met only if the paired 95% interval's upper end is under it. The whole window is judged; the median of 10 s windows is reported beside it, not substituted.
+
+**Result at `68d0d60c`, RTX 3090, six pairs** (`ab-1` … `ab-12`). One leg was flagged DISTURBED for a single major page fault.
+
+| Scope | Off | Playtest | Paired Δ (95% interval, n = 6) |
+| --- | --- | --- | --- |
+| Main thread, ms per frame (every task and collection) | 3.08 | 3.49 | **+0.42** (−0.14 to +0.97); the quietest runs differ by about 0.30 |
+| Renderer process CPU, ms per s (all threads: page, worker, encoder) | 315 | 561 | **+246** (+161 to +332) |
+| GPU process CPU, ms per s | 449 | 357 | −92 (−110 to −74) |
+| Recorder self-time, ms per frame | — | 0.094 | — |
+
+**Verdict: the budget is not met.** The best estimate is about 0.3–0.4 ms per frame, or 2–2.5% of a frame: two to four times the budget, and four times the recorder's self-time. Off the main thread, the VP9 encoder in the spool worker takes about a quarter of one core.
+
+**Where it goes (diagnosis so far):**
+- Not the video. A playtest without video costs the same (3.92 against 3.78 ms; a shared run).
+- Not allocations. A sampling heap profile at the hold shows 32.4 MiB/s off and 32.8 MiB/s playtest.
+- The extra time is inside the game's own frame callback (work p50 2.5 → 3.0 ms), spread evenly across the game's own functions. In a sampling profile, `isReady` rises 30%, `dataInBox` 35%, `update` 21%, and collection from 2.5 to 4.1 ms/s.
+- What recording switches on besides its own code is the renderer's per-part timing and GPU timer queries (`renderer.timing`). A decomposition is queued behind CW-1's series to test that: off, playtest, playtest without timing, without video or timing, and driver mode (`--no-timing`, `?rectiming=0`).
+- **Root fix:** whatever that run names. If it's the renderer's timing, sample it (one frame in N) or drop GPU queries in playtests. **Cost:** frame rows lose per-frame GPU time or part of their split.
+
+The earlier figures are superseded: R2's pooled travelling pairs (+0.30 ms, wide) and the diagnostic in-ticket hold (+0.15 ms, with the precise-memory flag).
+
+Also: the snapshot's first callback is charged to the recorder; the drivers' precise-memory flag can be turned off (`--owner-browser`) to measure a player's Chrome; the resource guide's cost line and the first handoff's bold sub-1% claim are corrected.
 
 ## R2 (Sol R2 `370f2dea` on `f9c04948`: seven P2s)
 
@@ -194,5 +236,5 @@ Side by side: `final/compare-seg0/` (driver marks line the runs up by place: bot
 - **The owner's own browser:** the in-game video, the spool and the export in a headed Chrome on the owner's Windows PC (and whether it shows the 4070 sandbox's 30 fps stretches), including a genuinely hidden tab: checked headless only (`playtest-check.mjs`, `adverse.mjs`), on both machines.
 - **A completed soak with the recorder:** the two-lap tour proved the wiring and the pack, but its own driver stalled before the first cave; a full three-lap tour and a dwell soak are MEM-1's and PT-0's.
 - **Memory flatness** is judged only from 10 minutes up; every run here was shorter.
-- **The recorder's inclusive cost, settled (R1-S1, R2-6).** With the probe corrected, four clean pairs put the default playtest path at 0.30 ms per frame on average, with a 95% interval of about −0.13 to +0.73 ms (R2 evidence). That cannot show "well under 1% of a frame" (0.17 ms), nor rule it out. Self-time (0.09 ms) and the profile's attribution (0.09 ms) both sit under 1%, but neither is the inclusive measurement. The variance is the game's own: each run travels through a different scene at a different moment. **The measurement that would settle it:** the same A/B with the scene held still, travelling to a point and then holding a fixed pose for the measured window in both modes. That needs about 15 exclusive minutes after TST-16's priority slice. Until then the inclusive figure is unproven.
+- **The recorder's inclusive cost (R1-S1, R2-6, R3-4): measured at a fixed pose, and over budget** (about 0.3–0.4 ms per frame against 0.167; see R3). The fix waits on the queued decomposition.
 - **The fixed-view set's taste:** some framings are weak (the crown station's work pose faces a wall, the dish field shows open water, a few interiors face sand or are near black). The once-per-wave Opus taste review decides version 2; `make-views.mjs` regenerates it.

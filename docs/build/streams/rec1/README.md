@@ -14,3 +14,8 @@ A few files from each pack; the full packs (every strip, the video, the timeline
   - `adverse.mjs`'s verdict on the 4070 (the clock judged with `--decode`);
   - the two exclusive A/B tables (each ticket's round 1 excluded in the handoff's pooling);
   - the off/playtest sampling profiles (contended: attribution only).
+- `r3/`: R3's evidence at `68d0d60c`:
+  - `adverse.mjs` on the 3090 host: encoder throw, removals, backpressure, with the gap strip;
+  - the 3090 playtest, budget and pack results;
+  - the six-pair fixed-pose A/B;
+  - the hold profiles (off, playtest, playtest without video) and the allocation profiles.
