@@ -1,8 +1,9 @@
 /** LS-1 1b: finite caches at placed lost sites. Each is one fixed cache container
- * (`cache:<id>`) holding its authored contents from New Game; taking moves items out
+ * (`site_cache_<id>`) holding its authored contents from New Game; taking moves items out
  * through the ordinary transfer, so there is no "opened" flag. The container opens
  * within reach of its point, like a recovery cache. Item IDs are fixed
- * (`cache.<id>.<kind>`), never drawn from the instance sequence, so adding a cache
+ * (`site_cache_<id>_<kind>`, a cell `…_c<n>` so it never reads as a sequence number),
+ * never drawn from the instance sequence, so adding a cache
  * to an older save (`save/content.ts`) changes no other ID. */
 import { LOST_SITE_CACHES, siteCacheContainerId } from "../../content/systems/lostSites.js";
 import type { CacheItem, LostSiteCacheId } from "../../content/systems/lostSites.js";
@@ -21,13 +22,13 @@ export function siteCacheItems(id: LostSiteCacheId): ItemStack[] {
   const out: ItemStack[] = [];
   for (const [kind, n] of Object.entries(LOST_SITE_CACHES[id].contents) as [CacheItem, number][]) {
     if (kind === "bio_cell") for (let k = 0; k < n; k++)
-      out.push({ id: `cache.${id}.${kind}.${k}`, kind: kind as ItemKind, quantity: 1, containerId: siteCacheContainerId(id), fitted: null, charge: 100, provenance: "public" });
-    else out.push({ id: `cache.${id}.${kind}`, kind: kind as ItemKind, quantity: n, containerId: siteCacheContainerId(id), fitted: null, charge: null, provenance: "public" });
+      out.push({ id: `site_cache_${id}_${kind}_c${k}`, kind: kind as ItemKind, quantity: 1, containerId: siteCacheContainerId(id), fitted: null, charge: 100, provenance: "public" });
+    else out.push({ id: `site_cache_${id}_${kind}`, kind: kind as ItemKind, quantity: n, containerId: siteCacheContainerId(id), fitted: null, charge: null, provenance: "public" });
   }
   return out;
 }
 /** A cache's container, sized to exactly its authored contents. */
 export function siteCacheContainer(id: LostSiteCacheId, cuOf: (kind: string) => number): ContainerState {
   const capacity = Object.entries(LOST_SITE_CACHES[id].contents).reduce((n, [kind, q]) => n + cuOf(kind) * (q as number), 0);
-  return { id: siteCacheContainerId(id), kind: "cache", capacity, ownerId: `lost:${LOST_SITE_CACHES[id].site}` };
+  return { id: siteCacheContainerId(id), kind: "cache", capacity, ownerId: `lost_${LOST_SITE_CACHES[id].site}` };
 }

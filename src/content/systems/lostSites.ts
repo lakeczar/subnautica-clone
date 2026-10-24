@@ -282,7 +282,7 @@ export const LOST_SITE_CACHES = {
 } as const satisfies Record<string, LostSiteCache>;
 export type LostSiteCacheId = keyof typeof LOST_SITE_CACHES;
 /** The container a site cache lives in. */
-export const siteCacheContainerId = (id: LostSiteCacheId): string => `cache:${id}`;
+export const siteCacheContainerId = (id: LostSiteCacheId): string => `site_cache_${id}`;
 
 /** Authored, not yet in the world: each waits on `blockedBy`. Their decodes join
  * `CB_DECODABLES` when the row is placed; until then nothing here is findable. */

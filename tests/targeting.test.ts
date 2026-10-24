@@ -14,6 +14,7 @@ import { RECOVERY_NOTICES } from "../src/sim/recovery.js";
 import { createEnvelope, encodeSave, decodeSave } from "../src/save/codec.js";
 import type { GameEvent, GameState, Vec3 } from "../src/sim/types.js";
 import { DECODABLE_IDS, DECODABLES } from "../src/content/systems/decodes.js";
+import { siteCacheOf } from "../src/sim/systems/siteCaches.js";
 import { faceTarget, NORMAL_VIEWS, protectedReadyState, readyState } from "./targeting-support.js";
 
 const world = createWorldQueries(), empty = createWorldQueries([], () => -200);
@@ -133,7 +134,7 @@ test("all sources, food, C01–C06, optional note and both rescue work faces ret
     else if (v.id === "basin_keel_plate") assert.ok(result.state.knowledge.scans.includes(v.id) && result.state.knowledge.blueprints.includes("bp_keel_survey"));
     else if (v.id in TECH_RECORDS) assert.ok(result.state.knowledge.scans.includes(v.id) &&
       TECH_RECORDS[v.id as keyof typeof TECH_RECORDS].blueprints.every(bp => result.state.knowledge.blueprints.includes(bp)), v.id);
-    else assert.deepEqual(panels(result.events), [{ type: "interaction-panel", panel: v.id === "rescue_staging" ? "inventory" : "craft", targetId: v.id }]);
+    else assert.deepEqual(panels(result.events), [{ type: "interaction-panel", panel: v.id === "rescue_staging" || siteCacheOf(v.id) ? "inventory" : "craft", targetId: v.id }]);
     saved(result.state);
     s.player.pose.yaw += Math.PI;
     assert.notEqual(aimedInteraction(s, world)?.id, v.id, v.id + " looking away");

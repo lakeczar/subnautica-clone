@@ -31,6 +31,7 @@ import { DISCOVERY_IDS, type DiscoveryId } from "../content/story/evidence.js";
 import { basePanel, fitPanel, journalPanel, JOURNAL_TABS } from "./systemsPanels.js";
 import { registerFaunaPanels } from "./faunaPanels.js";
 import { currentObjective } from "../sim/objective.js";
+import { siteCacheOf } from "../sim/systems/siteCaches.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import { carrierPanel } from "./carrierPanel.js";
 import { isSeed } from "../content/systems/cultivation.js";
@@ -305,13 +306,18 @@ export class PanelView {
     if (containerAccessible(state, "buoy_hold")) return "anchor:buoy";
     if (local[0]) return `craft:${local[0].id}`;
     const cache = state.recovery.caches.find((c) => containerAccessible(state, c.containerId));
-    return cache ? `cache:${cache.id}` : state.player.interiorId ? `interior:${state.player.interiorId}` : "field";
+    if (cache) return `cache:${cache.id}`;
+    // LS-1: a lost site's cache, within reach of its point.
+    const site = state.inventory.containers.find((c) => siteCacheOf(c.id) && containerAccessible(state, c.id));
+    return site ? `cache:${site.id}` : state.player.interiorId ? `interior:${state.player.interiorId}` : "field";
   }
 
   private knownContainer(state: GameState, id: string): boolean {
     if (id === "workshop_locker") return nearWorkshop(state) || facility(state, "island_workshop") || state.knowledge.markers.includes("island_workshop");
     if (id === "buoy_hold") return state.inventory.buoy.deployed;
     if (id === "canopy_stop_locker") return nearCanopyStop(state) || facility(state, "canopy_stop") || state.knowledge.markers.includes("canopy_stop");
+    // LS-1: a lost site's cache is a place, not a holding: it lists only within reach.
+    if (siteCacheOf(id)) return false;
     return true;
   }
 
@@ -760,6 +766,7 @@ export class PanelView {
     if (kind === "inventory") {
       const cache = state.recovery.caches.find(c => c.id === targetId);
       if (cache) id = `container-${cache.containerId}`;
+      else if (siteCacheOf(targetId)) id = `container-${targetId}`;
       else if (state.fleet.vehicles.some(v => v.id === targetId)) id = `vessel-${targetId}`;
       else if (targetId === "rescue_staging") id = "panel-content";
     }
