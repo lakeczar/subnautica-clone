@@ -589,7 +589,8 @@ export class SiltwakeApp {
       });
       // A recording turned on mid-session reads the timeline from now, not what passed while it was off.
       this.flightTimeline.start(this.timeline);
-      this.renderer.timing = true;
+      // The renderer's per-part timing and GPU timer queries feed the frame rows; `?rectiming=0` (measurement only) leaves them off.
+      this.renderer.timing = new URLSearchParams(globalThis.location?.search ?? "").get("rectiming") !== "0";
     } catch (error) {
       console.warn(`flight recorder unavailable: ${errorText(error)}`);
       this.flight = null;
