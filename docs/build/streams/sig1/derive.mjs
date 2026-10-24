@@ -98,7 +98,7 @@ const hullOf = (s, hull) => {
   const s = creelFirst(), src = SOURCES.reef_service_scraps_east.position;
   const v = stagedHull(s, "spindle", { x: src.x, y: -0.5, z: src.z + 4 }, ["spindle_deck_crane"], false);
   pilot(s, v, { x: src.x, y: -0.5, z: src.z + 4 }, { x: src.x, y: -0.5, z: src.z - 6 });
-  write("spindle", s, { source: "reef_service_scraps_east", position: src });
+  write("spindle", s, { source: "reef_service_scraps_east", position: src, hull: { ...v.pose.position } });
 }
 // 5. Mantle: salvage clamp and drone bay above a Basin frame host.
 {

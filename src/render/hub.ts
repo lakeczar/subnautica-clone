@@ -47,10 +47,10 @@ uniform mat4 world; uniform mat4 worldViewProjection; varying vec3 vWorld; varyi
 void main(){vWorld=(world*vec4(position,1.)).xyz;vNormal=normalize((world*vec4(normal,0.)).xyz);vUp=position.y+.5;
   gl_Position=worldViewProjection*vec4(position,1.);}`;
 const SHAFT_FRAGMENT = `precision highp float; varying vec3 vWorld; varying vec3 vNormal; varying float vUp;
-uniform vec3 eye; uniform float glow; uniform vec3 tint;
+uniform vec3 eye; uniform float glow;
 void main(){vec3 v=normalize(eye-vWorld);float edge=abs(dot(normalize(vNormal),v));
   float a=pow(edge,2.5)*(1.-.75*vUp)*glow*.3;
-  gl_FragColor=vec4(vec3(1.,.8,.5)*tint,clamp(a,0.,1.));}`;
+  gl_FragColor=vec4(1.,.8,.5,clamp(a,0.,1.));}`;
 
 function additive(scene: Scene, name: string, vertex: string, fragment: string, attributes: string[], uniforms: string[]): ShaderMaterial {
   const m = new ShaderMaterial(name, scene, { vertexSource: vertex, fragmentSource: fragment },
@@ -67,9 +67,7 @@ function additive(scene: Scene, name: string, vertex: string, fragment: string, 
  * reads through murk; `glow` 0..1 sets it, `tint` recolours it (SIG-1's sonar). */
 export const flareMaterial = (scene: Scene, name: string): ShaderMaterial =>
   additive(scene, name, FLARE_VERTEX, FLARE_FRAGMENT, ["position", "uv"], ["worldViewProjection", "glow", "tint"]);
-/** The hub shaft's additive rim glow: edges facing across the view light up. */
-export const rimGlowMaterial = (scene: Scene, name: string): ShaderMaterial =>
-  additive(scene, name, SHAFT_VERTEX, SHAFT_FRAGMENT, ["position", "normal"], ["world", "worldViewProjection", "eye", "glow", "tint"]);
+
 
 export function createHubArt(scene: Scene, cel: Material): HubArt {
   const root = new TransformNode("hub", scene);
@@ -78,7 +76,8 @@ export function createHubArt(scene: Scene, cel: Material): HubArt {
   flare.billboardMode = Mesh.BILLBOARDMODE_ALL;
   const beaconFlare = flareMaterial(scene, "hub.beacon.flare");
   flare.material = beaconFlare; flare.isPickable = false; flare.parent = root;
-  const shaftMaterial = rimGlowMaterial(scene, "hub.beacon.shaft");
+  const shaftMaterial = additive(scene, "hub.beacon.shaft", SHAFT_VERTEX, SHAFT_FRAGMENT, ["position", "normal"],
+    ["world", "worldViewProjection", "eye", "glow"]);
   const shaftTop = -1.5, shaftHeight = shaftTop - BEACON.y;
   const shaft = CreateCylinder("hub.beacon.shaft", { height: 1, diameterBottom: 2.2, diameterTop: 10, tessellation: 16, cap: Mesh.NO_CAP }, scene);
   shaft.scaling.set(1, shaftHeight, 1);

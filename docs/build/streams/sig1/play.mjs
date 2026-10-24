@@ -3,12 +3,13 @@
 // save from derive.mjs is imported through the menu like a player's backup; the craft's actions are
 // pressed by the number the HUD's action bar shows for them, and every effect is screenshotted.
 // usage: node play.mjs <repo> <dist> <out> <port> <saves-dir> [chrome]
+// env: SIG1_PW (playwright-core's install dir), SIG1_ANGLE (gl-egl on the 3090, gl on alickers), SIG1_EXPECT (renderer regex)
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 const [repo, dist, out, port, saves, chromePath] = process.argv.slice(2);
-const require = createRequire(existsSync("/work/tmp/gpu-prep/pw/") ? "/work/tmp/gpu-prep/pw/" : path.join(repo, "/"));
+const require = createRequire(path.join(process.env.SIG1_PW ?? "/work/tmp/gpu-prep/pw", "/"));
 const { chromium } = require("playwright-core");
 mkdirSync(out, { recursive: true });
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json", ".wasm": "application/wasm", ".bin": "application/octet-stream" };
@@ -25,13 +26,25 @@ const log = [], note = (...a) => { const line = `[${(performance.now() / 1000).t
 const plan = JSON.parse(readFileSync(path.join(saves, "plan.json"), "utf8"));
 const result = { commit: existsSync(path.join(dist, "COMMIT")) ? readFileSync(path.join(dist, "COMMIT"), "utf8").trim() : null, scenarios: {}, shots: [], errors: [] };
 const browser = await chromium.launch({ executablePath: chromePath || `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`,
-  headless: true, args: ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist", "--sig1-play"], timeout: 30000 });
+  headless: true, args: ["--use-gl=angle", `--use-angle=${process.env.SIG1_ANGLE ?? "gl-egl"}`, "--ignore-gpu-blocklist", "--sig1-play"], timeout: 30000 });
 let page, scenario = "";
 const wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
 async function shot(name) {
   const file = path.join(out, `${String(result.shots.length + 1).padStart(2, "0")}-${scenario}-${name}.jpg`);
   await page.screenshot({ path: file, type: "jpeg", quality: 82 }); result.shots.push(path.basename(file)); note("screenshot", path.basename(file));
 }
+/** Every notice and toast as it appears (they are transient), recorded in the page. */
+const NOTICE_RECORDER = () => {
+  window.__notices = [];
+  setInterval(() => {
+    for (const sel of ["#alert-stack", "#notification", "#action-result"]) {
+      const text = document.querySelector(sel)?.innerText.replace(/\s+/g, " ").trim();
+      if (text && window.__notices.at(-1) !== text) window.__notices.push(text);
+    }
+  }, 100);
+};
+const noticesSince = async (n) => page.evaluate((k) => window.__notices.slice(k), n);
+const noticeCount = () => page.evaluate(() => window.__notices.length);
 const read = () => page.evaluate(() => {
   const q = (s) => document.querySelector(s);
   return {
@@ -81,9 +94,14 @@ async function load(name) {
   const context = await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 });
   page = await context.newPage(); scenario = name;
   page.on("pageerror", (e) => result.errors.push(`${name}: ${e.message}`));
+  await page.addInitScript(NOTICE_RECORDER);
   page.on("console", (m) => { if (m.type() === "error" && !/404/.test(m.text())) result.errors.push(`${name}: ${m.text().slice(0, 300)}`); });
   await page.goto(`http://127.0.0.1:${port}/`, { waitUntil: "load", timeout: 60000 });
-  if (!result.renderer) { result.renderer = await page.evaluate(() => { const g = document.createElement("canvas").getContext("webgl2"); const e = g.getExtension("WEBGL_debug_renderer_info"); return g.getParameter(e.UNMASKED_RENDERER_WEBGL); }); note("renderer", result.renderer); }
+  if (!result.renderer) {
+    result.renderer = await page.evaluate(() => { const g = document.createElement("canvas").getContext("webgl2"); const e = g.getExtension("WEBGL_debug_renderer_info"); return g.getParameter(e.UNMASKED_RENDERER_WEBGL); });
+    note("renderer", result.renderer);
+    if (!new RegExp(process.env.SIG1_EXPECT ?? "RTX 3090").test(result.renderer)) throw new Error(`unexpected renderer: ${result.renderer}`);
+  }
   await page.waitForFunction(() => document.querySelector("#ocean")?.dataset.graphics === "available", null, { timeout: 60000 });
   await page.locator("#new-game").waitFor({ state: "visible", timeout: 30000 });
   await page.locator("#import-file").setInputFiles(path.join(saves, `${name}.json`));
@@ -94,6 +112,7 @@ async function load(name) {
   await page.waitForTimeout(2500);
   const r = { checks: {} }; result.scenarios[name] = r;
   r.loaded = await read(); note("loaded", name, JSON.stringify(r.loaded.actions));
+  r.noticesFrom = await noticeCount();
   return { r, context };
 }
 const bearingTo = (from, to) => Math.atan2(to.x - from.x, -(to.z - from.z));
@@ -113,14 +132,14 @@ const SCENARIOS = {
     r.checks.tag = (await action("Tag")).notices;
     await page.waitForTimeout(600); await shot("tagging");
     await page.waitForTimeout(1400); r.checks.tagged = (await read()).notices; await shot("tagged");
-    await context.close();
+    r.notices = await noticesSince(r.noticesFrom); await context.close();
   },
   async "creel-arm"() {
     const { r, context } = await load("creel-arm");
     r.checks.prompt = (await read()).guidance; await shot("cutting-arm-prompt");
     await page.keyboard.press("KeyE"); await page.waitForTimeout(800); await shot("cutting");
     await page.waitForTimeout(4000); r.checks.cut = (await read()).notices; await shot("cut-aboard");
-    await context.close();
+    r.notices = await noticesSince(r.noticesFrom); await context.close();
   },
   async "creel-grapple"() {
     const { r, context } = await load("creel-grapple");
@@ -132,7 +151,7 @@ const SCENARIOS = {
     // The diver leaves the Creel and swims down to the dropped pod: it is a container within 8 m.
     await exitCraft();
     await hold("KeyC", 3000); await page.waitForTimeout(600);
-    await look(await camPos(), plan["creel-grapple"].position); await shot("pod-dropped");
+    const at = plan["creel-grapple"].at; await look(await camPos(), { x: at.x, y: plan["creel-grapple"].position.y, z: at.z }); await shot("pod-dropped");
     await page.keyboard.press("Tab"); await page.waitForTimeout(700);
     r.checks.cargo = await panelText(); await shot("cargo-with-pod");
     await page.locator("#cargo-filter").focus(); await page.locator("#cargo-filter").selectOption("materials"); await page.waitForTimeout(400);
@@ -142,17 +161,17 @@ const SCENARIOS = {
     }
     r.checks.cargoMaterials = await panelText(); await shot("cargo-materials");
     await closePanel();
-    await context.close();
+    r.notices = await noticesSince(r.noticesFrom); await context.close();
   },
   async spindle() {
     const { r, context } = await load("spindle");
     await shot("action-bar");
     r.checks.crane = (await action("Crane lift")).notices;
     // Seen from the water beside the Spindle: the boom and its line down to the ledge.
-    await exitCraft(); await page.waitForTimeout(300);
-    await turnTo(((await read()).bearing * Math.PI / 180) + Math.PI, -25); await shot("crane-lifting");
+    await exitCraft(); await hold("KeyS", 1400); await hold("Space", 300);
+    const sp = plan.spindle.hull; await look(await camPos(), { x: sp.x, y: sp.y + 1.5, z: sp.z }); await shot("crane-lifting");
     await page.waitForTimeout(4200); r.checks.lifted = (await read()).notices; await shot("crane-lifted");
-    await context.close();
+    r.notices = await noticesSince(r.noticesFrom); await context.close();
   },
   async mantle() {
     const { r, context } = await load("mantle");
@@ -166,7 +185,7 @@ const SCENARIOS = {
     await exitCraft(); await page.waitForTimeout(300);
     await hold("KeyS", 900); await look(await camPos(), plan.mantle.position); await shot("clamp-gripping");
     await page.waitForTimeout(5200); r.checks.gripped = (await read()).notices; await shot("clamp-aboard");
-    await context.close();
+    r.notices = await noticesSince(r.noticesFrom); await context.close();
   },
   async outpost() {
     const { r, context } = await load("outpost");
@@ -176,7 +195,7 @@ const SCENARIOS = {
     await press("button[data-command-key*='upgrade-host-module']:not([disabled])", "Fit lattice");
     await page.waitForTimeout(500); r.checks.fitted = await panelText(); await shot("base-lattice-fitted");
     await closePanel();
-    await context.close();
+    r.notices = await noticesSince(r.noticesFrom); await context.close();
   },
 };
 try {

@@ -42,7 +42,7 @@ test("field kit: outposts and their modules build near the camera, rebuild on ch
     kit.update(s, near);
     assert.equal(scene.getMeshByName("fieldkit.drone")!.isEnabled(), false);
     assert.equal(scene.getMeshByName(`fieldkit.line.tether.${m.id}`)!.isEnabled(), false);
-    assert.equal(scene.materials.length, materials + 1 + 8, "the cel material, the pulse's and eight flares' (no per-frame materials)");
+    assert.equal(scene.materials.length, materials + 8, "the cel material and eight flares' (no per-frame materials)");
     kit.dispose();
     assert.deepEqual([scene.meshes.length, scene.geometries.length, scene.materials.length], before, "disposed clean");
   } finally { engine.dispose(); }

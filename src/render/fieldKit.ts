@@ -6,19 +6,17 @@
  * - **Modules at fixed hosts** on a small socket rack beside the host.
  * - **Signature tools out in the world:** the Creel's dropped cargo pod and
  *   grapple line, the Mantle's scout drone and tether, crane and clamp lines,
- *   and the Dart's sonar pulse with a brief flare at each opening it found.
+ *   and the Dart's sonar sweep: a flare at each opening it found, as its front arrives.
  * - **Fitted signature hardware** on each hull (sonar dome, tagger, cutting
  *   arm, grapple winch, deck crane, salvage jaw, drone bay).
  *
  * Built art is keyed by what it shows and rebuilt only when that changes; lines,
- * the drone and the pulse are fixed meshes moved each frame (no per-frame
+ * the drone and the sonar flares are fixed meshes moved each frame (no per-frame
  * allocation beyond a short key per outpost). Hosts build within BUILD_DISTANCE
  * and are released beyond DROP_DISTANCE, like the placed hosts. */
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder.js";
-import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
-import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import { HULL_COLLIDERS, SOURCES } from "../content/registry.js";
@@ -31,13 +29,13 @@ import { vehicleProfile } from "../sim/fittings.js";
 import { sonarContacts } from "../sim/signatures.js";
 import type { GameState, Vec3, VehicleState } from "../sim/types.js";
 import { ArtBatch, type Point } from "./geometry.js";
-import { flareMaterial, rimGlowMaterial } from "./hub.js";
+import { flareMaterial } from "./hub.js";
 import { PALETTE as P } from "./palette.js";
 
 export const BUILD_DISTANCE = 160;
 export const DROP_DISTANCE = 240;
-/** The sonar pulse expands at this speed and fades over PULSE_SECONDS; contacts flare for FLARE_SECONDS. */
-const PULSE_SPEED = 120, PULSE_SECONDS = 1.5, FLARE_SECONDS = 12, MAX_FLARES = 8;
+/** The sweep's front travels at this speed; each contact flares for FLARE_SECONDS. */
+const PULSE_SPEED = 120, FLARE_SECONDS = 12, MAX_FLARES = 8;
 
 // ---------------------------------------------------------------- module art
 /** One module's art at a socket datum, facing outward along `out` (x, z). */
@@ -248,13 +246,9 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
     b.glow(b.ellipsoid([0, 0, -0.4], [0.09, 0.07, 0.04], P.warm, 8));
   });
   drone.unfreezeWorldMatrix(); drone.setEnabled(false);
-  // The sweep reads through murk on the hub beacon's additive materials: an expanding
-  // rim-lit bubble, then a flare at each opening it found, sized to stay legible at range.
+  // The sweep reads through murk on the hub beacon's additive flare: each opening it
+  // found lights as the sweep's front (PULSE_SPEED) reaches it, sized to stay legible at range.
   const sonarTint = Color3.FromHexString("#7fe7ff");
-  const pulseMaterial = rimGlowMaterial(scene, "fieldkit.sonar.pulse");
-  pulseMaterial.setColor3("tint", sonarTint);
-  const pulse = CreateSphere("fieldkit.sonar.pulse", { diameter: 2, segments: 24 }, scene);
-  pulse.material = pulseMaterial; pulse.isPickable = false; pulse.renderingGroupId = 1; pulse.setEnabled(false);
   const flares: { mesh: Mesh; material: ShaderMaterial; on: boolean }[] = [];
   for (let i = 0; i < MAX_FLARES; i++) {
     const material = flareMaterial(scene, `fieldkit.sonar.flare.${i}`);
@@ -264,7 +258,6 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
     mesh.setEnabled(false);
     flares.push({ mesh, material, on: false });
   }
-  const eye = new Vector3();
   let sweepAt = -1;
   let disposed = false;
   return {
@@ -343,12 +336,6 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
             flares.forEach((f, i) => { const c = contacts[i]; f.on = !!c; if (c) f.mesh.position.set(c.position.x, c.position.y, c.position.z); });
           }
           const o = rt.sonar.origin, radius = age * PULSE_SPEED;
-          pulse.position.set(o.x, o.y, o.z);
-          pulse.scaling.setAll(Math.max(0.1, radius));
-          eye.set(camera.x, camera.y, camera.z);
-          pulseMaterial.setVector3("eye", eye);
-          pulseMaterial.setFloat("glow", Math.max(0, 1 - age / PULSE_SECONDS) * 2.5);
-          pulse.setEnabled(age >= 0 && age < PULSE_SECONDS);
           for (const f of flares) {
             const p = f.mesh.position, reached = Math.hypot(p.x - o.x, p.y - o.y, p.z - o.z) <= radius;
             const shown = f.on && reached && age < FLARE_SECONDS;
@@ -359,7 +346,7 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
           }
         }
       }
-      if (!playing || !s!.fleet.vehicles.some((v) => v.upgrades.sonar)) { pulse.setEnabled(false); for (const f of flares) f.mesh.setEnabled(false); }
+      if (!playing || !s!.fleet.vehicles.some((v) => v.upgrades.sonar)) for (const f of flares) f.mesh.setEnabled(false);
       pod.setEnabled(podShown); anchor.setEnabled(anchorShown); drone.setEnabled(droneShown);
       for (const [id, m] of lines) if (!usedLines.has(id)) m.setEnabled(false);
     },
@@ -370,8 +357,7 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
       built.clear();
       for (const m of lines.values()) m.dispose();
       lines.clear();
-      for (const m of [pod, anchor, drone, pulse]) m.dispose();
-      pulseMaterial.dispose();
+      for (const m of [pod, anchor, drone]) m.dispose();
       for (const f of flares) { f.mesh.dispose(); f.material.dispose(); }
     },
   };
