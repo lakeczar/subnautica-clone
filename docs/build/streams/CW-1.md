@@ -1,9 +1,21 @@
 # CW-1: every authored cave in the game, streamed without pauses (handoff)
 
-Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Code: **`b03304f`** after review R1 and REC-1's findings (the R1 traversal ran on `fd457d3`; the clean remeasure waits on TST-16). Review R1: `review/cw-1-r1`, `docs/build/reviews/CW-1-SOL-XHIGH-R1.md`.
+Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Root merged again at `21a1652` (SIM-1a, TST-16, SIG-1 stage 0, STEW-1). Code: **`3652c703`** after review R2 (this handoff is the docs-only commit after it). The game code is unchanged since `5d9425f4`, where the full gate passed; later commits are the harness, its evidence and this handoff. The clean remeasure ran at `3779f59c` (r10). The targeted remeasure of its failures ran on the fixes at `6ca73311` (r12). Reviews: R1 `review/cw-1-r1` (`docs/build/reviews/CW-1-SOL-XHIGH-R1.md`), R2 `review/cw-1-r2` (`docs/build/reviews/CW-1-SOL-XHIGH-R2.md`).
 
 ## Outcome
-All **55** authored small and medium caves are in the real game: the Fanvault and W2's four hub caves, CA-1's 18 Reef and Isles caves, CA-2's 12 Canopy and Basin groups, and CA-3's 20 Rift, Divide and Meridian sources. The browser never generates a cave: collision and light are baked, streamed ahead by proximity and heading, built in time slices and evicted behind and far first. At 1920×1080 on the RTX 3090, after review R1, 109 minutes of driving from earned library saves (an 8-segment Dart tour from `tour-ready`, deep Creel segments from `canopy-over-geared`) reached 66 of 67 cave stops, **never held and never built a cave unsliced**. The streaming frame gate is **not met**: 18 frames went over 34 ms in streaming parts (24 before R1, in half the driving). Whether they are game work or this machine's is **unresolved** (*Traversal*). R1's fixes removed every real cost the per-call attribution found. Clean 3090 frame-time evidence is listed as **missing**.
+All **55** authored small and medium caves are in the real game: the Fanvault and W2's four hub caves, CA-1's 18 Reef and Isles caves, CA-2's 12 Canopy and Basin groups, and CA-3's 20 Rift, Divide and Meridian sources. The browser never generates a cave: collision and light are baked, streamed ahead by proximity and heading, built in time slices and evicted behind and far first. At 1920×1080 on the RTX 3090, the driving ran from earned library saves by ordinary keys: an 8-segment Dart tour from `tour-ready`, and the 800 m Creel from `canopy-over-geared`, with service calls and reserve cells.
+
+**Clean remeasure after R2 (r10, `3779f59c`, TST-16 installed):** 16 segments, 167 minutes, 602k frames.
+- 83 of 84 cave stops, every Meridian east cave included, and the Isles surf cave once.
+- **Never held, never built a cave unsliced, never drew a cave dark.**
+- 8 segments failed the streaming gate.
+
+**Why those frames ran long:** a diagnostic run found every long frame inside host pauses of the VM (*Traversal*). So the gate now subtracts the time stolen from our main threads and judges what remains. The remainder showed real costs of ours: chunk disposal over the byte budget, per-mesh light budgets, and planning time we didn't measure. They're fixed at the root.
+
+**Targeted remeasure of every failed segment on the fixes (r12, `6ca73311`):** 41 of 41 stops, 0 holds, 0 unsliced builds, 0 dark cave frames.
+- Light placement p99 0.2 ms, worst 4.8 ms outside host frames.
+- No moving light ever lagged.
+- **All 8 pass the stolen-time gate.** One of them, tour 7, passes only because a single frame is classed **host-stopped, GPU unknown**: most of the VM stopped, our threads on CPU for 8.2 ms. That is stated plainly below and its class is listed separately.
 
 ## What changed
 - **Registration (`caves.ts`).** `CAVE_SOURCES` lists every cave. CA-2's groups build through `groupDef` (their edge-shelf floor, one memo) and draw in their own style (`caveShellOf`). CA-3's join through a data-only `caves/deepCaves.ts` (no simulation import, so no cycle). `caves/authored.ts` no longer imports values from `caves.ts` (the cycle would have put `EXTERIOR` in its dead zone); `assertDisjointFootprints` moved to `caveGeometry.ts` and is re-exported.
@@ -33,12 +45,11 @@ All **55** authored small and medium caves are in the real game: the Fanvault an
   - **Cave light textures:** a field's whole `texImage3D` (65–84 ms in a frame) became an empty allocation filled by `texSubImage3D` z slabs, 128 KiB a frame; a field binds only when complete.
   - **Kit cave cluster builds:** these still allocate about 18 MiB per cluster (18k boxes as objects). That's COL-1 debt (below).
 - **REC-1's findings.**
-  - **Cave readiness.** A cave the view stands in, drawn as open water because its light field hasn't landed, is now reported: `caveView.lightPending`, `GameRenderer.caveLightPending`, and `data-cave-light` (`pending` or `resident`).
+  - **Cave readiness.** A cave the view stands in, drawn as open water because its light field hasn't landed, is now reported: `caveView.lightPending`, `GameRenderer.caveLightPending`, and the pulled `GameRenderer.stats()` (`caveLight`, and `lights.settled` once every known mesh is scanned and its lights placed). R2 removed the first version's per-frame dataset writes (*Review R2*, below).
     - The load waits for that light behind the loading presentation, 8 s at most.
     - The settle after a jump ends only once the cave there is lit, 5 s at most.
-    - Captures can wait on `data-cave-light`, and on `data-lights-settled`, which is true when every known mesh is scanned and its lights placed.
     - App-boundary tests cover the wait and the bound.
-  - **Light selection is a pure function of the eye and the candidate set.** Equal scores are ordered by the light itself (`lightOrder`: position, reach, strength, colour), never by mesh arrival order. A test over 30 tied lattices, shuffled 5 ways each, fails with arrival-order ties. The candidate set itself fills in over the frames after a mesh streams in; `data-lights-settled` says when it is complete.
+  - **Light selection is a pure function of the eye and the candidate set.** Equal scores are ordered by the light itself (`lightOrder`: position, reach, strength, colour), never by mesh arrival order. A test over 30 tied lattices, shuffled 5 ways each, fails with arrival-order ties. The candidate set itself fills in over the frames after a mesh streams in; `stats().lights.settled` says when it is complete.
   - **Simulation cost: routed to SIM.** The traversal data has 6 frames with over 30 ms of simulation in about 3 hours of travel:
     - three near caves (37–50 ms, 3–29 m from a footprint);
     - three far from any cave (63–136 ms, 134–244 m);
@@ -46,6 +57,45 @@ All **55** authored small and medium caves are in the real game: the Fanvault an
     - none with an unsliced cave build.
 
     So caves don't explain it. One caveat for SIM: a diver step inside the deep caves' composed collision costs about 380 µs, against 34 µs outside (`caves-deep-perf`), so dense cave collision does raise the sim's query cost near caves.
+- **Review R2's five findings** (branch `review/cw-1-r2`, `docs/build/reviews/CW-1-SOL-XHIGH-R2.md`).
+  - **Light textures bind only when complete (R2-1).** Activating a cave never uploads its field at once. `setField` binds only a cached, complete field; otherwise the active field's fill continues under the same per-frame budget the prefetch uses (`beginFrame`: one 128 KiB budget shared by `stream` and `update`). The cave draws as open water meanwhile, and that is now counted (R2-2). Tests with a byte-counting texture port cover: activation of an untouched field, of a part-filled one (R2's 1,179,648-byte case), and of one evicted from the four-field cache. In each, no frame writes more than the budget, and the field binds only once complete.
+    - **Empty-texture allocation:** the time is measured per allocation and per slab write (`maxAllocMs`, `maxWriteMs`), in the pulled diagnostics and every traversal result. Across r12's 8 runs (248 field uploads): worst allocation 0.3 ms, worst slab write 0.2 ms, at most 0.3 ms of texture upload in any frame, 0 frames in a cave with its light unbound.
+    - **Context restore:** a fill in progress starts over (counted, `restarts`; tested). A completed field is marked complete, so Babylon re-uploads it whole. That is at most the four cached fields, up to about 1.25 MiB each, while graphics are coming back (compromise below).
+  - **Active cave light readiness (R2-2).**
+    - **Where it is reported:** the pulled `GameRenderer.stats()` (`caveLight`: `resident` or `pending`; `caveStream.pendingFrames`) and `#ocean.siltwakeCaveStream()` for drivers.
+    - **Where it is waited on:** entry (8 s at most) and the settle after a jump (5 s at most).
+    - **Removed:** the per-frame `data-cave-light` and `data-lights-settled` writes, and CW-1's per-frame `caveStream` JSON.
+    - **The traversal gate** now fails on any travel frame inside a cave whose light isn't bound, so ordinary approaches must have prefetched it.
+  - **Light selection is history-free end to end (R2-3).** Equal scores break by `lightOrder` (position, reach, strength, colour). Reserved lights are sorted the same way before they are cut to the slots. Tests use the real `SceneLights` on a NullEngine with 13 equidistant emissive meshes:
+    - forward, reversed and shuffled announcement send the same twelve lights in the same order;
+    - eviction and reconstruction send the same set at the same settled pose;
+    - so does a second history to that pose.
+  - **The stream tick no longer scales with the roster (R2-4):**
+    - **Candidates:** the wanted list comes from a 128 m cluster grid (`clustersNear`), eviction scans only resident clusters, and the light lists use a cave grid. Each frame reuses owned buffers, and upload wishes are capped at three.
+    - **Moving lights:** their storage is reused, refreshed round-robin, 2,048 a frame.
+    - **Out-of-range meshes** are culled before scoring.
+    - **The world queries:** move and line of sight gather through owned buffers and the allocation-free box query, like clearance and support.
+    - **Test (`cw1-streaming`):** at the same pose, a tick reads as many clusters from a 1,089-cluster roster as from a 121-cluster one, and reuses its frame and arrays. A second test checks that `clustersNear` returns exactly the clusters whose rects meet the box, against the game's own world.
+  - **The scanned-cluster cache is owned (R2-5).** Geometries are reference-counted by the live meshes that use them, released when the mesh is disposed, and cleared by `dispose`. The count and bytes are in the lights' stats. A test replaces the emissive geometry five times: nothing outlives its meshes.
+  - **A measurement fix found on the way.** Per-frame `cavePasses` had held a reference to the streamer's reused timing object, so every recorded frame would have shown the latest frame's wanted-list, eviction and light-list times. Each frame now records its own copy, so the remeasure attributes those passes separately, as R2 asked.
+- **Frame costs the clean remeasure found, fixed at the root (convention 4).**
+  - **Chunk residency** (`world/residency.ts`), behind 38–90 ms frames with no build or upload time:
+    - **Amortised disposal.** Over the byte budget, an eviction is still decided at once, and the unit leaves the accounting and the decisions at once. Its art is hidden immediately and disposed from a queue, 2 ms a frame, at least one a frame (`DISPOSE_MS_PER_FRAME`). Until then its bytes still count: the frame-end `cpuBytes`/`gpuBytes` include it, the frame reports `overBudget` honestly, and the admission frontier counts it as held, so no new chunk is admitted into unfreed memory. Each chunk's art is many Babylon meshes, and disposing several chunks' meshes had happened in one frame.
+    - **One accounting pass per eviction.** `makeRoom`, the eviction pass and the last-resort discard keep a running total, instead of re-summing every unit for each one released (O(units²)).
+    - **Every phase is timed:** plan, drop, build, upload, display, evict, dispose (`phaseMs`).
+    - **A frame's updates are summed.** `stream()` runs several updates in one frame (catch-up after a jump, plus up to 4 ms of extra construction) but reported only the last; it now sums the frame's work (`frameWork`: updates, build, upload and each phase).
+    - **Tests:**
+      - An eviction with 5 ms disposals spreads across frames, one a frame, with its bytes counted until freed; `dispose()` still frees everything at once.
+      - On the fake clock, the phases add up to the whole update, so no work can go untimed (`world-residency`).
+  - **Moving lights** (`render/lighting/sceneLights.ts`), behind 24–67 ms placement frames:
+    - **One budget per frame, nearest first.** The 2,048-lights-a-frame cap was per mesh, so many moving meshes added up. It's now one budget for the frame. Moving meshes are refreshed nearest the eye first, each taking what it needs, so far meshes absorb any lag; every mesh still refreshes at least 32 lights a frame (round-robin), and every light stays sent.
+    - **Distance, not frustum.** A light behind the camera still lights what's on screen.
+    - **Lag is measured where it shows.** Every moving light carries the frame it was last moved. Each frame records the worst lag among the lights selection actually sends (the on-screen lag), the worst of any moving light, and the nearest distance at which any moving mesh lags.
+    - **Placement is timed by kind:** cached copy, moving refresh, first placement of a frozen mesh.
+    - **Tests:**
+      - Sixty moving meshes (6,000 lights) stay within 2,048 + 32 per mesh a frame, and all are made and sent (6,000 moved in one frame before).
+      - A moving mesh beside the eye never lags and sent lights are always current, while 60 far meshes absorb the lag (`cw1-scene-lights.heavy`).
+    - **Settled allocation** (an earlier fix in this round, from the SAVE-1 alloc profile): a settled scene-lights frame had allocated 62 KiB, growing with the meshes. It's now a constant 3.3 KiB: a dense entry list walked by index, cached lights copied untimed, the frame's candidate array written by index (emptying it each frame had dropped and regrown its storage), closure-free cluster parameters, and uniforms written without `splice`.
 - **Light placement resumes.** One streamed scatter mesh's thousands of thin-instance lights were placed in one go (37–111 ms). Placement now resumes across frames: 64 instances per budget check, no per-instance matrix allocation.
 - **Tests.** New `cw1-streaming` (fast, 13), `cw1-caves.heavy` (whole world, sheltered caves, every lane near a cave), `cw1-bake.heavy` (CA-1's bake probe over every cave chunk: borders at all LOD pairs, shells, scatter, codec). Tests that assumed one registered cave, or composed CA-2's groups beside the registry, now use the registry once (CA-2 and CA-3 suites compose the game's own world); CA-3's thickness rule allows edge-clipped boxes; the shelf-race escape reads the masked flow; `regions-art` allows pit-cut coarse chunks up to 3,000 vertices (worst 2,529).
 
@@ -70,7 +120,99 @@ Task-owned headless Chrome, ANGLE GL-EGL, **1920×1080**, the built game (`dist`
 - the camera, with any jump;
 - every hold change and HUD notice.
 
-**After R1, 3090, `fd457d3`** (`runs/r1-tour`, `runs/r1-deep`; tables: `node docs/build/streams/cw1/summarize.mjs docs/build/streams/cw1/runs/r1-tour docs/build/streams/cw1/runs/r1-deep`):
+**What decides a long frame (R2 follow-up).** The renderer and GPU process main threads are sampled every 5 ms: CPU time, runnable wait, faults, the vCPU each is on, and every vCPU's steal from `/proc/stat`.
+- **Stolen time, following the threads.** For each 5 ms interval, the steal on the vCPU the renderer's main thread was on, or on the GPU main thread's vCPU, whichever is larger (overlapping time counts once). Moving between vCPUs is followed.
+- **The remainder decides.** Gap minus stolen time, against the 34 ms budget. Steal never excuses a frame by itself.
+  - **host:** steal, and the remainder within budget;
+  - **mixed:** steal, but the remainder still over budget; ours;
+  - **clean:** no steal above the 10 ms jiffy, over budget; ours;
+  - **unsampled:** no thread samples; ours.
+- **The gate fails on any streaming frame that isn't host.** Every run reports all four counts, for all frames and for streaming ones.
+- **The kernel point (correction).** Review notes said the off-CPU frames weren't steal because `PARAVIRT_TIME_ACCOUNTING` is off. That was wrong: here stolen time sometimes appears as the thread's run time and sometimes not, so only per-vCPU sampling can tell.
+
+**Why: the host pauses the whole VM.** A diagnostic run of tour 3's route (`CW1_PROFILE=1` plus per-vCPU steal, `runs/diag/d1`) found:
+- **every long frame was inside a host pause:** all 20 frames over 34 ms coincided with 410–670 ms of steal across the 8 vCPUs in a 100 ms gap, most of the VM paused for about the length of the frame. The host's average is 2–16 ms per 100 ms;
+- **none came without steal**, and five had the renderer's own vCPU stolen for at least half the gap;
+- **the profiler saw no JS in them:** mostly `(idle)`, because the thread wasn't running.
+
+A 70–120 ms pause averages to about 2% over a 5 s context window, which is why receipts read nearly clean and DISTURBED fires only when several stack up.
+
+The pauses land in whichever part of our frame is running. That is why R1's and this series' long frames looked like render, cave view, selection, placement or residency in turn, and why some weren't proportional to their work. What pauses the VM is a fleet question; the coordinator has raised it with the owner.
+
+**Other harness changes:**
+- **Pass timings copied per frame.** `cavePasses` had held a reference to the streamer's reused timing object, so every frame recorded the latest frame's times. Each frame now keeps a copy. The wanted list, builds, eviction and light lists are timed separately, as are the texture upload, cave view, optics, light scan, placement (by kind) and selection, plus chunk residency by phase.
+- **Light readiness gated.** The gate fails on any travel frame inside a cave whose light isn't bound (R2-2).
+- **Power planned by ordinary input.** Power is planned from the save's own drain and restored sites. The driver services through the inventory panel (Tab, Service or Charge, Escape) and swaps a reserve cell in below 20%. Each segment carries a home ledger.
+- **Craft state logged** every 15 s (air source, O₂, health, charge, hull), and every stall with its pose, target, heading error, held keys and vitals.
+- **Legs swept against cave solids.** The planner sweeps legs with every kit cave resident, holds no leg over 150 m, and keeps the keel rule 2 m either side of transit legs: the keyboard driver drifts, and a surf-cave stall was the hull running onto a −2.2 m bump beside the planned line. The margin is a preference: a leg no margined path reaches is planned by the keel rule alone and counted (3 legs on the tour).
+- **Tracing streamed.** `stream-trace.mjs` (by SIM-PERF-1) uses CDP `ReturnAsStream`, incremental parsing, and a 90 s rotation. A traced 6-minute run had exceeded Node's 512 MiB string limit. `CW1_TRACE=1` adds the toplevel, gpu and devtools.timeline slices to each long gap.
+- **SIM-PERF-1's opt-ins** are folded too, inert unless `SIMPERF_HOST=1`, so its evidence binds to a committed harness.
+- **Diagnostics pulled.** The game's cave diagnostics are pulled (`#ocean.siltwakeCaveStream()`), not written as JSON every frame.
+
+**Clean remeasure after R2, 3090, `3779f59c` (r10)** (`runs/r10`; per-segment evidence `runs/r10/evidence.md`, tables `runs/r10/summary.md`, receipts with TST-16 context in `runs/r10/receipts/`).
+- **Scale:** 16 segments, one exclusive ticket each, at boost unless the power plan said cruise: 167 min, 601,967 frames.
+- **Gate's other conditions:** 0 holds, 0 unsliced builds in travel, 0 frames in a cave with its light unbound, p50 / p99 16.7 / 16.8 ms in every run. The gate (the pre-stolen-time rule) failed on 8.
+- **Window rule:** two segments ran DISTURBED in the 08:30–09:45 backup window and were rerun after it, keeping both results:
+  - tour 4's rerun passes;
+  - tour 7's rerun was worse: 189 major faults and 6.8% steal, and it stalled short of the surf cave.
+- **Outside the window too:** steal stayed high, and five later runs were DISTURBED as well.
+
+| Segment | Admitted UTC | Caves | Gate (streaming frames over 34 ms) | Worst streaming part | Steal p95 / max % | Major faults | DISTURBED |
+|---|---|---|---|---|---|---|---|
+| Tour 0 | 07:14 | 6/6 | **fail** (1) | cave view 79 | 2.2 / 3.4 | 0 | no |
+| Tour 1 | 07:38 | 12/12 | pass | – | 1.5 / 4.0 | 0 | no |
+| Tour 2 | 07:49 | 9/9 | pass | – | 1.6 / 3.6 | 0 | no |
+| Tour 3 | 08:11 | 5/5 | **fail** (3) | placement 31, chunk residency 72, placement 24 | 1.4 / 3.6 | 0 | no |
+| Tour 4 | 08:29 (window) | 4/4 | **fail** (1) | chunk residency 38 | 2.7 / 5.3 | 0 | yes (steal 5.33%) |
+| Tour 5 | 08:47 (window) | 13/13 | **fail** (1) | selection 73 | 1.4 / 3.4 | 0 | no |
+| Tour 6 | 09:16 (window) | 9/9 | pass | – | 1.6 / 3.1 | 0 | no |
+| Tour 7 | 09:29 (window) | 4/4 | **fail** (3) | optics 74, placement 53, selection 27 | 4.0 / 8.5 | 0 | yes (steal 8.5%) |
+| Deep 0 | 09:47 | 2/2 | pass | – | 0.4 / 4.8 | 0 | no |
+| Deep 1 | 09:56 | 8/8 | pass | – | 0.4 / 4.6 | 0 | no |
+| Deep 2 | 10:11 | 7/7 | **fail** (1) | placement 67 | 0.7 / 4.7 | 0 | no |
+| Hop 0 | 10:25 | 1/1 | pass | – | 1.7 / 5.2 | 0 | yes (steal 5.16%) |
+| Hop 1 | 10:33 | 1/1 | pass | – | 1.1 / 3.6 | 0 | no |
+| Hop 2 | 10:41 | 1/1 | **fail** (1) | chunk residency 90 | 1.3 / 6.1 | 0 | yes (steal 6.14%) |
+| Hop 3 | 10:50 | 1/1 | pass | – | 2.0 / 7.3 | 0 | yes (steal 7.27%) |
+| Surf hop | 10:59 | 0/1 | **fail** (1) | cave view 52 | 1.1 / 7.4 | 0 | yes (steal 7.36%) |
+| Tour 4 (rerun) | 11:08 | 4/4 | pass | – | 1.4 / 5.1 | 0 | yes (steal 5.12%) |
+| Tour 7 (rerun) | 11:53 | 3/4 | **fail** (2) | chunk residency 49, cave view 50 | 1.3 / 6.8 | 189 | yes (189 major faults; steal 6.76%) |
+
+**Coverage.**
+- **Meridian east, reached cold:** deep 2, hops 0–3 and every later deep run reached them by ordinary input, using the power plan (cell swaps and service calls by the panel). The stall that ended R1's deep run was a flat battery.
+- **Isles surf cave:** reached by driving in r10's tour 7 and in r12. It stalled in three runs because the legs passed within a hull's width of a −2.2 m bump. Fixed by the planner's lateral margin.
+
+**Diagnosis runs** (`runs/diag`, not frame evidence):
+- **D1:** tour 3's route with the CPU profile and per-vCPU steal. It found the host pauses above. Its profiler overhead cost the driver three caves.
+- **D2:** tour 0's route with the full trace. The drive completed, but the trace overflowed Node's string limit, which is why tracing is now streamed.
+
+**Targeted remeasure on the fixes, 3090, `6ca73311` (r12)** (`runs/r12`, the same layout).
+- **What ran:** every segment that failed in r10 (tours 0, 3, 4, 5 and 7, deep 2, hop 2, the surf hop), on plans re-derived with the lateral margin (the tour segments cover the same caves).
+- **Totals:** 80 min, 286,493 frames, **41 of 41 stops**, 0 holds, 0 unsliced builds, 0 dark cave frames.
+- **Streaming frames over 34 ms:** 5 in all. Host removes 4. Host-stopped (GPU unknown) removes 1, tour 7's. **0 are ours.**
+- **Large maxima are excused frames:** the placement, selection and chunk build maxima over 25 ms (tour 4's 81 ms selection, deep 2's 88 ms, tour 7's 92 ms placement, the surf hop's 25.6 ms build) all sit in host or host-stopped frames.
+- **Elsewhere:** placement and selection p99 are 0.2–0.4 ms, and chunk eviction ≤ 0.9 ms and disposal ≤ 0.7 ms a frame.
+- **Moving lights:** no moving light lagged in any frame of any segment (sent-light lag 0, no lagging mesh at any distance).
+
+| Segment | Admitted UTC | Caves | Streaming > 34 ms: raw → removed by host, host-stopped → ours | Long frames: host / host-stopped / mixed / clean | Placement / selection max ms | Sent-light lag | Steal p95 / max % | DISTURBED | Gate |
+|---|---|---|---|---|---|---|---|---|---|
+| Tour 0 | 13:38 | 6/6 | 0 → −0, −0 → 0 | 10 / 0 / 0 / 1 | 0.3 / 0.3 | 0 | 1.8 / 7.6 | yes (steal 7.6%) | pass |
+| Tour 3 | 13:46 | 5/5 | 1 → −1, −0 → 0 | 12 / 1 / 1 / 1 | 4.8 / 2.4 | 0 | 1.5 / 6.1 | yes (steal 6.1%) | pass |
+| Tour 4 | 13:58 | 4/4 | 1 → −1, −0 → 0 | 12 / 0 / 2 / 2 | 0.5 / 81 | 0 | 1.5 / 5.7 | yes (steal 5.69%) | pass |
+| Tour 5 | 14:13 | 13/13 | 0 → −0, −0 → 0 | 11 / 0 / 1 / 0 | 1.5 / 1 | 0 | 1.0 / 6.2 | yes (steal 6.2%) | pass |
+| Tour 7 | 14:26 | 4/4 | 1 → −0, −1 → 0 | 6 / 1 / 1 / 0 | 92.4 / 0.6 | 0 | 0.5 / 6.4 | yes (steal 6.37%) | pass (host-stopped, GPU unknown) |
+| Deep 2 | 14:38 | 7/7 | 1 → −1, −0 → 0 | 20 / 1 / 1 / 0 | 0.6 / 88.4 | 0 | 1.6 / 4.6 | yes (13 major faults) | pass |
+| Hop 2 | 14:53 | 1/1 | 0 → −0, −0 → 0 | 2 / 0 / 0 / 0 | 0.4 / 0.6 | 0 | 0.4 / 2.0 | no | pass |
+| Surf hop | 15:01 | 1/1 | 1 → −1, −0 → 0 | 5 / 1 / 0 / 1 | 0.3 / 1.1 | 0 | 1.6 / 5.5 | yes (steal 5.52%) | pass |
+
+**Functional check of the streamed trace** (surf hop, `gpu` class, `CW1_TRACE=1`, `runs/r12/func`): 2 rotations, 0 chunks with data loss, 2.6 M events, 484 MB read without materialising the trace. The GC slices aligned on `Renderer/CrRendererMain`, and it reached the surf cave.
+
+**Not ours, but noted:**
+- **Presentation-side gaps:** the remaining mixed and clean long frames are non-streaming. Each had 3–8 ms of frame work and no steal on our two sampled threads, but large steal elsewhere in the VM. That points to presentation-side gaps (compositor) outside the threads the harness samples.
+- **Host steal outside the window:** most r12 segments ran DISTURBED with no backup running (steal up to 7.6% in a 5 s window). That's for the fleet owner's comparison.
+
+**History: after R1, 3090, `fd457d3`.**
+(`runs/r1-tour`, `runs/r1-deep`; tables: `node docs/build/streams/cw1/summarize.mjs docs/build/streams/cw1/runs/r1-tour docs/build/streams/cw1/runs/r1-deep`):
 
 | | Result |
 |---|---|
@@ -83,13 +225,17 @@ Task-owned headless Chrome, ANGLE GL-EGL, **1920×1080**, the built game (`dist`
 | Queue context | 8 of the 9 runs were labelled `DISTURBED` (CPU PSI up to 7–80%) despite the exclusive window; segment 6 ran quiet (PSI ≤0.56%) |
 | Known overlaps | REC-1's local work overlapped tour segment 0 (`npm test` and reruns, about 22:40–22:44 UTC) and segment 4 (a typecheck and test build, about 23:33–23:35 UTC). Both are `DISTURBED` and are rerun in the clean remeasure. The TST-16 builder's unit tests (about 1 s of CPU at 00:10:23 UTC) overlapped segment 7's load; there was no long frame within 15 s of it, so the segment is kept |
 
-**Deep caves, cold approaches.** The Creel's runs flew 1–2 km from the hub at travel speed and reached the Basin buried hut, all eight Divide caves, and the Meridian footing void, window gallery and spire footing: 11 of 15. The Meridian east four (culvert north, escarp pocket, terrace crack, escarp culvert) were not reached, for two reasons:
-- **Air:** the Creel's air ran out about 13 minutes into a dive. The HUD notice is "Oxygen exhausted. You recovered at Splitspine workshop" (`runs/r1-deep/*.log`). That is the game's rule, not a hold.
-- **Memory:** the later two runs exceeded the `gpu` class's 3 GiB, mostly from the harness's own 5 ms samples.
+**Deep caves, cold approaches (R1 runs).** The Creel's runs flew 1–2 km from the hub at travel speed and reached the Basin buried hut, all seven Divide caves, and the Meridian footing void, window gallery and spire footing: 11 of 15. The Meridian east four (culvert north, escarp pocket, terrace crack, escarp culvert) were not reached, for two reasons:
+- **Power (corrected).** The handoff had said "the Creel's air ran out". The game's rule: a powered craft supplies air, and its 120 s of emergency air starts only when power is lost or the craft is disabled. At boost the Creel draws 0.23 % a second (`motion`, the save's own profile), so its 95.7 % lasts about 7 minutes, or 2.6 km. The run boosted to the Meridian with no service call and no reserve cell.
+  - The stall's own pose was re-driven by the game's step from the save (`/work/tmp/cw1/deep-stall.mjs`). At 95 % or at 5 % charge, the Creel climbs from there to the terrace crack stop and ends 1.4 m from it. At 0 % it doesn't move and ends 20.6 m short, which is the log's "20.7 m short", while emergency air counts down from 120 s.
+  - So the stall was a flat battery, then the 120 s of emergency air, then "Oxygen exhausted" and recovery at the workshop. It was not geometry and not a hold.
+- **Memory:** the later two runs exceeded the `gpu` class's 3 GiB, mostly from the harness's own 5 ms samples (now typed arrays).
+
+**The fix is in the plan, not the game:** power planning and the panel-driven service and cell swaps (*Other harness changes*, above).
 
 The recovery teleport ran through the new settle path.
 
-**Attribution of the 18 frames: unresolved** (review R1's correction). What the measurements show:
+**R1's attribution of its 18 frames: since resolved as host pauses** (see *What decides a long frame*, above). What R1's measurements showed:
 - **Not GC** (none traced inside them), **not swap** (0 major faults), and not a hold or an unsliced build.
 - **Not proportional to the work in them:**
   - selection over 657 lights took 22.5 ms (the allocation profile puts 5,000 at 0.09 ms);
@@ -99,14 +245,16 @@ The recovery teleport ran through the new settle path.
 - **On CPU, no runnable wait:** the other 16 are like this. That fits host steal invisible to the guest (TST-16's per-job steal found 3–8% at such spikes), and it fits work we don't measure. These measurements can't tell them apart.
 - **One frame from the quiet run:** 53 ms in the kit cave streamer's step, on CPU, with no build slice long. It may be game work; the next step is to time the streamer's own wanted-list and eviction passes.
 
-**Allocation** (`node docs/build/streams/cw1/alloc.mjs .`: V8's sampling heap profiler, collected objects included, per operation in Node):
+**Allocation** (`node --expose-gc docs/build/streams/cw1/alloc.mjs . tour-ready`). V8's sampling heap profiler, collected objects included, per operation in Node. It's bound to its commit and a SAVE-1 save: the saved craft's world and pose, with the baked collision pack installed as the browser does. Now: `3652c703` on `tour-ready` (`runs/r12/alloc.txt`, heavy-check receipt "evidence for 3652c703").
 
-| Path | Before R1 | After | Biggest allocators now | Owner |
-|---|---|---|---|---|
-| Light selection and uniforms, 5,000 lights | 1,153 KiB a frame, 3.79 ms | 15 KiB, 0.09 ms | the chosen lights' faded copies, uniform arrays | ours |
-| Simulation step | 283 KiB a tick, 1.58 ms | 99 KiB, 0.51 ms | whole-state `structuredClone` (25 KiB), `stepGame` | the sim's (SIM-1) |
-| Kit cave cluster build | 18 MiB a cluster | unchanged | spatial index 34%, collar `Solid` objects 26%, generator frames 20% | ours: COL-1 debt |
-| Chunk terrain decode, fine | 638 KiB a chunk | unchanged | `octDecode`, `Math.hypot` | ours (small: a chunk at a time) |
+| Path | Before R1 | After R1 | Now | Biggest allocators now | Owner |
+|---|---|---|---|---|---|
+| Cave streamer tick, clusters resident (a pass from the save's craft through three caves) | – | – | 3.6 KiB a tick, 0.009 ms; 24.7 KiB with its sliced builds | the frame's timing fields, collar rebuilds | ours |
+| Scene lights, settled, 400 emissive meshes, viewer moving | – | 68 KiB a frame (62 KiB with the eye still), growing with the meshes | 16.4 KiB, 0.064 ms (3.3 KiB with the eye still), constant | selection's faded copies, the uniform arrays | ours |
+| Light selection and uniforms, 5,000 lights | 1,153 KiB a frame, 3.79 ms | 15 KiB, 0.09 ms | 14.3 KiB, 0.078 ms | the same | ours |
+| Simulation step, the save's Dart driven forward (in place, SIM-1a) | 283 KiB a tick, 1.58 ms (a fresh game, diver) | 99 KiB, 0.51 ms (diver) | 124 KiB, 0.48 ms (driven Dart: a heavier step) | `craftProfile` 17 KiB, hazard `shapeWeight` 13 KiB | the sim's (SIM) |
+| Kit cave cluster build | 18 MiB a cluster | unchanged | unchanged | spatial index, collar `Solid` objects, generator frames | ours: COL-1 debt |
+| Chunk terrain decode, fine | 638 KiB a chunk | unchanged | 674 KiB, 1.9 ms | `octDecode`, `Math.hypot` | ours (one chunk at a time) |
 
 **Before R1, 3090, `cb8ae86`** (`runs/1080p-tour`, `runs/1080p-deep`; saves edited to place the craft): 23 runs, 200,681 frames over 55.6 min, 0 holds, 0 unsliced builds in travel, 24 streaming frames over 34 ms, 50 of 55 caves reached. Review R1 found 22 of those 24 on CPU at PSI ≤1%. The handoff's earlier claim that they were "this machine's, not streaming's" is **retracted**: it was not established.
 
@@ -133,29 +281,37 @@ Screenshots (`docs/build/streams/cw1/shots/`):
   - ![](cw1/views/s1-03-seam-archlet-side.webp)
 
 ## Checks
-After R1 (`src` as at `20679ea`, unchanged to `9c73272`). Run on the second worker (`scripts/alickers-job.sh`, tested SHA recorded) except the build, the bake and the perf rerun:
-- **Fast tier:** 1,418/1,418 at `20679ea`, including `cw1-entry` (R1 and R2) and `cw1-slicing` (tessellation, selection, box query).
-- **Economy:** the five root-merge economy checks pass at `4a16985`, after the root merge with SCHED-2b and SAVE-1.
-- **Heavy tier:** 63 of 64 files, 469 tests, at `20679ea`. The one failure is CA-3's `caves-deep-perf` timing bound: a diver step in the deep caves at 455 µs against 400 µs, with three files running at once on the shared host.
-  - Alone, it passes: 377–390 µs on alickers; 378–380 µs on factory-worker.
-  - The commit before R1 (`e935e4f`) measures 404 µs alone on factory-worker. So the bound was already exceeded before R1's changes, and they made the step slightly faster.
-  - For CA-3: the bound is tight on both machines.
-- **Playthrough:** at `9c73272`, all eight scenarios complete (creel, carrier, creel-loss, reverse, no-optional, low-air, tour, over-geared), with no blockers.
-- **Build:** `npm run build` passes on factory-worker.
-- **Provenance:** the build carries the bake's source hash `0f5f2f1ef45d…`, equal to the bake's.
-- **Bake:** `bake-terrain --verify` at `fd457d3`: **276/276** files equal the live bytes (220 chunks, 1 collision pack, 55 light fields).
-  - `public/caves/collision.bin`: **1,570,443 bytes** compressed (8,238,891 raw).
-  - The caves total 2.46 MiB compressed; terrain is 38.91 MiB.
+At `5d9425f4`. The game code is identical at the handoff head: later commits touch only `docs/build/streams/cw1/` (the harness, its evidence) and this handoff. Fast tier, heavy tier, economy and playthrough ran on the second worker (`scripts/alickers-job.sh`, tested SHA recorded); the bake and build were queued on factory-worker.
+- **Fast tier:** 1,488/1,488, including `cw1-entry`, `cw1-slicing`, `cw1-streaming` (R2-4's roster test, the cluster query), `world-residency` (amortised disposal, phases covering the whole update) and `world-budget`.
+- **Heavy tier:** 66 files, 478 tests, 0 failures, including:
+  - `cw1-cave-light-upload` (R2-1, now heavy-tier by TT-1's guard: `CaveLighting` reaches Babylon's math);
+  - `cw1-scene-lights` (R2-3 histories, R2-5 cache, the frame-wide moving budget, nearest-first priority);
+  - `cave-light`.
+  
+  CA-3's `caves-deep-perf` timing bound passed. Its 400 µs bound was not loosened.
+- **Economy, the root gate's six steps:** campaign, m1, m2-a, m2-b1, progression curve and upgrade economy pass.
+- **Playthrough:** all eight scenarios complete with no blockers.
+- **Bake:** `bake-terrain --verify` at `686e19d5`: **276/276** files equal the live bytes (220 chunks, 1 collision pack, 55 light fields). The bake's sources are unchanged since.
+- **Build and provenance:** `npm run build` at `6ca73311` (on the second worker, because factory-worker's queue had it 27th behind exclusive jobs). The bundle carries the bake's source hash `866d9186…`, equal to the bake's.
+- **Root gate:** `npm run gate` on root after merging is the coordinator's, as R2 asked.
 
 ## Adverse cases
 - **Resting in a sheltered cave (CA-3 R1).** A diver idle 15 s in the crest hollow shelter at cycle 40 s, and in the lintel galleries: moved under 0.6 m, health 100, brine 0. Unmasked control: carried over 2 m (`cw1-caves.heavy`).
 - **A cave that cannot load.** Records missing: held, then admitted the frame they land. Never clearing: relocated to the remembered open water at 12 s, or the refuge if that is no longer clear. A biome reload below its budget: paused, rescued at 4 s; with no verified rescue, the refuge at 12 s (`cw1-streaming`).
 
 ## Compromises (each with its root fix and cost)
-- **Clean 3090 frame-time evidence: missing.**
-  - **What happened:** see *Traversal*. The attribution is unresolved. Contention outside the lane still labelled 8 of 9 runs `DISTURBED` inside the window, and the remaining spikes are not proportional to the work in them.
-  - **Root fix:** TST-16's static priority slice (so local work can't contend with an exclusive run) and per-job steal on every long frame. Then rerun the 8 segments with this harness, about 2 h. A spike that is still on CPU with no steal and no contention is game work: the per-call attribution names its part.
-  - **Also for SCHED:** a quiet run (load ≤2.65, PSI ≤0.54%) was still labelled `DISTURBED`.
+- **The frame gate depends on attributing host pauses.**
+  - **What happened:** this VM's host stops most of the VM for 70–120 ms several times a minute. Every long frame of the diagnostic run sat in one.
+  - **The gate's rule:** subtract the time stolen from our two main threads and judge the remainder. A frame is excused as **host-stopped** only when most of the VM stopped and our threads were within budget on CPU. Without GPU busy data, that class says "GPU unknown". It's listed apart, and it removes exactly one gate failure (r12 tour 7).
+  - **Root fixes:**
+    - the host itself, a fleet question the coordinator has raised with the owner;
+    - GPU timer queries (or a GPU-process trace of the device wait) on long frames, so host-stopped needn't say "GPU unknown" (S, harness);
+    - sampling the compositor's thread too, so presentation-side gaps can be attributed (S).
+- **Chunk residency planning, a known over-slice (convention 4).**
+  - **What happened:** the residency's plan phase (wanted chunks, frontier and admission) is now timed. Across the targeted remeasure its p99 is 0.2 ms, but single frames reached **6.9 ms** (tour 3) and **4.5 ms** (tour 5). That's over the 2 ms slice, well under the 34 ms frame budget.
+  - **Unresolved:** those frames weren't long, so the harness recorded no stolen-time sample for them. Whether they're steal or planning can't be told.
+  - **Root fix:** cache the wanted set between frames, re-planning only when the viewer crosses a chunk boundary or the budget or external share changes. Slice the frontier walk if it's still over 2 ms (S).
+  - **Owner:** WK-1, which owns streaming scale. Not done in CW-1, by the coordinator's decision.
 - **Kit collision as boxes: COL-1 debt.**
   - **What happened:** the composites hold up to 149k boxes as objects, about 650k small objects in total, so the JS heap runs at 228–352 MiB, and a cluster build allocates about 18 MiB (18k boxes; `cw1/alloc.mjs`).
   - **Uphill edges:** CA-1 and hub caves sink at most 1.4 m and keep their accepted build. CA-2 keeps its edge-shelf floor. `rift_kiln_tube` and `meridian_culvert_north` keep their sunk edges, because edge rock broke their content and retreat.
@@ -169,17 +325,19 @@ After R1 (`src` as at `20679ea`, unchanged to `9c73272`). Run on the second work
 - **The island lookout is not built yet.**
   - **What happened:** the "lookout" shots are taken from its planned coordinate (`ISLAND_LOOKOUT`) at the surface, not from a standing point on land. Pending OP-1.
 - **Coverage by keyboard driver.**
-  - **What happened:** after R1's planner (keel rule, transits from the berth) and driver (depth along the leg) fixes, the tour reached 66 of 67 stops; the Isles surf cave stopped 78 m short. In the deep caves, the Creel's air (about 13 minutes at depth) ended the Meridian leg before its east four.
-  - **Root fix:**
-    - route the driver along each cave's authored approach route, not a computed outer point (S);
-    - plan deep segments within the craft's air budget, from an earned save nearer the Meridian (S).
+  - **What happened:** every cave stop is now reached by ordinary input from earned saves. The surf cave approach is narrow: before the planner's lateral margin, the keyboard driver's drift put the Dart on a −2.2 m bump beside the planned leg in three runs (reproduced headless). Three tour legs have no path with the margin and are planned on the keel rule alone (counted by the planner).
+  - **Root fix, if a stop stalls again:** route the driver along each cave's authored approach route instead of a computed outer point (S).
+- **Context restore re-uploads complete cave fields whole.**
+  - **What happened:** after a lost context, a fill in progress restarts within the per-frame budget, but completed fields are marked complete so Babylon restores them. That's at most the four cached fields, up to about 1.25 MiB each, uploaded at once while graphics come back.
+  - **Root fix:** re-fill restored fields through the sliced path (S), if a restore frame matters.
+- **REC-1's 68.8 ms simulation frame stays open.**
+  - **What happened:** it's SIM's, for the composed profile (SIM-PERF-1). The SAVE-1 alloc profile has a driven Dart step at 124 KiB a tick: `craftProfile` 17 KiB and hazard sampling 13 KiB, the sim's own.
 - **Bake size.**
   - **What happened:** terrain grows 15.4 → 38.9 MiB compressed with every cave's shell, plus 2.46 MiB of caves. Both are fetched per chunk and per cave, never all at once.
   - **Root fix:** shells as per-cave assets shared across LODs (S/M) if download size matters.
 
 ## Missing evidence
-- **3090 1080p frame times:** clean `exclusive` frame times with no `DISTURBED` label, and a resolved attribution of the remaining streaming frames (above).
-- **Mouth visits:** the Isles surf cave, not reached by driving.
-- **Deep caves, cold approaches:** the Meridian east four (culvert north, escarp pocket, terrace crack, escarp culvert). The other 11 were reached cold at travel speed.
-- **Exact candidate:** no 3090 run of `9c73272` itself; the runs were at `fd457d3`. Every change since is to the harness (`traverse.mjs`, notices and holds logging).
-- **Lookout:** a lookout shot from the built lookout.
+- **GPU busy time on long frames:** with none, host-stopped frames say "GPU unknown" (one in r12).
+- **A kernel off-CPU stack** for frames where our threads sleep without measured steal, such as r12 tour 7's (eBPF, root, a fleet question).
+- **The sliced chunk plan:** the plan phase's single-frame maxima (6.9 ms) can't yet be told apart from steal, since those frames weren't long.
+- **Lookout:** a lookout shot from the built lookout (OP-1).
