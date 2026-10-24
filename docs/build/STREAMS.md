@@ -806,3 +806,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **SIG-1 stage 1 R1** (Sol on `416441bc`, report on `review/sig-1-stage1` `fe580446`): REQUEST CHANGES, 5 P2s.
   - **Findings:** unsaveable mid-action transitions; silent cutting-arm completion and inferred feedback; the drone can launch in rock; per-step roster scans for lifts; an unbounded field-kit line cache.
   - **Resolved:** the OOM kills were intentional probes; the Spindle is intentionally optional (a specialist, walk-on Isles plate).
+- **SIG-1 stage 1 done at `5f557cbf`** (R1 fixes, code `a3e716f3`): saveable mid-actions; typed arm and berth events; drone launch clearance with atomic refusal; `rowById` lifts; a bounded line pool. Gate parts on the 4070 (fast 1,475, build, 6 economy, playthrough 8/8). Sol R2 running (`siltwake-sig1-stage1-review-r2-sol-5f557cb`).
