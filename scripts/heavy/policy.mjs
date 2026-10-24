@@ -81,24 +81,45 @@ const PORTABLE = [
 export const portableCommand = (argv) => PORTABLE.find((p) => p.match(argv.map(String)))?.name ?? null;
 export const UNDECLARED = "portability not declared: pass --machine any and --artifact for its outputs";
 
+// The submitter's settings that change what a registered command does (R2-F1).
+// The queue never forwards the environment (alickers gets argv and the
+// commit), so a registered command is portable only when none is set. npm's
+// own exports describe where npm and its files are (it sets them inside every
+// `npm run`), or only how much it logs; every other npm_config_* (script-shell,
+// node-options, a registry, …) changes the run. NODE_OPTIONS preloads and
+// flags. The rest are what the test tiers, the test build and the playthrough
+// runner read (scripts/test-tier.mjs, scripts/playthrough, tests/). Not listed:
+// the queue's own per-job variables (SILTWAKE_JOB_*, SILTWAKE_HEAVY_CONCURRENCY,
+// …), which it sets on either machine, and SILTWAKE_TEST_BUILD, which only
+// names where the job compiles (alickers compiles into its own .test-build).
+const NPM_OWN = new Set(["cache", "globalconfig", "global_prefix", "init_module", "local_prefix", "node_gyp", "noproxy", "npm_version", "prefix", "user_agent", "userconfig", "allow_scripts", "loglevel"]);
+const INVOCATION_ENV = ["NODE_OPTIONS", "SILTWAKE_HEAVY_BUDGET_MIB", "SILTWAKE_PLAYTHROUGH_FAULT", "SILTWAKE_SAVES", "SILTWAKE_LIBRARY_PAUSE"];
+const INVOCATION_PREFIXES = ["SILTWAKE_FAST_", "SILTWAKE_TIMELINE_"];
+/** The set variables in `env` that change a registered command, sorted. */
+export const invocationEnv = (env) => Object.keys(env).filter((k) => env[k] != null && env[k] !== "" && (
+  (k.toLowerCase().startsWith("npm_config_") && !NPM_OWN.has(k.slice(11).toLowerCase())) || INVOCATION_ENV.includes(k) || INVOCATION_PREFIXES.some((p) => k.startsWith(p)))).sort();
+
 /**
  * The machine a request resolves to. `why`: a reason it can't run on alickers
  * (the lane's eligibility), or null. `explicit`: the caller passed --machine.
- * `portable`: the command is registered (portableCommand).
+ * `portable`: the command is registered (portableCommand). `localConfig`: the
+ * submitter's settings that change it (invocationEnv).
  * - with a reason, `any` goes to the 3090, recording why (`routed`, on the
  *   ticket and its result), and `4070` is refused;
- * - an `any` the caller didn't ask for, on an unregistered command, goes to
- *   the 3090 too (UNDECLARED);
+ * - an `any` the caller didn't ask for goes to the 3090 too, if its command
+ *   is unregistered (UNDECLARED) or local configuration changes it;
  * - every other tag stands (`soak` runs here by its own rule).
  * Returns { machine, routed? } or { error }.
  */
-export function resolveMachine(machine, why, { explicit, portable }) {
+export function resolveMachine(machine, why, { explicit, portable, localConfig = [] }) {
   if (why) {
     if (machine === "4070") return { error: `--machine 4070 runs on alickers, but ${why}` };
     if (machine === "any") return { machine: "3090", routed: { from: "any", reason: why } };
     return { machine };
   }
   if (machine === "any" && !explicit && !portable) return { machine: "3090", routed: { from: "any", reason: UNDECLARED } };
+  if (machine === "any" && !explicit && localConfig.length)
+    return { machine: "3090", routed: { from: "any", reason: `local configuration ${localConfig.join(", ")} changes this command; pass --machine any to declare it portable` } };
   return { machine };
 }
 /** What a ticket that never ran was planned for (its result's `planned`; R1-F3). */

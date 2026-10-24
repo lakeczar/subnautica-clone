@@ -907,3 +907,93 @@ test("B33 (SCHED-3 R1-F3, Sol's R3): a routed ticket cancelled, expired or lost 
   await until("recovered", () => { hc(c, ["status"]); return result(c, lost); }, 30000);
   check(lost, /supervisor died before admission/);
 });
+
+// SCHED-3 R2 ------------------------------------------------------------------
+
+test("B34 (SCHED-3 R2-F1, Sol's E1): local npm configuration that changes a registered command routes a default any here, where it applies; an explicit --machine any stays the caller's declaration", async () => {
+  const c = await lane("npm-env");
+  commitFiles(c, { ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: 'if [ "$CASE" = REQUESTED ]; then echo CASE-REQUESTED; exit 19; fi; echo CASE-DEFAULT' } }) + "\n" });
+  const shell = join(c.dir, "test-shell");
+  writeFileSync(shell, "#!/bin/sh\nexport CASE=REQUESTED\nexec /bin/sh \"$@\"\n", { mode: 0o755 });
+  const env = { npm_config_script_shell: shell };
+  const s = hc(c, ["submit", "--class", "standard", "--", "npm", "test"], { cwd: c.repoDir, env });
+  assert.equal(s.code, 0, s.err);
+  assert.match(s.err, /runs here \(factory-worker\), not on alickers: local configuration npm_config_script_shell changes this command; pass --machine any to declare it portable/);
+  const id = s.out.trim();
+  assert.equal(waitFor(c, id).code, 19, "the requested setup ran");
+  assert.match(log(c, id), /^CASE-REQUESTED/m);
+  assert.deepEqual([result(c, id).remote, result(c, id).goal.machine, result(c, id).goal.routed.from], [undefined, "3090", "any"]);
+  // Without it, the same registered command goes to the 4070.
+  const plain = submit(c, c.repoDir, "--class", "standard", "--", "npm", "test");
+  assert.equal(waitFor(c, plain).code, 0);
+  assert.equal(result(c, plain).remote, true);
+  // Declared by the caller: alickers, with what the commit carries. Real ssh carries no caller environment;
+  // the fake one is a local shell, so it drops this variable as the real boundary does (Sol's E1 seam).
+  const ssh = join(c.fake.dir, "ssh");
+  writeFileSync(ssh, readFileSync(ssh, "utf8").replace("#!/bin/bash\n", "#!/bin/bash\nunset npm_config_script_shell\n"));
+  const dec = hc(c, ["submit", "--class", "standard", "--machine", "any", "--", "npm", "test"], { cwd: c.repoDir, env });
+  assert.equal(dec.code, 0, dec.err);
+  assert.doesNotMatch(dec.err, /runs here/);
+  assert.equal(waitFor(c, dec.out.trim()).code, 0, "the commit's own test, without the local shell");
+  assert.equal(result(c, dec.out.trim()).remote, true);
+});
+
+test("B35 (SCHED-3 R2-F2, Sol's E2 and its base control): a build with options declares its output with --artifact; it runs on the 4070 and the declared directory comes back; with no artifact it stays here", async () => {
+  const c = await lane("custom-build");
+  commitFiles(c, {
+    ".gitignore": "custom-dist/\n",
+    "package.json": JSON.stringify({ name: "fixture", private: true, type: "module", scripts: { build: "node scripts/build.mjs" } }) + "\n",
+    "scripts/build.mjs": "import {mkdirSync,writeFileSync} from 'node:fs'; const i=process.argv.indexOf('--outDir'),out=i<0?'dist':process.argv[i+1]; mkdirSync(out,{recursive:true}); writeFileSync(out+'/result.txt','FRESH'); console.log('built '+out);\n",
+  });
+  const argv = ["npm", "run", "build", "--", "--outDir", "custom-dist"];
+  for (const machine of ["4070", "any"]) {
+    const s = hc(c, ["submit", "--class", "standard", "--machine", machine, "--artifact", "custom-dist", "--", ...argv], { cwd: c.repoDir });
+    assert.equal(s.code, 0, s.err);
+    assert.doesNotMatch(s.err, /runs here/);
+    const id = s.out.trim();
+    assert.equal(waitFor(c, id).code, 0);
+    assert.equal(result(c, id).remote, true, machine);
+    assert.equal(readFileSync(join(c.dir, "artifacts", id, "custom-dist", "result.txt"), "utf8"), "FRESH");
+  }
+  const no = hc(c, ["submit", "--class", "standard", "--machine", "4070", "--", ...argv], { cwd: c.repoDir });
+  assert.equal(no.code, 2);
+  assert.match(no.err, /refused: --machine 4070 runs on alickers, but it only builds \(npm run build\) and declares no --artifact for its output: build output must stay here/);
+});
+
+test("B36 (SCHED-3 R2-F3, Sol's E3): a ticket the holder rejects (its tree changed while it waited) never ran: ran false, planned, no machine; wait, wait --json and status agree", async () => {
+  const c = await lane("never-ran-holder");
+  commitFiles(c, { "noop.mjs": "console.log('PAYLOAD-RAN');\n" });
+  host(c, { memAvailableMiB: 1000 });
+  const id = submit(c, c.repoDir, "--class", "standard", "--", "node", "noop.mjs");
+  writeFileSync(join(c.repoDir, "file.txt"), "changed\n");
+  host(c, { memAvailableMiB: 12000 });
+  await done(c, id, 60000);
+  const r = result(c, id);
+  assert.equal(r.code, 3);
+  assert.match(r.label, /the command did not run/);
+  assert.doesNotMatch(log(c, id), /^PAYLOAD-RAN/m);
+  assert.deepEqual([r.ran, r.planned, r.machine, r.goal.machine, r.goal.routed.from], [false, "RTX 3090 (factory-worker)", undefined, "3090", "any"]);
+  const w = hc(c, ["wait", id]);
+  assert.match(w.err, /never ran; planned for RTX 3090 \(factory-worker\) \(any, routed here: portability not declared/);
+  assert.doesNotMatch(w.err, /; on RTX 3090/);
+  assert.deepEqual(JSON.parse(hc(c, ["wait", id, "--json"]).out.trim().split("\n").at(-1)), { pending: false, ...r });
+  assert.deepEqual(JSON.parse(hc(c, ["status", id]).out), r);
+  // A job that ran here says so.
+  git(c.repoDir, "checkout", "-q", "--", "file.txt");
+  const ran = submit(c, c.repoDir, "--class", "standard", "--machine", "3090", "--", "node", "noop.mjs");
+  assert.equal(waitFor(c, ran).code, 0);
+  assert.deepEqual([result(c, ran).ran, result(c, ran).machine], [true, "RTX 3090 (factory-worker)"]);
+});
+
+test("B37 (SCHED-3 R2-F3, Sol's E4): remote recovery after the payload started keeps the frozen goal and says it ran there", async () => {
+  const c = await lane("remote-goal");
+  const id = submit(c, c.repoDir, "--class", "standard", "--machine", "any", "--", "sh", "-c", "echo PAYLOAD-RAN; sleep 60");
+  const t = await holderOf(c, id);
+  await until("the payload ran on the sandbox", () => log(c, id).includes("PAYLOAD-RAN"), 30000);
+  killOwned(t.holder);
+  hc(c, ["status"]);
+  await done(c, id, 120000);
+  const r = result(c, id);
+  assert.deepEqual([r.remote, r.ran, r.machine, r.machineTag, r.goal.machine, r.evidence.bound], [true, true, REMOTE, "any", "any", false]);
+  assert.deepEqual(r.goal, t.goal, "the frozen goal");
+});

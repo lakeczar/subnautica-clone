@@ -11,7 +11,7 @@
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { availableParallelism } from "node:os";
+import { cpus } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unmeasuredContext } from "./contention.mjs";
@@ -280,10 +280,20 @@ export function cgroupRead(cgroup, file) {
   try { return readFileSync(join(cgroup, file), "utf8").trim(); } catch { return null; }
 }
 
+/**
+ * This machine's vCPUs, the same from every cgroup (SCHED-3 R2-F4):
+ * config.json `nproc` if set, else the kernel's CPU count. Not
+ * availableParallelism(), which follows the caller's own cgroup quota, so a
+ * caller inside a quota-limited scope (a queue job running the suites, an
+ * install from a capped shell) would size tokens and slices differently from
+ * the holder in its own scope.
+ */
+export const machineCpus = (cfg) => (Number.isInteger(cfg?.nproc) && cfg.nproc > 0 ? cfg.nproc : cpus().length);
+
 /** Host facts for plan(). In a private (test) state directory,
  * host-override.json may replace nproc, memAvailableMiB and memFullAvg10. */
 export function sampleHost(cfg, state) {
-  const host = { nproc: availableParallelism(), ...meminfo(), memFullAvg10: psi("memory", "full"), charges: {} };
+  const host = { nproc: machineCpus(cfg), ...meminfo(), memFullAvg10: psi("memory", "full"), charges: {} };
   for (const t of Object.values(state.tickets)) {
     if (t.state !== "running") continue;
     const cg = readFileSafe(join(jobDir(cfg, t.id), "cgroup"));
@@ -412,17 +422,21 @@ export function reconcile(cfg, state) {
 }
 
 /**
- * The result record of a ticket the queue ends itself (SCHED-3 R1-F3):
- * cancelled or expired while queued, or recovered after its supervisor or
- * holder died. It keeps the frozen goal (machine tag and route). A ticket that
- * never ran gets `ran: false` and `planned`, never `machine`; one that ran
- * here gets `machine`. `fields` are the code, label and the rest.
+ * Every ticket's result record starts here (SCHED-3 R1-F3, R2-F3): holders,
+ * remote holders, recovery, cancellation, expiry and release. It keeps the
+ * frozen goal (machine tag and route) and says what was observed of the
+ * payload: `ran` true once its command was launched (not when the ticket was
+ * admitted), false if it never was, "unknown" if a remote start can't be
+ * established. A ticket that ran or may have gets `machine` (where); one that
+ * never ran gets `planned`, never `machine`. `fields` are the rest (code,
+ * label, measurements), and win.
  */
-export function terminalRecord(t, fields, { ran = false } = {}) {
+export function terminalRecord(t, fields, { ran = false, remote = false } = {}) {
   const goal = t.goal ?? null;
   return {
     ticket: t.id, class: t.req?.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), goal,
-    ...(ran ? { machine: MACHINE_LABELS.local, machineTag: goal?.machine ?? null } : { ran: false, planned: plannedFor(goal) }),
+    ...(remote ? { remote: true } : {}),
+    ...(ran === false ? { ran: false, planned: plannedFor(goal) } : { ran, machine: remote ? MACHINE_LABELS.remote : MACHINE_LABELS.local, machineTag: goal?.machine ?? null }),
     ...fields,
   };
 }
@@ -465,7 +479,7 @@ export function readStats(dir) {
  * Processes with an NVIDIA device open (/dev/nvidia0 …), which is what a GPU
  * Chrome (ANGLE GL-EGL) or any other GPU client does; SwiftShader does not.
  * Each is matched to the running ticket whose job scope contains it: `leased`
- * when that ticket holds the GPU. A v1 scope (siltwake-heavy-*) is exclusive,
+ * when that ticket holds the GPU. A v1 scope (siltwake-heavy-<dir>-<pid>) is exclusive,
  * so it counts as leased. Only this user's processes are readable. ~10 ms.
  */
 export function gpuUsers(cfg, state) {
@@ -479,7 +493,9 @@ export function gpuUsers(cfg, state) {
     if (!fds.some((fd) => { try { return /^\/dev\/nvidia\d/.test(readlinkSync(`/proc/${pid}/fd/${fd}`)); } catch { return false; } })) continue;
     const cgroup = readFileSafe(`/proc/${pid}/cgroup`) ?? "";
     const owner = scopes.find(([s]) => cgroup.includes(s))?.[1];
-    const v1 = !owner && /\/siltwake-heavy-[^/]*\.scope/.test(cgroup) && !scopes.some(([s]) => cgroup.includes(s));
+    // A v1 scope is siltwake-heavy-<dir>-<pid>; a v2 job scope of any queue
+    // (another state's, e.g. the queue job running these suites) ends in a ticket id, and isn't one (R2-F4).
+    const v1 = !owner && /\/siltwake-heavy-[^/]*\.scope/.test(cgroup) && !/-\d{6}-\d{6}-[0-9a-f]{4}\.scope/.test(cgroup) && !scopes.some(([s]) => cgroup.includes(s));
     users.push({ pid: Number(pid), cmd: (readFileSafe(`/proc/${pid}/cmdline`) ?? "").replace(/\0/g, " ").trim().slice(0, 160),
       ticket: owner?.id ?? null, leased: Boolean(owner?.req.gpu) || v1 });
   }

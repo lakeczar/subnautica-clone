@@ -35,6 +35,46 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
 
+## R2 review responses
+
+Review `0f6b3b2a` on `review/sched-3-r2`, by Sol on `fa2078a2`: REQUEST CHANGES, P1, P2 and P3, plus the coordinator's new F4. All R1 repros were fixed (9/9). Not installed.
+- **F1 (P1), registered argv inherited local configuration** (E1: `npm_config_script_shell` changed `npm test` here, and the remote run silently dropped it).
+  - **The rule:** a default `any` is portable only when the settings that change the command are clean (`policy.mjs` `invocationEnv`, passed to `resolveMachine` as `localConfig`). The environment is not forwarded. An explicit `--machine any` stays the caller's declaration.
+  - **Invocation-changing settings:**
+    - `npm_config_*`, except npm's own exports. These are the 13 names `npm run` sets itself: install paths, config file locations, version, user agent, `allow_scripts` and `loglevel`. They say where npm is and how much it logs, so `npm run test:heavy`'s queued command still balances.
+    - `NODE_OPTIONS`.
+    - What `scripts/test-tier.mjs`, the playthrough runner and the fast tests read: `SILTWAKE_FAST_*`, `SILTWAKE_TIMELINE_*`, `SILTWAKE_HEAVY_BUDGET_MIB`, `SILTWAKE_SAVES`, `SILTWAKE_PLAYTHROUGH_FAULT` and `SILTWAKE_LIBRARY_PAUSE`.
+  - **Not counted:** the queue's own per-job variables (`SILTWAKE_JOB_*`, `SILTWAKE_HEAVY_CONCURRENCY`, …), which it sets on either machine, and `SILTWAKE_TEST_BUILD`, which only names where the job compiles (alickers compiles into its own fresh `.test-build`).
+  - **The reason:** `local configuration <names> changes this command; pass --machine any to declare it portable`.
+- **F2 (P2), build options changed the output** (E2: `npm run build -- --outDir custom-dist` with `--artifact custom-dist` was refused). `buildOnly`:
+  - with options after the build command, the caller's declared `--artifact` is the output contract, so any declared artifact satisfies it;
+  - with no options, the table's output must be covered, as before;
+  - with no artifact, it stays here, "declares no --artifact for its output".
+  - No `--outDir` parsing.
+- **F3 (P3), one terminal identity builder.** `state.mjs` `terminalRecord(t, fields, { ran, remote })` now starts every result, at all seven writers:
+  - the holder;
+  - the remote holder's finish, and its recovery;
+  - the coordinator's release;
+  - queued cancellation, expiry, and reconcile.
+
+  It always keeps the frozen goal. `ran` is what was observed of the payload, not of admission:
+  - **the holder:** scope-run's `started`, written just before the command runs;
+  - **the remote holder:** the receipt's `started` phase. Without a valid receipt that says it didn't start, `unknown`;
+  - **remote recovery:** `true` if a valid receipt read showed the start, else `unknown`;
+  - **release:** `unknown`.
+
+  `true` and `unknown` carry `machine`; `false` carries `planned`. The final line says `never ran; planned for …` for `false`, and `on <machine> (whether its command started there is unknown)` for `unknown`.
+- **F4, the suites inside a queue job:**
+  - **Scope naming:** `gpuUsers` treated any `siltwake-heavy-*` scope as a v1 (leased) holder, including the production job scope running the suites. A v1 scope is `siltwake-heavy-<dir>-<pid>`. A v2 job scope of any queue ends in a ticket id (`-YYMMDD-HHMMSS-xxxx`) and is no longer taken for one.
+  - **Parallelism:** `availableParallelism()` follows the caller's cgroup quota, so the suites inside a quota-limited job sized slices for 7 CPUs while holders in their own scopes used 8. One `state.mjs` `machineCpus(cfg)` (config.json `nproc`, else the kernel's CPU count) now serves host sampling, the holder's exclusive-slice check, the unit writer and the tests.
+  - **Job variables:** the test contexts drop every `SILTWAKE_JOB_*`, `SILTWAKE_HEAVY_*`, the GPU lease, `SILTWAKE_TEST_BUILD` and `BAKE_WORKERS` they inherit.
+- **Regressions:**
+  - **B34 (E1):** `npm_config_script_shell` routes the default `npm test` here, where the requested setup runs (exit 19). Without it the same command goes to the 4070. An explicit `any` goes there, where the real ssh boundary drops the variable.
+  - **B35 (E2 and its base control):** `--machine 4070|any --artifact custom-dist -- npm run build -- --outDir custom-dist` runs on the 4070 and returns `FRESH`. Without the artifact it is refused.
+  - **B36 (E3):** the holder's tree-change rejection: `ran:false`, `planned`, no machine. `wait`, `wait --json` and `status` agree. A job that ran says `ran:true`.
+  - **B37 (E4):** remote recovery after the payload started keeps the frozen goal, with `ran:true`.
+  - **Policy units:** `invocationEnv` with npm's own exports and the queue's variables excluded, `resolveMachine` with local configuration, and `buildOnly` with options.
+
 ## R1 review responses
 
 Review `6f49c776` on `review/sched-3-r1`, by Sol on `86744a72`: REQUEST CHANGES, one P1, one P2 and one P3; not installed. Coordinator's decisions applied.

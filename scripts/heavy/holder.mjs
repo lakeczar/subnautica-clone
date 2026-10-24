@@ -31,15 +31,14 @@
 // holds processes, the ticket is alive (state.mjs reconcile).
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { exclusiveSliceReady, hostObserved, judge, parseCounters, sliceMismatch, sliceThrottle, snapshotNow } from "./contention.mjs";
-import { MACHINE_LABELS, jobEnv, plan, sliceLimits } from "./policy.mjs";
+import { jobEnv, plan, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 import {
-  cgroupRead, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
-  releaseAnchorIfAlone, scopePopulated, self, sliceCheck, systemctl, transaction, unitFacts, writeJsonAtomic,
+  cgroupRead, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, machineCpus, readFileSafe, readJson, readState, readStats,
+  releaseAnchorIfAlone, scopePopulated, self, sliceCheck, systemctl, terminalRecord, transaction, unitFacts, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -312,7 +311,7 @@ if (gpuShared.size) note(`the GPU was also used outside the lease by: ${[...gpuS
 const counters = { start: parseCounters(readFileSafe(join(dir, "counters-start"))), end: parseCounters(readFileSafe(join(dir, "counters-end"))) };
 let boost = null;
 if (placement) {
-  const w = sliceLimits(availableParallelism(), cfg); // as install.sh wrote the unit
+  const w = sliceLimits(machineCpus(cfg), cfg); // as install.sh wrote the unit
   const want = { slice: cfg.exclusiveSlice, weight: String(cfg.exclusiveCpuWeight), cpuMax: `${w.cpuQuotaPct * 1000} 100000`, memoryMax: String(w.memoryMaxMiB * 1048576), swapMax: "0" };
   const wrong = !placement.ready ? [placement.why] : [...new Set([...sliceMismatch(counters.start, want).map((m) => `at the start: ${m}`), ...sliceMismatch(counters.end, want).map((m) => `at the end: ${m}`)])];
   boost = wrong.length ? { slice: cfg.exclusiveSlice, status: "unavailable", why: wrong.join("; ") } : { slice: cfg.exclusiveSlice, weight: cfg.exclusiveCpuWeight, status: "applied" };
@@ -341,21 +340,22 @@ const evidence = rejected ? null : {
 const keptSnapshot = snap ? dropSnapshot(snap.root, snap.status) : null;
 if (keptSnapshot) note(`the job wrote files into its snapshot; kept at ${keptSnapshot}`);
 
-const result = {
-  ticket: id, code, label, class: req.class, review: req.review, tokens: req.tokens, memMiB: req.memMiB, gpu: req.gpu,
+// Launched means the payload's command started (scope-run.sh's `started`), not that the ticket was admitted.
+const result = terminalRecord(t, {
+  code, label, review: req.review, tokens: req.tokens, memMiB: req.memMiB, gpu: req.gpu,
   express: t.express, exclusive: req.exclusive, mode: t.mode, worktree: t.worktree, cwd: t.cwd, argv: t.argv,
-  submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ranS: Math.round(ranS * 10) / 10,
+  ranS: Math.round(ranS * 10) / 10,
   peakMiB: stats.peak ? Math.ceil(Number(stats.peak) / 1048576) : oomSeen.peak ? Math.ceil(oomSeen.peak / 1048576)
     : facts.memoryPeak != null ? Math.ceil(facts.memoryPeak / 1048576) : null,
   cpuS: stats.usage_usec ? Math.round(Number(stats.usage_usec) / 1e5) / 10 : facts.cpuNs != null ? Math.round(facts.cpuNs / 1e8) / 10 : null,
-  oomKills, reservationOom, oomGroupKill: groupOom, oomEvidence, unavailable, leftovers, stopReason, goal,
+  oomKills, reservationOom, oomGroupKill: groupOom, oomEvidence, unavailable, leftovers, stopReason,
   head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
   changedTree, changedDuringRun, evidence, snapshot: snap ? { root: snap.root, kept: Boolean(keptSnapshot) } : null,
   gpuShared: gpuShared.size ? [...gpuShared.values()] : undefined, context: contextResult,
-  machine: MACHINE_LABELS.local, machineTag: goal.machine ?? null, fellBack: t.fellBack ?? undefined,
+  fellBack: t.fellBack ?? undefined,
   // --artifact paths of a job that ran here are where it wrote them.
   artifacts: request.opts?.artifacts?.map((p) => { const at = resolve(runCwd, p); return { path: p, ...(existsSync(at) ? { local: at } : { error: "not written" }) }; }),
-};
+}, { ran: existsSync(join(dir, "started")) });
 // The scope is empty: release the worktree's .test-build before anyone can see the result.
 if (writesMarker && readJson(marker)?.ticket === id) rmSync(marker, { force: true });
 // Result, ledger and release in one transaction. If this process dies before

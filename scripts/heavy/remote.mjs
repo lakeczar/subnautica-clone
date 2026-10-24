@@ -341,9 +341,12 @@ const BUILDS = [
 /**
  * A command that only builds, run where its output doesn't come back: its
  * output in this worktree is the point. Returns { command, output } when no
- * --artifact covers the output, else null. A build followed by other work, or
- * one whose output is declared (`--artifact dist`, fetched back whole), can go.
- * One command line only: `sh -c` with a separator or a newline is more than a build.
+ * --artifact covers the output, else null. A build followed by other work can
+ * go. Its output: with no options after the command, the table's (covered by
+ * that --artifact, or `.`); with options (`-- --outDir x`, a mode …), the
+ * caller's declared --artifact is the output contract, so any declared one
+ * will do, and `output` is null (R2-F2). One command line only: `sh -c` with a
+ * separator or a newline is more than a build.
  */
 export function buildOnly(argv, artifacts = []) {
   let words = argv.map(String);
@@ -351,11 +354,11 @@ export function buildOnly(argv, artifacts = []) {
     if (/[;&|\n`$(]/.test(words[2])) return null;
     words = words[2].trim().split(/\s+/);
   }
-  const hit = BUILDS.find(([cmd]) => cmd.every((w, i) => words[i] === w)); // its own options after it change nothing
+  const hit = BUILDS.find(([cmd]) => cmd.every((w, i) => words[i] === w));
   if (!hit) return null;
-  const [cmd, output] = hit;
-  const declared = artifacts.some((a) => !isAbsolute(a) && [".", output].includes(normalize(a).replace(/\/$/, "")));
-  return declared ? null : { command: cmd.join(" "), output };
+  const [cmd, output] = hit, options = words.length > cmd.length;
+  const declared = options ? artifacts.length > 0 : artifacts.some((a) => !isAbsolute(a) && [".", output].includes(normalize(a).replace(/\/$/, "")));
+  return declared ? null : { command: cmd.join(" "), output: options ? null : output };
 }
 
 /**

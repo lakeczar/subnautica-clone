@@ -12,11 +12,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { heavyJobGuard } from "./build-guard.mjs";
 import { sliceLimits } from "./policy.mjs";
-import { alive, loadConfig, scopePopulated } from "./state.mjs";
+import { alive, loadConfig, machineCpus, scopePopulated } from "./state.mjs";
 import { V1_REPO, blockedBy, context, exclusiveSlice, hc, here, holderOf, killOwned, read, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
 
 const fast = { minStallS: 1, soakYieldS: 3 };
@@ -707,7 +706,7 @@ exec /usr/bin/systemctl "$@"
   // 3. An equal file with a stale manager (the file written, never reloaded): the rerun verifies systemd, not the file.
   pool(3072);
   const stale = memMax();
-  const wantMiB = sliceLimits(availableParallelism(), loadConfig(c.env)).memoryMaxMiB;
+  const wantMiB = sliceLimits(machineCpus(loadConfig(c.env)), loadConfig(c.env)).memoryMaxMiB;
   writeFileSync(unitFile, readFileSync(unitFile, "utf8").replace(/MemoryMax=\d+M/, `MemoryMax=${wantMiB}M`));
   assert.equal(memMax(), stale, "systemd hasn't seen it");
   r = install();

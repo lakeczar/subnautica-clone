@@ -403,6 +403,21 @@ test("portability is declared (SCHED-3 R1-F1): a default any goes to alickers on
     assert.equal(P.portableCommand(argv), null, argv.join(" "));
 });
 
+test("local configuration (SCHED-3 R2-F1): settings that change a registered command route a default any here; npm's own exports and the queue's job variables don't", () => {
+  assert.deepEqual(P.invocationEnv({ npm_config_script_shell: "/x/sh", NODE_OPTIONS: "--require x", SILTWAKE_FAST_FILE_BUDGET_S: "30", SILTWAKE_TIMELINE_SEED: "7", SILTWAKE_SAVES: "/x", npm_config_node_options: "--x", NPM_CONFIG_REGISTRY: "http://x" }),
+    ["NODE_OPTIONS", "NPM_CONFIG_REGISTRY", "SILTWAKE_FAST_FILE_BUDGET_S", "SILTWAKE_SAVES", "SILTWAKE_TIMELINE_SEED", "npm_config_node_options", "npm_config_script_shell"]);
+  // What `npm run` exports itself, the queue's per-job variables, the scheduler's own and an empty value: not invocation-changing.
+  const quiet = Object.fromEntries(["cache", "globalconfig", "global_prefix", "init_module", "local_prefix", "node_gyp", "noproxy", "npm_version", "prefix", "user_agent", "userconfig", "allow_scripts", "loglevel"].map((k) => [`npm_config_${k}`, "x"]));
+  Object.assign(quiet, { SILTWAKE_JOB_CPUS: "2", SILTWAKE_HEAVY_CONCURRENCY: "2", SILTWAKE_SCHED_DIR: "/x", SILTWAKE_TEST_BUILD: ".test-build-2", NODE_OPTIONS: "", PATH: "/bin" });
+  assert.deepEqual(P.invocationEnv(quiet), []);
+  const portable = { explicit: false, portable: "the fast tier" };
+  assert.deepEqual(P.resolveMachine("any", null, { ...portable, localConfig: ["npm_config_script_shell"] }),
+    { machine: "3090", routed: { from: "any", reason: "local configuration npm_config_script_shell changes this command; pass --machine any to declare it portable" } });
+  assert.deepEqual(P.resolveMachine("any", null, { ...portable, localConfig: [] }), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("any", null, { explicit: true, portable: null, localConfig: ["NODE_OPTIONS"] }), { machine: "any" }, "an explicit --machine any stays the caller's declaration");
+  assert.deepEqual(P.resolveMachine("4070", null, { explicit: true, portable: null, localConfig: ["NODE_OPTIONS"] }), { machine: "4070" });
+});
+
 test("build-only commands stay here unless an --artifact brings their output back (SCHED-3 R1-F2); one command line only", async () => {
   const R = await import(pathToFileURL(resolve("scripts/heavy/remote.mjs")).href);
   assert.deepEqual(R.buildOnly(["npm", "run", "build"]), { command: "npm run build", output: "dist" });
@@ -412,6 +427,11 @@ test("build-only commands stay here unless an --artifact brings their output bac
   for (const art of [["dist"], ["./dist/"], ["."]]) assert.equal(R.buildOnly(["npm", "run", "build"], art), null, `--artifact ${art}`);
   assert.ok(R.buildOnly(["npm", "run", "build"], ["dist/sub"]), "part of the output doesn't bring it back");
   assert.ok(R.buildOnly(["npm", "run", "test:build"], ["dist"]), "another output doesn't either");
+  // With options after the command, the declared --artifact is the output contract (R2-F2): any declared one will do.
+  const custom = ["npm", "run", "build", "--", "--outDir", "custom-dist"];
+  assert.equal(R.buildOnly(custom, ["custom-dist"]), null);
+  assert.equal(R.buildOnly(["sh", "-c", "npm run build -- --outDir custom-dist"], ["custom-dist"]), null);
+  assert.deepEqual(R.buildOnly(custom), { command: "npm run build", output: null }, "with no artifact it stays here");
   for (const argv of [["npm", "test"], ["sh", "-c", "npm run build && node scripts/check-dist.mjs"], ["sh", "-c", "npm run build\nnode scripts/use-build.mjs"],
     ["sh", "-c", "node scripts/test-build.mjs; node scripts/test-tier.mjs heavy"], ["npm", "run", "build:terrain"], ["npm", "run", "playthrough"]])
     assert.equal(R.buildOnly(argv), null, JSON.stringify(argv));

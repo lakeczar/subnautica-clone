@@ -25,10 +25,9 @@
 // request that can never fit.
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
+import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, invocationEnv, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
 import { buildOnly, builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
@@ -133,8 +132,8 @@ async function submit(opts, command, { quiet = false } = {}) {
   const why = !lane.enabled ? `the remote lane is off (${readHealth(cfg).detail})` : !tree.head ? "not a git tree"
     : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)`
     : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …`
-    : builds ? `it only builds (${builds.command}) and declares no --artifact ${builds.output}: build output must stay here` : null;
-  const routed = resolveMachine(req.goal.machine, why, { explicit: opts.machine != null, portable: portableCommand(command) });
+    : builds ? `it only builds (${builds.command}) and declares no --artifact ${builds.output ?? "for its output"}: build output must stay here` : null;
+  const routed = resolveMachine(req.goal.machine, why, { explicit: opts.machine != null, portable: portableCommand(command), localConfig: invocationEnv(process.env) });
   if (routed.error) fail(`refused: ${routed.error}`);
   const machine = req.goal.machine = routed.machine;
   if (routed.routed) req.goal.routed = routed.routed;
@@ -307,7 +306,8 @@ function finalLine(e) {
       : `tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`);
   }
   const route = e.goal?.routed ? ` (any, routed here: ${e.goal.routed.reason})` : "";
-  parts.push(e.ran === false ? `never ran; planned for ${e.planned}${route}` : `on ${e.machine ?? MACHINE_LABELS.local}${route}`);
+  parts.push(e.ran === false ? `never ran; planned for ${e.planned}${route}`
+    : `on ${e.machine ?? MACHINE_LABELS.local}${e.ran === "unknown" ? " (whether its command started there is unknown)" : ""}${route}`);
   if (e.artifacts?.length) parts.push(`artifacts: ${e.artifacts.map((a) => a.local ?? `${a.remote ?? a.path} (${a.error ?? "here"})`).join(", ")}`);
   if (e.gpuShared) parts.push(`GPU shared outside the lease with pid ${e.gpuShared.map((u) => u.pid).join(", ")}`);
   if (e.context?.v === 2) {
@@ -438,12 +438,13 @@ function releaseRemoteCmd(args) {
     if (!t) return { result: existsSync(join(jobDir(cfg, id), "exit.json")) ? "finished" : "unknown" };
     if (!t.remote || t.state !== "running") return { result: "not-remote" };
     const request = readJson(join(jobDir(cfg, id), "request.json"));
-    const result = {
-      ticket: id, code: 75, stopReason: "released", class: t.req.class, remote: true, machine: MACHINE_LABELS.remote, machineTag: t.goal?.machine, attempts: t.attempts,
+    // Whether the attempt on alickers started is exactly what nobody could confirm.
+    const result = terminalRecord(t, {
+      code: 75, stopReason: "released", attempts: t.attempts,
       label: `released by the coordinator: ${reason}. The attempt on alickers was never confirmed stopped; the job was not run here`,
-      released: { reason, by, at: Date.now() }, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), head: request?.tree?.head ?? null,
+      released: { reason, by, at: Date.now() }, head: request?.tree?.head ?? null,
       evidence: { commit: request?.tree?.head ?? null, bound: false, why: `released by the coordinator: ${reason}`, snapshot: false },
-    };
+    }, { ran: "unknown", remote: true });
     writeJsonAtomic(join(jobDir(cfg, id), "exit.json"), result);
     ledger(cfg, { event: "remote-released", ...result, holder: t.holder ?? null, recovering: t.recovering ?? null });
     delete state.tickets[id];
