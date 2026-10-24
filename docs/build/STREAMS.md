@@ -823,3 +823,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **REC-1 R3 fixes at `3eec4044`** (code `68d0d60c`): R3-1/2/3/5 fixed and checked with real workers and OPFS.
   - **R3-4, inclusive cost measured** (fixed pose, 6 one-run pairs under the TST-16 slice): +0.42 ms per frame (95% CI −0.14 to +0.97), with a best estimate of 0.3–0.4 ms. That's **over the 0.167 ms budget**. It sits in the game's own frame callback with collection up, and the suspect is renderer per-part timing and GPU timer queries.
   - **Decision:** fix it in R3b, not as a compromise; then one R4 covers everything.
+- **SIM-1b code complete at `5314f3ef`** (rebuilt on root `96255382`):
+  - **Bench at 20k on the 4070:** 2.96M chars and 9.36 ms per save → 64k chars and 0.80 ms steady; a sealing commit is 2.80 ms.
+  - **Rulings and tests:** the R6 rulings are in, and their regressions fail on f6fee338. Note events carry `saveRef` for REC-2.
+  - **Gate:** running inside 4070 jobs.
+  - **Review:** Sol R1 dispatched in parallel (`siltwake-sim1b-review-r1-sol-5314f3e`).
