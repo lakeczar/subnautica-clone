@@ -176,6 +176,43 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
   - **What doesn't:** a game save's success still never resolves a timeline warning, and a timeline success never resolves a game-save warning.
   - Regressions: both directions in the presentation, the success after a refused commit with the live cue showing, and a repair in the app that clears its protection warning.
 
+**Mutant detection, at `80b11146`:** the self-check, via the queue on `--machine 4070`. The review's mutants are Sol's `mutations.mjs` patches, unchanged, on the same anchors. Three are new: a read that rewrites identical bytes, R2-F1's validator reverted, and the old resume.
+
+| Mutant | Caught by fast-tier scripts | Fast seeds (24 × 40) | First heavy-range seed (of 300) |
+| --- | --- | --- | --- |
+| `load_mutates`: a protected read writes an unrelated key, catching a refusal | 60, first "a protected read writes nothing" | 17 | index 0 |
+| `load_rewrites_same_bytes`: a protected read rewrites the journal's own bytes | 58, same first | 10 | index 0 |
+| F1: repair reuses its numbers, cleanup against the proposed state | 4: "failed repair at write 0–3" (a write before the journal touches a damaged key) | 0 | index 29 |
+| F2 version: unsafe version coercion, no totality or depth wrappers | 3: hostile and deep v1, a deep summary field (a load throws) | 5 | index 7 |
+| F2 counters: finite-only counters, no partition check | 5: the five head-counter scripts (loads over the damaged journal) | 0 | index 8 |
+| F3, shallow `kept` read as already folded | 2: "shallow summary folding" (a commit folded a damaged chunk) | 0 | none |
+| F3, shallow `kept` overwritten | the same 2 | 0 | none |
+| F4: folds before the journal, quota targets validated lazily | 1: "quota with a damaged previous" (a protected commit changed storage) | 0 | none |
+| Seed 66769815: staging ignores absent old-journal names | 1: the missing-named-number repair (a write touches a damaged key) | 0 | none |
+| `oracle_saved_protected`: a repair claims success, writing nothing | 36, first "failed repair at write 0" | 13 | index 0 |
+| R2-F1 reverted: optional fields and stretch members unchecked | 4: one event field, three summary stretches | 0 | index 10 |
+| The old resume (1,001-event chunks after a reload) | 1: "reload of a full open chunk" | 0 | index 270 |
+
+Every mutant is caught by the fast tier, and the unchanged sources pass every script, all 24 fast seeds and all 300 heavy-range seeds. As Sol's R2 table showed, random sequences alone miss several of these within these budgets. The targeted scripts are what kill them, so they stay in the fast tier.
+
+- **Sol's R2 baseline, for comparison** (24 × 30 fast, 2,000 × 40 heavy):
+  - survived both tiers: F3 (both variants) and F4;
+  - survived the fast tier: F2 counters and the seed-66769815 mutant;
+  - the protect sentinel survived too.
+- **One fast script that doesn't distinguish:** "quota with damage beyond the first fold" does not catch F4. There, the mutant's first fold frees enough room to commit without touching the damaged chunk, which leaves storage within the contract.
+
+**Evidence, all via the queue on `--machine 4070`** (RTX 4070 Laptop, alickers, a shared desktop host). No local CPU work ran during CW-1's 3090 exclusive series.
+- **At `80b11146`:**
+  - `npm run typecheck`: passes;
+  - focused suites (timeline store, app, recorder, recovery, report and fast model tier, plus presentation, session notices and encounter presentation): 204/204 pass;
+  - heavy tier: 2,000 sequences of 40 steps, and the mutant self-check with 300 heavy-range seeds per mutant, in 7 min 25 s.
+- **At `f60f6e6c`** (the same code with this handoff):
+  - partial gate (`--only fast,build,economy:…`, all six economy steps) passed: fast in 72 s, build in 13 s, each economy step in 1–2 s;
+  - playthrough: all 8 scenarios pass, with no blockers and every milestone reload matched.
+- **Not run:**
+  - the gate's bake step: the terrain bake's sources are unchanged;
+  - a browser check of the status line's new warning style (`#system-status.error`, the toast's colours). Its behaviour is tested through the real `EncounterPresentation`; its look is not.
+
 ## What changed
 
 **`stepGameInPlace(s, commands, world): GameEvent[]`** (`src/sim/step.ts`) is the step, and it mutates `s`.
