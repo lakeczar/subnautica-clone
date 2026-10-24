@@ -102,7 +102,7 @@ test("with a 3090 exclusive running, the local steps run as one queued job after
   const inner = [{ id: "build", problems: [], s: 41 }, { id: "economy:m1", problems: ["exit 1"], s: 2 }];
   const r = gate(queue, schedRoot(runningExclusive), {
     bake: { receipt: good() },
-    standard: { lines: ["…", `gate-batch: ${JSON.stringify(inner)}`, "alickers-job: tested x exit 1"], receipt: good({ code: 1 }) },
+    batch: { lines: ["…", `gate-batch: ${JSON.stringify(inner)}`, "alickers-job: tested x exit 1"], receipt: good({ code: 1 }) },
   }, "--only", "build,bake,economy:m1", "--allow-dirty");
   const [bake, batch] = submitted();
   assert.deepEqual(bake!.slice(0, 2), ["--class", "bake"], "the bake first: the build expects it current");
@@ -117,7 +117,7 @@ test("with a 3090 exclusive running, the local steps run as one queued job after
 
 test("--queued routes the local steps even when the machine is free, and --machine moves the batch too", () => {
   const { queue, submitted } = standIn();
-  const r = gate(queue, schedRoot({}), { standard: { lines: [`gate-batch: ${JSON.stringify([{ id: "economy:m2-a", problems: [], s: 1 }])}`], receipt: good() } },
+  const r = gate(queue, schedRoot({}), { batch: { lines: [`gate-batch: ${JSON.stringify([{ id: "economy:m2-a", problems: [], s: 1 }])}`], receipt: good() } },
     "--only", "economy:m2-a", "--queued", "--machine", "4070");
   assert.deepEqual(submitted()[0]!.slice(0, 5), ["--class", "standard", "--machine", "4070", "--review"]);
   assert.match(r.stdout, /^ {2}pass {2}economy:m2-a /m, r.stdout + r.stderr);
@@ -128,7 +128,7 @@ test("--queued routes the local steps even when the machine is free, and --machi
 
 test("a batch job that prints no per-step results fails every batched step; --batch takes local steps only", () => {
   const { queue } = standIn();
-  const r = gate(queue, schedRoot(runningExclusive), { standard: { lines: ["crashed early"], receipt: good({ code: 2 }) } }, "--only", "fast,economy:m1");
+  const r = gate(queue, schedRoot(runningExclusive), { batch: { lines: ["crashed early"], receipt: good({ code: 2 }) } }, "--only", "fast,economy:m1");
   assert.match(r.stdout, /FAIL {2}fast .*the queued job reported no per-step results; exit 2/);
   assert.match(r.stdout, /FAIL {2}economy:m1 .*the queued job reported no per-step results/);
   const bad = spawnSync(process.execPath, ["scripts/gate.mjs", "--batch", "build,bake"], { encoding: "utf8" });
