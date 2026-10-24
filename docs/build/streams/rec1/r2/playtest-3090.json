@@ -1,0 +1,200 @@
+{
+ "query": "?rec=playtest",
+ "errors": [],
+ "exports": [
+  {
+   "label": "export-1",
+   "bytes": 9601748,
+   "entries": 11,
+   "pictures": 5,
+   "absent": [],
+   "declaredMissing": [],
+   "note": {
+    "found": true,
+    "t": 84432.5,
+    "picture": {
+     "file": "snapshots/00005.jpg",
+     "present": true
+    }
+   },
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 964.9,
+      "seconds": 83.48
+     }
+    ],
+    "endsAt": 84445,
+    "coversUntil": 84435.59999999404
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": [],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [],
+    "stopped": null,
+    "exportOver": []
+   },
+   "lastFrameT": 84511.6,
+   "offAfter": null,
+   "ok": true
+  },
+  {
+   "label": "export-2",
+   "bytes": 12208437,
+   "entries": 15,
+   "pictures": 9,
+   "absent": [],
+   "declaredMissing": [],
+   "note": {
+    "found": true,
+    "t": 84432.5,
+    "picture": {
+     "file": "snapshots/00005.jpg",
+     "present": true
+    }
+   },
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 964.9,
+      "seconds": 104.06
+     }
+    ],
+    "endsAt": 105025,
+    "coversUntil": 103533.59999999404
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": [],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [
+     {
+      "session": "export:siltwake-flight-2026-10-24T00-37-01-557Z.zip",
+      "file": "siltwake-flight-2026-10-24T00-37-01-557Z.zip",
+      "bytes": 9601748,
+      "why": "an earlier export (a copy), replaced by this one"
+     }
+    ],
+    "stopped": null,
+    "exportOver": []
+   },
+   "lastFrameT": 105077.4,
+   "offAfter": null,
+   "ok": true
+  },
+  {
+   "label": "export-3",
+   "bytes": 12284274,
+   "entries": 15,
+   "pictures": 9,
+   "absent": [],
+   "declaredMissing": [],
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 964.9,
+      "seconds": 104.31
+     }
+    ],
+    "endsAt": 105275,
+    "coversUntil": null
+   },
+   "retention": {
+    "budgetBytes": 2147483648,
+    "lost": [],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [
+     {
+      "session": "export:siltwake-flight-2026-10-24T00-37-01-557Z.zip",
+      "file": "siltwake-flight-2026-10-24T00-37-01-557Z.zip",
+      "bytes": 9601748,
+      "why": "an earlier export (a copy), replaced by this one"
+     },
+     {
+      "session": "export:siltwake-flight-2026-10-24T00-37-01-557Z.zip",
+      "file": "siltwake-flight-2026-10-24T00-37-01-557Z.zip",
+      "bytes": 12208437,
+      "why": "an earlier export (a copy), replaced by this one"
+     }
+    ],
+    "stopped": null,
+    "exportOver": []
+   },
+   "lastFrameT": 105277.4,
+   "offAfter": 105283.59999999404,
+   "ok": true
+  }
+ ],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "mode": "playtest",
+ "offMode": "off",
+ "pack": {
+  "verdict": "partial",
+  "failed": [],
+  "unproven": [
+   "no streaming frame over 33 ms",
+   "frame times judged",
+   "memory flat",
+   "tab memory (RSS)",
+   "VRAM"
+  ],
+  "frame": {
+   "p50": 16.7,
+   "p99": 16.8,
+   "max": 500,
+   "over33": 8,
+   "frames": 4665
+  },
+  "work": {
+   "p50": 3.1,
+   "p99": 11
+  },
+  "rec": {
+   "mean": 0.093,
+   "p99": 0.5
+  },
+  "holds": 0,
+  "memory": {
+   "tab": null,
+   "heap": [
+    313.1,
+    225.5
+   ],
+   "vram": null,
+   "trend": -179.2
+  },
+  "errors": 0,
+  "warnings": 0,
+  "draws": {
+   "p50": 69,
+   "max": 207
+  },
+  "attention": 3,
+  "minutes": 1.3,
+  "machine": null,
+  "gpu": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+  "browser": "Chrome/156.0.0.0",
+  "commit": "126b2cc6787a",
+  "build": "index-CmineJ7n.js"
+ },
+ "ok": true
+}

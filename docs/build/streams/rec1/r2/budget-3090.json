@@ -1,0 +1,492 @@
+{
+ "query": "?rec=playtest&recbudget=6&recsegment=15000",
+ "errors": [],
+ "exports": [
+  {
+   "label": "export-1",
+   "bytes": 5640945,
+   "entries": 19,
+   "pictures": 11,
+   "absent": [],
+   "declaredMissing": [],
+   "note": {
+    "found": true,
+    "t": 143593.40000000596,
+    "picture": {
+     "file": "snapshots/00011.jpg",
+     "present": true
+    }
+   },
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 894.5,
+      "seconds": null
+     },
+     {
+      "file": "video/001.webm",
+      "start": 16893.7,
+      "seconds": null
+     },
+     {
+      "file": "video/002.webm",
+      "start": 31976.5,
+      "seconds": null
+     },
+     {
+      "file": "video/003.webm",
+      "start": 46975.9,
+      "seconds": null
+     },
+     {
+      "file": "video/004.webm",
+      "start": 61975.3,
+      "seconds": null
+     },
+     {
+      "file": "video/005.webm",
+      "start": 76974.7,
+      "seconds": null
+     },
+     {
+      "file": "video/006.webm",
+      "start": 91974.1,
+      "seconds": null
+     },
+     {
+      "file": "video/007.webm",
+      "start": 107056.9,
+      "seconds": 15
+     },
+     {
+      "file": "video/008.webm",
+      "start": 122056.2,
+      "seconds": 14.93
+     },
+     {
+      "file": "video/009.webm",
+      "start": 137055.6,
+      "seconds": 6.67
+     }
+    ],
+    "endsAt": 143726,
+    "coversUntil": 143596.79999999702
+   },
+   "retention": {
+    "budgetBytes": 6291456,
+    "lost": [
+     {
+      "file": "video/000.webm",
+      "bytes": 1279155,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/001.webm",
+      "bytes": 1756780,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/002.webm",
+      "bytes": 1671310,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/003.webm",
+      "bytes": 1744584,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/004.webm",
+      "bytes": 1769711,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/005.webm",
+      "bytes": 1935278,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/006.webm",
+      "bytes": 1993936,
+      "why": "this recording's oldest video, over the storage budget"
+     }
+    ],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [],
+    "stopped": null,
+    "exportOver": [
+     {
+      "at": "2026-10-24T00:41:22.035Z",
+      "bytes": 4985248
+     }
+    ]
+   },
+   "lastFrameT": 143705.3,
+   "offAfter": null,
+   "ok": true
+  },
+  {
+   "label": "export-2",
+   "bytes": 6023397,
+   "entries": 20,
+   "pictures": 12,
+   "absent": [],
+   "declaredMissing": [],
+   "note": {
+    "found": true,
+    "t": 143593.40000000596,
+    "picture": {
+     "file": "snapshots/00011.jpg",
+     "present": true
+    }
+   },
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 894.5,
+      "seconds": null
+     },
+     {
+      "file": "video/001.webm",
+      "start": 16893.7,
+      "seconds": null
+     },
+     {
+      "file": "video/002.webm",
+      "start": 31976.5,
+      "seconds": null
+     },
+     {
+      "file": "video/003.webm",
+      "start": 46975.9,
+      "seconds": null
+     },
+     {
+      "file": "video/004.webm",
+      "start": 61975.3,
+      "seconds": null
+     },
+     {
+      "file": "video/005.webm",
+      "start": 76974.7,
+      "seconds": null
+     },
+     {
+      "file": "video/006.webm",
+      "start": 91974.1,
+      "seconds": null
+     },
+     {
+      "file": "video/007.webm",
+      "start": 107056.9,
+      "seconds": null
+     },
+     {
+      "file": "video/008.webm",
+      "start": 122056.2,
+      "seconds": 14.93
+     },
+     {
+      "file": "video/009.webm",
+      "start": 137055.6,
+      "seconds": 15
+     },
+     {
+      "file": "video/010.webm",
+      "start": 152055.1,
+      "seconds": 12.08
+     }
+    ],
+    "endsAt": 164135,
+    "coversUntil": 162527.20000000298
+   },
+   "retention": {
+    "budgetBytes": 6291456,
+    "lost": [
+     {
+      "file": "video/000.webm",
+      "bytes": 1279155,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/001.webm",
+      "bytes": 1756780,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/002.webm",
+      "bytes": 1671310,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/003.webm",
+      "bytes": 1744584,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/004.webm",
+      "bytes": 1769711,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/005.webm",
+      "bytes": 1935278,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/006.webm",
+      "bytes": 1993936,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/007.webm",
+      "bytes": 2044412,
+      "why": "this recording's oldest video, over the storage budget"
+     }
+    ],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [
+     {
+      "session": "export:siltwake-flight-2026-10-24T00-39-00-212Z.zip",
+      "file": "siltwake-flight-2026-10-24T00-39-00-212Z.zip",
+      "bytes": 5640945,
+      "why": "an earlier export (a copy), replaced by this one"
+     }
+    ],
+    "stopped": null,
+    "exportOver": [
+     {
+      "at": "2026-10-24T00:41:22.035Z",
+      "bytes": 4985248
+     },
+     {
+      "at": "2026-10-24T00:41:42.398Z",
+      "bytes": 5750314
+     }
+    ]
+   },
+   "lastFrameT": 164071.2,
+   "offAfter": null,
+   "ok": true
+  },
+  {
+   "label": "export-3",
+   "bytes": 6025459,
+   "entries": 20,
+   "pictures": 12,
+   "absent": [],
+   "declaredMissing": [],
+   "video": {
+    "segments": [
+     {
+      "file": "video/000.webm",
+      "start": 894.5,
+      "seconds": null
+     },
+     {
+      "file": "video/001.webm",
+      "start": 16893.7,
+      "seconds": null
+     },
+     {
+      "file": "video/002.webm",
+      "start": 31976.5,
+      "seconds": null
+     },
+     {
+      "file": "video/003.webm",
+      "start": 46975.9,
+      "seconds": null
+     },
+     {
+      "file": "video/004.webm",
+      "start": 61975.3,
+      "seconds": null
+     },
+     {
+      "file": "video/005.webm",
+      "start": 76974.7,
+      "seconds": null
+     },
+     {
+      "file": "video/006.webm",
+      "start": 91974.1,
+      "seconds": null
+     },
+     {
+      "file": "video/007.webm",
+      "start": 107056.9,
+      "seconds": null
+     },
+     {
+      "file": "video/008.webm",
+      "start": 122056.2,
+      "seconds": 14.93
+     },
+     {
+      "file": "video/009.webm",
+      "start": 137055.6,
+      "seconds": 15
+     },
+     {
+      "file": "video/010.webm",
+      "start": 152055.1,
+      "seconds": 12.25
+     }
+    ],
+    "endsAt": 164305,
+    "coversUntil": null
+   },
+   "retention": {
+    "budgetBytes": 6291456,
+    "lost": [
+     {
+      "file": "video/000.webm",
+      "bytes": 1279155,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/001.webm",
+      "bytes": 1756780,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/002.webm",
+      "bytes": 1671310,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/003.webm",
+      "bytes": 1744584,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/004.webm",
+      "bytes": 1769711,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/005.webm",
+      "bytes": 1935278,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/006.webm",
+      "bytes": 1993936,
+      "why": "this recording's oldest video, over the storage budget"
+     },
+     {
+      "file": "video/007.webm",
+      "bytes": 2044412,
+      "why": "this recording's oldest video, over the storage budget"
+     }
+    ],
+    "ringLost": {
+     "frames": 0,
+     "samples": 0,
+     "events": 0,
+     "snapshots": 0
+    },
+    "removedOlder": [
+     {
+      "session": "export:siltwake-flight-2026-10-24T00-39-00-212Z.zip",
+      "file": "siltwake-flight-2026-10-24T00-39-00-212Z.zip",
+      "bytes": 5640945,
+      "why": "an earlier export (a copy), replaced by this one"
+     },
+     {
+      "session": "export:siltwake-flight-2026-10-24T00-39-00-212Z.zip",
+      "file": "siltwake-flight-2026-10-24T00-39-00-212Z.zip",
+      "bytes": 6023397,
+      "why": "an earlier export (a copy), replaced by this one"
+     }
+    ],
+    "stopped": null,
+    "exportOver": [
+     {
+      "at": "2026-10-24T00:41:22.035Z",
+      "bytes": 4985248
+     },
+     {
+      "at": "2026-10-24T00:41:42.398Z",
+      "bytes": 5750314
+     },
+     {
+      "at": "2026-10-24T00:41:52.779Z",
+      "bytes": 5754446
+     }
+    ]
+   },
+   "lastFrameT": 164271.2,
+   "offAfter": 164276.90000000596,
+   "ok": true
+  }
+ ],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "mode": "playtest",
+ "offMode": "off",
+ "pack": {
+  "verdict": "partial",
+  "failed": [],
+  "unproven": [
+   "no streaming frame over 33 ms",
+   "recording complete",
+   "video",
+   "frame times judged",
+   "memory flat",
+   "tab memory (RSS)",
+   "VRAM"
+  ],
+  "frame": {
+   "p50": 16.7,
+   "p99": 16.8,
+   "max": 516.7,
+   "over33": 13,
+   "frames": 8208
+  },
+  "work": {
+   "p50": 2.9,
+   "p99": 7.6
+  },
+  "rec": {
+   "mean": 0.085,
+   "p99": 0.4
+  },
+  "holds": 0,
+  "memory": {
+   "tab": null,
+   "heap": [
+    280.5,
+    244.2
+   ],
+   "vram": null,
+   "trend": -64.5
+  },
+  "errors": 0,
+  "warnings": 7,
+  "draws": {
+   "p50": 100,
+   "max": 207
+  },
+  "attention": 16,
+  "minutes": 2.3,
+  "machine": null,
+  "gpu": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+  "browser": "Chrome/156.0.0.0",
+  "commit": "126b2cc6787a",
+  "build": "index-CmineJ7n.js"
+ },
+ "ok": true
+}
