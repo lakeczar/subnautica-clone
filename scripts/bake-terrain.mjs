@@ -18,7 +18,6 @@
 // tools) is ever published or restored.
 // --force and --verify never use the store; the composed gate's --verify still
 // compares the restored files with the live recipe.
-import { build, version as esbuildVersion } from "esbuild";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
@@ -26,6 +25,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { deflateSync, inflateSync } from "node:zlib";
+import { guardLocalRun } from "./local-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -40,6 +40,9 @@ if (!isMainThread) {
   process.exit(0);
 }
 
+// On factory-worker, only inside a heavy-check job (STEW-2); here, because public/terrain is its product.
+guardLocalRun({ cls: "bake", machine: "3090" });
+const { build, version: esbuildVersion } = await import("esbuild");
 const args = new Set(process.argv.slice(2));
 const out = join(root, "public", "terrain");
 const work = join(process.env.TMPDIR ?? tmpdir(), `siltwake-bake-${process.pid}`);

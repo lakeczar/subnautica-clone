@@ -3,16 +3,21 @@
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
-import { CONTENT_VERSION, DART_BUILD_POSE, HULLS, ITEMS, PLACES, RECIPES, SOURCES } from "../.test-build/src/content/registry.js";
-import { BASIN_GEOMETRY, BASIN_SOURCE_IDS, RECOVERY_SURFACE_OPERATOR } from "../.test-build/src/content/routes.js";
-import { createGame } from "../.test-build/src/sim/state.js";
-import { collect, completeOpening, craft, discover, frameDestination, personalLimit } from "../.test-build/src/sim/progression.js";
-import { addItem, available, containerAccessible, fabricationContainers, transfer, usedCapacity } from "../.test-build/src/sim/inventory.js";
-import { installModule } from "../.test-build/src/sim/modules.js";
-import { disableVehicle, recoveryCommand, updateRecovery } from "../.test-build/src/sim/recovery.js";
-import { createWorldQueries } from "../.test-build/src/sim/world.js";
-import { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } from "../.test-build/src/save/codec.js";
-import { validState } from "../.test-build/src/save/validation.js";
+import { guardLocalRun } from "./local-guard.mjs";
+
+// On factory-worker, only inside a heavy-check job (STEW-2), and admitted before the
+// compiled modules load. Routed, the job compiles them first.
+guardLocalRun({ cls: "quick", before: "node scripts/test-build.mjs" });
+const { CONTENT_VERSION, DART_BUILD_POSE, HULLS, ITEMS, PLACES, RECIPES, SOURCES } = await import("../.test-build/src/content/registry.js");
+const { BASIN_GEOMETRY, BASIN_SOURCE_IDS, RECOVERY_SURFACE_OPERATOR } = await import("../.test-build/src/content/routes.js");
+const { createGame } = await import("../.test-build/src/sim/state.js");
+const { collect, completeOpening, craft, discover, frameDestination, personalLimit } = await import("../.test-build/src/sim/progression.js");
+const { addItem, available, containerAccessible, fabricationContainers, transfer, usedCapacity } = await import("../.test-build/src/sim/inventory.js");
+const { installModule } = await import("../.test-build/src/sim/modules.js");
+const { disableVehicle, recoveryCommand, updateRecovery } = await import("../.test-build/src/sim/recovery.js");
+const { createWorldQueries } = await import("../.test-build/src/sim/world.js");
+const { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } = await import("../.test-build/src/save/codec.js");
+const { validState } = await import("../.test-build/src/save/validation.js");
 
 const args = process.argv.slice(2), option = name => { const i = args.indexOf(name); return i < 0 ? null : args[i + 1]; };
 assert.ok(args.every((a, i) => i % 2 ? true : ["--earned", "--out"].includes(a)), "only --earned and --out are supported");

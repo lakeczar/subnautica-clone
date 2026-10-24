@@ -17,6 +17,11 @@
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { guardLocalRun } from "./local-guard.mjs";
+
+// On factory-worker, only inside a heavy-check job (STEW-2). For numbers, submit it
+// yourself with --class exclusive; a bare run is routed as a shared job.
+guardLocalRun({ cls: "standard", machine: "3090" });
 
 const args = process.argv.slice(2);
 const all = (flag) => args.flatMap((a, i) => a === flag ? [args[i + 1]] : []);
