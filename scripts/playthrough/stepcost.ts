@@ -1,7 +1,8 @@
 /** SIM-PERF-1: what each fixed step costs in ordinary play, phase by phase,
  * and what the slow ones were doing. Every step runs as the app runs it: the
  * guard's step, then the app's own per-step work (the play timeline's
- * observation and its 600-tick export, and the 1,800-tick autosave through the
+ * observation and its 600-tick journal commit (SIM-1b's `TimelineJournal`, on an
+ * in-memory store), and the 1,800-tick autosave through the
  * real repository on an in-memory slot, lock body included). Only the HUD's
  * presentation step is left out (it needs a DOM): it's measured in the browser.
  *
@@ -43,6 +44,8 @@ import { gameWorld } from "../../src/sim/world.js";
 import { regionAtPoint } from "../../src/content/regions/layout.js";
 import { controlsActive } from "../../src/sim/timeline/activity.js";
 import * as timeline from "../../src/sim/timeline/recorder.js";
+import { TimelineJournal } from "../../src/sim/timeline/store.js";
+import type { TimelineStoragePort } from "../../src/sim/timeline/store.js";
 import type { GameCommand, GameEvent, GameState, WorldQueries } from "../../src/sim/types.js";
 import { loadCampaign } from "./content.js";
 import { driverHooks } from "./driver.js";
@@ -151,6 +154,9 @@ async function captureAfter(controls: readonly GameCommand[]): Promise<void> {
 class AppWork {
   private readonly rec: ReturnType<typeof timeline.createRecorder>;
   private readonly repository = new SaveRepository(new MemoryStorage(), LOCK);
+  /** The timeline's journal (SIM-1b), as `LiveTimeline.save` commits it every 600 ticks. */
+  private readonly journal: TimelineJournal;
+  private readonly timelineStore = new MemoryTimelineStorage();
   private timelineSaved: number;
   private lastAutosave: number;
   private activity = false;
@@ -158,7 +164,9 @@ class AppWork {
     // The app's entry warm-up (SiltwakeApp.warm), outside any measured step.
     warmSimulation(s, world);
     warmCommit(createEnvelope(structuredClone(s), { sessionId: "stepcost-warm", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:00.000Z" }));
-    this.rec = timeline.createRecorder({ id: `stepcost-${run}`.slice(0, 64), started: "2026-10-24T00:00:00.000Z" }, { regionAt: regionAtPoint });
+    const session = `stepcost-${run}`.slice(0, 64);
+    this.rec = timeline.createRecorder({ id: session, started: "2026-10-24T00:00:00.000Z" }, { regionAt: regionAtPoint });
+    this.journal = new TimelineJournal(this.timelineStore, LOCK, session);
     this.timelineSaved = this.lastAutosave = s.tick;
     this.repository.load();
   }
@@ -175,10 +183,9 @@ class AppWork {
     costs.mark(PHASE.timeline);
     if (s.tick - this.timelineSaved >= 600) {
       this.timelineSaved = s.tick;
-      sink.length = 0;
-      sink.push(timeline.exportTimelineText(this.rec, s, this.rec.sealed.length));
+      void this.journal.commit(this.rec, s, NEVER);
       timelineSize.events = Math.max(timelineSize.events, this.rec.seq);
-      timelineSize.chars = Math.max(timelineSize.chars, sink[0]!.length);
+      timelineSize.chars = Math.max(timelineSize.chars, this.timelineStore.chars());
       timelineSize.playHours = Math.max(timelineSize.playHours, this.rec.playTicks / 216_000);
     }
     costs.mark(PHASE.timelineSave);
@@ -192,8 +199,18 @@ class AppWork {
   }
 }
 const LOCK: WriterLockPort = { runExclusive: async (_name, _signal, action) => action() };
-/** Keeps the latest timeline export reachable, as storage would. */
-const sink: string[] = [];
+/** localStorage for the timeline journal, in memory. */
+class MemoryTimelineStorage implements TimelineStoragePort {
+  private readonly data = new Map<string, string>();
+  get length(): number { return this.data.size; }
+  key(index: number): string | null { return [...this.data.keys()][index] ?? null; }
+  getItem(key: string): string | null { return this.data.get(key) ?? null; }
+  setItem(key: string, value: string): void { this.data.set(key, value); }
+  removeItem(key: string): void { this.data.delete(key); }
+  /** Everything stored, in characters. */
+  chars(): number { let n = 0; for (const [k, v] of this.data) n += k.length + v.length; return n; }
+}
+const NEVER = new AbortController().signal;
 /** The largest play timeline any run reached (its export grows with it). */
 const timelineSize = { events: 0, chars: 0, playHours: 0 };
 
@@ -313,7 +330,7 @@ for (const w of snapshot.worst) {
 const seconds = (performance.now() - t0) / 1000;
 const r2 = (x: number): number => +x.toFixed(3);
 console.log(`${runs.map((r) => `${r.run} ${r.outcome} ${r.ticks}`).join("; ")} in ${seconds.toFixed(0)} s`);
-console.log(`largest play timeline: ${timelineSize.events} events, ${timelineSize.chars} chars exported, ${timelineSize.playHours.toFixed(2)} h of play`);
+console.log(`largest play timeline: ${timelineSize.events} events, ${timelineSize.chars} chars stored, ${timelineSize.playHours.toFixed(2)} h of play`);
 console.log(`collections: ${[...gcAll].sort((a, b) => a[0] - b[0]).map(([k, v]) => `kind ${k} ${v.count} (${v.ms.toFixed(0)} ms)`).join(", ")}; ` +
   `heap at the end ${(v8.getHeapStatistics().used_heap_size / 1048576).toFixed(0)} MiB`);
 console.log(`steps ${snapshot.steps}; mean ${r2(snapshot.step.mean)} ms, p50 ${r2(snapshot.step.p50)}, p99 ${r2(snapshot.step.p99)}, ` +
