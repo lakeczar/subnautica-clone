@@ -35,13 +35,15 @@ test("light selection keeps the best slots without a score object per light, cho
   const reference = (lights: readonly PointLight[], eye: { x: number; y: number; z: number }, slots = MAX_LIGHTS): PointLight[] => {
     const reserved: PointLight[] = [], scored: { l: PointLight; s: number }[] = [];
     for (const l of lights) {
-      if (l.reserved) { if (reserved.length < slots) reserved.push(l); continue; }
+      if (l.reserved) { reserved.push(l); continue; }
       const d = Math.hypot(l.x - eye.x, l.y - eye.y, l.z - eye.z);
       if (d - l.radius > LIGHT_RANGE) continue;
       scored.push({ l, s: lightScore(l, eye) });
     }
     scored.sort((a, b) => b.s - a.s || lightOrder(a.l, b.l));
-    return [...reserved, ...scored.slice(0, Math.max(0, slots - reserved.length)).map(x => x.l)];
+    reserved.sort(lightOrder);
+    const kept = reserved.slice(0, slots);
+    return [...kept, ...scored.slice(0, Math.max(0, slots - kept.length)).map(x => x.l)];
   };
   let seed = 7;
   const rand = (): number => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;

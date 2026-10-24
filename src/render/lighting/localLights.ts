@@ -121,7 +121,7 @@ export function selectLights(lights: readonly PointLight[], eye: Vec3Like, slots
   let kept = 0;
   for (let n = 0; n < lights.length; n++) {
     const l = lights[n]!;
-    if (l.reserved) { if (reserved.length < slots) reserved.push(l); continue; }
+    if (l.reserved) { reserved.push(l); continue; }
     const dx = l.x - eye.x, dy = l.y - eye.y, dz = l.z - eye.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (d - l.radius > LIGHT_RANGE) continue;
     const s = scoreAt(l, d);
@@ -130,7 +130,9 @@ export function selectLights(lights: readonly PointLight[], eye: Vec3Like, slots
     for (; i > 0 && ranksBefore(s, l, bestScore[i - 1]!, bestLight[i - 1]!); i--) { bestScore[i] = bestScore[i - 1]!; bestLight[i] = bestLight[i - 1]!; }
     bestScore[i] = s; bestLight[i] = l;
   }
-  const out = [...reserved];
+  // Reserved lights (instrument and markers: a handful) in the same total order.
+  if (reserved.length > 1) reserved.sort(lightOrder);
+  const out = reserved.length > slots ? reserved.slice(0, slots) : reserved;
   for (let k = 0; k < kept; k++) {
     const l = bestLight[k]!;
     bestLight[k] = null;

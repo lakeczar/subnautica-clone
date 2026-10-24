@@ -28,6 +28,8 @@ export interface SceneLights {
     /** Every known mesh is scanned and its lights placed: the candidate set
      * is complete, so selection from here depends only on the pose. */
     readonly settled: boolean;
+    /** The scanned-cluster cache: geometries held by live meshes, estimated bytes. */
+    readonly cache: { readonly geometries: number; readonly bytes: number };
     readonly slowest: { readonly name: string; readonly ms: number; readonly instances: number; readonly clusters: number; readonly frozen: boolean } | null;
   };
   dispose(): void;
@@ -72,6 +74,8 @@ const MARKER_COLOR = { r: 1, g: 0.72, b: 0.32 };
 const BLINK = 2.2, BLINK_ON = 0.22;
 /** Vertices read per check of the scan's time slice. */
 const SCAN_SLICE = 4096;
+/** Estimated bytes of one cached light cluster (its numbers and object). */
+const CLUSTER_BYTES = 120;
 /** Markers show below this depth (the surface has daylight). */
 const MARKER_DEPTH = 25;
 
@@ -92,7 +96,24 @@ interface Entry {
 }
 
 export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: readonly ShaderMaterial[]): SceneLights {
-  const entries = new Map<number, Entry>(), byGeometry = new Map<string, LightCluster[]>();
+  const entries = new Map<number, Entry>();
+  // Scanned clusters by geometry, owned by the live meshes using them (CW-1
+  // R2-5): each mesh that consulted a geometry holds a reference until it is
+  // disposed, and the last release frees the entry, so streamed chunks that
+  // come and go never leave clusters behind. Bytes are estimated per cluster.
+  const byGeometry = new Map<string, { clusters: LightCluster[]; refs: number; bytes: number }>();
+  let cacheBytes = 0;
+  const retain = (mesh: AbstractMesh, id: string, clusters?: LightCluster[]): LightCluster[] => {
+    let c = byGeometry.get(id);
+    if (!c) { c = { clusters: clusters!, refs: 0, bytes: 64 + clusters!.length * CLUSTER_BYTES }; byGeometry.set(id, c); cacheBytes += c.bytes; }
+    c.refs++;
+    mesh.onDisposeObservable.addOnce(() => release(id));
+    return c.clusters;
+  };
+  const release = (id: string): void => {
+    const c = byGeometry.get(id);
+    if (c && --c.refs <= 0) { byGeometry.delete(id); cacheBytes -= c.bytes; }
+  };
   const pending = new Set<AbstractMesh>();
   const vents = riftVents();
   const markers = new Map<string, Mesh>();
@@ -127,14 +148,14 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   const scan = (mesh: AbstractMesh, until: number): boolean => {
     if (mesh.isDisposed() || mesh.material !== cel || mesh.metadata?.atmLights === "skip") return true;
     const m = mesh as Mesh, geometry = m.geometry;
-    let clusters = geometry ? byGeometry.get(geometry.id) : undefined;
+    let clusters = geometry && byGeometry.has(geometry.id) ? retain(mesh, geometry.id) : undefined;
     if (!clusters) {
       const colors = geometry ? m.getVerticesData("color", false, false) : null;
       const positions = geometry ? m.getVerticesData("position", false, false) : null;
       if (!colors || !positions) return true;
       if (scanning?.mesh !== mesh) scanning = { mesh, geometry: geometry!.id, job: emissiveScan(positions, colors) };
       while (!scanning.job.step(SCAN_SLICE)) if (performance.now() > until) return false;
-      byGeometry.set(geometry!.id, clusters = scanning.job.clusters());
+      clusters = retain(mesh, geometry!.id, scanning.job.clusters());
       scanning = null;
     }
     if (!clusters.length) return true;
@@ -199,7 +220,8 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   };
   send(lightUniforms([]), 0);
   return {
-    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, slowest, settled: pending.size === 0 && unplaced === 0 }; },
+    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, slowest, settled: pending.size === 0 && unplaced === 0,
+      cache: { geometries: byGeometry.size, bytes: cacheBytes } }; },
     update(state, eye, daylight, time) {
       // Scan new meshes in a bounded slice per frame, resuming a large one.
       const until = performance.now() + 1.5;
@@ -276,7 +298,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       scene.onMeshRemovedObservable.remove(removed);
       for (const m of markers.values()) if (!m.isDisposed()) m.dispose();
       if (!ventArt.isDisposed()) ventArt.dispose();
-      entries.clear(); pending.clear();
+      entries.clear(); pending.clear(); byGeometry.clear(); cacheBytes = 0;
     },
   };
 }
