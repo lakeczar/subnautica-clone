@@ -13,7 +13,7 @@
  * - collection never removes a key the stored journal names, nor the version 1
  *   record before a stored journal supersedes it;
  * - "saved" means durable: a successful commit's notes reload at once. */
-import { addNote, createRecorder, exportTimeline, recordEvent, serializeTimeline, TIMELINE_STORAGE_KEY } from "../src/sim/timeline/index.js";
+import { addNote, createRecorder, exportTimeline, parseTimeline, recordEvent, serializeTimeline, TIMELINE_STORAGE_KEY } from "../src/sim/timeline/index.js";
 import type { TimelineRecorder } from "../src/sim/timeline/index.js";
 import { parseJournal, TIMELINE_CHUNK_PREFIX, TIMELINE_JOURNAL_KEY, TimelineJournal } from "../src/sim/timeline/store.js";
 import type { TimelineCommit, TimelineStoragePort } from "../src/sim/timeline/store.js";
@@ -118,22 +118,27 @@ export async function runModel(seed: number, steps: number): Promise<ModelResult
     return tab;
   };
   let active = open(pick(SESSIONS));
-  /** After a commit by `tab`: the model follows the stored journal. */
-  const settle = (tab: Tab, r: TimelineCommit): string | null => {
+  /** The expeditions storage holds now: the journal's heads, and a readable version 1 record it hasn't superseded. */
+  const holders = (): Set<string> => {
+    const raw = storage.data.get(TIMELINE_JOURNAL_KEY), j = raw === undefined ? null : parseJournal(raw);
+    const held = new Set<string>(), v1 = storage.data.get(TIMELINE_STORAGE_KEY);
+    if (j && typeof j !== "string") for (const h of [j.current, j.previous]) if (h) held.add(h.session.id);
+    if (v1 !== undefined && !(j && typeof j !== "string" && j.v1Superseded)) { const p = parseTimeline(v1); if (p.ok) held.add(p.value.session.id); }
+    return held;
+  };
+  /** After a commit by `tab`: the model follows storage. An expedition held before the commit and gone
+   * after it must be reported; one lost earlier (to corruption) just leaves the model. */
+  const settle = (tab: Tab, r: TimelineCommit, heldBefore: Set<string>): string | null => {
     if (r.ok) {
       if (r.seq !== tab.rec.seq) return `ok commit seq ${r.seq} is not the recorder's ${tab.rec.seq}`;
       durable.set(tab.session, notesOf(tab.rec, tab.s));
     }
-    // Sessions no longer in the stored journal (nor in a live version 1 record) are gone; the commit must say so.
-    const raw = storage.data.get(TIMELINE_JOURNAL_KEY), j = raw === undefined ? null : parseJournal(raw);
-    if (!j || typeof j === "string") return null;
-    const named = new Set([j.current, j.previous].flatMap((h) => h ? [h.session.id] : []));
-    const v1 = storage.data.get(TIMELINE_STORAGE_KEY);
+    const held = holders();
     let gone = 0;
     for (const [id, notes] of [...durable]) {
-      if (named.has(id) || (v1 !== undefined && !j.v1Superseded && v1.includes(`"id":"${id}"`))) continue;
+      if (held.has(id)) continue;
       durable.delete(id);
-      if (notes.length) gone++;
+      if (heldBefore.has(id) && notes.length) gone++;
     }
     if (gone > r.dropped.length) return `${gone} timelines with notes left the store but ${r.dropped.length} were reported`;
     return null;
@@ -149,22 +154,23 @@ export async function runModel(seed: number, steps: number): Promise<ModelResult
         for (let i = 0; i < n; i++) { active.s.tick += 7; active.rec.playTicks += 7; recordEvent(active.rec, active.s, { kind: pick(["gather", "poi"]), what: "silica_glass", quantity: 1 }); }
       } else if (op === "commit" || op === "fault-commit") {
         if (op === "fault-commit") storage.arm(rand() < 0.7 ? { at: int(0, 6), name: pick(["QuotaExceededError", "SecurityError"]) } : null, rand() < 0.5 ? int(0, 12) : null);
-        const before = storage.snapshot();
+        const before = storage.snapshot(), heldBefore = holders();
         const r = await active.journal.commit(active.rec, active.s, new AbortController().signal);
         storage.arm(null, null);
         log.push(`   -> ${r.ok ? `ok seq ${r.seq}` : r.code}${r.dropped.length ? ` dropped ${r.dropped.length}` : ""}`);
         if (!r.ok && ["protected", "conflict", "cancelled", "invalid", "lock-unavailable", "lock-failed"].includes(r.code) && !same(before, storage.data))
           return fail(`step ${step}: a ${r.code} commit changed storage`);
-        const bad = settle(active, r);
+        const bad = settle(active, r, heldBefore);
         if (bad) return fail(`step ${step}: ${bad}`);
       } else if (op === "quota") storage.quota = rand() < 0.3 ? Infinity : storage.usedChars + int(0, 200_000);
       else if (op === "enter") active = open(pick(SESSIONS));
       else if (op === "other-tab") {
         const other = open(pick(SESSIONS));
         addNote(other.rec, other.s, `${other.session} other-tab note ${counter++}`);
+        const heldBefore = holders();
         const r = await other.journal.commit(other.rec, other.s, new AbortController().signal);
         log.push(`   -> other tab ${other.session}: ${r.ok ? "ok" : r.code}`);
-        const bad = settle(other, r);
+        const bad = settle(other, r, heldBefore);
         if (bad) return fail(`step ${step}: ${bad}`);
         if (rand() < 0.5) active = other;
       } else if (op === "corrupt") {
