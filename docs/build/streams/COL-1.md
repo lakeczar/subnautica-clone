@@ -105,7 +105,10 @@ Two survive:
 
   That's about 1.2–1.6× in all, coarse alike. It falls on bake time (`npm run build`, tests through the build cache) and on that dev fallback only.
 - **Root fix:** WK-1's offline pack pipeline, with shells baked and loaded as packs, and the live builder sliced or in a worker for the dev fallback (conventions 4 and 5). **S–M.**
-- **Measured confirmation: TRAVERSE.**
+- **Measured confirmation: pending.** Two of CW-1's traversal segments are queued on the 3090 (exclusive, tickets `261024-130411-46ed` and `261024-130411-ccc2`). They run CW-1's harness at `6ca73311`, with per-vCPU steal and host/mixed/clean frame classes, on a production build of CW-1 + this branch that counts every shell build in the page.
+  - **The segments:** deep segment 12 (meridian_culvert_north) and main-tour segment 1 (the hub caves).
+  - **What should show:** zero shell builds during travel. Any long frame in a cave stream is judged by its remainder after steal.
+  - A first ticket (`261023-220354-37d3`) was rejected because the tree changed before admission; it never ran.
 
 **Performance conventions:** this is build-time work: no per-frame allocation, no hot path, Babylon-free (convention 5). `caveFloor`'s memo now has an owner, a 6 MiB bound and an eviction rule: it starts over past 2¹⁷ points, which changes no answer since it's exact (convention 8). It has a fast test. Registering it in a cache ledger waits for STEW-1's ledger.
 
