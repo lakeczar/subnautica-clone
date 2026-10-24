@@ -22,6 +22,7 @@ import { createServer } from "node:http";
 import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
+import { streamTrace } from "./stream-trace.mjs";
 requireGpuLease("CW-1 traversal");
 const require = createRequire(process.env.CW1_PW ?? "/work/tmp/gpu-prep/pw/");
 const CHROME = process.env.CW1_CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`;
@@ -55,6 +56,21 @@ let traveling = false;
 // (aligned to performance.now by a user-timing mark), so every long frame is
 // checked against the pauses that ran in it.
 let gcTrace = [];
+// The trace is streamed (stream-trace.mjs) and only what the analysis reads is kept: names, the
+// alignment mark, GC pauses and, with CW1_TRACE=1 (toplevel, gpu, devtools.timeline), every
+// complete slice over 4 ms, so each long gap lists what the renderer and GPU process did in it.
+const traced = { threads: new Map(), processes: new Map(), mark: null, gc: [], slices: [], gcNames: new Set() };
+const GC_SLICE = /^(MajorGC|MinorGC|V8\.GCFinalizeMC|V8\.GCScavenger|V8\.GCCompactor|V8\.GCIncrementalMarkingFinalize|V8\.GC_MC_.*ATOMIC.*|V8\.GCMinorMS)$/;
+function keepTraced(e) {
+  if (e.ph === "M" && e.name === "thread_name") traced.threads.set(`${e.pid}:${e.tid}`, e.args?.name);
+  else if (e.ph === "M" && e.name === "process_name") traced.processes.set(e.pid, e.args?.name);
+  if (e.name === "cw1-align" && !traced.mark) traced.mark = { ts: e.ts, pid: e.pid, tid: e.tid };
+  if (traced.gcNames.size < 40 && /GC/.test(e.name ?? "")) traced.gcNames.add(e.name);
+  if (e.ph !== "X") return;
+  if (GC_SLICE.test(e.name) && e.dur > 0) traced.gc.push({ ts: e.ts, dur: e.dur, name: e.name, tid: e.tid });
+  if (process.env.CW1_TRACE && e.dur > 4000) traced.slices.push({ ts: e.ts, dur: e.dur, name: e.name, cat: e.cat, pid: e.pid, tid: e.tid, args: JSON.stringify(e.args ?? {}).slice(0, 160) });
+}
+let trace = null;
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, timeout: 30000,
   ...(process.env.CW1_CHROME ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}),
   args: [...(process.env.CW1_CHROME ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", "--cw1-traverse"] });
@@ -277,7 +293,9 @@ try {
   let s = await read(); eye = s.cam[1] + s.depth;
   note("loaded", JSON.stringify({ cam: s.cam, depth: s.depth, vitals: s.vitals }));
   // Measured from here: the traversal itself.
-  await browser.startTracing(page, { categories: ["disabled-by-default-v8.gc", "v8", "blink.user_timing"], screenshots: false });
+  trace = await streamTrace(await browser.newBrowserCDPSession(),
+    ["disabled-by-default-v8.gc", "v8", "blink.user_timing", ...(process.env.CW1_TRACE ? ["toplevel", "gpu", "disabled-by-default-devtools.timeline"] : [])],
+    keepTraced, { onError: (error) => note("trace rotation failed", String(error)) });
   // CW1_PROFILE=1 (diagnosis): a sampled CPU profile of the page over the travel.
   const cdp = process.env.CW1_PROFILE ? await page.context().newCDPSession(page) : null;
   let profileStartPage = null;
@@ -335,8 +353,9 @@ try {
   const profile = cdp ? (await cdp.send("Profiler.stop")).profile : null;
   let profileAt = null;
   {
-    const trace = JSON.parse((await browser.stopTracing()).toString()), events = trace.traceEvents ?? trace;
-    const mark = events.find(e => e.name === "cw1-align");
+    result.trace = await trace.stop();
+    note("trace", JSON.stringify(result.trace));
+    const mark = traced.mark;
     // Profile samples on the page clock, each with its leaf and the nearest frames of our code.
     if (profile) {
       const byId = new Map(profile.nodes.map(n => [n.id, n])), parentOf = new Map();
@@ -349,10 +368,15 @@ try {
       profileAt.stack = stack;
     }
     // Top-level main-thread pauses: V8's MajorGC / MinorGC (and their finalizations).
-    const top = events.filter(e => e.ph === "X" && /^(MajorGC|MinorGC|V8\.GCFinalizeMC|V8\.GCScavenger|V8\.GCCompactor|V8\.GCIncrementalMarkingFinalize|V8\.GC_MC_.*ATOMIC.*|V8\.GCMinorMS)$/.test(e.name) && e.dur > 0);
-    if (mark) gcTrace = top.map(e => ({ at: markAt + (e.ts - mark.ts) / 1000, kind: e.name, pauseMs: +(e.dur / 1000).toFixed(2), tid: e.tid }));
+    if (mark) gcTrace = traced.gc.map(e => ({ at: markAt + (e.ts - mark.ts) / 1000, kind: e.name, pauseMs: +(e.dur / 1000).toFixed(2), tid: e.tid }));
+    // CW1_TRACE: every complete slice over 4 ms, on the page clock, with its process and thread.
+    if (mark && process.env.CW1_TRACE) {
+      result.slices = traced.slices.map(e => ({ at: markAt + (e.ts - mark.ts) / 1000, ms: +(e.dur / 1000).toFixed(1), name: e.name, cat: e.cat,
+        thread: `${traced.processes.get(e.pid) ?? e.pid}/${traced.threads.get(`${e.pid}:${e.tid}`) ?? e.tid}`, args: e.args }));
+      result.mainThread = `${traced.processes.get(mark.pid) ?? mark.pid}/${traced.threads.get(`${mark.pid}:${mark.tid}`) ?? mark.tid}`;
+    }
     result.gcTraceAligned = !!mark;
-    result.gcTraceNames = [...new Set(events.filter(e => /GC/.test(e.name ?? "")).map(e => e.name))].slice(0, 40);
+    result.gcTraceNames = [...traced.gcNames];
   }
   const data = await page.evaluate(() => ({ origin: performance.timeOrigin, gaps: window.__gaps, perf: window.__siltwakePerf, stream: (document.querySelector("#ocean").siltwakeCaveStream?.() ?? {}),
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
@@ -387,7 +411,10 @@ try {
       const total = [...counts.values()].reduce((a, b) => a + b, 0);
       hot = [`${total} ms sampled`, ...[...counts].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, ms]) => `${ms} ms: ${k}`)];
     }
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    // CW1_TRACE: the trace's slices inside the gap, longest first (renderer, GPU process and the rest).
+    const inGap = result.slices ? result.slices.filter(x => x.at < at && x.at + x.ms > at - g).sort((a, b) => b.ms - a.ms).slice(0, 10)
+      .map(x => `${x.ms} ms ${x.thread} ${x.cat}:${x.name} ${x.args}`) : undefined;
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, ...(inGap ? { trace: inGap } : {}), gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
@@ -477,6 +504,8 @@ try {
   result.errors.push(String(error?.stack ?? error)); note("error", String(error));
   result.gate ??= { pass: false, failures: ["the run did not finish"] };
 } finally {
+  trace?.abandon();
+  delete result.slices;
   writeFileSync(path.join(out, `segment-${segment}.json`), JSON.stringify(result, null, 1));
   writeFileSync(path.join(out, `segment-${segment}.log`), log.join("\n"));
   await browser.close().catch(() => {});

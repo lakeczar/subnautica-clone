@@ -173,8 +173,10 @@ for (let i = 1; i < tour.length; i++) {
 // holds LATERAL metres either side of the line too: on transit legs, not the
 // legs into and out of a cave stop (mouths can be under 4 m wide).
 const LATERAL = 2;
+/** Off only to replan a leg no margined path reaches (counted, reported). */
+let lateralOn = true, unmargined = 0;
 const keelClear = (a, b) => {
-  const lateral = a.cave || b.cave ? [0] : [0, LATERAL, -LATERAL];
+  const lateral = a.cave || b.cave || !lateralOn ? [0] : [0, LATERAL, -LATERAL];
   const len = Math.hypot(b.x - a.x, b.z - a.z), n = Math.max(1, Math.ceil(len / 2));
   const px = len > 1e-6 ? -(b.z - a.z) / len : 0, pz = len > 1e-6 ? (b.x - a.x) / len : 0;
   for (let i = 0; i <= n; i++) {
@@ -240,7 +242,10 @@ for (let i = 1; i < points.length; i++) {
   if (hullClearance(world, b, DART) && sweeps(a, b)) continue;
   // The craft's own start (its berth) is where the game put it: legs from it are planned like any other.
   const movable = !!b.cruise;
-  const via = plan(a, b, movable);
+  // The lateral margin is a preference: a leg no margined path reaches is
+  // planned by the keel rule alone (a narrow pass), and counted.
+  let via = plan(a, b, movable);
+  if (!via) { lateralOn = false; via = plan(a, b, movable); lateralOn = true; if (via) unmargined++; }
   // A cruise corner no path reaches (on land) is only a waypoint: drop it and plan to the next point.
   if (!via && movable && i + 1 < points.length) { points.splice(i, 1); i--; dropped++; continue; }
   if (!via) { blocked.push(`${b.cave ?? "cruise"} at ${b.x.toFixed(0)},${b.y.toFixed(0)},${b.z.toFixed(0)}`); continue; }
@@ -251,7 +256,7 @@ for (let i = 1; i < points.length; i++) {
 return points;
 }
 repair(points);
-const reportBlocked = () => console.log(`swept every leg: ${replanned} replanned, ${dropped} unreachable corners dropped, ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
+const reportBlocked = () => console.log(`swept every leg: ${replanned} replanned (${unmargined} without the ${LATERAL} m lateral margin), ${dropped} unreachable corners dropped, ${blocked.length} still blocked${blocked.length ? ": " + blocked.join("; ") : ""}`);
 reportBlocked();
 let total = 0;
 for (let i = 1; i < points.length; i++) total += Math.hypot(points[i].x - points[i - 1].x, points[i].y - points[i - 1].y, points[i].z - points[i - 1].z);
