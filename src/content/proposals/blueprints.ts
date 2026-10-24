@@ -26,14 +26,13 @@ export const ELSEWHERE_PLANS: readonly ProposedPlan[] = [
   { id: "bp_small_fabricator", status: "elsewhere", owner: "SYS-2", label: "Small fabricator", purpose: "Outpost fabrication." },
   { id: "bp_hush_survey", status: "elsewhere", owner: "S9", label: "Hush survey glider plans", purpose: "Optional quiet glider (crown survey marker log)." },
   { id: "bp_spindle_tender", status: "elsewhere", owner: "S9", label: "Spindle island tender plans", purpose: "Optional surface tender (yard tender plate)." },
+  // LS-1 1b built these two lost-site plans (src/content/upgrades/hosts.ts).
+  { id: "bp_locker_extension", status: "elsewhere", owner: "SYS-2", label: "Locker extension", purpose: "+50% capacity for one locker module (LS-1)." },
+  { id: "bp_ping_lens", status: "elsewhere", owner: "SYS-2", label: "Ping lens", purpose: "Handheld ping range 40 → 60 m (LS-1)." },
 ];
 
 /** New optional plans. Costs use the eight shared materials only. */
 export const NEW_PLANS: readonly ProposedPlan[] = [
-  { id: "bp_locker_extension", status: "new", owner: "SYS-2", label: "Locker extension",
-    purpose: "+50% capacity for one pod, stop or outpost locker. Light storage progression (GAME-DIRECTION)." },
-  { id: "bp_ping_lens", status: "new", owner: "SYS-2", label: "Ping lens",
-    purpose: "Handheld ping range 40 → 70 m; it also outlines cave mouths it touches." },
   { id: "bp_chart_fix", status: "new", owner: "SYS-2", label: "Chart position fix",
     purpose: "Live position on the personal chart (the GAME-DIRECTION chart upgrade), from a relay-linked chart buoy." },
   { id: "bp_lamp_filter", status: "new", owner: "SYS-1", label: "Shaded lamp filter",

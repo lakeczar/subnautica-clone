@@ -20,6 +20,7 @@ import { createGame } from "../src/sim/state.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameEvent, GameState } from "../src/sim/types.js";
 import { KeypadPanel, keypadKey, keypadModel, renderKeypad } from "../src/ui/keypad.js";
+import type { KeypadState } from "../src/ui/keypad.js";
 import { give, opened, siteTable, SPOTS, swimTo } from "./systems-support.js";
 
 const world = createWorldQueries();
@@ -164,7 +165,7 @@ test("coded doors: an unplaced door takes no code; a wrong code costs nothing; t
 });
 
 test("keypad: typed digits edit, Enter submits, Escape closes; F5 and action keys are consumed; a deduction door shows its stencil and the journal's part", () => {
-  let st = { door: "basin.vault_door" as const, text: "" };
+  let st: KeypadState = { door: "basin.vault_door", text: "" };
   for (const k of ["2", "0", "9", "x", "3"]) st = keypadKey(st, k).state;
   assert.equal(st.text, "2093", "only typed digits");
   assert.equal(keypadKey(st, "Backspace").state.text, "209");
