@@ -1,9 +1,9 @@
 # SIM-PERF-1: the simulation's frame spikes, attributed and fixed
 
-Branch `t3/sim-perf-1`, from root `168a5084` (merged with root's docs at `ee2e4450`). **Source SHA: PENDING.** No save schema change. No intended change to any outcome: every fix gives the same answers (tests and the differential below).
+Branch `t3/sim-perf-1`, from root `168a5084` (merged with root's docs at `ee2e4450`). **Code: `36dabcf3`** (no game source has changed since; later commits are the harness's collection counters and this page). No save schema change. No intended change to any outcome: every fix gives the same answers (tests and the differential below).
 
 ## Outcome
-Every simulation step over 8 ms in ordinary play now has a named cause. The game's own causes are fixed at the root; what remains over 8 ms is collections and, per the attribution below, the host.
+Every simulation step over 8 ms in ordinary play now has a named cause. The game's own were the autosave, the hunter's sweeps and first use after a load, and they are fixed at the root. On the 3090, exclusive and headless, no step is over 8 ms bar one collection (p99 0.20 ms, from 0.28–0.30). In the browser the simulation took at most 0.4 ms in every long frame; its two steps over 8 ms, and CW-1's 30–136 ms ones, were the VM being paused (stolen time on the step's vCPU, with a canary on another thread stalled beside them).
 
 ## How it was measured
 - **The step meter** (`src/sim/stepCosts.ts`): each fixed step's time by phase (24 phases: the guard's checkpoint and journal, every part of `stepGameInPlace`, and the app's own work: input, events, timeline, timeline save, HUD presentation, autosave). Pulled, never pushed (convention 6): `SiltwakeApp.stepCosts()`, and `__siltwakeStepCosts()` for drivers (`FORK(step-costs-global)`, below). Recording allocates nothing per step (typed arrays); it is always on in the app, at about 25 clock reads a step.
@@ -12,13 +12,19 @@ Every simulation step over 8 ms in ordinary play now has a named cause. The game
   - `--host` tags each slow step with per-vCPU steal and a canary thread's late wake-ups.
   - `--capture RUN:TICK` CPU-profiles one step in context and saves its pre-step save and controls.
   - `--heap` (allocation by phase) and `--alloc` (allocation by function, with callers).
-- **The browser** (probe only, not for merge: `probe/sim-perf-1-cw1`, this branch merged with CW-1 `3779f59c`): CW-1's traversal over its `saves-t6` plan, pulling the meter's snapshot and matching worst steps to long frames. Two opt-ins, for the coordinator's decisive host test: `SIMPERF_HOST=1` runs a worker (`simperf-host-worker.mjs`) with a 1 ms `CLOCK_MONOTONIC` canary, every vCPU's steal and the vCPU the renderer's main thread is on (every 10 ms), and that thread's state and syscall (every 2 ms; `wchan` is hidden on this kernel); `SIMPERF_TRACE=1` adds the `toplevel`, `gpu` and `ipc` trace categories, for short runs only (a whole segment's trace would pass V8's string limit).
+- **The browser:** CW-1's traversal (`docs/build/streams/cw1/traverse.mjs`, CW-1's tree at `6ca73311`), one harness:
+  - **The streamed trace** (`stream-trace.mjs`, written here, folded in by CW-1 at `4ea4d4a7`): CDP `Tracing.start` with `ReturnAsStream`, read in 4 MiB chunks and split into events as it arrives, restarted every 90 s so Chrome's buffer never fills. A materialised trace passed V8's 512 MiB string limit (CW-1's D2); streamed runs read 1.6–2.0 GB with no data loss. `CW1_TRACE=1` adds the `toplevel`, `gpu` and `devtools.timeline` categories and each long gap's longest slices.
+  - **`SIMPERF_HOST=1`** (written here, folded in at `6ca73311`): a 1 ms `CLOCK_MONOTONIC` canary on its own thread, the renderer thread's state and syscall every 2 ms (`wchan` is hidden on this kernel), the GPU process's `__GL_*` settings, the step meter's snapshot, and a verdict for each step over 8 ms: the time stolen on its vCPU (CW-1's `stolenBetween`, 5 ms intervals, the renderer's or GPU process's vCPU) is subtracted, and a remainder still over 8 ms is the game's.
+  - **The probe** (`probe/sim-perf-1-cw1`, local, not for merge): CW-1's branch merged with this one, plus the shader-cache wrappers and CW-1's `saves-t6` segments.
 
 ## Attribution (causes, ranked)
 Every slow step was re-executed from its own pre-step state (`--verify`), or its whole scenario replayed in a fresh process to the same tick (`--capture`), which also reproduces any first-use cost. A step that is slow again is the game's; one that isn't was a collection, the host, or (in the browser) the thread waiting.
 
-1. **The 30–136 ms steps (CW-1's six, REC-1's 68.8 ms, and this stream's own) are not the game's work.** Headless on factory-worker, the 33.9, 38.8, 45.8 and 8.8 ms steps took about 1 ms when replayed to the same tick in a fresh process. In the browser (3090, profiled, `gpu` class), the one long simulation frame was a 61.7 ms step, all in movement, during which Chrome's 0.5 ms CPU sampler caught no movement code. On the 4070 (control), 87,845 browser steps over two segments had none over 8 ms. **What paused the 3090's thread is PENDING** the exclusive host test (*Missing evidence*): the 4070 run proved the instrument reads a blocked thread (`S futex`, canary clear, no steal) apart from a paused VM.
-2. **Collections.** Node's major collections land 7–15 ms in whatever step allocates (up to 75 ms on CW-1's tree headless, where unstreamed cluster builds allocate about 18 MiB each). The step allocated 118 KiB a tick on root (124 on CW-1's tree); now FINAL-ALLOC.
+1. **The 30–136 ms steps (CW-1's six, REC-1's 68.8 ms, and this stream's own) are the host pausing the VM, not the game's work.**
+   - Headless on factory-worker, the 33.9, 38.8, 45.8 and 8.8 ms steps took about 1 ms when replayed to the same tick in a fresh process.
+   - In the 3090 exclusive browser test, both steps over 8 ms (63 and 9.5 ms, in the trivial `input` phase) were wholly stolen on their vCPU, with the canary on another thread stalled beside them. The frames over 34 ms were host by CW-1's rule or had the canary stalled 30–113 ms with VM-wide steal (34 of 35); the one exception was render-side work in the GPU process (53 ms on CPU in `ExecuteDeferredRequest`), not the simulation.
+   - On the 4070 (no host pauses), 273,249 browser steps over six segment runs had none over 8 ms; its long frames are the GPU-bound renderer blocked in `futex`, no steal and the canary clear.
+2. **Collections.** Node's major collections land 7–15 ms in whatever step allocates (up to 75 ms on CW-1's tree headless, where unstreamed cluster builds allocate about 18 MiB each). The step allocated 118 KiB a tick on root (124 on CW-1's tree); now 76.1 (−36%).
 3. **Autosave (every 1,800 ticks): 4–7 ms in a step, 10–17 ms on the first after a load.** Each commit decoded the record it had just written up to four times.
 4. **Hunter encounters: over 1 ms on every encounter step, up to about 8 ms.** Each sweep slice (0.2 m, up to about 15 escape directions a step) re-validated all 11,415 world solids.
 5. **First use after a load:** the first steps' compilation (5–8 ms), each hull's contact mesh at its first hunter contact (about 3 ms), the first autosave (above).
@@ -68,6 +74,12 @@ The before-tree's slow steps were the game's, and are gone after: `carrier-fitou
 
 **Browser, 4070 control** (`probe/sim-perf-1-cw1` at `99425bc4`: this branch at `9e6d3e99` with CW-1; segments 2 and 3 of CW-1's `saves-t6` plan, `SIMPERF_HOST=1`): 87,845 steps, **none over 8 ms**, p99 0.61 ms, p99.9 1.6–1.7 ms, max 4.6 ms (an autosave). The frame's own work p99 4.2–7 ms, max 9.9 ms; the gate passed and no long frame was the simulation's. Every long gap (GPU-bound, up to 200 ms) had the renderer's main thread **blocked** (`S futex` for 95–98% of the gap, 2–7 ms on CPU), the canary running through it and no steal.
 
+**Browser, 4070, the shader-cache set** (`--class gpu --machine 4070`, indicative; probe `68d932bc`; segment 2 four times, `CW1_TRACE=1`, `SIMPERF_HOST=1`): **not a cold/warm comparison.** Chrome's GL there is ANGLE → Mesa's d3d12 driver; Mesa's shader cache (`MESA_SHADER_CACHE_DIR`, task-owned, emptied for "cold") stayed empty in all four runs (0 files before and after), and the Windows NVIDIA driver's own cache is outside the sandbox. The four runs are repeats under one condition:
+- simulation 185,404 steps, **none over 8 ms**, p99 0.61 ms, max 3.8–7.2 ms;
+- 260–316 frames over 34 ms a run, no steal; in 256–316 of them the renderer was blocked in `futex` or `ioctl` (GPU-bound at 1080p, as CW-1 found);
+- no GPU shader compile in any long frame (the only "compile" slices are V8's background optimising compiler on a worker thread);
+- the streamed trace read 1.6–2.0 GB a run with no data loss; every gate passed.
+
 **Browser, 3090, the decisive test** (`--class exclusive`, probe `9c36c647`: CW-1 `4ea4d4a7` plus this branch's game at `2af18fa1`; segment 2 of CW-1's `saves-t6`; `CW1_TRACE=1`, `SIMPERF_HOST=1`; NVIDIA's shader disk cache on a task-owned path, emptied for the cold run). Both runs are labelled `DISTURBED` by the queue: host steal 5.4% and 7% in their worst 5 s windows, and 17 and 1 major faults. The steal is what is under test, so they classify frames; their frame times are not clean performance evidence.
 
 | | Cold (`261024-123746-b92e`, 13:12:55–13:25:00 UTC) | Warm (`261024-123747-70a7`, 13:25:01–13:37:38 UTC) |
@@ -105,5 +117,15 @@ The before-tree's slow steps were the game's, and are gone after: `carrier-fitou
 - **COL-1's debt:** CW-1's kit cave clusters allocate about 18 MiB each (18k boxes as objects); headless, unstreamed builds drive collections of up to 75 ms. COL-1 stage B owns the collider.
 - **The play timeline's save (SIM-1b's motivating number).** Every 600 ticks the app serialises the whole timeline export and writes it to localStorage. At the full rotation window (20 sealed chunks, about 20k events, 2.7 M characters) the serialisation alone is **13–21 ms in Node** on factory-worker, before the browser's write of about 5 MB; a chunk seal or rotation costs up to 3.8 ms. It grows linearly with the session (1.7 ms at 2k events, 5.8 ms at 10k). The bot's timelines never reach it (212 events in 3.2 h of play), so only a human session shows it. Root fix: SIM-1b's incremental journal (assigned to its builder; no interim here, by the coordinator's decision).
 
+## Checks
+- **Fast tier:** passed at `36dabcf3`, 148 files including the typecheck and the architecture guard (alickers, `261024-093422-d448`). New tests: `hazard-sampling` (the exact reference), `warmup` (no trace), the repository's record reuse and `warmCommit`, and the occupied hosts.
+- **Determinism:** the differential and the cross-commit playthroughs above, at `36dabcf3`.
+- **Build and the six economy checks:** PENDING-GATE.
+
 ## Missing evidence
-PENDING
+- **A clean 3090 browser frame-time run:** both exclusive traversals are `DISTURBED` (steal 5.4% and 7% in their worst windows); their frame times aren't performance evidence, only the classification is.
+- **The 3090 repeat pair:** one cold and one warm run only (the coordinator moved the rest to the 4070). A second pair would test whether the warm run's extra long frames (24 against 11) are only host bursts, as their steal says.
+- **A real shader-cache cold/warm on the 4070:** impossible from the sandbox (Mesa's cache unused, the Windows driver's cache out of reach). The 3090 pair is the only cold/warm evidence, and it shows no shader compile in a long frame.
+- **The GPU process's own environment:** the harness read no `__GL_` settings from the process it takes for the GPU process, though the driver wrote its cache under the task-owned path in both runs.
+- **The one render-side frame** (GPU process 53 ms on CPU in `ExecuteDeferredRequest`, no steal): not attributed further here; it's render work for CW-1 or the renderer, and power-state ramping isn't excluded without a locked-clock A/B (root and the owner).
+- **Human-session timeline cost in the browser:** the 13–21 ms export at a full window is measured in Node only; the browser's localStorage write of about 5 MB is not measured (SIM-1b's).
