@@ -7,7 +7,7 @@ import assert from "node:assert/strict";
 import { completeOpening } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
 import type { GameState } from "../src/sim/types.js";
-import { addNote, createRecorder, exportTimeline, exportTimelineText, recordEvent, resumeRecorder, TIMELINE_CHUNK_EVENTS,
+import { addNote, createRecorder, exportTimeline, exportTimelineText, recordEvent, resumeRecorder, rotateOldest, TIMELINE_CHUNK_EVENTS,
   TIMELINE_RETAINED_CHUNKS, TIMELINE_STORAGE_KEY } from "../src/sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../src/sim/timeline/recorder.js";
 import { analyseTimeline, parseTimeline, serializeTimeline, summarizeChunk } from "../src/sim/timeline/report.js";
@@ -939,19 +939,95 @@ test("R1-F4: a steady commit changes no committed chunk before its journal; a fo
 });
 
 test("R1-F1: a repair never stages a chunk under a number the old journal names, even when that key is gone (model seed 66769815)", async () => {
+  // Two named chunks, the higher one gone; a one-chunk replacement would reuse its number if only existing keys were avoided.
   const storage = new Storage(), a = session("A");
-  a.add(TIMELINE_CHUNK_EVENTS * 2 + 10);
+  a.add(TIMELINE_CHUNK_EVENTS * 2);
   assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
   const named: number[] = journalOf(storage).current.chunks;
   storage.data.delete(chunkKeysOf(storage, "A").find((k) => k.endsWith(`|${Math.max(...named)}`))!);
   const j = new TimelineJournal(storage, new TestWriterLock(), "A");
   assert.equal(j.load().kind, "protected");
   const x = session("A");
-  x.add(TIMELINE_CHUNK_EVENTS * 3);
+  x.add(TIMELINE_CHUNK_EVENTS);
   const writes: string[] = [];
   const set = storage.setItem.bind(storage);
   storage.setItem = (k: string, v: string) => { writes.push(k); set(k, v); };
   assert.ok((await j.repair(x.rec, x.s, new AbortController().signal, j.records() as TimelineRecords)).ok);
   for (const n of named) assert.ok(!writes.includes(`siltwake.timeline.v2|A|${n}`), `staged under ${n}, which the old journal names`);
   reloadsWhole(storage, x.rec, x.s, "repaired");
+});
+
+/** One wrong known field on an otherwise-valid event (SIM-1b R2 F1). */
+const WRONG_FIELD: [string, (e: Record<string, unknown>) => void][] = [
+  ["text an object", (e) => { e.text = { bad: "not text" }; }],
+  ["what a number", (e) => { e.what = 3; }],
+  ["id null", (e) => { e.id = null; }],
+  ["label a list", (e) => { e.label = ["x"]; }],
+  ["quantity a string", (e) => { e.quantity = "2"; }],
+  ["region a number", (e) => { e.region = 4; }],
+  ["seconds null", (e) => { e.seconds = null; }],
+  ["stationary a string", (e) => { e.stationary = "1"; }],
+  ["metres an object", (e) => { e.metres = {}; }],
+  ["hull a number", (e) => { e.hull = 1; }],
+  ["waiting holding a number", (e) => { e.waiting = ["decode", 1]; }],
+  ["keys a string", (e) => { e.keys = "cache:x"; }],
+  ["of a string", (e) => { e.of = "10"; }],
+  ["wall a number", (e) => { e.wall = 0; }],
+  ["at two numbers", (e) => { e.at = [1, 2]; }],
+  ["saveRef a number", (e) => { e.saveRef = 7; }],
+];
+/** One wrong member of a summary's stretch lists. */
+const WRONG_STRETCH: [string, (sum: { travel: { long: unknown[] }; idle: { long: unknown[] } }) => void][] = [
+  ["travel.long [null]", (sum) => { sum.travel.long = [null]; }],
+  ["a travel stretch without its hull", (sum) => { sum.travel.long = [{ play: 1, seconds: 400, region: null }]; }],
+  ["an idle stretch waiting on a number", (sum) => { sum.idle.long = [{ play: 1, tick: 60, seconds: 900, waiting: [3], region: null }]; }],
+  ["idle.long a valid stretch then a string", (sum) => { sum.idle.long = [{ play: 1, tick: 60, seconds: 900, waiting: [], region: null }, "x"]; }],
+];
+
+test("SIM-1b R2-F1: one wrong known field in an ordinary or kept event, or one bad stretch, protects with stored bytes unchanged", async () => {
+  const cases: { label: string; where: "events" | "kept" | "stretch"; damage(chunk: unknown): void }[] = [
+    ...WRONG_FIELD.map(([label, f]) => ({ label, where: "events" as const, damage: (c: unknown) => f((c as Record<string, unknown>[]).find((e) => e.kind === "note")!) })),
+    ...WRONG_FIELD.map(([label, f]) => ({ label, where: "kept" as const, damage: (c: unknown) => f((c as { kept: Record<string, unknown>[] }).kept.find((e) => e.kind === "note")!) })),
+    ...WRONG_STRETCH.map(([label, f]) => ({ label, where: "stretch" as const, damage: (c: unknown) => f(c as never) })),
+  ];
+  for (const { label, where, damage } of cases) {
+    const name = `${where}: ${label}`;
+    const storage = new Storage(), a = session("A"), writer = tab(storage, "A");
+    a.add(TIMELINE_CHUNK_EVENTS + 10);
+    if (where !== "events") rotateOldest(a.rec);
+    assert.ok((await commit(writer, a.rec, a.s)).ok, name);
+    const key = chunkKeysOf(storage, "A").find((k) => k.endsWith("|0"))!;
+    const chunk = JSON.parse(storage.data.get(key)!);
+    assert.equal(Array.isArray(chunk), where === "events", `${name}: stored as ${where === "events" ? "events" : "a summary"}`);
+    damage(chunk);
+    storage.data.set(key, JSON.stringify(chunk));
+    const before = new Map(storage.data);
+    const fresh = new TimelineJournal(storage, new TestWriterLock(), "A").load();
+    assert.equal(fresh.kind, "protected", `${name}: a fresh reader protects`);
+    assert.deepEqual(new Map(storage.data), before, `${name}: the read changes nothing`);
+    // The open writer folding a damaged chunk refuses; one never touching it leaves it as it is.
+    if (where === "events") {
+      rotateOldest(a.rec);
+      const r = await commit(writer, a.rec, a.s);
+      assert.deepEqual([r.ok, r.ok ? "" : r.code], [false, "protected"], `${name}: the fold refuses`);
+      assert.deepEqual(new Map(storage.data), before, `${name}: zero mutations`);
+    } else {
+      a.add(5);
+      await commit(writer, a.rec, a.s);
+      assert.equal(storage.data.get(key), before.get(key), `${name}: the damaged summary is left as it is`);
+    }
+  }
+});
+
+test("SIM-1b R2-F1: legitimate records still load: repeated note text, null regions, every optional field well formed", async () => {
+  const storage = new Storage(), a = session("A");
+  addNote(a.rec, a.s, "same words"); addNote(a.rec, a.s, "same words", "2026-10-24T00:00:00.000Z", "save:ref");
+  recordEvent(a.rec, a.s, { kind: "travel", seconds: 400, stationary: 2, metres: 900, hull: "dart", id: "dart_1" });
+  recordEvent(a.rec, a.s, { kind: "idle", seconds: 900, waiting: ["decode"] });
+  recordEvent(a.rec, a.s, { kind: "death", keys: ["cache:x"], at: [1, 2, 3] });
+  a.add(TIMELINE_CHUNK_EVENTS + 10);
+  rotateOldest(a.rec);
+  assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
+  const back = reloadsWhole(storage, a.rec, a.s, "well formed");
+  assert.equal(allNotes(back, a.s).filter((n) => n === "same words").length, 2);
 });
