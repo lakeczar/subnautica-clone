@@ -35,15 +35,23 @@
 - **Carrier, both stages:** C14 on the yard visit after the Divide, so before the district.
 - **Stage 2, Creel:** C14 on the chosen home visit between the Divide and the district, so before the district.
 
-**The lore owner's call, not PACE-1's:** keep L14 at C07, or move its offer to a district record (C13 or `district_controller`) so the lead points home after the reveal. Pacing works either way. If the lead moves, PACE-1's stage 2 bot reads C14 between the works and the ending. That is one optional return of about 27 min, with beats at both ends.
+**Decision:** the coordinator, as lore owner, decides after the review whether L14 stays at C07 or moves to a district record (C13 or `district_controller`) so the lead points home after the reveal. Pacing works either way. If it moves, the stage 2 bot reads C14 between the works and the ending, as one optional return of about 27 min with beats at both ends.
 
-## F4: the power plan at the Rift ledger
+## F4: evidence for core and lattice (revision 1)
 
-**The change:** `rift_station_ledger` already grants `bp_deep_service` and `bp_rift_pressure`. Adding `bp_service_power` lets the materials station's ledger list the works' portable power assembly, built from the core the station supplied.
+This follows the owner's rule that late-game needs are inferred from evidence, not handed over. The earlier proposal had the Rift ledger grant the power plan; it is withdrawn. Both materials now get physical evidence where they're found, and no record names a recipe or a quantity.
 
-**Canon fit:** the present-day repair has the player "bring independent temporary power/air", and the plan arriving two regions early is preparation in Act III's sense ("Preparation and return routes become meaningful").
-
-**What it doesn't touch:** no fact changes, and the ledger text needs no mention of the refuge, the beds or the six. If a ledger line is added, it names only "the district works' staging power".
+- **Lattice, at the Divide upper service dock (C07's site).**
+  - **What's there:** a staging air housing from the expedition's deep-service stores, opened, with lilac lattice seal rings and two empty seal seats, under a weathered works tag.
+  - **Canon fit:** the canon puts the deep-service route and the launch rail at this dock, so the housing is the expedition's own service hardware for gate maintenance. It was not prepared for the present repair; nobody left it for Ren.
+  - **The tag:** a cryptic stencil, for example "AIR STAGING · RESEAL BEFORE DESCENT". It must not name the refuge, the beds or the six.
+- **Core, at the Rift materials station.**
+  - **What's there:** core cradles on the station's rack, two of them tagged for "works staging power", stand empty. The materials station supplied the works.
+  - **Canon fit:** the canon's present repair has the player "bring independent temporary power/air". The plan arrives at C07, and the empty cradles are the earlier hint.
+- **Optional rare line.**
+  - **What it is:** a decoded line, for example in LS-1's mixing-line crew notes ("the air couplings sit dry; the brine ate the old seals; we wait on lilac"). Only by agreement with LS-1 and the lore owner.
+  - **What it can't do:** explain the gate's history.
+- **Story fit check:** the coordinator, as lore owner, checks it before stage 2 builds the fixtures.
 
 ## F3: the hall and food bay recipes
 
@@ -58,6 +66,6 @@
 New player text consists of:
 - the three habitat scan lines;
 - the office bench's label;
-- any ledger line for F4.
+- the two F4 fixtures' scan lines and tags, and any optional decoded line.
 
 It follows `LS-1-LORE.md`'s lint list. It describes ecology and machinery only and never names occupants, beds, sleepers, waking, the six, or an order given at the gate. The recorder's new beat IDs (`works:*`, `resolution:complete`) carry no text.
