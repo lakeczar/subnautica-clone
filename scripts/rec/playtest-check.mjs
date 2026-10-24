@@ -21,7 +21,7 @@ import { Blocked, goto, openGame, releaseAll } from "../soak/browser.mjs";
 import { unzip } from "./unzip.mjs";
 import { buildPack } from "./pack.mjs";
 import { remux, videoSeconds } from "./imaging.mjs";
-import { videoSegments } from "./analyse.mjs";
+import { latestPictures, videoSegments } from "./analyse.mjs";
 
 const args = process.argv.slice(2), arg = (n, d) => { const i = args.indexOf(`--${n}`); return i >= 0 ? args[i + 1] : d; };
 const out = arg("out"), seconds = Number(arg("seconds", 60));
@@ -66,7 +66,7 @@ function reconcile(zip, label, { noteText, until, after } = {}) {
   const entries = unzip(zip, dir);
   const read = (f) => (existsSync(path.join(dir, f)) ? readFileSync(path.join(dir, f), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
   const header = JSON.parse(readFileSync(path.join(dir, "header.json"), "utf8"));
-  const snaps = read("snapshots.ndjson"), events = read("events.ndjson"), frames = read("frames.ndjson");
+  const snaps = latestPictures(read("snapshots.ndjson")), events = read("events.ndjson"), frames = read("frames.ndjson");
   const absent = snaps.filter((s) => !s.missing && !existsSync(path.join(dir, s.file))).map((s) => s.file);
   const declaredMissing = snaps.filter((s) => s.missing).map((s) => `${s.file}: ${s.missing}`);
   const note = noteText ? events.find((e) => e.kind === "note" && e.text.includes(noteText)) : null;

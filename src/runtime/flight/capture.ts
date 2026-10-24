@@ -37,8 +37,8 @@ export const VIDEO_SIZE = { width: 1280, height: 720 } as const;
 const SNAPSHOT_SIZE = { width: 480, height: 270 } as const;
 /** Snapshots kept in memory for a driver that has not read them. */
 const SNAPSHOT_MEMORY = 600;
-/** A picture not encoded by then is recorded as missing (R1-S4). */
-const SNAPSHOT_TIMEOUT_MS = 10_000;
+/** How long Off and an export wait for pictures still encoding (they are never declared missing for a stall, R2). */
+const SNAPSHOT_WAIT_MS = 10_000;
 const SPOOL_EVERY_MS = 5000;
 const SPOOL_ROOT = "flight", EXPORT_ROOT = "flight-exports";
 const VIDEO_BITS = 900_000;
@@ -85,6 +85,8 @@ export class FlightCapture {
   readonly header: Record<string, unknown>;
   readonly session: string;
   private readonly blobs = new Map<number, Blob>();
+  /** Pictures read from the ring that are still encoding: written when they finish, and none waits for another (R1-S4). */
+  private waiting: FlightSnapshot[] = [];
   /** Each picture's state (R1-S4): taken pictures are pending until encoded, then ok or failed. */
   private readonly snapState = new Map<number, { state: "pending" | "ok" | "failed"; t: number; why?: string }>();
   private readonly abort = new AbortController();
@@ -572,11 +574,11 @@ export class FlightCapture {
   private putHeader(): void { this.post("header.json", JSON.stringify(this.header, null, 1), "put", "telemetry"); }
 
   /**
-   * Appends everything recorded since the last flush. Pictures go in order: an
-   * encoded one is written; a failed one is listed as missing with why (R1-S4);
-   * a pending one waits for a later flush, unless it has been pending for
-   * SNAPSHOT_TIMEOUT_MS or `expire` says the recording is over (R2-3: never
-   * because an export or Off came while it was encoding).
+   * Appends everything recorded since the last flush. An encoded picture is
+   * written; a failed one is listed as missing with why (R1-S4); one still
+   * encoding waits, without holding up the rest, until it finishes or the
+   * recording ends (`expire`). A picture is never declared missing because a
+   * stall, an export or Off came while it was encoding (R2-3).
    */
   flush(now = performance.now(), final = false, expire = false): void {
     const s = this.spool;
@@ -598,19 +600,19 @@ export class FlightCapture {
       this.post("events.ndjson", `${JSON.stringify({ seq: 0, t: now, kind: "warning", text: `warning: ${text} were overwritten in memory before the spool read them`, detail: { lost: lostNow } })}\n`);
       this.putHeader();
     }
-    let n = snaps.next - snaps.items.length;
-    for (const snap of snaps.items) {
+    c.snapshots = snaps.next;
+    const still: FlightSnapshot[] = [];
+    for (const snap of [...this.waiting, ...snaps.items]) {
       const st = this.snapState.get(snap.seq), blob = this.blobs.get(snap.seq);
-      if (st?.state === "pending" && !expire && now - st.t < SNAPSHOT_TIMEOUT_MS) break;
-      n++;
+      if (st?.state === "pending" && !expire) { still.push(snap); continue; }
       this.blobs.delete(snap.seq);
       this.snapState.delete(snap.seq);
       if (st?.state === "ok" && blob) {
         void this.track(blob.arrayBuffer().then((b) => this.post(snap.file, b, "append", "snapshot")));
         this.post("snapshots.ndjson", `${JSON.stringify(snap)}\n`);
-      } else this.post("snapshots.ndjson", `${JSON.stringify({ ...snap, missing: st?.why ?? (st?.state === "pending" ? (expire ? "still encoding when the recording ended" : "not encoded in time") : "not kept") })}\n`);
+      } else this.post("snapshots.ndjson", `${JSON.stringify({ ...snap, missing: st?.why ?? (st?.state === "pending" ? "still encoding when the recording ended" : "not kept") })}\n`);
     }
-    c.snapshots = n;
+    this.waiting = still;
     this.retain();
   }
 
@@ -636,11 +638,14 @@ export class FlightCapture {
     // before the cutoff (within one capture interval). A picture is never
     // re-sent with the cutoff's time: the screen may have moved on since.
     if (this.video && this.spool) await this.request({ op: "video-flush" });
-    await this.settleInflight(SNAPSHOT_TIMEOUT_MS);
+    await this.settleInflight(SNAPSHOT_WAIT_MS);
     this.recorder.settle();
     if (!this.spool) return { blob: await this.memoryZip(cutoff), name };
     this.flush(performance.now(), true);
-    await this.settleInflight(SNAPSHOT_TIMEOUT_MS);
+    // A picture from before the cutoff still encoding is noted in this export's
+    // index; when it lands, its own entry follows and supersedes the note.
+    for (const snap of this.waiting.filter((x) => x.t <= cutoff)) this.post("snapshots.ndjson", `${JSON.stringify({ ...snap, missing: "still encoding at this export" })}\n`);
+    await this.settleInflight(SNAPSHOT_WAIT_MS);
     await this.request({ op: "barrier" });
     // Room for the copy (R2-1): older recordings and exports make way first;
     // this recording's own data never does. What is still over is recorded.
@@ -710,9 +715,9 @@ export class FlightCapture {
     this.finished = this.finish();
   }
   private async finish(): Promise<void> {
-    await this.settleInflight(SNAPSHOT_TIMEOUT_MS);
+    await this.settleInflight(SNAPSHOT_WAIT_MS);
     this.flush(performance.now(), true, true);
-    await this.settleInflight(SNAPSHOT_TIMEOUT_MS);
+    await this.settleInflight(SNAPSHOT_WAIT_MS);
     this.putHeader();
   }
 

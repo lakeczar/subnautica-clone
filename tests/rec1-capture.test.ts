@@ -234,3 +234,24 @@ test("R2-4: a campaign-length timeline page is bounded and draws without spreadi
     assert.doesNotMatch(html, /Math\.max\(\.\.\./, "no spread of a series into arguments");
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
+
+test("R2 (4070 run): a picture still encoding through a long stall is never expired; an export in between notes it, and it supersedes the note when it lands", async () => {
+  const { c, worker } = await capture();
+  c.recorder.event("note", "note: before a 21 s stall", { t: 1 });
+  c.afterRender(2);
+  await settle();
+  c.flush(30_000);
+  assert.equal(worker.files.get("snapshots.ndjson") ?? "", "", "nothing written for it yet, and no missing entry");
+  c.recorder.event("action", "after the stall", { t: 30_001, snapshot: false });
+  const exporting = c.exportZip();
+  await new Promise((r) => setTimeout(r, 50));
+  encodings.shift()!.resolve(new Blob(["late picture"]));
+  await exporting;
+  c.flush(40_000);
+  await settle();
+  const { latestPictures } = await import(pathToFileURL(path.resolve("scripts/rec/analyse.mjs")).href);
+  const index = latestPictures(lines(worker.files.get("snapshots.ndjson")));
+  assert.equal(index.length, 1);
+  assert.equal(index[0].missing, undefined, "the picture's own entry is its state");
+  assert.equal(worker.files.get(index[0].file), "late picture");
+});

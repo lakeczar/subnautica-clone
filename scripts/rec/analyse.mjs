@@ -28,8 +28,10 @@ export function loadRecording(dir) {
   const codes = header.holdCodes ?? HOLD_CODES;
   const frames = lines(path.join(rec, "frames.ndjson")).map((row) => { const f = Object.fromEntries(cols.map((c, i) => [c, row[i]])); f.holdState = codes[f.hold] ?? null; return f; });
   return { dir, rec, header, frames, samples: lines(path.join(rec, "samples.ndjson")), events: lines(path.join(rec, "events.ndjson")),
-    snapshots: lines(path.join(rec, "snapshots.ndjson")), system: lines(path.join(rec, "system.ndjson")) };
+    snapshots: latestPictures(lines(path.join(rec, "snapshots.ndjson"))), system: lines(path.join(rec, "system.ndjson")) };
 }
+/** The picture index, one entry per picture: its last (a note like "still encoding at this export" is superseded when the picture lands). */
+export const latestPictures = (entries) => [...new Map(entries.map((s) => [s.seq, s])).values()];
 
 /** Linear fit slope of ys over xs (per unit x). */
 function slope(xs, ys) {
@@ -240,14 +242,16 @@ export function integrityOf(r, events) {
   if (rowsLost.length && !ledger?.ringLost) problems.push(rowsLost.map((e) => e.text.replace(/^warning: /, "")).join("; "));
   // Every picture the index names that is not on disk, and every event (up to an export's cutoff: later ones may still be encoding) pointing at a picture not in the index.
   const cutoff = h.exported?.cutoff ?? Infinity;
+  // A picture's last index entry is its state: a note ("still encoding at this export") is superseded when it lands.
   const listed = new Map(r.snapshots.map((s) => [s.seq, s]));
-  const absent = r.snapshots.filter((s) => !s.missing && !existsSync(path.join(r.rec, s.file)));
-  const declared = r.snapshots.filter((s) => s.missing);
+  const final = [...listed.values()];
+  const absent = final.filter((s) => !s.missing && !existsSync(path.join(r.rec, s.file)));
+  const declared = final.filter((s) => s.missing);
   const dangling = events.filter((e) => e.snap && e.t <= cutoff && !listed.has(e.snap));
   if (absent.length) problems.push(`${absent.length} pictures indexed but not in the recording (${absent.slice(0, 3).map((s) => s.file).join(", ")})`);
   if (declared.length) problems.push(`${declared.length} pictures recorded as missing (${[...new Set(declared.map((s) => s.missing))].slice(0, 2).join("; ")})`);
   if (dangling.length) problems.push(`${dangling.length} events name a picture the index lacks`);
-  return { known, problems, notes, note: `${r.snapshots.length} pictures indexed, all present; nothing lost${notes.length ? ` (${notes.join("; ")})` : ""}` };
+  return { known, problems, notes, note: `${final.length} pictures indexed, all present; nothing lost${notes.length ? ` (${notes.join("; ")})` : ""}` };
 }
 
 /** How much of the measured window the video files cover (R1-F4): from their real durations, never the header alone. */
