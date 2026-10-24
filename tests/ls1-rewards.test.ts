@@ -22,6 +22,11 @@ import type { GameEvent, GameState } from "../src/sim/types.js";
 import { KeypadPanel, keypadKey, keypadModel, renderKeypad } from "../src/ui/keypad.js";
 import type { KeypadState } from "../src/ui/keypad.js";
 import { give, opened, siteTable, SPOTS, swimTo } from "./systems-support.js";
+import { at, fund } from "./b1-support.js";
+import { kitId, LEDGE, run, systemsGame } from "./c4-systems-support.js";
+import { readyState } from "./targeting-support.js";
+import { TECH_RECORDS } from "../src/content/registry.js";
+import type { RecipeId } from "../src/content/registry.js";
 
 const world = createWorldQueries();
 const meta = { sessionId: "ls1-rewards-test-01", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:01.000Z" };
@@ -30,13 +35,9 @@ const reload = (s: GameState) => {
   assert.ok(text.ok, text.ok ? "" : text.error);
   return decodeSave(text.value);
 };
-/** The receipts a reloadable fixture needs for what `opened()` and `give` hand over:
- * strict validation keeps equipment and modules to what was made. */
-const made = (s: GameState, ...recipes: string[]) => { for (const r of recipes) if (!s.knowledge.crafted.includes(r as never)) s.knowledge.crafted.push(r as never); };
 /** A deployed outpost at SPOTS.a: thermal (beside a vent) or cell-powered. */
 function outpost(power: "thermal" | "cells"): { s: GameState; id: string } {
   const { s } = opened();
-  made(s, "essential_tools", "outpost_kit_standard", "mod_locker", "mod_planter");
   const id = give(s, "outpost_kit_standard");
   swimTo(s, SPOTS.a);
   assert.equal(deployOutpost(s, s.systems, id, SPOTS.a, siteTable(power === "thermal" ? { ventDistance: 5 } : {})), null);
@@ -46,25 +47,36 @@ function outpost(power: "thermal" | "cells"): { s: GameState; id: string } {
 const plans = (s: GameState, ...bps: string[]) => { for (const bp of bps) s.knowledge.blueprints.push(bp as never); };
 
 test("locker extension: only the chosen locker module grows, through pack and reload; a stale capacity is refused", () => {
-  const { s, id } = outpost("thermal");
-  const a = give(s, "mod_locker"), b = give(s, "mod_locker");
-  assert.equal(installModule(s, s.systems, id, "s0", a), null);
-  assert.equal(installModule(s, s.systems, id, "s1", b), null);
-  plans(s, "bp_locker_extension");
-  give(s, "structural_alloy", 3); give(s, "buoyant_resin", 2);
-  const r = upgradeHostModule(s, id, "s0", "locker_extension_1");
-  assert.ok(r.ok, r.ok ? "" : r.message);
-  const cap = (item: string) => s.inventory.containers.find((c) => c.id === `${item}_locker`)!.capacity;
-  assert.equal(cap(a), 48, "32 CU × 1.5");
-  assert.equal(cap(b), 32, "the other locker module is unchanged");
-  give(s, "structural_alloy", 1); give(s, "flex_membrane", 1); // packing breaks the anchor seals
-  assert.equal(packOutpost(s, s.systems, id), null);
-  assert.equal(cap(a), 48, "the capacity travels with the module item");
-  const back = reload(s);
-  assert.ok(back.ok, back.ok ? "" : back.error);
-  const stale = structuredClone(s);
-  stale.inventory.containers.find((c) => c.id === `${a}_locker`)!.capacity = 32;
-  assert.equal(reload(stale).ok, false, "validation recomputes the capacity from the upgrade");
+  // An earned fixture, so the reload is strict: the workshop's records read and two
+  // locker modules made at the pod bench. The plan's source (the tide store) is not
+  // in the world yet, so the workshop's outpost sheet carries it for this test.
+  const sheet = TECH_RECORDS.workshop_outpost_sheet.blueprints as unknown as string[];
+  sheet.push("bp_locker_extension");
+  try {
+    let s = systemsGame();
+    for (const k of ["mod_locker", "mod_locker"] as RecipeId[]) fund(s, k);
+    const kit = kitId(s), [a, b] = s.inventory.items.filter((i) => i.kind === "mod_locker").map((i) => i.id) as [string, string];
+    at(s, { ...LEDGE, y: LEDGE.y + 0.6 }, "swimming");
+    s = run(s, { type: "deploy-outpost", itemId: kit, name: "West ledge" }).state;
+    for (const [k, q] of [["structural_alloy", 3], ["silica_glass", 2], ["conductive_crust", 2]] as const) addItem(s, k, q, "diver");
+    s = run(s, { type: "upgrade-outpost", outpostId: kit }).state;
+    s = run(s, { type: "install-host-module", hostId: kit, socket: "s0", itemId: a }).state;
+    s = run(s, { type: "install-host-module", hostId: kit, socket: "s1", itemId: b }).state;
+    give(s, "structural_alloy", 3); give(s, "buoyant_resin", 2);
+    const r = upgradeHostModule(s, kit, "s0", "locker_extension_1");
+    assert.ok(r.ok, r.ok ? "" : r.message);
+    const cap = (item: string) => s.inventory.containers.find((c) => c.id === `${item}_locker`)!.capacity;
+    assert.equal(cap(a), 48, "32 CU × 1.5");
+    assert.equal(cap(b), 32, "the other locker module is unchanged");
+    give(s, "structural_alloy", 1); give(s, "flex_membrane", 1); // packing breaks the anchor seals
+    assert.equal(packOutpost(s, s.systems, kit), null);
+    assert.equal(cap(a), 48, "the capacity travels with the module item");
+    const back = reload(s);
+    assert.ok(back.ok, back.ok ? "" : back.error);
+    const stale = structuredClone(s);
+    stale.inventory.containers.find((c) => c.id === `${a}_locker`)!.capacity = 32;
+    assert.equal(reload(stale).ok, false, "validation recomputes the capacity from the upgrade");
+  } finally { sheet.pop(); }
 });
 
 test("heated grow bed: twice as fast and one more produce for food on a powered host; nothing for power crops; the heater draws power", () => {
@@ -113,8 +125,7 @@ test("ping lens: the handheld ping reaches 60 m once crafted", () => {
 });
 
 test("site caches: found on first reach, full, never a reserve cell; take-only; taken stays taken across reload; nothing refills", () => {
-  const { s } = opened();
-  made(s, "essential_tools");
+  const s = readyState();
   assert.ok(!s.inventory.containers.some((c) => siteCacheOf(c.id)), "New Game holds no cache, so every item is the player's");
   assert.ok(interactions(s).some((x) => x.id === siteCacheContainerId("canopy_basket_bins")), "an unfound cache is still a place to go");
   for (const id of SITE_CACHE_IDS) {
@@ -165,8 +176,7 @@ test("site caches: found on first reach, full, never a reserve cell; take-only; 
 });
 
 test("coded doors: an unplaced door takes no code; a wrong code costs nothing; the right one opens it for good", () => {
-  const { s } = opened(), hatch = CODED_DOORS["island.cold_store_hatch"];
-  made(s, "essential_tools");
+  const s = readyState(), hatch = CODED_DOORS["island.cold_store_hatch"];
   assert.equal(enterCode(s, "island.cold_store_hatch", "4417").ok, false, "not in the world yet");
   hatch.placed = true; hatch.position = { x: -230, y: 24, z: 3 };
   try {
