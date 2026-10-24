@@ -1071,3 +1071,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Projection:** the Creel's longest gap 51→15 min or less, the carrier's 95→15 or less.
   - **Cost:** the main path gets about 1 h shorter, so the 10 h floor rests on content (no padding).
   - **Review:** Sol plan R1 running (`siltwake-pace1-plan-review-r1-sol-671b0ec`).
+- **Owner decisions (2026-10-24):**
+  - **Door puzzles: more puzzles.** Most coded doors involve deduction, the main path is always solvable from logs, and the first door is a straight code (coordinator call). Recorded in OPENING-DESIGN.
+  - **90 s empty travel is a spacing guide, not law.** The limit scales with progression, and long legs are reported, not auto-failed; the 15–20 min gap and zero decode-only waits stay hard gates; a predator counts while its cue plays.
+  - **Carrier hold-course on sailed lanes** for long, slow journeys, otherwise steer (a small stream after PACE-1 stage 2). Recorded in GAME-DIRECTION.
+  - Sent to LS-1 and PACE-1. PACE-1 stage 2 also wires carrier fabrication.
