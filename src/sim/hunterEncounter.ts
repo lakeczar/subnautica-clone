@@ -17,8 +17,8 @@ import { PULSE_CHARGE_COST } from "./vehicles.js";
 import { gameWorld, moveHull } from "./world.js";
 import { THREAT_WINDOWS } from "../content/fauna/windows.js";
 import { HUNTER_ROUND_JOIN, HUNTER_ROUND_UNSWEPT, hunterRoundPath, windowBusy } from "./fauna/windows.js";
+import { FIXED_SECONDS as DT } from "./clock.js";
 
-const DT = 1 / 60;
 /** Latest pursuit time before the warning bump: just inside cycle 0's contact phase. */
 const FIRST_CONTACT = H.contactSeconds - 1e-6;
 /** Radius of the hunter's territory around its home. */

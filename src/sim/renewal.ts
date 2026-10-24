@@ -1,6 +1,7 @@
 import { RENEWABLE_SOURCE_IDS, renewable, SOURCE_RENEWAL, SOURCES } from "../content/registry.js";
 import type { RenewableSourceId, SourceId } from "../content/registry.js";
 import type { GameState } from "./types.js";
+import { rowById } from "./rows.js";
 
 /** Fresh progress for New Game and migration: no catch-up, refill or free materials. */
 export function initialRenewal(): GameState["world"]["renewal"] {
@@ -14,8 +15,8 @@ export const renewalCap = (id: RenewableSourceId): number => SOURCES[id].stock;
  * stock increase in the same transaction so a full source never banks time. */
 export function settleRenewal(s: GameState, id: SourceId): void {
   if (!renewable(id)) return;
-  const node = s.world.resources.find((n) => n.id === id)!;
-  if (node.stock >= renewalCap(id)) s.world.renewal.find((r) => r.id === id)!.progress = 0;
+  const node = rowById(s.world.resources, id)!;
+  if (node.stock >= renewalCap(id)) rowById(s.world.renewal, id)!.progress = 0;
 }
 
 /** One active expedition step. Constant cost per source, independent of elapsed real
@@ -23,7 +24,7 @@ export function settleRenewal(s: GameState, id: SourceId): void {
 export function advanceRenewal(s: GameState): void {
   if (s.scenario !== "expedition" || s.opening.phase < 4) return;
   for (const r of s.world.renewal) {
-    const node = s.world.resources.find((n) => n.id === r.id)!, cap = renewalCap(r.id);
+    const node = rowById(s.world.resources, r.id)!, cap = renewalCap(r.id);
     if (node.stock >= cap) {
       r.progress = 0;
       continue;

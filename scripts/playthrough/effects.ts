@@ -8,7 +8,7 @@ import * as registry from "../../src/content/registry.js";
 import { HULLS, ITEMS, MATERIALS, RECIPES, SOURCES } from "../../src/content/registry.js";
 import type { RecipeId, SourceId } from "../../src/content/registry.js";
 import { personalLimit } from "../../src/sim/capabilities.js";
-import { fabricationContainers } from "../../src/sim/inventory.js";
+import { fabricationContainers, usedCapacity } from "../../src/sim/inventory.js";
 import { aimedInteraction } from "../../src/sim/targeting.js";
 import { craftSite } from "../../src/sim/progression.js";
 import { outpostChargerFor } from "../../src/sim/systemsLink.js";
@@ -114,7 +114,7 @@ export function craftEffect(before: GameState, after: GameState, id: RecipeId): 
     // diver hold; stripped frames to the locker; everything else to the diver hold.
     const lockerFree = () => {
       const c = before.inventory.containers.find((x) => x.id === "workshop_locker")!;
-      const used = before.inventory.items.filter((i) => i.containerId === c.id && !i.fitted).reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0);
+      const used = usedCapacity(before, c.id);
       const freed = [...actual].filter(([k, d]) => k.startsWith("workshop_locker|") && d < 0)
         .reduce((n, [k, d]) => n - d * ITEMS[k.split("|")[1] as keyof typeof ITEMS].cu, 0);
       return c.capacity - used + freed;

@@ -7,11 +7,12 @@ import { SITES } from "../src/content/regions/sites.js";
 import { type ItemKind } from "../src/content/registry.js";
 import { addItem } from "../src/sim/inventory.js";
 import { interactions } from "../src/sim/progression.js";
-import { executeCommand, stepGame } from "../src/sim/step.js";
+import { executeCommand } from "../src/sim/step.js";
 import { recordStory, WORKS_MOORING_RADIUS } from "../src/sim/storyLink.js";
 import type { GameState } from "../src/sim/types.js";
 import { creelFirst, creelOf, saveable, world } from "./b1-support.js";
 import { faceTarget, NORMAL_VIEWS, protectedReadyState } from "./targeting-support.js";
+import { play } from "./step-support.js";
 
 test("every later story site is placed at an S2 site; the gate hall is at 769 m; every host rests on S2's world", () => {
   for (const [site, p] of Object.entries(STORY_PLACEMENTS)) {
@@ -59,7 +60,7 @@ test("COMPOSED WORKS AND ENDING: the gate procedure, the hall and food restorati
   saveable(s);
   // The pipe drains over real steps; opening early is refused with a reason.
   r = use(s, "gate_panel"); assert.equal(s.story.works.gate, "equalizing");
-  for (let i = 0; i < 5400; i++) s = stepGame(s, [], world).state;
+  s = play(s, 5400, [], world);
   assert.equal(s.story.works.gate, "equalized");
   s = use(s, "gate_panel").state;
   assert.equal(s.story.works.gate, "open");

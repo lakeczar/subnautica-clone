@@ -9,7 +9,7 @@ import type { ItemKind, MountKind, RecipeId } from "../content/registry.js";
 import { isMountKind } from "../content/registry.js";
 import {
   available, containerAccessible, containerLabel as inventoryLabel, distance, equipped, fabricationContainers,
-  facility, hasRoom, localBenchSite, materialStoragePreview, nearCanopyStop, nearPod,
+  facility, hasRoom, itemCu, localBenchSite, materialStoragePreview, nearCanopyStop, nearPod,
   nearStop, nearWorkshop, stopWorks, supportedServiceSite, usedCapacity,
 } from "../sim/inventory.js";
 import { atSite, craftingBlock, craftSite, hullOutput, personalLimit, recipeSites, refitHull, refitTier, suitRefit } from "../sim/progression.js";
@@ -33,6 +33,8 @@ import { registerFaunaPanels } from "./faunaPanels.js";
 import { currentObjective } from "../sim/objective.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import { carrierPanel } from "./carrierPanel.js";
+import { isSeed } from "../content/systems/cultivation.js";
+import { FAUNA_ITEMS } from "../content/fauna/items.js";
 import { developerMode } from "./developer.js";
 
 const isDiscovery = (id: string): id is DiscoveryId => (DISCOVERY_IDS as readonly string[]).includes(id);
@@ -72,6 +74,19 @@ function containerLabel(state: GameState, id: string): string {
 
 // GameView owns panel visibility, the latest state and all input listeners.
 // This owner builds content and retains only panel-local command/selection state.
+/** UI-01: Cargo's kinds of item, for its filter. */
+export const CARGO_FILTERS = ["all", "materials", "living", "power", "gear"] as const;
+export type CargoFilter = (typeof CARGO_FILTERS)[number];
+const CARGO_FILTER_LABELS: Readonly<Record<CargoFilter, string>> = {
+  all: "All", materials: "Materials", living: "Food & living", power: "Power", gear: "Gear",
+};
+export function cargoKind(kind: string): Exclude<CargoFilter, "all"> {
+  if (Object.hasOwn(MATERIALS, kind) || kind === "tagged_frame") return "materials";
+  if (kind === "reserve_cell" || kind === "bio_cell") return "power";
+  if (kind === "meal" || isSeed(kind) || Object.hasOwn(FAUNA_ITEMS, kind)) return "living";
+  return "gear";
+}
+
 export class PanelView {
   private readonly commands = new Map<string, GameCommand>();
   private storageFrom: string | null = null;
@@ -88,6 +103,8 @@ export class PanelView {
   private readonly sections = new Map<PanelKind, PanelSection[]>();
   /** The journal tab in view (UI state only; C4). */
   private journalTab: JournalTabId = "notebook";
+  /** UI-01: which kinds of item Cargo lists. Panel-local, never saved. */
+  private cargoFilter: CargoFilter = "all";
 
   constructor(private readonly root: HTMLElement, private readonly world: WorldQueries) {
     // The story's notebook is composed through the same extension sections as any stream.
@@ -138,6 +155,12 @@ export class PanelView {
     return true;
   }
   showJournalTab(id: JournalTabId): void { this.journalTab = id; }
+  /** The Cargo filter is panel-local: true when `value` named one. */
+  selectCargoFilter(value: string): boolean {
+    if (!(CARGO_FILTERS as readonly string[]).includes(value)) return false;
+    this.cargoFilter = value as CargoFilter;
+    return true;
+  }
 
   selectStorage(id: "storage-from" | "storage-to", value: string): void {
     if (id === "storage-from") this.storageFrom = value;
@@ -294,7 +317,9 @@ export class PanelView {
 
   private itemRows(state: GameState, containerId: string, button: CommandButton): string {
     const bins = state.inventory.containers.filter((c) => c.kind !== "equipment" && containerAccessible(state, c.id));
-    const items = state.inventory.items.filter((i) => i.containerId === containerId);
+    const all = state.inventory.items.filter((i) => i.containerId === containerId);
+    const items = this.cargoFilter === "all" ? all : all.filter((i) => cargoKind(i.kind) === this.cargoFilter);
+    const hidden = all.length - items.length;
     return items.map((i) => {
       const installed = state.fleet.vehicles.find((v) => v.modules.includes(i.id));
       let actions = "";
@@ -302,20 +327,31 @@ export class PanelView {
       if (!i.fitted && !installed)
         for (const d of bins.filter((d) => d.id !== containerId)) {
           const label = d.id === "diver" ? "Take to diver" : `To ${containerLabel(state, d.id)}`;
-          const room = hasRoom(state, d.id, ITEMS[i.kind].cu * i.quantity);
-          actions += button(`${label} · all (${i.quantity})`, { type: "transfer", itemId: i.id, to: d.id, quantity: i.quantity }, !room, room ? undefined : `Needs ${ITEMS[i.kind].cu * i.quantity} CU free in ${containerLabel(state, d.id)}.`);
+          const room = hasRoom(state, d.id, itemCu(i));
+          actions += button(`${label} · all (${i.quantity})`, { type: "transfer", itemId: i.id, to: d.id, quantity: i.quantity }, !room, room ? undefined : `Needs ${itemCu(i)} CU free in ${containerLabel(state, d.id)}.`);
           if (i.quantity > 1) {
             const one = hasRoom(state, d.id, ITEMS[i.kind].cu);
             actions += button(`${label} · 1`, { type: "transfer", itemId: i.id, to: d.id, quantity: 1 }, !one, one ? undefined : `Needs ${ITEMS[i.kind].cu} CU free in ${containerLabel(state, d.id)}.`);
           }
         }
-      return `<div class="item-row" data-row-key="${escapeHtml(`${containerId}:${i.id}`)}"><div><strong>${escapeHtml(this.itemLabel(state, i))}${i.quantity > 1 ? ` × ${i.quantity}` : ""}</strong><small>${ITEMS[i.kind].cu * i.quantity} CU${installed ? ` · Installed in ${HULLS[installed.hull].label} · remove at collar before transfer` : i.fitted ? " · Fitted / retained" : ""}${i.charge !== null ? ` · charge ${i.charge.toFixed(0)}%` : ""}${i.provenance === "maintenance" ? " · rescue stock" : ""}</small></div><div class="item-actions">${buoy}${actions ? this.group(`move:${i.id}`, `Move <span class="sr-only">${escapeHtml(this.itemLabel(state, i))}</span>`, `<div class="move-destinations">${actions}</div>`) : ""}</div></div>`;
-    }).join("") || '<p class="empty-hold">Empty</p>';
+      return `<div class="item-row" data-row-key="${escapeHtml(`${containerId}:${i.id}`)}"><div><strong>${escapeHtml(this.itemLabel(state, i))}${i.quantity > 1 ? ` × ${i.quantity}` : ""}</strong><small>${itemCu(i)} CU${installed ? ` · Installed in ${HULLS[installed.hull].label} · remove at collar before transfer` : i.fitted ? " · Fitted / retained" : ""}${i.charge !== null ? ` · charge ${i.charge.toFixed(0)}%` : ""}${i.provenance === "maintenance" ? " · rescue stock" : ""}</small></div><div class="item-actions">${buoy}${actions ? this.group(`move:${i.id}`, `Move <span class="sr-only">${escapeHtml(this.itemLabel(state, i))}</span>`, `<div class="move-destinations">${actions}</div>`) : ""}</div></div>`;
+    }).join("") + (hidden ? `<p class="filtered-out">${hidden} other item${hidden === 1 ? "" : "s"} hidden by the filter</p>` : "") ||
+      '<p class="empty-hold">Empty</p>';
+  }
+  /** UI-01: the kind filter, with how many reachable stacks each kind shows. */
+  private cargoFilterBar(state: GameState): string {
+    const reach = new Set(state.inventory.containers.filter((c) => c.kind !== "equipment" && containerAccessible(state, c.id)).map((c) => c.id));
+    const stacks = state.inventory.items.filter((i) => reach.has(i.containerId));
+    const option = (id: CargoFilter): string => {
+      const n = id === "all" ? stacks.length : stacks.filter((i) => cargoKind(i.kind) === id).length;
+      return `<option value="${id}"${this.cargoFilter === id ? " selected" : ""}>${CARGO_FILTER_LABELS[id]} · ${n}</option>`;
+    };
+    return `<label class="cargo-filter">Show<select id="cargo-filter" data-focus-key="cargo-filter">${CARGO_FILTERS.map(option).join("")}</select></label>`;
   }
 
   private hold(state: GameState, button: CommandButton): string {
     const diver = state.inventory.containers.find((c) => c.id === "diver");
-    let html = `<p class="panel-status">${this.protection(state)} · Carried ${usedCapacity(state, "diver")} / ${diver?.capacity ?? 0} CU</p>`;
+    let html = `<p class="panel-status">${this.protection(state)} · Carried ${usedCapacity(state, "diver")} / ${diver?.capacity ?? 0} CU</p>${this.cargoFilterBar(state)}`;
     if (localBenchSite(state)) {
       const bins = state.inventory.containers.filter(c => containerAccessible(state, c.id)).map(c => c.id);
       const stock = (Object.keys(MATERIALS) as (keyof typeof MATERIALS)[]).map(kind => ({ kind, quantity: available(state, kind, bins) })).filter(s => s.quantity > 0);

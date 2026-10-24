@@ -2,7 +2,7 @@ import { gameWorld, moveHull, sweptHullClearance } from "./world.js";
 import { HULL_COLLIDERS, HULLS, ITEMS, RECOVERY_STAGE } from "../content/registry.js";
 import type { ItemKind } from "../content/registry.js";
 import { CREEL_CABIN, hullToWorld, mobileRefugeBlock } from "./fleet.js";
-import { cabinLockerId } from "./inventory.js";
+import { cabinLockerId, cuOf, itemCu } from "./inventory.js";
 import { LEGACY_WORLD_BOUNDS, RECOVERY_ROUTES, RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
 import { deepRoute, deepRouteFor, insideB1Recovery, isLegacyRoute, STANDARD_TETHER, type RecoveryRouteId } from "../content/recoveryRoutes.js";
 import type { GameEvent, GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
@@ -22,7 +22,7 @@ import { moduleOfItem, tierOfKit } from "../content/systems/hosts.js";
 /** SYS-2's identity rule (systems/instances.ts `retainsIdentity`), inlined to keep imports one-way. */
 const retainsIdentity = (kind: string): boolean => moduleOfItem(kind) !== null || tierOfKit(kind) !== null;
 import { upgradeId } from "../content/upgrades/catalogue.js";
-const DT = 1 / 60;
+import { FIXED_SECONDS as DT } from "./clock.js";
 const OCCUPIED_RECOVERY = "the Dart is occupied. Tow and salvage require an empty hull. Exit only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
 const OCCUPIED_CREEL = "the Creel is occupied. Tow and salvage require an empty hull. Leave the helm or cabin only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
 export const RECOVERY_NOTICES = {
@@ -189,8 +189,8 @@ export function canisterSalvagePreview(s: GameState, vehicleId: string): { cu: n
   const v = s.fleet.vehicles.find((a) => a.id === vehicleId)!;
   const lockers = v.modules.filter((id) => s.inventory.items.some((i) => i.id === id && i.kind === "creel_cabin")).map(cabinLockerId);
   const items = s.inventory.items.filter((i) => i.containerId === v.cargoId || lockers.includes(i.containerId));
-  const cu = items.reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0) +
-    Object.entries(v.investment).reduce((n, [k, q]) => n + ITEMS[k as ItemKind].cu * (q ?? 0), 0);
+  const cu = items.reduce((n, i) => n + itemCu(i), 0) +
+    Object.entries(v.investment).reduce((n, [k, q]) => n + cuOf(k) * (q ?? 0), 0);
   return { cu, refusal: cu > CANISTER_CU ? `The salvage would need ${cu} CU; one canister holds ${CANISTER_CU}. Transfer cargo first.`
     : s.recovery.caches.length >= 80 ? "Too many visited caches remain. Empty one before salvaging." : null };
 }
@@ -259,10 +259,7 @@ export function recoveryCommand(
       v.modules.length)
     )
       return "Remove installed modules at a supported cradle or eligible local disabled-hull collar, then transfer all cargo before salvaging the frame. Nothing changed.";
-    const cu = Object.entries(v.investment).reduce(
-      (n, [k, q]) => n + ITEMS[k as ItemKind].cu * (q ?? 0),
-      0,
-    );
+    const cu = Object.entries(v.investment).reduce((n, [k, q]) => n + cuOf(k) * (q ?? 0), 0);
     const dest = creel ? null :
       hasRoom(s, "buoy_hold", cu) &&
       s.inventory.buoy.deployed &&

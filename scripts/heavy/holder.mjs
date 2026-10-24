@@ -31,12 +31,14 @@
 // holds processes, the ticket is alive (state.mjs reconcile).
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readFileSync, rmSync, statSync, watch, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { MACHINE_LABELS, jobEnv, plan } from "./policy.mjs";
+import { exclusiveSliceReady, hostObserved, judge, parseCounters, sliceMismatch, sliceThrottle, snapshotNow } from "./contention.mjs";
+import { MACHINE_LABELS, jobEnv, plan, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 import {
-  cgroupRead, cpuContext, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
+  cgroupRead, gitTree, gpuUsers, hostFor, jobDir, jobProcs, ledger, loadConfig, readFileSafe, readJson, readState, readStats,
   releaseAnchorIfAlone, scopePopulated, self, sliceCheck, systemctl, transaction, unitFacts, writeJsonAtomic,
 } from "./state.mjs";
 
@@ -130,10 +132,16 @@ if (cfg.manageSlice) ensureSlice(t.hostAtAdmit.nproc);
 const out = openSync(outPath, "a");
 const memBytes = req.memMiB * 1048576;
 const inOwnScope = readFileSync("/proc/self/cgroup", "utf8").includes(`/${holderUnit}.scope`);
+// An exclusive job runs in the exclusive slice, whose CPU weight is fixed in its
+// unit file (contention.mjs, TST-16): its priority lasts exactly as long as its
+// processes. If that slice isn't ready, it runs in the lane's slice, labelled.
+const placement = req.exclusive && cfg.exclusiveSlice ? exclusiveSliceReady(cfg.exclusiveSlice, cfg.exclusiveCpuWeight) : null;
+const jobSlice = placement?.ready ? cfg.exclusiveSlice : cfg.slice;
+if (placement && !placement.ready) note(`not in the exclusive slice: ${placement.why}; this run has no CPU priority`);
 const args = [
   // Not --collect: a failed scope stays loaded until unitFacts() has read its
   // accounting and cleared it.
-  "--user", "--scope", "--quiet", `--unit=${unit}`, `--slice=${cfg.slice}`,
+  "--user", "--scope", "--quiet", `--unit=${unit}`, `--slice=${jobSlice}`,
   // No MemoryHigh: with no swap, a job past memory.high is throttled, not
   // killed, and crawls to its deadline holding its reservation (measured in
   // SCHED-1). At MemoryMax the kernel still reclaims page cache before it
@@ -147,13 +155,17 @@ const args = [
   ...(inOwnScope ? ["-p", `BindsTo=${holderUnit}.scope`, "-p", `After=${holderUnit}.scope`] : []),
   "sh", join(here, "scope-run.sh"), dir, String(goal.limitS), String(memBytes), ...t.argv,
 ];
-const context = req.exclusive ? { samples: 0, load1Max: 0, cpuSomeMax: 0, memFullMax: 0 } : null;
+// An exclusive job's contention, judged on its own cgroup (contention.mjs,
+// TST-16): scope-run.sh's snapshots before and after the payload, and a live
+// point every second between (raw in contention.jsonl).
+const exclusive = req.exclusive ? { points: [], observed: { load1Max: 0, cpuSomeAvg10Max: 0, memFullAvg10Max: 0 }, raw: join(dir, "contention.jsonl") } : null;
 // GPU jobs record any GPU client outside the lease that shared the GPU with
 // them (a driver run outside the queue): their screenshots stay functional,
 // but an exclusive measurement is then disturbed.
 const gpuShared = new Map();
-const sampler = (context || req.gpu) && setInterval(() => sample(), 15000);
-sample();
+let gpuTicks = 0;
+const sampler = (exclusive || req.gpu) && setInterval(() => sample(), exclusive ? 1000 : 15000);
+sample({ gpu: true });
 const started = Date.now();
 // Hard limit: the in-scope `timeout` ends the foreground at the deadline or
 // ceiling (plus 10 s to kill); this backstop stops everything in the scope if
@@ -257,7 +269,7 @@ for (let i = 1; scopePopulated(unit); i++) {
 clearTimeout(backstop);
 for (const timer of [stallWatch, soakWatch]) if (timer) clearInterval(timer);
 if (sampler) clearInterval(sampler);
-sample();
+sample({ gpu: true }); // the final GPU observation always runs (R1-F5)
 
 // 4. Account, label, free.
 const stats = readStats(dir);
@@ -293,7 +305,26 @@ else if (code === 137 || signal) { stopReason = "killed"; label = "killed"; }
 if (oomKills > 0 && !reservationOom) note(`${oomKills} process(es) were OOM-killed inside the job by a sub-limit (for example a heavy test file's budget), not by its ${req.memMiB} MiB reservation`);
 if (leftovers) note("processes left behind by the command were stopped");
 if (gpuShared.size) note(`the GPU was also used outside the lease by: ${[...gpuShared.values()].map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}`);
-if (context && (context.cpuSomeMax >= 10 || context.memFullMax >= 1 || gpuShared.size)) context.disturbed = true;
+// The priority it had, from the kernel's own reading of the slice its scope ran
+// in, before the payload started and after it ended (scope-run.sh): the unit's
+// properties, never a path name. A slice created without its unit (weight 100,
+// no caps) or configured differently is no CPU priority (R5-F1).
+const counters = { start: parseCounters(readFileSafe(join(dir, "counters-start"))), end: parseCounters(readFileSafe(join(dir, "counters-end"))) };
+let boost = null;
+if (placement) {
+  const w = sliceLimits(availableParallelism(), cfg); // as install.sh wrote the unit
+  const want = { slice: cfg.exclusiveSlice, weight: String(cfg.exclusiveCpuWeight), cpuMax: `${w.cpuQuotaPct * 1000} 100000`, memoryMax: String(w.memoryMaxMiB * 1048576), swapMax: "0" };
+  const wrong = !placement.ready ? [placement.why] : [...new Set([...sliceMismatch(counters.start, want).map((m) => `at the start: ${m}`), ...sliceMismatch(counters.end, want).map((m) => `at the end: ${m}`)])];
+  boost = wrong.length ? { slice: cfg.exclusiveSlice, status: "unavailable", why: wrong.join("; ") } : { slice: cfg.exclusiveSlice, weight: cfg.exclusiveCpuWeight, status: "applied" };
+  // Throttling of that slice between the two readings: corroborates them (R6); missing counters are unmeasured (R7-F2).
+  if (boost.status === "applied") boost.throttled = sliceThrottle(counters.start, counters.end);
+  if (wrong.length) note(`no CPU priority for this exclusive run: ${boost.why}`);
+}
+const contextResult = !exclusive || rejected ? null : judge({
+  start: counters.start, end: counters.end,
+  points: exclusive.points, nproc: t.hostAtAdmit.nproc, thresholds: cfg.disturbed, gpuShared: [...gpuShared.values()], observed: exclusive.observed, boost,
+});
+if (contextResult?.disturbed) note(`DISTURBED: ${contextResult.reasons.join("; ")}`);
 
 // Evidence binding: a result is evidence for a commit only if the tree was
 // that clean commit when admitted and stayed so to the end. A snapshot is
@@ -320,7 +351,7 @@ const result = {
   oomKills, reservationOom, oomGroupKill: groupOom, oomEvidence, unavailable, leftovers, stopReason, goal,
   head: tree.head, dirty: tree.dirty, headAtAdmit: treeAtAdmit.head, dirtyAtAdmit: treeAtAdmit.dirty,
   changedTree, changedDuringRun, evidence, snapshot: snap ? { root: snap.root, kept: Boolean(keptSnapshot) } : null,
-  gpuShared: gpuShared.size ? [...gpuShared.values()] : undefined, context,
+  gpuShared: gpuShared.size ? [...gpuShared.values()] : undefined, context: contextResult,
   machine: MACHINE_LABELS.local, machineTag: goal.machine ?? null, fellBack: t.fellBack ?? undefined,
   // --artifact paths of a job that ran here are where it wrote them.
   artifacts: request.opts?.artifacts?.map((p) => { const at = resolve(runCwd, p); return { path: p, ...(existsSync(at) ? { local: at } : { error: "not written" }) }; }),
@@ -338,15 +369,18 @@ transaction(cfg, (state) => {
 });
 process.exit(0); // releases the bridge (fd 3)
 
-function sample() {
-  if (context) {
-    const s = cpuContext();
-    context.samples++;
-    context.load1Max = Math.max(context.load1Max, s.load1);
-    context.cpuSomeMax = Math.max(context.cpuSomeMax, s.cpuSomeAvg10);
-    context.memFullMax = Math.max(context.memFullMax, s.memFullAvg10);
+function sample({ gpu = false } = {}) {
+  if (exclusive) {
+    const p = snapshotNow(readFileSafe(join(dir, "cgroup")));
+    exclusive.points.push(p);
+    try { appendFileSync(exclusive.raw, `${JSON.stringify(p)}\n`); } catch { /* the audit copy only */ }
+    const o = hostObserved();
+    exclusive.observed.load1Max = Math.max(exclusive.observed.load1Max, o.load1);
+    exclusive.observed.cpuSomeAvg10Max = Math.max(exclusive.observed.cpuSomeAvg10Max, o.cpuSomeAvg10);
+    exclusive.observed.memFullAvg10Max = Math.max(exclusive.observed.memFullAvg10Max, o.memFullAvg10);
   }
-  if (!req.gpu) return;
+  // GPU scans every 15 s, and always at the first and last observation (R1-F5).
+  if (!req.gpu || (!gpu && exclusive && ++gpuTicks % 15 !== 0)) return;
   for (const u of gpuUsers(cfg, readState(cfg))) {
     if (u.leased || gpuShared.has(u.pid)) continue;
     gpuShared.set(u.pid, { pid: u.pid, cmd: u.cmd });

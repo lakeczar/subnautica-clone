@@ -18,6 +18,8 @@ import type { RecoveryRouteId } from "../content/recoveryRoutes.js";
 import type { RestBaseId } from "../content/bases.js";
 import type { SystemsState } from "./systems/state.js";
 import type { SystemsEvent } from "./systems/step.js";
+import type { SignatureAction, SignatureEvent } from "./signatures.js";
+import type { HostUpgradeId } from "../content/upgrades/hosts.js";
 import type { FlareState, UpgradeRuntime } from "./upgrades/tools.js";
 export interface Vec3 {
   x: number;
@@ -113,7 +115,8 @@ export interface BerthTransaction {
 }
 export interface CarrierState {
   vehicleId: string;
-  configuration: "compact" | "medium";
+  /** SIG-1: "mixed" (one medium and one compact berth) needs the berth extension. */
+  configuration: "compact" | "medium" | "mixed";
   stationKeeping: boolean;
   supportedDock: boolean;
   transaction: BerthTransaction | null;
@@ -247,11 +250,13 @@ export type GameCommand =
   | { type: "release-ink" }
   | { type: "mark"; placeId: PlaceId }
   // C4: SYS-1 upgrade actions and fitting.
-  | { type: "upgrade"; action: "overdrive" | "flare" | "ballast" | "anchor" | "listen" | "sample" | "rearm" | "bio-cell"; vehicleId?: string; itemId?: string }
+  | { type: "upgrade"; action: "overdrive" | "flare" | "ballast" | "anchor" | "listen" | "sample" | "rearm" | "bio-cell" | SignatureAction; vehicleId?: string; itemId?: string }
   // C4: SYS-2 bases and knowledge.
   | { type: "deploy-outpost"; itemId: string; name?: string }
   | { type: "pack-outpost"; outpostId: string; to?: string }
   | { type: "upgrade-outpost"; outpostId: string }
+  /** SIG-1: fit a decoder lattice or survey array to the module in one host socket. */
+  | { type: "upgrade-host-module"; hostId: string; socket: string; upgrade: HostUpgradeId }
   | { type: "install-host-module"; hostId: string; socket: string; itemId: string }
   | { type: "remove-host-module"; hostId: string; socket: string; to?: string }
   | { type: "start-decode"; hostId: string; socket: string; decodable: string }
@@ -316,6 +321,8 @@ export type GameEvent =
   | { type: "thrust-sample"; actorId: string; requested: number; actual: number; solidLimited: number; supportLimited: number }
   /** SYS-2 background work for the local play timeline (C4). Transient, never saved. */
   | { type: "systems"; event: SystemsEvent }
+  /** SIG-1 signature actions and their per-step work (typed outcomes, F17). Transient, never saved. */
+  | { type: "signature"; event: SignatureEvent }
   | { type: "interaction-panel"; panel: "inventory" | "craft" | "notebook" | "systems" | "journal" | "carrier"; targetId: string }
   | ({ type: "notice"; message: string; error?: boolean } & NoticeOptions)
   | {

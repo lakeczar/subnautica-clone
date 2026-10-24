@@ -207,6 +207,9 @@ export function plan(state, now, host, cfg = DEFAULTS, { counterfactual = false 
   const all = tickets.filter((t) => t.state === "queued").sort(byOrder(now, cfg));
   const used = { tokens: 0, memMiB: 0, gpu: 0, express: false, exclusive: false, soaks: 0, remote: remoteRunning.length };
   const result = { admit: [], blocked: {}, order: all.map((t) => t.id), T, used, preempt: [] };
+  // Maintenance (install.sh changing the exclusive slice's unit, TST-16): nothing
+  // is admitted; queued tickets wait, and run once it is cleared.
+  if (state.maintenance) { for (const t of all) result.blocked[t.id] = "maintenance"; return result; }
 
   // The remote lane first: its slot is independent of everything local.
   const rstate = host.remote?.state ?? "off";

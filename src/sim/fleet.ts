@@ -1,7 +1,10 @@
 import { HUSH_HANDLING } from "../content/campaign/fleet.js";
 import { upgradeId } from "../content/upgrades/catalogue.js";
+import type { UpgradeId } from "../content/upgrades/catalogue.js";
 import { craftProfile } from "./upgrades/effects.js";
-import { HULL_COLLIDERS, HULL_HOLD_CU, HULLS, ITEMS, SOURCES, isMountKind } from "../content/registry.js";
+import type { CraftProfile } from "./upgrades/effects.js";
+import { armWork, hostKind, type ArmWork } from "./upgrades/tools.js";
+import { HULL_COLLIDERS, HULL_HOLD_CU, HULLS, ITEMS, MATERIALS, SOURCES, isMountKind } from "../content/registry.js";
 import type { MountKind, SourceId } from "../content/registry.js";
 import type { GameState, ItemStack, Vec3, VehicleState, WorldQueries } from "./types.js";
 import { cabinLockerId, distance, equipped, hasRoom, removeQuantity } from "./inventory.js";
@@ -24,8 +27,7 @@ export function fittedMount(s: Readonly<GameState>, v: Readonly<VehicleState>): 
 /** Hold size: the hull's base hold plus what its fitted upgrades add or take
  * (C4: SYS-1's profile; the Creel rack +32 and cabin −24 as before). */
 export function holdCapacity(s: Readonly<GameState>, v: Readonly<VehicleState>): number {
-  const kinds = v.modules.flatMap((id) => { const k = s.inventory.items.find((i) => i.id === id)?.kind; return k && upgradeId(k) ? [k] : []; });
-  return HULL_HOLD_CU[v.hull] + craftProfile(v.hull, v.rating, kinds).holdDeltaCu;
+  return HULL_HOLD_CU[v.hull] + craftProfile(v.hull, v.rating, fittedUpgradeKinds(s, v)).holdDeltaCu;
 }
 export function fittedCabin(s: Readonly<GameState>, v: Readonly<VehicleState>): (ItemStack & { kind: "creel_cabin" }) | null {
   const mount = fittedMount(s, v);
@@ -95,11 +97,8 @@ export const CREEL_BOARDING = { x: 1.2, y: 1.9, z: -1.7 } as const;
 export const CREEL_SEAT = { x: 0, y: 2.22, z: -1.8 } as const;
 /** Tool-arm reach datum at the guarded bow; the art stays inside the berth envelope. */
 export const CREEL_ARM = { x: 0, y: 0.7, z: -3.3, reach: 7.5 } as const;
-export const ARM_LIFT_SECONDS = 6;
-/** Battery percent per arm lift. C3 (P1 playthrough): at 4% a full Basin frame
- * haul (10 lifts plus the return loop) came home at 7%; at 1.5% it keeps the
- * 25% return margin EXPEDITION_INTEGRATION asks for. */
-export const ARM_CHARGE = 1.5;
+/** The arms' timing and charge are SYS-1's arm rule (`upgrades/tools.ts`). */
+export { ARM_CHARGE, ARM_LIFT_SECONDS } from "./upgrades/tools.js";
 export const DIVER_LIFT_SECONDS = 10;
 
 export function hullToWorld(local: Readonly<Vec3>, v: Readonly<VehicleState>): Vec3 {
@@ -307,35 +306,52 @@ export function registerRefuge(s: GameState, vehicleId: string | null): string |
 
 // ---------------------------------------------------------------- tool arms
 /** Loose maintenance salvage and tagged frames are the arms' hosts; living
- * sources and mineral fins stay hand work. */
-export const armHost = (id: SourceId): boolean => SOURCES[id].region === "silt_basin" &&
-  (SOURCES[id].item === "tagged_frame" || SOURCES[id].item === "structural_alloy");
-export type ArmTarget = { sourceId: SourceId; refusal: string | null };
+ * sources stay hand work. SIG-1: the cutting arm adds mineral hosts anywhere
+ * (`armWork`); fauna sheds, roe and seeds are never arm work. */
+export const armHost = (id: SourceId, p?: CraftProfile): boolean => {
+  const item = SOURCES[id].item;
+  if (SOURCES[id].region === "silt_basin" && (item === "tagged_frame" || item === "structural_alloy")) return true;
+  return !!p?.tools.includes("cutting_arm") && Object.hasOwn(MATERIALS, item) && hostKind(item as Parameters<typeof hostKind>[0]) === "mineral";
+};
+export type ArmTarget = { sourceId: SourceId; refusal: string | null; work: ArmWork };
+const SOURCE_IDS = Object.keys(SOURCES) as SourceId[];
 /** Nearest stocked arm host in reach of the bow, or the reason a visible host
- * cannot be worked. Pure. */
+ * cannot be worked, with the work the fitted arm would do there. Pure. */
 export function armTarget(s: Readonly<GameState>): ArmTarget | null {
   const v = s.fleet.vehicles.find((a) => a.id === s.player.controlledVehicleId);
   if (!v || v.hull !== "creel") return null;
-  const arm = hullToWorld(CREEL_ARM, v);
-  const near = (Object.keys(SOURCES) as SourceId[]).filter(armHost)
+  const arm = hullToWorld(CREEL_ARM, v), p = craftProfile(v.hull, v.rating, fittedUpgradeKinds(s, v));
+  const near = SOURCE_IDS.filter((id) => armHost(id, p))
     .map((id) => ({ id, d: distance(arm, SOURCES[id].position) }))
     .filter((c) => c.d <= CREEL_ARM.reach).sort((a, b) => a.d - b.d || a.id.localeCompare(b.id));
   const target = near.find((c) => (s.world.resources.find((n) => n.id === c.id)?.stock ?? 0) > 0) ?? near[0];
   if (!target) return null;
   const id = target.id, def = SOURCES[id], node = s.world.resources.find((n) => n.id === id);
-  const cu = ITEMS[def.item].cu * Math.min(def.bundle, node?.stock ?? 0);
+  const work = armWork(p, def.item as Parameters<typeof armWork>[1], Math.min(def.bundle, node?.stock ?? 0));
+  const n = Math.min(work.bundle, node?.stock ?? 0), cu = ITEMS[def.item].cu * n;
   const refusal = !node || node.stock <= 0 ? `${def.label} · empty.`
-    : v.disabled || v.charge < ARM_CHARGE ? `Tool arms need ${ARM_CHARGE}% hull power.`
+    : work.refusal ? work.refusal
+    : v.disabled || v.charge < work.charge ? `Tool arms need ${work.charge}% hull power.`
     : !hasRoom(s as GameState, v.cargoId, cu) ? `Hold full · ${cu} CU needed for this lift. Store cargo or fit the rack.`
     : null;
-  return { sourceId: id, refusal };
+  return { sourceId: id, refusal, work: { ...work, bundle: n } };
+}
+/** The upgrade kinds fitted to a hull, in fitting order: the craft profile's input. */
+export function fittedUpgradeKinds(s: Readonly<GameState>, v: Readonly<VehicleState>): UpgradeId[] {
+  const out: UpgradeId[] = [];
+  for (const id of v.modules) {
+    const kind = s.inventory.items.find((i) => i.id === id)?.kind;
+    if (kind && upgradeId(kind)) out.push(kind);
+  }
+  return out;
 }
 /** A stocked arm host near the piloted Creel but outside arm reach: the bow must
  * turn or close in. Presentation only; never starts work. */
 export function armNearby(s: Readonly<GameState>, radius = 16): SourceId | null {
   const v = s.fleet.vehicles.find((a) => a.id === s.player.controlledVehicleId);
   if (!v || v.hull !== "creel" || armTarget(s)) return null;
-  return (Object.keys(SOURCES) as SourceId[]).filter(armHost)
+  const p = craftProfile(v.hull, v.rating, fittedUpgradeKinds(s, v));
+  return SOURCE_IDS.filter((id) => armHost(id, p))
     .filter((id) => (s.world.resources.find((n) => n.id === id)?.stock ?? 0) > 0)
     .map((id) => ({ id, d: distance(v.pose.position, SOURCES[id].position) }))
     .filter((c) => c.d <= radius).sort((a, b) => a.d - b.d || a.id.localeCompare(b.id))[0]?.id ?? null;

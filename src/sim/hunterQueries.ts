@@ -130,7 +130,7 @@ export function hullMesh(hull: HullId, pose: ContactPose = {}): ContactMesh {
 export const DIVER_MESH=contactMesh([box({center:[0,.475,0],size:[.68,.95,.68]})]);
 const shells=new Map<string,ContactMesh>();
 /** The existing structural walls include the sealed panes; no carrier bubble. */
-export function carrierShell(configuration: "compact" | "medium", slot?: 0 | 1): ContactMesh {
+export function carrierShell(configuration: "compact" | "medium" | "mixed", slot?: 0 | 1): ContactMesh {
   const key=configuration+"/"+slot,cached=shells.get(key);if(cached)return cached;
   const components=carrierStructure(configuration,slot).map(b=>box({
     center:[(b.min.x+b.max.x)/2,(b.min.y+b.max.y)/2,(b.min.z+b.max.z)/2],

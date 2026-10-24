@@ -81,7 +81,10 @@ fi
 [[ -n "$(git status --porcelain --untracked-files=no)" && -z "$sha" ]] && echo "alickers-job: uncommitted changes are not sent; testing HEAD only" >&2
 sha="$(git rev-parse --verify "${sha:-HEAD}^{commit}")"
 ssh_cmd=(/usr/bin/ssh -F "$HOME/.ssh/siltwake.conf" siltwake-alickers) repo=/work/repos/subnautica-clone tmp=/work/tmp lock=/work/tmp/siltwake-sandbox-job.lock
-if [[ "${ALICKERS_TEST_MODE:-}" == 1 && -n "${SILTWAKE_SCHED_DIR:-}" && "${SILTWAKE_SCHED_DIR%/}" != /work/tmp/siltwake-sched ]]; then
+# Private by identity, not spelling: a trailing slash, `..` or a symlink to the
+# production state is production (as scripts/heavy/state.mjs sameDir).
+private_state() { [[ -n "${SILTWAKE_SCHED_DIR:-}" && ! "$SILTWAKE_SCHED_DIR" -ef /work/tmp/siltwake-sched && "$(realpath -m -- "$SILTWAKE_SCHED_DIR")" != /work/tmp/siltwake-sched ]]; }
+if [[ "${ALICKERS_TEST_MODE:-}" == 1 ]] && private_state; then
   [[ -n "${ALICKERS_SSH:-}" ]] && read -r -a ssh_cmd <<<"$ALICKERS_SSH"
   repo="${ALICKERS_REPO:-$repo}" tmp="${ALICKERS_TMP:-$tmp}" lock="${ALICKERS_LOCK:-$lock}"
 elif [[ -n "${ALICKERS_SSH:-}${ALICKERS_REPO:-}${ALICKERS_TMP:-}${ALICKERS_LOCK:-}" ]]; then

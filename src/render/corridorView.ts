@@ -5,8 +5,8 @@
  * launch point, with chevrons along it: mint when clear, amber when obstructed.
  * Shown at the helm and beside the lock consoles while a craft is berthed, and
  * to a pilot whose craft fits a free berth within 60 m of the lock mouth. */
-import { BERTH_ENVELOPES, HULLS } from "../content/registry.js";
-import { CARRIER_LAYOUT, carrierHull, launchPoint, worldToLocal } from "../sim/carrier.js";
+import { BERTH_ENVELOPES } from "../content/registry.js";
+import { CARRIER_LAYOUT, carrierHull, freeBerth, launchPoint, worldToLocal } from "../sim/carrier.js";
 import { aboardCarrier, atCarrierHelm, CARRIER_STATIONS, launchCorridorView } from "../sim/carrierStations.js";
 import { distance } from "../sim/inventory.js";
 import type { GameState, Vec3, WorldQueries } from "../sim/types.js";
@@ -46,8 +46,7 @@ export function corridorDrawing(s: GameState, world: WorldQueries): CorridorDraw
   // A pilot bringing a craft home: the lock mouth, if it has a berth for it.
   const v = s.fleet.vehicles.find((a) => a.id === s.player.controlledVehicleId);
   if (!v || v.hull === "hearthline" || v.berth || !dock.stationKeeping) return null;
-  const free = ([0, 1] as const).find((n) => !s.fleet.vehicles.some((a) => a.berth?.carrierId === h.id && a.berth.slot === n));
-  if (free === undefined || (dock.configuration === "medium" && free !== 0) || HULLS[v.hull].berth !== dock.configuration) return null;
+  if (freeBerth(s, h, v) === null) return null;
   if (distance(v.pose.position, launchPoint(h, v)) > GUIDE_RANGE) return null;
   const shape = BERTH_ENVELOPES[v.hull as keyof typeof BERTH_ENVELOPES];
   return { mode: "guide", clear: true, from: CARRIER_LAYOUT.railTurn, to: local(launchPoint(h, v)), halfWidth: shape.halfWidth, height: shape.height };

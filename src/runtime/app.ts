@@ -1,7 +1,7 @@
 import { armTarget, fittedCabin } from "../sim/fleet.js";
+import { craftActions } from "../sim/signatures.js";
 import { SiltwakeAudio } from "../audio/director.js";
-import { worldRegionAt } from "../render/regions.js";
-import { executeCommand, stepGame } from "../sim/step.js";
+import { StepFault, StepGuard } from "../sim/stepGuard.js";
 import { gameWorld } from "../sim/world.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
@@ -9,7 +9,7 @@ import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
 import { encodeSave } from "../save/codec.js";
 import { SaveRepository } from "../save/repository.js";
 import type { StoragePort } from "../save/repository.js";
-import { browserWriterLock } from "../save/writer-lock.js";
+import { browserWriterLock } from "./browserLock.js";
 import { ExpeditionSession } from "./session.js";
 import { createRenderer } from "../render/renderer.js";
 import type { GameRenderer, Quality } from "../render/renderer.js";
@@ -18,11 +18,12 @@ import { HelmControl } from "./helm.js";
 import { forgetCorridorView } from "../sim/carrierStations.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
-import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY } from "../sim/timeline/recorder.js";
+import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY,
+  TIMELINE_WHOLE_FLOOR } from "../sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../sim/timeline/recorder.js";
 import { parseTimeline } from "../sim/timeline/report.js";
 import { controlsActive } from "../sim/timeline/activity.js";
-import { regionAtPoint } from "../content/regions/layout.js";
+import { regionAtPoint, regionAtPosition } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
 
 interface Settings {
@@ -44,6 +45,12 @@ const BLOCKED_ASCENT_SECONDS = 0.45;
 const ASCENT_EPSILON = 1e-5;
 /** Lets a pause or menu draw before idle region preparation may block a frame. */
 const IDLE_PREPARE_MS = 250;
+/** Vite's development build (false in production and in Node tests). */
+const DEV = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV === true;
+/** A browser's full-storage error: the standard name and code 22, and Firefox's legacy name and code 1014. */
+const quotaExceeded = (error: unknown): boolean => error instanceof Error &&
+  (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
+    (error as { code?: number }).code === 22 || (error as { code?: number }).code === 1014);
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 
@@ -81,9 +88,9 @@ function readSettings(): Settings {
 
 /** The single lifecycle owner. Simulation never touches the DOM, storage or Babylon. */
 export class SiltwakeApp {
-  // Ambience follows C2's WorldMap, the map region selection uses; outside it, the last region holds.
+  // Ambience follows the semantic region map (regionAtPoint); outside it, the last region holds.
   private readonly sound = new SiltwakeAudio({
-    regionAt: worldRegionAt,
+    regionAt: regionAtPosition,
     onCaption: (caption) => this.view.audioCaption(caption, this.state),
   });
   private resolutionPhase: string | null = null;
@@ -137,6 +144,9 @@ export class SiltwakeApp {
   private ascentActor: string | null = null;
   private lastBoundaryNotice = -Infinity;
   private settings = readSettings();
+  /** SIM-1: the live state steps in place; a throw restores it (development
+   * builds also check every 10th checkpoint's replay against the live state). */
+  private readonly guard = new StepGuard({ verifyEvery: DEV ? 10 : 0 });
   /** Local-only play timeline (SYS-2, C4): never in the save, never sent. */
   private timeline: TimelineRecorder | null = null;
   private timelineSaved = 0;
@@ -306,9 +316,10 @@ export class SiltwakeApp {
         return;
       }
       if (event.code === "KeyN" && this.active) { event.preventDefault(); this.feedbackNote(); return; }
-      // C4: piloted upgrade actions on the number row, and the handheld ping.
-      const upgrade = ({ Digit1: "overdrive", Digit2: "flare", Digit3: "ballast", Digit4: "listen", Digit5: "sample", Digit6: "anchor" } as const)[event.code as "Digit1"];
-      if (upgrade && this.state?.player.controlledVehicleId) { event.preventDefault(); this.command({ type: "upgrade", action: upgrade }); return; }
+      // SIG-1: the number row runs the piloted craft's fitted actions, numbered on the HUD.
+      const digit = /^Digit([1-9])$/.exec(event.code)?.[1];
+      const craftAction = digit && this.state?.player.controlledVehicleId ? craftActions(this.state)[Number(digit) - 1] : undefined;
+      if (craftAction) { event.preventDefault(); this.command({ type: "upgrade", action: craftAction.action }); return; }
       const commands: Record<string, GameCommand> = {
         KeyE: { type: "interact" }, KeyQ: { type: "scan" }, KeyP: { type: "ping" },
         KeyB: { type: "buoy" }, KeyF: { type: "eat" },
@@ -358,12 +369,14 @@ export class SiltwakeApp {
       const gesture = this.sampleGesture();
       const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
       this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
-      const result = stepGame(
-        this.state,
-        [...controls, ...gesture],
-        this.world,
-      );
-      this.session.state = result.state;
+      // SIM-1: the live state steps in place; the guard keeps a throw atomic.
+      let result: { state: GameState; events: GameEvent[] };
+      try {
+        result = { state: this.state, events: this.guard.step(this.state, [...controls, ...gesture], this.world) };
+      } catch (error) {
+        this.simulationFault(error);
+        return;
+      }
       this.events(result.events);
       this.observeTimeline(result.state, [...controls, ...gesture], result.events);
       this.observeAscent(result.events);
@@ -462,10 +475,18 @@ export class SiltwakeApp {
     if (systems.length) recordSystemsEvents(this.timeline, s, systems);
     if (s.tick - this.timelineSaved >= 600) this.saveTimeline();
   }
-  private saveTimeline(): void {
-    if (!this.timeline || !this.state) return;
+  /** The whole timeline under its one key, in one atomic write (SIM-1a; incremental storage is
+   * SIM-1b). Rotation bounds the export and keeps every note. On a full quota the stored copy
+   * keeps fewer whole chunks, halving each try down to the open chunk plus two, the older ones
+   * folded into summaries (notes, new things, deaths and recoveries verbatim); the timeline in
+   * memory keeps its window. False when even that doesn't fit, or storage refused it. */
+  private saveTimeline(): boolean {
+    if (!this.timeline || !this.state) return false;
     this.timelineSaved = this.state.tick;
-    try { localStorage.setItem(TIMELINE_STORAGE_KEY, exportTimelineText(this.timeline, this.state)); } catch {}
+    for (let whole = this.timeline.sealed.length; ; whole = Math.max(TIMELINE_WHOLE_FLOOR, Math.floor(whole / 2))) {
+      try { localStorage.setItem(TIMELINE_STORAGE_KEY, exportTimelineText(this.timeline, this.state, whole)); return true; }
+      catch (error) { if (!quotaExceeded(error) || whole <= TIMELINE_WHOLE_FLOOR) return false; }
+    }
   }
   /** Start or resume the timeline for the session just entered (same save session resumes). */
   private startTimeline(): void {
@@ -486,8 +507,10 @@ export class SiltwakeApp {
     this.view.noteEntry((text) => {
       if (text && this.timeline && this.state) {
         const no = addNote(this.timeline, this.state, text, new Date().toISOString());
-        this.view.notify(no ?? "Note saved to the play timeline.", !!no, { channel: "system" });
-        this.saveTimeline();
+        // "Note saved" only once the write has returned.
+        const saved = !no && this.saveTimeline();
+        this.view.notify(no ?? (saved ? "Note saved to the play timeline."
+          : "Note kept in memory only: the browser refused to store the play timeline. Export it from the menu to keep it."), !saved, { channel: "system" });
       }
       this.resume(true);
     });
@@ -563,6 +586,18 @@ export class SiltwakeApp {
     this.view.showMenu(this.state !== null, reason);
     this.syncSessionUi();
     this.dirty = true;
+  }
+
+  /** SIM-1: a simulation exception. The guard has already restored the live
+   * state, so saving and export stay safe: pause and say so. Development
+   * builds also rethrow, so the fault is loud there. */
+  private simulationFault(error: unknown): void {
+    console.error(error);
+    const restored = !(error instanceof StepFault) ? "is unchanged"
+      : error.restored === "exact" ? "was restored to the moment before the fault"
+      : "was restored to its last checkpoint, up to a second earlier";
+    this.pause(`Simulation fault · the expedition ${restored}; saving and export are safe. ${errorText(error)}`);
+    if (DEV) queueMicrotask(() => { throw error; });
   }
 
   private events(events: readonly GameEvent[]): void {
@@ -659,7 +694,9 @@ export class SiltwakeApp {
       return;
     this.sound.activate();
     const actor = `${this.state.player.mode}/${this.state.player.controlledVehicleId ?? "diver"}`;
-    const result = executeCommand(this.state, command, this.world);
+    let result: { state: GameState; events: GameEvent[] };
+    // A throw inside a command never touches the live state (executeCommand's draft).
+    try { result = this.guard.command(this.state, command, this.world); } catch (error) { this.simulationFault(error); return; }
     this.session.state = result.state;
     if (actor !== `${result.state.player.mode}/${result.state.player.controlledVehicleId ?? "diver"}`) this.resetAscent();
     this.validateGesture();

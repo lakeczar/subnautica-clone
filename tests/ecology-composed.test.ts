@@ -3,7 +3,7 @@ import assert from "node:assert/strict";
 import { RECIPES, type ItemKind } from "../src/content/registry.js";
 import { CueMapper } from "../src/audio/mapping.js";
 import { sceneFromState } from "../src/audio/scene.js";
-import { worldRegionAt } from "../src/render/regions.js";
+import { regionAtPosition } from "../src/content/regions/layout.js";
 import { createEcology, resumeEcology } from "../src/sim/ecology/ecology.js";
 import { addItem } from "../src/sim/inventory.js";
 import { craft } from "../src/sim/progression.js";
@@ -94,6 +94,6 @@ test("smoke: the heat shroud is fabricated at the workshop and fitted as protect
   saveable(fitted);
   const s = riftDiver(start), mapper = new CueMapper();
   const step = hold(s, 60 * 8);
-  const cues = mapper.events(step.events, step.state, sceneFromState(step.state, true, worldRegionAt));
+  const cues = mapper.events(step.events, step.state, sceneFromState(step.state, true, regionAtPosition));
   assert.ok(cues.some((c) => c.cue === "alert.threat-call" && c.distance > 0), "a positional warning call at the animal");
 });

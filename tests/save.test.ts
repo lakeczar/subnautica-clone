@@ -1,16 +1,14 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createEnvelope, decodeSave, encodeSave, MAX_SAVE_BYTES } from "../src/save/codec.js";
+import { createEnvelope, decodeSave, encodeSave, MAX_SAVE_BYTES, SAVE_SCHEMA_VERSION } from "../src/save/codec.js";
 import { CARRIER_LAYOUT, carrierCommand, fixtureGame, localToWorld } from "../src/sim/carrier.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { WORLD_VERTICAL_BOUNDS } from "../src/content/routes.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
 import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
 import type { CommitResult } from "../src/save/repository.js";
-import {
-  SAVE_WRITER_LOCK,
-  browserWriterLock,
-} from "../src/save/writer-lock.js";
+import { SAVE_WRITER_LOCK } from "../src/save/writer-lock.js";
+import { browserWriterLock } from "../src/runtime/browserLock.js";
 import {
   MemoryStorage,
   TestWriterLock,
@@ -88,7 +86,7 @@ test("invalid JSON, unrecognized format, unsafe numeric ranges and nonempty futu
 });
 
 test("unsupported schema and different content are rejected without rewriting data", () => {
-  for (const version of [0, 7, 100, "1", null, ["1"], { toString: {} }]) {
+  for (const version of [0, SAVE_SCHEMA_VERSION + 1, 100, "1", null, ["1"], { toString: {} }]) {
     const result = decodeSave(
       JSON.stringify({ ...sample(), schemaVersion: version }),
     );
@@ -149,7 +147,7 @@ test("invalid writes and rejected corrupt/future imports leave current AND backu
   // The runtime only offers import confirmation if decode succeeds.
   for (const text of [
     "{bad json}",
-    JSON.stringify({ ...sample(99), schemaVersion: 7 }),
+    JSON.stringify({ ...sample(99), schemaVersion: SAVE_SCHEMA_VERSION + 1 }),
   ]) {
     const result = decodeSave(text);
     if (result.ok) await repo.commit(result.value);

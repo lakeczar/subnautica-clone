@@ -11,7 +11,7 @@
 import { HAZARD_FIELDS, type HazardFieldId } from "../content/ecology/hazards.js";
 import { HULL_HOLD_CU, HULLS, ITEMS, SOURCES } from "../content/registry.js";
 import type { ItemKind, SourceId } from "../content/registry.js";
-import { UPGRADES, upgradeId } from "../content/upgrades/catalogue.js";
+import { upgradeId } from "../content/upgrades/catalogue.js";
 import type { DockKind, UpgradeId } from "../content/upgrades/catalogue.js";
 import { LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import { isSeed, SEEDS } from "../content/systems/cultivation.js";
@@ -20,28 +20,22 @@ import { fieldLevel, protectionFor, sampleHazards, shapeWeight } from "./ecology
 import type { Protection } from "./ecology/types.js";
 import { launchPoint } from "./carrier.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
-import { addItem, distance, hasRoom, supportedServiceSite, usedCapacity } from "./inventory.js";
+import { addItem, distance, hasRoom, supportedServiceSite, takeInstance, usedCapacity } from "./inventory.js";
+import { fittedUpgradeKinds } from "./fleet.js";
 import { airLineSupply, type AirLineCraft, type AirLineSupply } from "./power/airline.js";
 import { bioFeedStep, insertBioCellRefusal, startBioFeed, totalRate, trickleRates } from "./power/charging.js";
-import { craftProfile, motion } from "./upgrades/effects.js";
+import { craftProfile } from "./upgrades/effects.js";
 import type { CraftProfile, HeatContribution } from "./upgrades/effects.js";
 import { installPreview, removePreview, slotOf } from "./upgrades/fitting.js";
 import type { FitPreview, FitTarget, Fitted, Hazards } from "./upgrades/fitting.js";
 import {
-  anchorRefusal, ballastRefusal, blowBallast, fireFlare, flareLight, flarePosition, LISTENING_ARRAY, overdriveRefusal,
+  anchorRefusal, ballastRefusal, blowBallast, fireFlare, LISTENING_ARRAY, overdriveRefusal,
   rearm, sampleRefusal, startOverdrive,
 } from "./upgrades/tools.js";
 import type { GameState, ItemStack, Vec3, VehicleState, WorldQueries } from "./types.js";
 
-/** The upgrade kinds fitted to a hull, in fitting order. */
-export function fittedKinds(s: Readonly<GameState>, v: Readonly<VehicleState>): UpgradeId[] {
-  const out: UpgradeId[] = [];
-  for (const id of v.modules) {
-    const kind = s.inventory.items.find((i) => i.id === id)?.kind;
-    if (kind && upgradeId(kind)) out.push(kind);
-  }
-  return out;
-}
+/** The upgrade kinds fitted to a hull, in fitting order (one helper, in fleet.ts). */
+export const fittedKinds = fittedUpgradeKinds;
 export const fittedList = (s: Readonly<GameState>, v: Readonly<VehicleState>): Fitted[] =>
   v.modules.flatMap((id) => {
     const kind = s.inventory.items.find((i) => i.id === id)?.kind;
@@ -114,7 +108,8 @@ export function fitTarget(s: Readonly<GameState>, v: Readonly<VehicleState>): Fi
     ...(v.hull === "hearthline" && docking?.vehicleId === v.id ? { carrier: {
       configuration: docking.configuration, berthsEmpty: !s.fleet.vehicles.some((a) => a.berth), systemOccupied,
     } } : {}),
-    inUse: { anchored: v.upgrades.anchored },
+    inUse: { anchored: v.upgrades.anchored, pod: v.upgrades.pod !== null, grapple: v.upgrades.grapple !== null,
+      drone: v.upgrades.drone !== null, lift: v.upgrades.lift !== null, tow: v.upgrades.tow !== null },
   };
 }
 const fittedItem = (s: GameState, id: string): ItemStack | undefined => s.inventory.items.find((i) => i.id === id);
@@ -161,7 +156,7 @@ export function actorProtection(s: GameState, suitFitted: Parameters<typeof prot
 const controlled = (s: GameState): VehicleState | undefined =>
   s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
 /** A direction from the pilot's view. */
-const forward = (s: GameState): Vec3 => ({
+export const pilotForward = (s: Readonly<GameState>): Vec3 => ({
   x: Math.sin(s.player.pose.yaw) * Math.cos(s.player.pose.pitch), y: Math.sin(s.player.pose.pitch),
   z: -Math.cos(s.player.pose.yaw) * Math.cos(s.player.pose.pitch),
 });
@@ -183,7 +178,7 @@ export function upgradeAction(s: GameState, action: string, world: WorldQueries,
       return null;
     }
     case "flare": {
-      const fired = fireFlare(p, v.upgrades, v.pose.position, forward(s), s.tick, world);
+      const fired = fireFlare(p, v.upgrades, v.pose.position, pilotForward(s), s.tick, world);
       if ("refusal" in fired) return fired.refusal;
       if (s.world.flares.length >= MAX_FLARES) s.world.flares.shift();
       v.upgrades = fired.runtime;
@@ -273,8 +268,9 @@ function bioCellCommand(s: GameState, v: VehicleState | null, itemId?: string): 
   const cell = s.inventory.items.find((i) => i.kind === "bio_cell" && holds.includes(i.containerId) && (!itemId || i.id === itemId));
   const no = insertBioCellRefusal(target.bioFeed, cell ? cell.charge ?? 100 : null, target.disabled);
   if (no) return no;
-  target.bioFeed = startBioFeed(cell!.charge ?? 100);
-  s.inventory.items = s.inventory.items.filter((i) => i !== cell);
+  // The chosen cell itself is consumed, with its own charge.
+  const fed = takeInstance(s, cell!.id)!;
+  target.bioFeed = startBioFeed(fed.charge ?? 100);
   s.feedback = `Bio-cell feeding the ${HULLS[target.hull].label} · about ${Math.round(target.bioFeed.remaining)}% over 100 s.`;
   return null;
 }
@@ -307,10 +303,6 @@ export function stepUpgrades(s: GameState, movedIds: ReadonlySet<string>): void 
 }
 /** The Spindle's own canopy rate; the array doubles it. */
 const HULLS_SOLAR_STOCK = 0.05 + 1e-9;
-/** Burning flares as ecology light sources: position and output now. */
-export function flareLights(s: GameState): { position: Vec3; light: number }[] {
-  return s.world.flares.map((f) => ({ position: flarePosition(f, s.tick), light: flareLight(f, s.tick) })).filter((f) => f.light > 0);
-}
 
 /** The diver's air line from a parked, powered craft nearby (SYS-1). */
 export function airLineFor(s: GameState): AirLineSupply | null {
@@ -322,7 +314,4 @@ export function airLineFor(s: GameState): AirLineSupply | null {
   }));
   return airLineSupply(s.player.pose.position, crafts);
 }
-/** Motion for one piloted step (speed, loudness and drain in the chosen mode). */
-export const pilotMotion = (s: GameState, v: VehicleState, mode: "idle" | "quiet" | "cruise" | "boost", lamp: boolean) =>
-  motion(vehicleProfile(s, v), mode, { lamp });
-export const upgradeLabel = (kind: UpgradeId): string => UPGRADES[kind].label;
+

@@ -16,7 +16,7 @@ import { stimulusFrom } from "./ecology/stimulus.js";
 import type { EcologyWorld, Stimulus } from "./ecology/types.js";
 import { NO_ACTOR } from "./ecology/types.js";
 import { hullHandling } from "./fleet.js";
-import { facility, stopWorks } from "./inventory.js";
+import { facility, removeQuantity, stopWorks } from "./inventory.js";
 import type { GameEvent, GameState, ItemStack, Vec3, WorldQueries } from "./types.js";
 
 /** Suit fittings worn in the diver's equipment, and hull protections that work
@@ -66,8 +66,7 @@ export function releaseKit(s: GameState, kind: "lure" | "ink"): string | null {
   const v = controlled(s), holds = ["diver", ...(v ? [v.cargoId] : [])];
   const item: ItemStack | undefined = s.inventory.items.find((i) => i.kind === KIT[kind] && holds.includes(i.containerId));
   if (!item) return kind === "lure" ? "No glow lure carried. Fabricate them at the pod." : "No startle ink carried. Fabricate it at the pod.";
-  item.quantity--;
-  if (item.quantity === 0) s.inventory.items = s.inventory.items.filter((i) => i !== item);
+  removeQuantity(s, item, 1);
   const p = v?.pose.position ?? s.player.pose.position;
   placeDeterrent(s, kind, p);
   s.feedback = kind === "lure" ? "Glow lure released · it rises slowly. Sight hunters follow it; dim your lamp and move away."

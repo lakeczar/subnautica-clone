@@ -8,6 +8,7 @@ import { BERTH_ENVELOPES, HULL_COLLIDERS } from "../src/content/registry.js";
 import { disableVehicle } from "../src/sim/recovery.js";
 import type { Vec3 } from "../src/sim/types.js";
 import { bounds, coherent, command, edges, meta, move, NORTH_X, roundTrip, staged, world, worldMove } from "./carrier-boundary-support.js";
+import { play } from "./step-support.js";
 
 /** B1's edge cases, re-anchored on the full envelope: B1's north edge sat at
  * z 66 beside the reef; the envelope's is z 160, deep enough at NORTH_X. */
@@ -269,7 +270,7 @@ test("smoke: the first 500 ticks of the carrier's ascent and reverse stay cohere
   let s = roundTrip(fixtureGame());
   const items = structuredClone(s.inventory.items), identities = s.fleet.vehicles.map((v) => v.id);
   s = executeCommand(s, { type: "carrier", action: "helm" }, world).state;
-  for (let i = 0; i < 300; i++) s = stepGame(s, [move(0, 0, 1)], world).state;
+  s = play(s, 300, [move(0, 0, 1)], world);
   coherent(s);
   for (let i = 0; i < 200; i++) {
     s = stepGame(s, [move(-1), { type: "look", yawDelta: 0, pitchDelta: -s.player.pose.pitch }], world).state;
@@ -292,7 +293,7 @@ test("smoke: a medium carrier at a corner edge launches and captures through pre
       s = roundTrip(s);
       assert.equal(s.fleet.docking!.transaction!.phase, phase);
       let stopped = command(s, "interrupt");
-      for (let i = 0; i < 35; i++) stopped = stepGame(stopped, [], world).state;
+      stopped = play(stopped, 35, [], world);
       coherent(stopped);
       assert.equal(!!stopped.fleet.vehicles.find((v) => v.id === "fixture_creel")!.berth, type === "launch");
     }

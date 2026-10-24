@@ -29,19 +29,21 @@ import {
 } from "../sim/systems/index.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import type { CreatureEntry, CycleEntry } from "../sim/systems/index.js";
+import { speciesScanId } from "../sim/signatures.js";
+import { hostUpgradeOffers } from "../sim/hostUpgrades.js";
+import { hostUpgrade } from "../content/upgrades/hosts.js";
 import { berthChargePlan, chartOptions, deployPoint, hostPower, hostPowerReason, OUTPOST_SERVICE_RADIUS, outpostRules, siteQuery, surveyTierAt, systemsContext } from "../sim/systemsLink.js";
 import { surveyRange } from "../sim/systems/survey.js";
 import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
 import { currentObjective } from "../sim/objective.js";
 import type { GameState, WorldQueries } from "../sim/types.js";
-import { bearing, escapeHtml } from "./format.js";
+import { bearing, duration as mins, escapeHtml } from "./format.js";
 import type { CommandButton } from "./panels.js";
 
 type Group = (id: string, label: string, body: string, open?: boolean) => string;
 const esc = escapeHtml;
 const label = (kind: string): string => Object.hasOwn(ITEMS, kind) ? ITEMS[kind as keyof typeof ITEMS].label : kind.replaceAll("_", " ");
 const pct = (n: number): string => `${Math.round(n * 100)}%`;
-const mins = (s: number): string => s < 90 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`;
 
 // ---------------------------------------------------------------- Base
 export function basePanel(s: GameState, world: WorldQueries, button: CommandButton, group: Group): string {
@@ -76,6 +78,14 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
           actions.push(button(`Plant ${SEEDS[seed.kind as keyof typeof SEEDS].label}`, { type: "plant", hostId: host.id, socket: k.id, seed: seed.kind }));
       }
       if (occ.module === "survey") actions.push(button("Survey", { type: "survey", hostId: host.id }, !powered, reason ?? undefined));
+      // SIG-1: a decoder lattice or survey array fits in place; the offer is the command's own plan.
+      if ((occ.module === "decoder" || occ.module === "survey") && occ.itemId) {
+        const fitted = sys.moduleUpgrades[occ.itemId];
+        if (fitted) actions.unshift(`<small>${esc(hostUpgrade(fitted).label)}</small>`);
+        for (const offer of hostUpgradeOffers(s, host.id, k.id))
+          actions.push(button(`Fit ${offer.label}`, { type: "upgrade-host-module", hostId: host.id, socket: k.id, upgrade: offer.upgrade },
+            !!offer.refusal, offer.refusal ?? `${offer.benefit} Costs ${offer.cost}.`));
+      }
       actions.push(...faunaSocketActions(s, host.id, k.id, occ.module, button));
       return `<li><b>${esc(k.id)}</b> · ${esc(occ.label)} ${actions.join("")}</li>`;
     }).join("");
@@ -97,7 +107,7 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
       }).join("");
       extra = `${charges}<div class="service-actions">${button("Pack up", { type: "pack-outpost", outpostId: outpost.id }, !!pack.refusal, pack.refusal ?? undefined)}${
         up.to ? button(`Upgrade to ${up.to}`, { type: "upgrade-outpost", outpostId: outpost.id }, !!up.refusal, up.refusal ?? undefined) : ""}</div>${
-        group(`pack:${outpost.id}`, "Pack preview", `<p>Spends ${pack.loss.map((l) => `${l.quantity} ${esc(label(l.kind))}`).join(", ") || "nothing"}. Moves ${pack.locker.length} locker stack${pack.locker.length === 1 ? "" : "s"} and ${pack.modules.length} module${pack.modules.length === 1 ? "" : "s"} to your hold (${pack.needCu} CU, ${pack.freeCu} free).</p>${pack.work.map((w) => `<p>${esc(w)}</p>`).join("")}`)}`;
+        group(`pack:${outpost.id}`, "Pack preview", `<p>Spends ${pack.loss.lines.map((l) => `${l.quantity} ${esc(label(l.kind))}`).join(", ") || "nothing"}. Moves ${pack.locker.length} locker stack${pack.locker.length === 1 ? "" : "s"} and ${pack.modules.length} module${pack.modules.length === 1 ? "" : "s"} to your hold (${pack.needCu} CU, ${pack.freeCu} free).</p>${pack.work.map((w) => `<p>${esc(w)}</p>`).join("")}`)}`;
     }
     // The carrier's charging dock: a socketed charger fills the berths from the carrier.
     if (host.kind === "carrier") {
@@ -176,9 +186,12 @@ export function fitPanel(s: GameState, button: CommandButton, group: Group): str
 /** Creatures met: every species of a region whose habitats you have worked. */
 function creatures(s: GameState): CreatureEntry[] {
   const regions = new Set(s.knowledge.scans.filter((id) => Object.hasOwn(SOURCES, id)).map((id) => SOURCES[id as keyof typeof SOURCES].region as RegionId));
+  // SIG-1: a species the Dart's range tagger filed is known wherever it was met.
+  const known = (id: string, region: RegionId): boolean => regions.has(region) || s.knowledge.scans.includes(speciesScanId(id));
+  const tagged = (id: string): readonly string[] => s.knowledge.scans.includes(speciesScanId(id)) ? ["Tagged at range by the Dart."] : [];
   return [
-    ...Object.entries(THREATS).filter(([, t]) => regions.has(t.region)).map(([id, t]) => ({ id, label: t.label, region: t.region, behaviour: t.scan, danger: "hunter" as const })),
-    ...Object.entries(CUE_SPECIES).filter(([, c]) => regions.has(c.region)).map(([id, c]) => ({ id, label: c.label, region: c.region, behaviour: c.scan, danger: "cue" as const })),
+    ...Object.entries(THREATS).filter(([id, t]) => known(id, t.region)).map(([id, t]) => ({ id, label: t.label, region: t.region, behaviour: t.scan, danger: "hunter" as const, notes: tagged(id) })),
+    ...Object.entries(CUE_SPECIES).filter(([id, c]) => known(id, c.region)).map(([id, c]) => ({ id, label: c.label, region: c.region, behaviour: c.scan, danger: "cue" as const, notes: tagged(id) })),
   ];
 }
 /** Natural cycles the player has watched (C4B-07): only timings seen from a

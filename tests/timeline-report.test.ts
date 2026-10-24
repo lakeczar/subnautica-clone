@@ -66,10 +66,13 @@ test("empty travel is split at points of interest; idle waiting and deaths are s
 test("parse rejects other formats, versions and malformed events", () => {
   const good = serializeTimeline(sample());
   assert.ok(parseTimeline(good).ok);
+  // A version 1 export (before rotation) still reads.
+  assert.ok(parseTimeline(good.replace('"version":2', '"version":1')).ok);
   const cases: [string, RegExp][] = [
     ["not json", /Not JSON/],
     [JSON.stringify({ format: "other" }), /Not a siltwake.timeline/],
-    [good.replace('"version":1', '"version":2'), /Unsupported timeline version 2/],
+    [good.replace('"version":2', '"version":3'), /Unsupported timeline version 3/],
+    [good.replace('"dropped":0', '"dropped":0,"rotated":[{"from":{}}]'), /Malformed rotated chunks/],
     [good.replace('"kind":"death"', '"kind":"teleport"'), /Malformed event 7/],
     [good.replace('"id":"owner-01"', '"id":1'), /Malformed session/],
   ];

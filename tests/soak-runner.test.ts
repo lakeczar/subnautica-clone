@@ -340,34 +340,38 @@ test("R4-F2: a hold the #ocean poll sees only inside a save check fails and stop
 });
 
 test("R4-F3: the real recorder tags gaps by interval: a GC pause before, during and after a save tick is never an autosave hitch; a real game pause is", async () => {
-  const busy = (ms: number) => { const t = performance.now(); while (performance.now() - t < ms) { /* a real stall of the event loop */ } };
-  const saved = { window: gw.window };
-  // An rAF shim for the real recorder; `live` ends a run's frame loop, and the
-  // shim stays installed so a frame already scheduled ends quietly.
-  let live = 0;
+  // Deterministic (it flaked under host load): the real recorder, but no
+  // timers. The recorder's only clock is the rAF timestamp, so the shim keeps
+  // the pending callback and the test delivers frames itself, 8 ms apart on a
+  // virtual clock, at fixed points: two before each tick's frame sample, and
+  // one before and after each GC stall (inside the excluded window). A stall
+  // adds its length to the clock, as a real one would to the next frame's gap.
+  // Host load (late timers, the runner's own GC) then can't add, drop or
+  // reorder a gap.
+  let clock = 0, pending: ((t: number) => void) | null = null;
+  const frame = () => { const cb = pending; pending = null; clock += 8; cb?.(clock); };
+  const stall = (ms: number) => { clock += ms; };
+  const saved = { window: gw.window, raf: gw.requestAnimationFrame };
   const run = async (gamePauseAt: number | null) => {
     gw.window = {};
-    const mine = ++live;
-    gw.requestAnimationFrame = (cb) => setTimeout(() => { if (live === mine) cb(performance.now()); }, 8);
+    gw.requestAnimationFrame = (cb) => { pending = cb; };
     P.frameRecorderScript.call(null);
     const f = fake();
     let saves = 0, gcRan = false, ticks = 0;
-    f.deps.collectGarbage = async () => { busy(120); gcRan = true; };
+    f.deps.collectGarbage = async () => { frame(); stall(120); frame(); gcRan = true; };
     f.deps.exclude = async (_g: unknown, on: boolean): Promise<boolean> => P.excludeTiming({ page: nodePage() } as never, on);
     const base = f.deps.providers;
     f.deps.providers = () => {
       const ps = base();
       return { ...ps, tick: [
         // The game pauses right after this tick's drain, so its long gap lands in the next interval.
-        { name: "frames", sample: async () => { ticks++; const r = await P.frames(nodePage() as never).sample(); if (ticks === gamePauseAt) busy(150); return r; } },
+        { name: "frames", sample: async () => { frame(); frame(); ticks++; const r = await P.frames(nodePage() as never).sample(); if (ticks === gamePauseAt) stall(150); return r; } },
         // A save is seen on the first poll after each GC (the reviewer's ordering), and in the paused run on the tick after the pause.
         { name: "save-journal", sample: async () => { if (gcRan || (gamePauseAt != null && ticks === gamePauseAt + 1)) { gcRan = false; saves++; } return { lastSave: { savedAt: String(saves), tick: saves } }; } },
         ps.tick[1]!, // ocean-dataset
       ] };
     };
-    try {
-      return await S.runSoak({ ...opts("dwell"), gcEveryS: 0.15, thresholds: { tour: G.DEFAULTS.tour, dwell: { ...G.DEFAULTS.dwell, autosaves: 6, warmupS: 0.05, leakMinWindowS: 0.4, autosaveMissingS: 30, autosaveHitchMs: 100 } } }, f.deps);
-    } finally { live++; }
+    return S.runSoak({ ...opts("dwell"), gcEveryS: 0.15, thresholds: { tour: G.DEFAULTS.tour, dwell: { ...G.DEFAULTS.dwell, autosaves: 6, warmupS: 0.05, leakMinWindowS: 0.4, autosaveMissingS: 30, autosaveHitchMs: 100 } } }, f.deps);
   };
   try {
     const healthy = await run(null);
@@ -379,7 +383,7 @@ test("R4-F3: the real recorder tags gaps by interval: a GC pause before, during 
     const paused = await run(6);
     assert.equal(paused.verdict.status, "fail", JSON.stringify(paused.run.autosaves));
     assert.match(paused.verdict.reason ?? "", /autosave-hitch|over 100 ms/);
-  } finally { live++; gw.window = saved.window; }
+  } finally { gw.window = saved.window; if (saved.raf) gw.requestAnimationFrame = saved.raf; else delete gw.requestAnimationFrame; }
 });
 
 // SCHED-2a R5 -----------------------------------------------------------------
