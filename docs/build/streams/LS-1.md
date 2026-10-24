@@ -437,10 +437,15 @@ From the access research (`research/access-onboarding` `45811fa5`, `ACCESS-ONBOA
 5. **Not in this field:** caches persist as containers and items, read notes through `knowledge.journals`, and grow beds and locker extensions through `moduleUpgrades`.
 
 **Earned cultivation knowledge at integration (R1 F1).** Moving `bp_cultivation` off the workshop sheet changes saved meaning. Strict validation derives the exact plan set from scans, story discoveries and decodes (`validation.ts:780`). A save that read the sheet before the move would hold a plan the new rules don't derive, so it would fail to load. The fix lives in the same `bridge7`, and it is narrow, not a global loosening.
-1. **Shape:** `knowledge.legacyGrants: { blueprint, record }[]`. This build has one legal entry: `{ blueprint: "bp_cultivation", record: "workshop_outpost_sheet" }`, listed in a one-row `LEGACY_GRANTS` table with its reason. **It is a permanent, narrow saved fact (R2 N1):** dropping schema 7 support retires the converter, not the knowledge it converted. A later bridge carries the field and the table unchanged, and they are never removed.
-2. **Bridge:** `bridge7` writes the entry only when the schema 7 save holds both `bp_cultivation` and the `workshop_outpost_sheet` scan, which is the old provenance. Otherwise it writes `[]`. A schema 7 save that already holds the field is refused. New Game writes `[]`.
+1. **Shape** (coordinator, 2026-10-24): `knowledge.legacyGrants: { blueprint, source: { kind: "scan" | "discovery", id } }[]`.
+   - **One table, one validator.** `LEGACY_GRANTS` lists each legal row with its reason.
+   - **LS-1's row:** `{ blueprint: "bp_cultivation", source: { kind: "scan", id: "workshop_outpost_sheet" } }`.
+   - **PACE-1's row** (`bp_pod_buffer`, `source: { kind: "discovery", id: "C07" }`) lands atomically with a schema step:
+     - in this `bridge7`, if PACE-1's stage 2 is ready before 1b merges (coordinated through the coordinator);
+     - otherwise in an 8 → 9 bridge using the same table and validator. **It is a permanent, narrow saved fact (R2 N1):** dropping schema 7 support retires the converter, not the knowledge it converted. A later bridge carries the field and the table unchanged, and they are never removed.
+2. **Bridge:** `bridge7` writes a row's entry only when the schema 7 save holds both the row's blueprint and its old provenance: the `workshop_outpost_sheet` scan for LS-1's row. Otherwise it writes `[]`. A schema 7 save that already holds the field is refused. New Game writes `[]`.
 3. **Validation:**
-   - each entry must be a `LEGACY_GRANTS` row whose record is in `knowledge.scans`;
+   - each entry must be a `LEGACY_GRANTS` row whose source is held: a `scan` source in `knowledge.scans`, a `discovery` source in `storyView(s).discoveries`;
    - its blueprint joins the expected plan set, and nothing else does;
    - no duplicates.
 
@@ -449,7 +454,7 @@ From the access research (`research/access-onboarding` `45811fa5`, `ACCESS-ONBOA
    - a post-workshop schema 7 save **with an installed planter and a growing crop** bridges, validates, keeps the crop and can build another planter;
    - a post-workshop save **without a planter** bridges with the grant and can build one;
    - a **fresh game** whose only cultivation grant is the racks' card validates, and reading the workshop sheet adds no `bp_cultivation`;
-   - a schema 8 save with a legacy entry whose record wasn't scanned is refused.
+   - a schema 8 save with a legacy entry whose source isn't held is refused, tested for both source kinds (a `discovery` fixture row stands in until PACE-1's row lands).
 
    - **lifecycle:** convert 7 → 8, save again without visiting the racks, then run the next supported transition (a test bridge 8 → 9 stand-in in the fixture suite). The plan, the entry and the growing crop all survive.
 
