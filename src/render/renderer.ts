@@ -471,6 +471,7 @@ export function createRenderer(
         scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
         const tLights = timedParts ? performance.now() : 0;
         const optics = updateOpticalUniforms([cel, glass, water, sky, cue.material], camera.position, state);
+        const opticsMs = timedParts ? performance.now() - tLights : 0;
         lights.update(state, camera.position, optics.ambient, time);
         const lightsMs = timedParts ? performance.now() - tLights : 0;
         canvas.dataset.localLights = `${lights.stats.sent}/${lights.stats.known}`;
@@ -529,7 +530,7 @@ export function createRenderer(
         if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
         else { scene.render(); canvas.dataset.settling = "false"; }
         if (timed) (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent = {
-          regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), actors: +actorsMs.toFixed(2),
+          regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), optics: +opticsMs.toFixed(2), actors: +actorsMs.toFixed(2),
           lightScan: +lights.stats.scanMs.toFixed(2), lightPlace: +lights.stats.placeMs.toFixed(2), lightSelect: +lights.stats.selectMs.toFixed(2),
           lightCount: lights.stats.placed, evicted: world?.totals.evicted ?? 0,
           chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2),
@@ -537,7 +538,7 @@ export function createRenderer(
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump, stepUnit: world?.maxStepUnit ?? null,
           caveStep: +caveStepMs.toFixed(2), // The streamer reuses its pass timings: a copy per frame (wanted list, eviction, light lists).
-          cavePasses: streamFrame ? { score: +streamFrame.passMs.score.toFixed(2), evict: +streamFrame.passMs.evict.toFixed(2), light: +streamFrame.passMs.light.toFixed(2) } : null, caveStream: +caveStreamMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered,
+          cavePasses: streamFrame ? { score: +streamFrame.passMs.score.toFixed(2), evict: +streamFrame.passMs.evict.toFixed(2), light: +streamFrame.passMs.light.toFixed(2) } : null, caveStream: +caveStreamMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered, lightsWalked: lights.stats.walked,
           lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
         };
         canvas.dataset.meshes = String(scene.meshes.length);

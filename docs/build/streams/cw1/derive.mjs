@@ -306,8 +306,9 @@ function withService(seg) {
     if (after >= MARGIN || !SITES.length || seg[i].call || calledFor.has(seg[i])) { charge -= cost; continue; }
     calledFor.add(seg[i]);
     const here = nearestSite(seg[i - 1]);
-    // A call at the site, then back to where the route left off.
-    const call = repair([{ ...seg[i - 1] }, { x: here.x, y: here.y, z: here.z, service: here.id, tol: 3 }, { ...seg[i - 1], cave: undefined, cruise: true }]).slice(1)
+    // A call at the site, then on to the next planned point (swept; the
+    // point itself stays in the route, so only the way there is inserted).
+    const call = repair([{ ...seg[i - 1] }, { x: here.x, y: here.y, z: here.z, service: here.id, tol: 3 }, { ...seg[i], cave: undefined, cruise: undefined }]).slice(1, -1)
       .map(q => q.service ? q : { ...q, call: true });
     seg.splice(i, 0, ...call);
     i--; // the next leg is to the first point of the call

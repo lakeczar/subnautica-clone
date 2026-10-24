@@ -25,6 +25,8 @@ export interface SceneLights {
     readonly scanMs: number; readonly placeMs: number; readonly selectMs: number; readonly placed: number;
     /** Lights the selection considered this frame, and the frame's slowest entry to place. */
     readonly considered: number;
+    /** Entries the placement walked this frame (measurement: a long placement with few is not our work). */
+    readonly walked: number;
     /** Every known mesh is scanned and its lights placed: the candidate set
      * is complete, so selection from here depends only on the pose. */
     readonly settled: boolean;
@@ -259,7 +261,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     return Math.sqrt(dx * dx + dy * dy + dz * dz) > LIGHT_RANGE + MAX_LIGHT_RADIUS + 8;
   };
   let unplaced = 0;
-  let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0, considered = 0;
+  let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0, considered = 0, walked = 0;
   /** The frame's slowest entry to place (measurement: which mesh a long placement was). */
   let slowest: { name: string; ms: number; instances: number; clusters: number; frozen: boolean } | null = null;
   const send = (u: ReturnType<typeof lightUniforms>, halo: number): void => {
@@ -272,7 +274,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   };
   send(lightUniforms([]), 0);
   return {
-    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, slowest, settled: pending.size === 0 && unplaced === 0,
+    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, walked, slowest, settled: pending.size === 0 && unplaced === 0,
       cache: { geometries: byGeometry.size, bytes: cacheBytes } }; },
     update(state, eye, daylight, time) {
       // Scan new meshes in a bounded slice per frame, resuming a large one.
@@ -297,7 +299,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       // for some scatter) are placed once and cached; place a bounded number
       // per frame (CW-1), so a new chunk's lights join over a few frames.
       const placeUntil = performance.now() + 2;
-      slowest = null; unplaced = 0;
+      slowest = null; unplaced = 0; walked = list.length;
       for (let k = 0; k < list.length; k++) {
         const e = list[k]!;
         if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
