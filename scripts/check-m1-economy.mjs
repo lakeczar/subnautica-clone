@@ -1,13 +1,7 @@
 // Run after npm test (compiled production modules). Only the registry is runtime authority.
 import assert from "node:assert/strict";
-import { HOST_KNOWLEDGE_RECIPES, UPGRADE_RECIPES, UPGRADE_REFIT_RECIPES } from "../.test-build/src/content/upgrades/registry.js";
-import { SYS2_RECIPES } from "../.test-build/src/content/systems/items.js";
-import { FAUNA_RECIPES } from "../.test-build/src/content/fauna/items.js";
-import { HUB_RECIPES } from "../.test-build/src/content/hub/recipes.js";
 import fs from "node:fs";
-import { createHash } from "node:crypto";
 import { CONTENT_VERSION, RECIPES, SOURCES, ITEMS, PLACES } from "../.test-build/src/content/registry.js";
-import { CAMPAIGN_RECIPES } from "../.test-build/src/content/campaign/index.js";
 import { LEGACY_TERRAIN_SOURCE_IDS } from "../.test-build/src/content/routes.js";
 import { createGame } from "../.test-build/src/sim/state.js";
 import { collect, completeOpening, craft, discover, toggleBuoy } from "../.test-build/src/sim/progression.js";
@@ -17,47 +11,16 @@ import { createWorldQueries } from "../.test-build/src/sim/world.js";
 import { validState } from "../.test-build/src/save/validation.js";
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
-const proposalText = read("../docs/build/design/economy-candidate.json");
-const candidate = JSON.parse(proposalText);
 const delta = JSON.parse(read("../docs/build/design/M1-PLAY-ECONOMY.json"));
-assert.equal(createHash("sha256").update(proposalText).digest("hex"), delta.historicalProposalSha256, "historical proposal must remain unchanged");
-assert.equal(delta.contentVersion, "expedition.3", "historical adoption retains its original content tag");
-assert.equal(CONTENT_VERSION, "expedition.7", "check the current executable content separately");
-assert.deepEqual(Object.keys(delta.costOverrides).sort(), ["essential_tools", "restore_workshop", "suit_150"]);
+// STEW-1 (F28): this script keeps M1's current invariant, the opening's solvency
+// played through real transactions. Its adoption receipt (the historical
+// proposal's hash, its literal content tags, a hand-listed recipe roster and the
+// per-recipe reconciliation against economy-candidate.json) was retired from the
+// merge gate by DIRECTION's no-hash-inventory rule; see git history before STEW-1.
 const m1Ids = [...delta.preCanopy, ...Object.keys(delta.optionalReturn)];
 assert.equal(new Set(m1Ids).size, m1Ids.length, "each adopted M1 recipe is covered exactly once");
-// M2-B1 recipes are runtime-checked separately by scripts/check-m2-b1-economy.mjs.
-const m2b1Ids = ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "restore_canopy_stop", "creel_350", "dart_350"];
-// S5 works recipes wait on later content; tests/story-composed.test.ts audits them against the registry.
-const storyIds = ["service_power_assembly", "service_air_assembly", "pod_buffer"];
-// C4's upgrade, refit, host-knowledge and SYS-2 recipes: scripts/upgrade-economy.mjs and tests/c4-systems.test.ts.
-const c4Ids = Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES, ...SYS2_RECIPES });
-// CR-1's hand net: tests/cr-1-creatures.test.ts (loop-free, capped creature economy).
-const cr1Ids = Object.keys(FAUNA_RECIPES);
-// HUB-2's crown station stages: tests/crown-station.test.ts.
-const hubIds = Object.keys(HUB_RECIPES);
-assert.deepEqual(Object.keys(RECIPES).sort(), [...m1Ids, "suit_350", ...m2b1Ids, ...storyIds, ...Object.keys(CAMPAIGN_RECIPES), ...c4Ids, ...cr1Ids, ...hubIds].sort(), "complete roster is M1 plus the separately checked M2 refits, M2-B1 fleet work, S5 works recipes, S9 campaign recipes (check-campaign-economy.mjs), C4 systems, CR-1's net and HUB-2's crown stages");
 assert.equal(new Set(delta.preCanopy).size, delta.preCanopy.length);
-for (const id of m1Ids) {
-  const r = RECIPES[id];
-  const optional = delta.optionalReturn[id];
-  if (optional) {
-    assert.ok(!candidate.recipes[id], "optional reward is not historical arithmetic");
-    assert.deepEqual(r.cost, optional.cost); assert.equal(ITEMS[r.output].cu, optional.itemCu);
-    assert.ok(r.once && !r.maintenance); assert.equal(r.quantity, 1);
-    assert.equal(r.site, "island_workshop"); assert.equal(r.bp, "bp_canopy_reinforcement"); assert.deepEqual(r.needs, ["dart_base"]);
-  } else {
-    const historical = candidate.recipes[id]; assert.ok(historical, id);
-    const override = delta.costOverrides[id];
-    if (override) assert.deepEqual(override.proposal, historical.cost, `${id}: declared original`);
-    assert.deepEqual(r.cost, override?.adopted ?? historical.cost, `${id}: reconcile material changes`);
-    assert.deepEqual([r.bp], historical.bp); assert.deepEqual(r.needs, historical.needs);
-    assert.equal(r.quantity, historical.quantity ?? 1); assert.equal(r.maintenance, historical.maintenance ?? false);
-    const site = delta.existingSiteAdoptions[id];
-    if (site) assert.equal(site.proposal, historical.site);
-    assert.equal(r.site, site?.runtime ?? historical.site, `${id}: fabrication site`);
-  }
-}
+for (const id of m1Ids) assert.ok(RECIPES[id], `${id}: an M1 recipe the opening budget names is still in the registry`);
 const sumCosts = (ids) => {
   const out = {};
   for (const id of ids) for (const [k, n] of Object.entries(RECIPES[id].cost)) out[k] = (out[k] ?? 0) + n;
@@ -170,7 +133,7 @@ function stagedPreparation(order) {
     sources, receipts, peakCu: peak, firstCanopyPayloadCu: 16, installedHoldCu: usedCapacity(s, v.cargoId), moduleId: item.id,
     publicFrameInvestment: v.investment, collections: s.metrics.collections };
 }
-console.log(JSON.stringify({ scope: delta.limits, historicalContent: delta.contentVersion, content: CONTENT_VERSION,
+console.log(JSON.stringify({ scope: delta.limits, content: CONTENT_VERSION,
   comparedRecipes: m1Ids.length, executableRecipes: Object.keys(RECIPES).length,
   starterSpend, starterRawCu: cu(starterSpend), optionalReturnSpend: optionalSpend, optionalRawCu: cu(optionalSpend),
   exposedStarterStock: starterStock, exposedStock: stock, starterRemaining: Object.fromEntries(Object.entries(starterSpend).map(([k, n]) => [k, starterStock[k] - n])),

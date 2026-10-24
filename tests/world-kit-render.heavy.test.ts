@@ -15,15 +15,13 @@ import { createWorldMap } from "../src/world/map.js";
 import { createResidency } from "../src/world/residency.js";
 import { createSliceLayout, sliceFloor } from "../src/world/sliceLayout.js";
 import type { ChunkRecipe } from "../src/render/kit/types.js";
+import { drain } from "./shared-support.js";
 
 const layout = createSliceLayout({ setPieces: 0.25, parts: 120 });
 const map = createWorldMap(layout);
 const ctx = defaultContext(sliceFloor);
 const MiB = 1024 * 1024;
 
-function drain<T>(g: Generator<void, T>): T {
-  for (;;) { const r = g.next(); if (r.done) return r.value; }
-}
 function withScene(run: (scene: Scene) => void): void {
   const engine = new NullEngine(), scene = new Scene(engine);
   scene.useRightHandedSystem = true;

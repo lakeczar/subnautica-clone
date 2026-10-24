@@ -14,7 +14,7 @@ import { disableVehicle, incapacitate } from "./recovery.js";
 import { airLineFor, effectiveRating } from "./fittings.js";
 import { isRestBase, type RestBaseId } from "../content/bases.js";
 import { bunkHealRate } from "./hub/crownStation.js";
-const DT = 1 / 60;
+import { FIXED_SECONDS as DT } from "./clock.js";
 export const SUIT_OXYGEN_DRAIN_PER_SECOND = 100 / 180;
 /** These are fixed simulation reference points. Renderer eye interpolation is never read. */
 export function exposure(s: GameState): {

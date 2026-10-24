@@ -11,7 +11,7 @@
 import { HAZARD_FIELDS, type HazardFieldId } from "../content/ecology/hazards.js";
 import { HULL_HOLD_CU, HULLS, ITEMS, SOURCES } from "../content/registry.js";
 import type { ItemKind, SourceId } from "../content/registry.js";
-import { UPGRADES, upgradeId } from "../content/upgrades/catalogue.js";
+import { upgradeId } from "../content/upgrades/catalogue.js";
 import type { DockKind, UpgradeId } from "../content/upgrades/catalogue.js";
 import { LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import { isSeed, SEEDS } from "../content/systems/cultivation.js";
@@ -24,12 +24,12 @@ import { addItem, distance, hasRoom, supportedServiceSite, takeInstance, usedCap
 import { fittedUpgradeKinds } from "./fleet.js";
 import { airLineSupply, type AirLineCraft, type AirLineSupply } from "./power/airline.js";
 import { bioFeedStep, insertBioCellRefusal, startBioFeed, totalRate, trickleRates } from "./power/charging.js";
-import { craftProfile, motion } from "./upgrades/effects.js";
+import { craftProfile } from "./upgrades/effects.js";
 import type { CraftProfile, HeatContribution } from "./upgrades/effects.js";
 import { installPreview, removePreview, slotOf } from "./upgrades/fitting.js";
 import type { FitPreview, FitTarget, Fitted, Hazards } from "./upgrades/fitting.js";
 import {
-  anchorRefusal, ballastRefusal, blowBallast, fireFlare, flareLight, flarePosition, LISTENING_ARRAY, overdriveRefusal,
+  anchorRefusal, ballastRefusal, blowBallast, fireFlare, LISTENING_ARRAY, overdriveRefusal,
   rearm, sampleRefusal, startOverdrive,
 } from "./upgrades/tools.js";
 import type { GameState, ItemStack, Vec3, VehicleState, WorldQueries } from "./types.js";
@@ -303,10 +303,6 @@ export function stepUpgrades(s: GameState, movedIds: ReadonlySet<string>): void 
 }
 /** The Spindle's own canopy rate; the array doubles it. */
 const HULLS_SOLAR_STOCK = 0.05 + 1e-9;
-/** Burning flares as ecology light sources: position and output now. */
-export function flareLights(s: GameState): { position: Vec3; light: number }[] {
-  return s.world.flares.map((f) => ({ position: flarePosition(f, s.tick), light: flareLight(f, s.tick) })).filter((f) => f.light > 0);
-}
 
 /** The diver's air line from a parked, powered craft nearby (SYS-1). */
 export function airLineFor(s: GameState): AirLineSupply | null {
@@ -318,7 +314,4 @@ export function airLineFor(s: GameState): AirLineSupply | null {
   }));
   return airLineSupply(s.player.pose.position, crafts);
 }
-/** Motion for one piloted step (speed, loudness and drain in the chosen mode). */
-export const pilotMotion = (s: GameState, v: VehicleState, mode: "idle" | "quiet" | "cruise" | "boost", lamp: boolean) =>
-  motion(vehicleProfile(s, v), mode, { lamp });
-export const upgradeLabel = (kind: UpgradeId): string => UPGRADES[kind].label;
+

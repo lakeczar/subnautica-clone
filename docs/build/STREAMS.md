@@ -755,3 +755,18 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **STEW-1 done at `bdaef84`** (R5 fixes, code `d2617b1`): JSON must exist; symlinks under src fail; the scope is documented. All merge trees pass, including REC-1. The gate passed 10/10 on the 4070. Final Sol R6 running (`siltwake-stew1-review-r6-sol-bdaef84`).
 - **STEW-1 ACCEPTED** (R6, Sol `f3d82c64` on `review/stew-1-r6`; one nonblocking P3 about ignored-name symlinks). The builder merges root (SIM-1a + TST-16) into the branch, resolves app.ts and runs `npm run gate`; then the coordinator merges it and the root gate becomes `npm run gate`.
 - **SIG-1 stage 0 done at `da226755`** (R2 fix `a4e1834e`): cooking uses `hasRoomAfter`, with no result change (1-CU items). Gate on the 4070 and bit-identical saves. Short Sol R3 running (`siltwake-sig1-stage0-review-r3-sol-da22675`).
+- **SIG-1 stage 0 MERGED and pushed** (root `7df4c8ab`). Gate on the 4070: 1,435/1,435, build, 5 economy scripts, plus `check-progression-curve` run separately (PROGRESSION-OK). Correction: the coordinator's hand gate had been missing the sixth economy script (`check-progression-curve`) for SIM-1a and TST-16; it passes on the current root, which contains both.
+- **STEW-1 merged locally** at `06442757` (ledger.ts stays deleted; its CORE-HELPERS row is removed). `npm run gate` was started locally and stopped at about 01:18Z because REC-1's exclusive overhead A/B was running (REC-1 told). It reruns when the lane is idle, followed by the TST-16 install.
+- **Usage limit, ~01:30–03:00 UTC:** CW-1 and SIG-1 runs failed on the rate limit and resumed at 03:00; all builder threads were checked. CW-1's exclusive series and REC-1's A/B are finished; the lane is idle at 03:00Z.
+- **TST-16b done at `75c659eb`** (code `d2e54642`): install.sh holds `install.lock` through publication (the helper verifies the inherited fd); production is decided by directory identity (`sameDir`); the R4-F3 flake is made deterministic. Suites pass 23/23, 27/27 and 27/27, fast tier on the 4070. Sol review running (`siltwake-tst16b-review-sol-75c659e`).
+- **CW-1 R1 fixes done at `699b575d`** (code `9c73272`):
+  - **Fixed:** R1 (admission held on the load screen) and R2 (per-session recovery reset), with 5 app tests.
+  - **Root-fixed costs:** terrain step 37.5 ms; far light placement; selection 1.15 MiB→15 KiB; sim queries 283→99 KiB per tick; light uploads sliced.
+  - **3090 run:** frame gate not met (18 frames over 34 ms, 17 DISTURBED); one quiet 53 ms streamer frame is open. Missing evidence is listed.
+  - **Review:** Sol R2 running (`siltwake-cw1-review-r2-sol-699b575`).
+  - **Infra follow-ups:**
+    - the 7,200 s default queue timeout is too short for exclusive series (consider a class default);
+    - the `gpu` class's 3 GiB reservation is too small for the deep traverse harness.
+  - **Design question:** the Creel's ~13 min air limit makes 4 Meridian east deep caves unreachable by cold approach. Decide whether that's intended (an upgrade gate) or a route or pacing issue.
+- **STEW-1 MERGED and pushed** (root `a7ca6054`). `npm run gate` passed 10/10 at a7ca6054 (playthrough ticket 261024-031515-c0ed on the 3090). The root merge gate is now `npm run gate`. The saves export follows.
+- **TST-16b ACCEPTED** (Sol `98940eed` on `review/tst-16b`), safe to install. P3 follow-ups: a missing-directory symlink alias can read as private; the fd check accepts an unlocked matching descriptor; the soak rewrite lacks window-end frame coverage.
