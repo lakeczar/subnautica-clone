@@ -1,3 +1,4 @@
+import { activeDrone } from "../sim/signatures.js";
 import type { GameState, Vec3, WorldQueries } from "../sim/types.js";
 import { eyeHeight } from "../sim/state.js";
 import { CREEL_SEAT } from "../sim/fleet.js";
@@ -104,6 +105,15 @@ export function playerView(state: GameState, toWorld: ((local: Vec3) => Vec3) | 
     const forward = { x: Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) };
     const eye = localToWorld(HELM_EYE, helm);
     return { eye, forward, work: 0, lamp: { x: eye.x + forward.x * HELM_LAMP_NEAR, y: eye.y + forward.y * HELM_LAMP_NEAR, z: eye.z + forward.z * HELM_LAMP_NEAR } };
+  }
+  // SIG-1: while the Mantle's scout drone is out, the view is the drone's camera.
+  const droneHost = activeDrone(state);
+  if (droneHost) {
+    const d = droneHost.upgrades.drone!, yaw = d.yaw + (look?.yaw ?? 0), pitch = Math.max(-1.35, Math.min(1.35, d.pitch + (look?.pitch ?? 0)));
+    const forward = { x: Math.sin(yaw) * Math.cos(pitch), y: Math.sin(pitch), z: -Math.cos(yaw) * Math.cos(pitch) };
+    // The drone's own swept capsule (0.35 m) keeps its camera out of rock.
+    const eye = d.position;
+    return { eye, forward, work: 0, lamp: { x: eye.x + forward.x * 0.3, y: eye.y + forward.y * 0.3, z: eye.z + forward.z * 0.3 } };
   }
   const forward = { x: Math.sin(pose.yaw) * Math.cos(pose.pitch), y: Math.sin(pose.pitch), z: -Math.cos(pose.yaw) * Math.cos(pose.pitch) };
   const seated = toWorld ? state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId) : undefined;

@@ -137,7 +137,7 @@ export function signatureAction(s: GameState, action: SignatureAction, world: Wo
     case "tag": return tag(s, v, p);
     case "grapple": return grapple(s, v, p, world);
     case "reel": return reel(v);
-    case "pod": return pod(s, v, p, world);
+    case "pod": return pod(v, p, world);
     case "crane": return startLift(s, v, p, "crane");
     case "clamp": return clamp(s, v, p);
     case "drone": return drone(s, v, p);
@@ -242,7 +242,7 @@ function reel(v: VehicleState): SignatureOutcome {
   return ok({ kind: "grapple", vehicleId: v.id, phase: reeling ? "reeling" : "holding", anchor: line.anchor, load: line.load },
     reeling ? "Reeling in." : "Reel stopped · the line holds at this length.", reeling ? "Reeling" : "Holding");
 }
-function pod(s: GameState, v: VehicleState, p: CraftProfile, world: WorldQueries): SignatureOutcome {
+function pod(v: VehicleState, p: CraftProfile, world: WorldQueries): SignatureOutcome {
   const out = v.upgrades.pod;
   if (out) {
     const refusal = collectPodRefusal(p, v.upgrades, v.pose.position);
@@ -358,7 +358,7 @@ export function activeDrone(s: Readonly<GameState>): VehicleState | null {
 }
 const DRONE_SHAPE = { radius: SCOUT_DRONE.radius, height: SCOUT_DRONE.height } as const;
 /** Fly the drone one step with the pilot's input; the Mantle holds station. */
-export function steerDrone(s: GameState, v: VehicleState, yaw: number, pitch: number,
+export function steerDrone(v: VehicleState, yaw: number, pitch: number,
   input: { forward: number; right: number; vertical: number }, world: WorldQueries): void {
   const d = v.upgrades.drone!;
   const n = Math.max(1, Math.hypot(input.forward, input.right, input.vertical)), speed = SCOUT_DRONE.speed * DT / n;
@@ -383,7 +383,7 @@ export function stepSignatures(s: GameState, world: WorldQueries, events: GameEv
     if (rt.lift) stepLift(s, v, events);
     if (v.upgrades.grapple) stepLine(s, v, world, events);
     if (v.upgrades.tow) stepTow(s, v, world, events);
-    if (v.upgrades.drone) stepDrone(s, v, v.id === pilot, world, events);
+    if (v.upgrades.drone) stepDrone(s, v, v.id === pilot, events);
   }
 }
 const say = (events: GameEvent[], event: SignatureEvent, message: string, error = false): void => {
@@ -503,7 +503,7 @@ function stepTow(s: GameState, v: VehicleState, world: WorldQueries, events: Gam
   towed.pose.yaw = v.pose.yaw;
   if (distance(towed.pose.position, v.pose.position) > gap + 8) release("the towed hull snagged on rock");
 }
-function stepDrone(s: GameState, v: VehicleState, piloting: boolean, world: WorldQueries, events: GameEvent[]): void {
+function stepDrone(s: GameState, v: VehicleState, piloting: boolean, events: GameEvent[]): void {
   const d = v.upgrades.drone!, out = (s.tick - d.launchedAt) / TICKS_PER_SECOND;
   const recall = !piloting ? "the pilot left the helm" : v.disabled ? "the Mantle lost power"
     : droneRecall(d.position, v.pose.position, out) ? (out >= SCOUT_DRONE.batterySeconds ? "its battery ran low" : "it reached the end of its tether") : null;

@@ -14,10 +14,8 @@ import { executeCommand } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameState } from "../src/sim/types.js";
 import { encoded, MemoryStorage, sample, settled, TestWriterLock } from "./persistence-support.js";
-import { creelFirst, creelOf, fund } from "./b1-support.js";
-import { createSystems } from "../src/sim/systems/state.js";
+import { creelFirst, creelOf } from "./b1-support.js";
 import { initialRuntime } from "../src/sim/upgrades/tools.js";
-import { vehicleProfile } from "../src/sim/fittings.js";
 
 // Save policy (DIRECTION): schema 7 loads; schema 6 / expedition.7 is the one bridged
 // predecessor (SIG-1); schemas 1–5 are refused as older development builds.

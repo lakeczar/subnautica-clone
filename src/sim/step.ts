@@ -676,7 +676,7 @@ export function stepGameInPlace(
   }
   yaw = ((yaw % TAU) + TAU) % TAU;
   if (droneHost) {
-    steerDrone(s, droneHost, yaw, pitch, { forward, right, vertical }, world);
+    steerDrone(droneHost, yaw, pitch, { forward, right, vertical }, world);
     yaw = s.player.pose.yaw; pitch = s.player.pose.pitch;
     forward = right = vertical = 0; sprint = false;
   }

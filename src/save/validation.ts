@@ -50,7 +50,7 @@ import { MAX_FLARES } from "../sim/fittings.js";
 import { validSystems } from "../sim/systems/state.js";
 import { instanceProblems } from "../sim/systems/instances.js";
 import { moduleOfItem, MODULES as SYS2_MODULES, OUTPOST_TIERS } from "../content/systems/hosts.js";
-import { HOST_UPGRADES } from "../content/upgrades/hosts.js";
+import { hostUpgrade } from "../content/upgrades/hosts.js";
 import { DECODABLES } from "../content/systems/decodes.js";
 const TICK = 2147483647;
 /** A saved tag aim names its target kind and ID (`sim/signatures.ts`). */
@@ -720,7 +720,7 @@ function semantic(s: GameState, fresh: GameState): boolean {
   // SIG-1: a host upgrade belongs to an existing decoder or survey module, carried or installed.
   for (const [itemId, upgrade] of Object.entries(s.systems.moduleUpgrades)) {
     const kind = items.find((i) => i.id === itemId)?.kind ?? s.systems.sockets.find((e) => e.itemId === itemId)?.kind;
-    if (!kind || moduleOfItem(kind) !== HOST_UPGRADES[upgrade].module) return false;
+    if (!kind || moduleOfItem(kind) !== hostUpgrade(upgrade).module) return false;
   }
   const moduleReferences = new Set<string>();
   for (const v of f.vehicles) {
