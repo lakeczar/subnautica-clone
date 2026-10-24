@@ -6,6 +6,7 @@ import { HULL_BASE } from "../../content/upgrades/base.js";
 import { UPGRADES } from "../../content/upgrades/catalogue.js";
 import type { ContractKind, ToolKind, UpgradeEffect, UpgradeId } from "../../content/upgrades/catalogue.js";
 import type { HullId } from "../../content/registry.js";
+import { BoundedMemo } from "../caches.js";
 
 export type MotionMode = "idle" | "quiet" | "cruise" | "boost";
 export interface CraftProfile {
@@ -41,23 +42,19 @@ export interface CraftProfile {
 export const MAX_CURRENT_AUTHORITY = 0.95;
 const BASE_SYSTEM_SOCKETS = 2;
 
-/** Profiles by their inputs (SIM-PERF-1): the fold ran several times a step, the
- * step's largest allocation (about 17 KiB). Owned here; at most PROFILE_MEMO
- * entries (a few hundred bytes each), the oldest dropped first; the key is the
- * inputs themselves, so a hit is exactly the fold's answer. Profiles are frozen. */
-const PROFILE_MEMO = 128;
-const profiles = new Map<string, CraftProfile>();
+/** Profiles by their inputs (SIM-PERF-1): the fold ran several times a step, the step's
+ * largest allocation (about 17 KiB). The key is the inputs' values, so a hit is exactly the
+ * fold's answer; profiles are frozen. A profile retains about 400 bytes (one object of 24
+ * fields, two four-number objects, two small arrays at 16 bytes an entry; `drainMode` is the
+ * hull base's own), plus its key at two bytes a character: at most 128 entries and 96 KiB,
+ * the oldest dropped first, in the sim's cache ledger (`sim/caches.ts`). */
+const profiles = new BoundedMemo<CraftProfile>("sim/upgrades/effects craftProfile", 128, 96 * 1024,
+  (key, p) => 400 + 16 * (p.tools.length + p.contracts.length) + 2 * key.length);
 
 /** Fold fitted upgrades onto the hull base. `rating` is the paid hull rating
  * (VehicleState.rating); refits are already in it, so refit entries add nothing. */
 export function craftProfile(hull: HullId, rating: number, fitted: readonly UpgradeId[]): CraftProfile {
-  const key = `${hull}|${rating}|${fitted.join(",")}`;
-  let profile = profiles.get(key);
-  if (profile) return profile;
-  profile = foldProfile(hull, rating, fitted);
-  if (profiles.size >= PROFILE_MEMO) profiles.delete(profiles.keys().next().value!);
-  profiles.set(key, profile);
-  return profile;
+  return profiles.get(`${hull}|${rating}|${fitted.join(",")}`, () => foldProfile(hull, rating, fitted));
 }
 
 function foldProfile(hull: HullId, rating: number, fitted: readonly UpgradeId[]): CraftProfile {

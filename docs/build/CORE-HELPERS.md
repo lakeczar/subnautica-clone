@@ -15,7 +15,7 @@ Owned by the coordinator; each per-wave architecture review updates it (STEW-1, 
 | Tick time | `sim/clock.ts` `FIXED_SECONDS` | Never a local `1 / 60` or `60`. |
 | Formatting | `ui/format.ts` | Durations (`duration`), escaping, headings. |
 | Panel sections | `ui/panels.ts` `SectionKit` | New panels use it. Existing bespoke presenters stay until someone changes them. |
-| A bounded cache | modelled on `render/geometryCache.ts` | An owner, a byte bound, an eviction rule and a ledger registration (performance convention 8). |
+| A bounded cache | modelled on `render/geometryCache.ts`; in the simulation, `sim/caches.ts` (`BoundedMemo`, the ledger `simCaches()`) | An owner, a byte bound, an eviction rule and a ledger registration (performance convention 8). Sim caches register with `registerCache`; the app reads the ledger with the step costs. |
 | Test clocks and waits | a deterministic `workClock` passed to the stream; `waitUntil` in `tests/shared-support.ts` | Never a fixed sleep for an outcome. |
 | Test helpers | `tests/shared-support.ts`: `drain` (run a sliced builder), `rectOf` (a chunk's rectangle), `waitUntil` | Fixtures stay with their tests. |
 | Test saves | the SAVE-1 library (`saves.js pick KIND`, `librarySave`) | Hand-seeded diagnostic saves are labelled as such. |

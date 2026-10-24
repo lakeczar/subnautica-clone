@@ -4,6 +4,8 @@ import { SiltwakeAudio } from "../audio/director.js";
 import { StepFault, StepGuard } from "../sim/stepGuard.js";
 import { PHASE, StepCosts, stepMeter } from "../sim/stepCosts.js";
 import type { StepCostSnapshot } from "../sim/stepCosts.js";
+import { simCaches } from "../sim/caches.js";
+import type { CacheStats } from "../sim/caches.js";
 import { gameWorld } from "../sim/world.js";
 import { warmSimulation } from "../sim/warmup.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
@@ -357,7 +359,8 @@ export class SiltwakeApp {
     );
     // FORK(step-costs-global): a pulled diagnostic global beside REC-1's `__siltwake` hook;
     // retire in whichever of REC-1 and SIM-PERF-1 merges second (as `__siltwake.steps()`).
-    (globalThis as { __siltwakeStepCosts?: () => StepCostSnapshot }).__siltwakeStepCosts = () => this.stepCosts();
+    (globalThis as { __siltwakeStepCosts?: () => StepCostSnapshot & { caches: CacheStats[] } }).__siltwakeStepCosts =
+      () => ({ ...this.stepCosts(), caches: simCaches() });
     this.frameId = requestAnimationFrame((now) => this.frame(now));
   }
 
@@ -461,7 +464,8 @@ export class SiltwakeApp {
     costs.mark(PHASE.autosave);
   }
 
-  /** Where the fixed steps' time has gone this page (SIM-PERF-1), read on demand. */
+  /** Where the fixed steps' time has gone this page (SIM-PERF-1), read on demand; the sim's
+   * cache ledger (`simCaches()`) is read beside it through the same diagnostic global. */
   stepCosts(): StepCostSnapshot { return this.costs.snapshot(); }
 
   private syncSessionUi(): void {
@@ -940,7 +944,7 @@ export class SiltwakeApp {
     this.paused = true;
     cancelAnimationFrame(this.frameId);
     if (stepMeter.active === this.costs) stepMeter.active = null;
-    const g = globalThis as { __siltwakeStepCosts?: () => StepCostSnapshot };
+    const g = globalThis as { __siltwakeStepCosts?: () => unknown };
     if (g.__siltwakeStepCosts) delete g.__siltwakeStepCosts;
     this.abort.abort();
     this.session.dispose();

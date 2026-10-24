@@ -9,6 +9,7 @@ import { clamp01 } from "./vector.js";
 import { cycleLevel as frameworkLevel, fromHazardCycle, secondsAt, secondsUntil } from "../cycles/cycle.js";
 import type { CycleDef } from "../cycles/cycle.js";
 import { WORLD_CYCLES } from "../../content/currents/cycles.js";
+import { registerCache } from "../caches.js";
 
 const FIELD_IDS = Object.keys(HAZARD_FIELDS) as HazardFieldId[];
 const field = (id: HazardFieldId): HazardFieldDefinition => HAZARD_FIELDS[id];
@@ -50,15 +51,17 @@ export function fieldLevel(id: HazardFieldId, tick: number): number {
   const base = f.baseline ?? 0;
   return base + (1 - base) * cycleLevel(f.cycle, tick);
 }
-/** Each shape's absolute centre, resolved once (SIM-PERF-1: every field's centre
- * was rebuilt on every sample, several samples a step). Keyed by the static
- * content shape, never by state. */
-const centers = new WeakMap<HazardShape, Readonly<Vec3>>();
-function centerOf(shape: HazardShape): Readonly<Vec3> {
-  let c = centers.get(shape);
-  if (!c) centers.set(shape, c = Object.freeze(sitePosition(shape.center)));
-  return c;
-}
+/** Each world field's absolute centre, resolved once at load (SIM-PERF-1: every field's
+ * centre was rebuilt on every sample, several samples a step). A fixed table of the content's
+ * fields: one entry a field, about 80 bytes each (a Map entry and a frozen point), never
+ * evicted, in the sim's cache ledger (`sim/caches.ts`). A shape that isn't a world field's
+ * (a test's, or a cave field until it joins the table) is resolved on each call, uncached. */
+const CENTERS = new Map<HazardShape, Readonly<Vec3>>(FIELD_IDS.map((id) => [field(id).shape, Object.freeze(sitePosition(field(id).shape.center))]));
+const CENTER_BYTES = 80;
+registerCache(() => ({ owner: "sim/ecology/hazards field centres", eviction: "none: a fixed table of the world's fields, built at load",
+  entries: CENTERS.size, maxEntries: CENTERS.size, bytes: CENTERS.size * CENTER_BYTES, maxBytes: CENTERS.size * CENTER_BYTES,
+  hits: 0, misses: 0, evictions: 0 }));
+const centerOf = (shape: HazardShape): Readonly<Vec3> => CENTERS.get(shape) ?? sitePosition(shape.center);
 /** 1 inside the shape, falling linearly to 0 over `edge` metres outside it. */
 export function shapeWeight(shape: HazardShape, edge: number, p: Vec3): number {
   const c = centerOf(shape);
