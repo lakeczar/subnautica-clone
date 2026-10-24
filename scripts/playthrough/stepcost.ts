@@ -15,18 +15,27 @@
  * `--capture RUN:TICK[,RUN:TICK]` CPU-profiles that one step in context and
  * writes the save before it, its controls and the profile to `--out DIR`
  * (default /work/tmp/simperf1/captures), for `stepreplay.js`.
+ * `--verify` re-executes every slow step three times from its own pre-step
+ * state (a checkpoint every 60 ticks and a journal, as StepGuard keeps): a step
+ * that is fast again was not the game's work (a collection, the host, or a
+ * first use), and one that is slow again is.
+ * `--host` tags each slow step with the host's disturbance inside it
+ * (`hostSampler.js`: each vCPU's steal, and a canary thread's late wake-ups),
+ * so a step the hypervisor paused is told apart from the game's own work.
  * Timings count only from `heavy-check.sh --class exclusive`. */
 import fs from "node:fs";
 import inspector from "node:inspector/promises";
 import path from "node:path";
 import v8 from "node:v8";
 import { PerformanceObserver } from "node:perf_hooks";
+import { Worker } from "node:worker_threads";
 import { createEnvelope, encodeSave } from "../../src/save/codec.js";
 import { SaveRepository } from "../../src/save/repository.js";
 import type { WriterLockPort } from "../../src/save/writer-lock.js";
 import { PHASE, SLOW_STEP_MS, StepCosts, stepMeter } from "../../src/sim/stepCosts.js";
 import type { StepRecord } from "../../src/sim/stepCosts.js";
 import { StepGuard } from "../../src/sim/stepGuard.js";
+import { executeCommand, stepGameInPlace } from "../../src/sim/step.js";
 import { gameWorld } from "../../src/sim/world.js";
 import { regionAtPoint } from "../../src/content/regions/layout.js";
 import { controlsActive } from "../../src/sim/timeline/activity.js";
@@ -54,10 +63,44 @@ const gcObserver = new PerformanceObserver((list) => {
 gcObserver.observe({ entryTypes: ["gc"] });
 
 interface Slow extends StepRecord {
+  /** `--verify`: the same step again from its own pre-step state, three times, ms. */
+  replay?: number[];
+  /** `--host`: steal jiffies (10 ms each) by vCPU inside the step, the vCPU the step ended on, and canary stalls (ms). */
+  host?: { steal: Record<number, number>; cpu: number | null; canary: number[] };
   run: string; phase: string; mode: string; hull: string | null; region: string | null; position: [number, number, number]; gc?: number;
   /** Cave clusters built unsliced inside the step (CW-1's world; headless has no streamer to build them ahead). */
   caveBuilds?: number;
 }
+/** `--verify`: the live state's checkpoint (every 60 ticks) and everything applied since. */
+class Replayer {
+  private checkpoint: GameState | null = null;
+  private of: GameState | null = null;
+  private journal: ({ step: GameCommand[] } | { command: GameCommand })[] = [];
+  /** Before a step of `s`: a new object (a load) or a full journal starts a new checkpoint. */
+  before(s: GameState): void {
+    if (s !== this.of || this.journal.length >= 60) { this.checkpoint = structuredClone(s); this.of = s; this.journal = []; }
+  }
+  stepped(controls: readonly GameCommand[]): void { this.journal.push({ step: controls.map((c) => ({ ...c })) }); }
+  /** An accepted command replaced the state with `next`. */
+  commanded(command: GameCommand, next: GameState): void { this.journal.push({ command: { ...command } }); this.of = next; }
+  /** The last step again, `n` times, each from a fresh copy of its pre-step state; ms each. */
+  replayLast(world: WorldQueries, n = 3): number[] {
+    const last = this.journal.at(-1);
+    if (!this.checkpoint || !last || !("step" in last)) return [];
+    let s = structuredClone(this.checkpoint);
+    for (const e of this.journal.slice(0, -1))
+      if ("step" in e) stepGameInPlace(s, e.step, world); else s = executeCommand(s, e.command, world).state;
+    const out: number[] = [];
+    for (let i = 0; i < n; i++) {
+      const copy = structuredClone(s), t = performance.now();
+      stepGameInPlace(copy, last.step, world);
+      out.push(+(performance.now() - t).toFixed(3));
+    }
+    return out;
+  }
+}
+const replayer = args.includes("--verify") ? new Replayer() : null;
+
 /** CW-1's unsliced cave-cluster builds so far, when the world has kit caves. */
 const caveBuilds = (world: WorldQueries): number => (world as { kitCaves?: { stats: { syncBuilds: number } } }).kitCaves?.stats.syncBuilds ?? 0;
 let buildsAtOpen = 0;
@@ -146,9 +189,16 @@ function close(run: string, phase: string, s: GameState, world: WorldQueries): v
   if (costs.lastMs <= SLOW_STEP_MS || slow.length >= SLOW_KEEP) return;
   const built = caveBuilds(world) - buildsAtOpen;
   const v = s.fleet.vehicles.find((x) => x.id === s.player.controlledVehicleId) ?? null, p = s.player.pose.position;
-  slow.push({ ...costs.lastStep(s.tick), run, phase, mode: s.player.mode, hull: v?.hull ?? null,
-    region: regionAtPoint(p.x, p.z), position: [+p.x.toFixed(1), +p.y.toFixed(1), +p.z.toFixed(1)], ...(built ? { caveBuilds: built } : {}) });
+  slow.push({ ...costs.lastStep(s.tick), ...(hostSampler ? { host: { steal: {}, cpu: threadCpu(), canary: [] } } : {}), run, phase, mode: s.player.mode, hull: v?.hull ?? null,
+    region: regionAtPoint(p.x, p.z), position: [+p.x.toFixed(1), +p.y.toFixed(1), +p.z.toFixed(1)], ...(built ? { caveBuilds: built } : {}),
+    ...(replayer ? { replay: replayer.replayLast(world) } : {}) });
 }
+
+/** `--host`: the disturbance sampler, and the vCPU this thread is on (/proc/thread-self/stat's 39th field). */
+const hostSampler = args.includes("--host") ? new Worker(new URL("./hostSampler.js", import.meta.url)) : null;
+const threadCpu = (): number | null => {
+  try { const t = fs.readFileSync("/proc/thread-self/stat", "utf8"); return Number(t.slice(t.lastIndexOf(")") + 2).split(" ")[36]); } catch { return null; }
+};
 
 await loadCampaign();
 const t0 = performance.now();
@@ -166,10 +216,12 @@ if (saves) {
       const controls: GameCommand[] = [{ type: "look", yawDelta: 0.004, pitchDelta: t % 240 < 120 ? 0.002 : -0.002 },
         { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }];
       captureBefore(kind, s);
+      replayer?.before(s);
       costs.open();
       buildsAtOpen = caveBuilds(world);
       costs.mark(PHASE.input);
       const events = guard.step(s, controls, world);
+      replayer?.stepped(controls);
       app.after(s, controls, events);
       close(kind, "held", s, world);
       await captureAfter(controls);
@@ -190,19 +242,22 @@ if (saves) {
     return {
       before() {
         // A milestone reload hands the driver a new state: the app's session starts over too.
+        // (A command's new state is the same session: `command` below follows it.)
         if (d.state !== seen) { seen = d.state; app = new AppWork(d.run.scenario, d.state); }
         captureBefore(d.run.scenario, d.state);
+        replayer?.before(d.state);
         costs.open();
         buildsAtOpen = caveBuilds(d.world);
         costs.mark(PHASE.input);
       },
       tick(_d, controls, events) {
         costs.skip(); // the driver's own bookkeeping
+        replayer?.stepped(controls);
         app.after(d.state, controls, events);
         close(d.run.scenario, d.phase, d.state, d.world);
         if (capturing) pending.push(captureAfter(controls));
       },
-      command() { app.commanded(); },
+      command(_d, command, result) { seen = result.state; replayer?.commanded(command, result.state); app.commanded(); },
     };
   };
   for (const r of await playScenarios(ids, args.includes("--verbose"), library ? { fromLibrary: library } : {}))
@@ -211,6 +266,20 @@ if (saves) {
 }
 await new Promise((resolve) => setTimeout(resolve, 50));
 gcObserver.disconnect();
+if (hostSampler) {
+  // Steal is accounted when the vCPU next ticks after the pause: the window reaches past the step.
+  const data = await new Promise<{ steal: { at: number; cpu: number; jiffies: number }[]; late: { at: number; ms: number }[] }>((resolve) => {
+    hostSampler.once("message", resolve); hostSampler.postMessage("stop");
+  });
+  await hostSampler.terminate();
+  for (const s of slow) {
+    const from = performance.timeOrigin + s.at, to = from + s.ms;
+    for (const x of data.steal) if (x.at >= from - 20 && x.at <= to + 30) s.host!.steal[x.cpu] = (s.host!.steal[x.cpu] ?? 0) + x.jiffies;
+    s.host!.canary = data.late.filter((l) => l.at < to && l.at + l.ms > from).map((l) => +l.ms.toFixed(1));
+  }
+  const total = data.steal.reduce((n, x) => n + x.jiffies, 0);
+  console.log(`host: ${total} steal jiffies over the run (${(total * 10 / 1000).toFixed(1)} s across vCPUs), ${data.late.length} canary stalls over ${4 + 2} ms`);
+}
 for (const s of slow) {
   const gc = gcs.filter((g) => g.at < s.at + s.ms && g.at + g.ms > s.at).reduce((n, g) => n + g.ms, 0);
   if (gc) s.gc = +gc.toFixed(2);
@@ -235,7 +304,9 @@ for (const w of snapshot.worst.slice(0, 16)) {
   const top = Object.entries(w.phases).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(", ");
   const ctx = slow.find((s) => s.at === w.at);
   console.log(`  ${w.ms.toFixed(2).padStart(7)} ms tick ${w.tick} ${ctx ? `${ctx.run}/${ctx.phase} ${ctx.mode}${ctx.hull ? `/${ctx.hull}` : ""} ${ctx.region} ` : ""}` +
-    `[${top}]${(w as { gc?: number }).gc ? ` gc ${(w as { gc?: number }).gc} ms` : ""}${ctx?.caveBuilds ? ` cave builds ${ctx.caveBuilds}` : ""}`);
+    `[${top}]${(w as { gc?: number }).gc ? ` gc ${(w as { gc?: number }).gc} ms` : ""}${ctx?.caveBuilds ? ` cave builds ${ctx.caveBuilds}` : ""}` +
+    (ctx?.replay?.length ? ` replay ${ctx.replay.join("/")} ms` : "") +
+    (ctx?.host ? ` host: steal ${JSON.stringify(ctx.host.steal)} on cpu ${ctx.host.cpu}, canary ${JSON.stringify(ctx.host.canary)}` : ""));
 }
 const json = value("--json");
 if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, timelineSize, snapshot, slow, gcs }, null, 1) + "\n");
