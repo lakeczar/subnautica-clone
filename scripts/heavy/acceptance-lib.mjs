@@ -47,8 +47,8 @@ export function context(name, { mode = "normal", host = {}, config = null, slice
     SILTWAKE_SCHED_SLICE: slice, SILTWAKE_SCHED_UNIT_PREFIX: `sched1test-heavy-${n}`, SILTWAKE_SCHED_SUPERVISOR_PREFIX: `sched1test-sched-${n}`,
     SILTWAKE_SCHED_EXCLUSIVE_SLICE: `sched1testexcl${process.pid}x${n}.slice` }; // a private top-level exclusive slice (TST-16; set up by exclusiveSlice())
   // Nothing of an enclosing queue job leaks in (the suites run inside one, SCHED-3 R2-F4): its ticket, lease, reservation and heartbeat.
-  // Nor does the test runner's own NODE_TEST_CONTEXT, which a submit would take for the submitter's intent (SCHED-3 R3).
-  for (const k of Object.keys(env)) if (/^(SILTWAKE_JOB_|SILTWAKE_HEAVY_)/.test(k) || ["SILTWAKE_GPU_LEASE", "SILTWAKE_TEST_BUILD", "BAKE_WORKERS", "HEAVY_MEMORY_MAX", "HEAVY_LOCK_WAIT", "NODE_TEST_CONTEXT"].includes(k)) delete env[k];
+  // Nor do the test runner's own NODE_TEST_* (its context, worker id), which a submit would take for the submitter's intent (SCHED-3 R3).
+  for (const k of Object.keys(env)) if (/^(SILTWAKE_JOB_|SILTWAKE_HEAVY_|NODE_TEST_)/.test(k) || ["SILTWAKE_GPU_LEASE", "SILTWAKE_TEST_BUILD", "BAKE_WORKERS", "HEAVY_MEMORY_MAX", "HEAVY_LOCK_WAIT"].includes(k)) delete env[k];
   const c = { dir, sched, env, legacy: join(dir, "legacy.lock"), n };
   c.wt = (w) => { const p = join(dir, `wt-${w}`); mkdirSync(p, { recursive: true }); return p; };
   /** A git worktree with one committed file, file.txt = "v1". */
