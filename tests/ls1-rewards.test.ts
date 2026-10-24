@@ -30,10 +30,10 @@ import type { RecipeId } from "../src/content/registry.js";
 
 const world = createWorldQueries();
 const meta = { sessionId: "ls1-rewards-test-01", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:01.000Z" };
+/** Save and load again; strict validation refuses an invalid state at either end. */
 const reload = (s: GameState) => {
   const text = encodeSave(createEnvelope(s, meta));
-  assert.ok(text.ok, text.ok ? "" : text.error);
-  return decodeSave(text.value);
+  return text.ok ? decodeSave(text.value) : text;
 };
 /** A deployed outpost at SPOTS.a: thermal (beside a vent) or cell-powered. */
 function outpost(power: "thermal" | "cells"): { s: GameState; id: string } {
@@ -54,7 +54,9 @@ test("locker extension: only the chosen locker module grows, through pack and re
   sheet.push("bp_locker_extension");
   try {
     let s = systemsGame();
-    for (const k of ["mod_locker", "mod_locker"] as RecipeId[]) fund(s, k);
+    // Stow the hold in the pod locker before each make, as a player would; the kit stays.
+    const stow = () => { for (const i of s.inventory.items.filter((i) => i.containerId === "diver" && i.kind !== "outpost_kit_basic" && i.kind !== "mod_locker")) i.containerId = "pod_locker"; };
+    for (const k of ["mod_locker", "mod_locker"] as RecipeId[]) { stow(); fund(s, k); }
     const kit = kitId(s), [a, b] = s.inventory.items.filter((i) => i.kind === "mod_locker").map((i) => i.id) as [string, string];
     at(s, { ...LEDGE, y: LEDGE.y + 0.6 }, "swimming");
     s = run(s, { type: "deploy-outpost", itemId: kit, name: "West ledge" }).state;
