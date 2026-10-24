@@ -30,8 +30,8 @@ const allocating = (name: string, mib: number): string => write(name, `test("${n
   assert.equal(r.status, 0, "the child finished");
 });`);
 
-/** The nested heavy runner over `files` with one adapter; its summary rows by probe name. */
-function tier(files: readonly string[], mode: (typeof modes)[number], budgetMiB: number, budgets?: object) {
+/** The nested heavy runner over `files` with one adapter, as it ran; `budgets` replaces tests/heavy-budgets.json. */
+function runTier(files: readonly string[], mode: (typeof modes)[number], budgetMiB: number, budgets?: object) {
   const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_HEAVY_BUDGET_MIB: String(budgetMiB) };
   if (budgets) {
     env.SILTWAKE_HEAVY_BUDGETS = join(probes, `budgets-${Math.random().toString(36).slice(2)}.json`);
@@ -39,8 +39,12 @@ function tier(files: readonly string[], mode: (typeof modes)[number], budgetMiB:
   }
   if (mode === "process group") env.SILTWAKE_HEAVY_CGROUP = "";
   delete env.NODE_TEST_CONTEXT;
+  return spawnSync(process.execPath, ["scripts/test-tier.mjs", "heavy", ...files], { cwd: root, encoding: "utf8", env, timeout: 120_000 });
+}
+/** The same, required to have run; its summary rows by probe name. */
+function tier(files: readonly string[], mode: (typeof modes)[number], budgetMiB: number, budgets?: object) {
   const started = Date.now();
-  const out = spawnSync(process.execPath, ["scripts/test-tier.mjs", "heavy", ...files], { cwd: root, encoding: "utf8", env, timeout: 120_000 });
+  const out = runTier(files, mode, budgetMiB, budgets);
   assert.match(out.stdout, new RegExp(`${mode} containment`), `the runner used ${mode} containment`);
   const row = (name: string) => out.stdout.split("\n").find((l) => l.trimStart().startsWith(`${name}.heavy.test.js `)) ?? "";
   return { out, row, seconds: (Date.now() - started) / 1000 };
@@ -114,7 +118,7 @@ for (const mode of modes) {
 
   test(`${mode}: a heavy file that reads a clock but is in neither list is refused before anything runs`, () => {
     const file = write(`unlisted-clock-${tag}`, `test("times something", () => { assert.ok(${NOW}() >= 0); });`);
-    const { out } = tier([file], mode, 256, { exclusive: [] });
+    const out = runTier([file], mode, 256, { exclusive: [] });
     assert.equal(out.status, 2, out.stdout + out.stderr);
     assert.match(out.stderr, new RegExp(`unlisted-clock-${tag}\\.heavy\\.test\\.ts read a clock.*clockWithoutBound`));
     assert.doesNotMatch(out.stdout, /test:heavy summary/);
