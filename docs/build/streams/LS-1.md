@@ -297,6 +297,27 @@ Together, a grow bed yields about 2.5–3× the meals, salve or membrane per act
 | **SIG-1** (merged) | The range tagger marks without capturing (`signatures.ts`). The listening array points at sites with a sound tell (`fittings.ts`, after CW-1). | Stage 1 and stage 2 respectively. |
 | **Save schema** | **One additive field.** New decodable IDs are additive. Caches are finite world sources through the composed source table (as `c4Sources.ts` does). Read notes go in `knowledge.journals`. Coded doors need `systems.opened` (door IDs), because a typed or guessed code opens a door independently of decodes. The coordinator composes it at integration, as a schema bump or folded into the next planned one. Grow beds reuse the module upgrade record (`moduleUpgrades`), so they need no field. | Proposed here; the coordinator composes `src/save/*`. |
 
+**Opened doors at integration (approved 2026-10-24).** One additive field, composed by the coordinator in one schema change. If another stream's bump lands near it, the two fold into one.
+1. **Shape:** `systems.opened: DoorId[]`. `DoorId` comes from LS-1's coded-door table (`island.cold_store_hatch` and `basin.vault_door` so far). Door IDs are stable facts: a row is never deleted or renamed. A door whose site isn't placed yet keeps its row and is simply withheld, so no save ever references a vanished ID. A door, once opened, stays open, so the list only grows.
+2. **Validation** (`validSystems`, strict, current schema):
+   - `opened` joins the exact key list;
+   - it must be an array of known door IDs with no duplicates.
+
+   There's no cross-check against `decoded`, because a typed or guessed code legitimately opens a door before any decode.
+3. **Migration: schema 7 → 8,** following the `bridge6.ts` pattern:
+   - a new `bridge7.ts` adds `opened: []` in New Game's key order;
+   - a schema 7 save that already holds `systems.opened` is refused as corruption, since no schema 7 build writes it;
+   - the empty list is exact, because no coded door exists in any schema 7 build;
+   - per DIRECTION, only the immediately previous schema is supported, so `bridge6.ts` retires and schema 6 joins `OLDER_BUILD_SCHEMAS`.
+4. **Tests and evidence:**
+   - validation refuses an unknown door ID, a duplicate, a non-array, and a schema 7 save carrying the field;
+   - a SAVE-1 library schema 7 save bridges and then validates strictly;
+   - after a code is typed, save → reload keeps the door open (this is stage 1b's adverse case);
+   - the playthrough's milestone reloads match;
+   - named fixtures (the reef-rib trap regression included) are converted once and their originals archived;
+   - `scripts/saves-export.sh` re-exports the library after the root merge.
+5. **Not in this field:** cache stock already persists through `world.resources` (`addNewContent` fills new roster rows), read notes through `knowledge.journals`, and grow beds through `moduleUpgrades`.
+
 **Stages** (each a reviewable outcome; file sets are disjoint from CW-1's until it lands):
 
 | Stage | Outcome | Files it owns | Needs |
