@@ -85,6 +85,8 @@ const CLUSTER_BYTES = 120;
 /** Markers show below this depth (the surface has daylight). */
 const MARKER_DEPTH = 25;
 
+/** A moving mesh's light, moved in place, with the frame it was last moved. */
+type MovingLight = { -readonly [K in keyof PointLight]: PointLight[K] } & { stamp: number };
 interface Entry {
   readonly mesh: AbstractMesh;
   readonly clusters: readonly LightCluster[];
@@ -101,7 +103,7 @@ interface Entry {
   /** A moving mesh's lights, one mutable light per cluster and instance,
    * made once and moved in place each frame (R2-4), and where the
    * round-robin refresh of a large one resumes. */
-  moving: { lights: (PointLight & { stamp: number })[]; next: number } | null;
+  moving: { lights: MovingLight[]; next: number } | null;
   active: boolean;
   /** Where the entry sits in the dense per-frame list. */
   index: number;
