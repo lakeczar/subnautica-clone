@@ -814,3 +814,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Fixed:** all 5 P2s; a measurement bug (shared timing object) fixed. The deep stall turned out to be a flat battery, and the planner now plans power.
   - **Gate parts at 0f4d36fe:** fast 1,486, heavy 476/476 (CA-3 passes unloosened), 6 economy, playthrough 8/8, bake verify.
   - **Clean remeasure:** greenlit at 06:50Z: 16 exclusive tickets under TST-16 priority. Segments in the 08:30–09:45Z backup window are flagged, which gives fleet the in-window versus out-of-window steal comparison.
+- **SIM-PERF-1 attribution at `3b9eef1e`:**
+  - **Large spikes (30–136 ms):** don't reproduce when the step is re-run. The builder attributes them to host or VM pauses; the coordinator is not yet convinced (steal is low under TST-16, and recorded idle samples point to a blocked main thread). A decisive canary-plus-per-vCPU-steal test and a 4070 control come after CW-1's series.
+  - **Real fixes:** a memoized `craftProfile` and single-pass hazard sampling (99→80 KiB a step); autosave no longer re-decodes its own record (3.4→1.2 ms commit); hunter solid validation once per world (threat p99 1.1 ms→21 µs).
+  - **Timeline save:** 13–21 ms of stringify at 20k events, so SIM-1b gets assigned.
+  - **Also asked for:** warm the cold costs behind "Resume when ready"; a systems-view revision counter.
+- **SIM-1b started:** the incremental timeline journal, on the SIM-1 builder, from the parked `t3/sim-1b-timeline-journal`. Spec: contract v2 plus the R5 decisions plus the R6 rulings. It must land before the owner's first playtest. Builders: CW-1, COL-1, REC-1, SIM-PERF-1, SIM-1b (5).
