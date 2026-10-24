@@ -1,81 +1,81 @@
-# STEW-2 dry run at 1f8c45b2 on factory-worker, 2026-10-24T19:53:21Z
-# inside this job:  local CPU work here: runs directly (inside heavy-check job 261024-194131-c1b5)
+# STEW-2 dry run at 14e1ed22 on factory-worker, 2026-10-24T21:32:33Z
+# inside this job:  local CPU work here: runs directly (inside heavy-check job 261024-211943-ebb6)
 # outside (no job): local CPU work here: goes through the queue (not inside a heavy-check job)
 
 $ npm test
-> node scripts/local-guard.mjs --class standard -- npm run test:fast:direct --
-local-guard: npm run test:fast:direct --: through the queue: heavy-check run --class standard --machine any -- node scripts/local-guard.mjs --class standard -- npm run test:fast:direct -- [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
-[stand-in queue client] heavy-check run --class standard --machine any -- node scripts/local-guard.mjs --class standard -- npm run test:fast:direct --
-  routed: exit 0 in 208 ms
+> node scripts/local-guard.mjs --class standard --machine any -- npm run test:fast:direct --
+local-guard: npm run test:fast:direct --: through the queue: heavy-check run --class standard --machine any -- node scripts/local-guard.mjs --class standard --machine any -- npm run test:fast:direct -- [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
+[stand-in queue client] heavy-check run --class standard --machine any -- node scripts/local-guard.mjs --class standard --machine any -- npm run test:fast:direct --
+  routed: exit 0 in 172 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ npm run build
 > node scripts/local-guard.mjs --class standard --machine 3090 -- npm run build:direct --
 local-guard: npm run build:direct --: through the queue: heavy-check run --class standard --machine 3090 -- node scripts/local-guard.mjs --class standard --machine 3090 -- npm run build:direct -- [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class standard --machine 3090 -- node scripts/local-guard.mjs --class standard --machine 3090 -- npm run build:direct --
-  routed: exit 0 in 134 ms
+  routed: exit 0 in 101 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ npm run typecheck
-> node scripts/local-guard.mjs --class quick -- npm run typecheck:direct --
-local-guard: npm run typecheck:direct --: through the queue: heavy-check run --class quick --machine any -- node scripts/local-guard.mjs --class quick -- npm run typecheck:direct -- [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
-[stand-in queue client] heavy-check run --class quick --machine any -- node scripts/local-guard.mjs --class quick -- npm run typecheck:direct --
-  routed: exit 0 in 141 ms
+> node scripts/local-guard.mjs --class quick --machine any -- npm run typecheck:direct --
+local-guard: npm run typecheck:direct --: through the queue: heavy-check run --class quick --machine any -- node scripts/local-guard.mjs --class quick --machine any -- npm run typecheck:direct -- [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
+[stand-in queue client] heavy-check run --class quick --machine any -- node scripts/local-guard.mjs --class quick --machine any -- npm run typecheck:direct --
+  routed: exit 0 in 121 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ npm run playthrough -- --scenario creel
-> node scripts/local-guard.mjs --class playthrough -- npm run playthrough:direct -- --scenario creel
-local-guard: npm run playthrough:direct -- --scenario creel: through the queue: heavy-check run --class playthrough --machine any -- node scripts/local-guard.mjs --class playthrough -- npm run playthrough:direct -- --scenario creel [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
-[stand-in queue client] heavy-check run --class playthrough --machine any -- node scripts/local-guard.mjs --class playthrough -- npm run playthrough:direct -- --scenario creel
-  routed: exit 0 in 146 ms
+> node scripts/local-guard.mjs --class playthrough --machine any -- npm run playthrough:direct -- --scenario creel
+local-guard: npm run playthrough:direct -- --scenario creel: through the queue: heavy-check run --class playthrough --machine any -- node scripts/local-guard.mjs --class playthrough --machine any -- npm run playthrough:direct -- --scenario creel [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
+[stand-in queue client] heavy-check run --class playthrough --machine any -- node scripts/local-guard.mjs --class playthrough --machine any -- npm run playthrough:direct -- --scenario creel
+  routed: exit 0 in 130 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ npm run test:build
 local-guard: node scripts/test-build.mjs: through the queue: heavy-check run --class quick --machine 3090 -- node scripts/test-build.mjs [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class quick --machine 3090 -- node scripts/test-build.mjs
-  routed: exit 0 in 196 ms
+  routed: exit 0 in 145 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ npm run bake:terrain
 local-guard: node scripts/bake-terrain.mjs: through the queue: heavy-check run --class bake --machine 3090 -- node scripts/bake-terrain.mjs [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class bake --machine 3090 -- node scripts/bake-terrain.mjs
-  routed: exit 0 in 174 ms
+  routed: exit 0 in 138 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/test-tier.mjs fast
 local-guard: node scripts/test-tier.mjs fast: through the queue: heavy-check run --class standard --machine any -- sh -c 'node scripts/test-build.mjs && node scripts/test-tier.mjs fast' [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class standard --machine any -- sh -c node scripts/test-build.mjs && node scripts/test-tier.mjs fast
-  routed: exit 0 in 48 ms
+  routed: exit 0 in 56 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/test-build.mjs --typecheck
 local-guard: node scripts/test-build.mjs --typecheck: through the queue: heavy-check run --class standard --machine 3090 -- node scripts/test-build.mjs --typecheck [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class standard --machine 3090 -- node scripts/test-build.mjs --typecheck
-  routed: exit 0 in 41 ms
+  routed: exit 0 in 53 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/guard-architecture.mjs --quiet
 local-guard: node scripts/guard-architecture.mjs --quiet: through the queue: heavy-check run --class quick --machine any -- node scripts/guard-architecture.mjs --quiet [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class quick --machine any -- node scripts/guard-architecture.mjs --quiet
-  routed: exit 0 in 36 ms
+  routed: exit 0 in 38 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/check-campaign-economy.mjs
 local-guard: node scripts/check-campaign-economy.mjs: through the queue: heavy-check run --class quick --machine any -- sh -c 'node scripts/test-build.mjs && node scripts/check-campaign-economy.mjs' [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class quick --machine any -- sh -c node scripts/test-build.mjs && node scripts/check-campaign-economy.mjs
-  routed: exit 0 in 35 ms
+  routed: exit 0 in 33 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/check-m1-economy.mjs
 local-guard: node scripts/check-m1-economy.mjs: through the queue: heavy-check run --class quick --machine any -- sh -c 'node scripts/test-build.mjs && node scripts/check-m1-economy.mjs' [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class quick --machine any -- sh -c node scripts/test-build.mjs && node scripts/check-m1-economy.mjs
-  routed: exit 0 in 49 ms
+  routed: exit 0 in 36 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/check-m2-a-economy.mjs
 local-guard: node scripts/check-m2-a-economy.mjs: through the queue: heavy-check run --class quick --machine any -- sh -c 'node scripts/test-build.mjs && node scripts/check-m2-a-economy.mjs' [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class quick --machine any -- sh -c node scripts/test-build.mjs && node scripts/check-m2-a-economy.mjs
-  routed: exit 0 in 36 ms
+  routed: exit 0 in 49 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/check-m2-b1-economy.mjs
@@ -87,13 +87,13 @@ local-guard: node scripts/check-m2-b1-economy.mjs: through the queue: heavy-chec
 $ node scripts/check-progression-curve.mjs
 local-guard: node scripts/check-progression-curve.mjs: through the queue: heavy-check run --class quick --machine any -- sh -c 'node scripts/test-build.mjs && node scripts/check-progression-curve.mjs' [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class quick --machine any -- sh -c node scripts/test-build.mjs && node scripts/check-progression-curve.mjs
-  routed: exit 0 in 32 ms
+  routed: exit 0 in 42 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/upgrade-economy.mjs
 local-guard: node scripts/upgrade-economy.mjs: through the queue: heavy-check run --class quick --machine any -- sh -c 'node scripts/test-build.mjs && node scripts/upgrade-economy.mjs' [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class quick --machine any -- sh -c node scripts/test-build.mjs && node scripts/upgrade-economy.mjs
-  routed: exit 0 in 35 ms
+  routed: exit 0 in 34 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ node scripts/sim-bench.mjs --states <tmp>/states
@@ -105,25 +105,37 @@ local-guard: node scripts/sim-bench.mjs --states <tmp>/states: through the queue
 $ node scripts/timeline-save-bench.mjs --tree <tmp>/tree
 local-guard: node scripts/timeline-save-bench.mjs --tree <tmp>/tree: through the queue: heavy-check run --class standard --machine 3090 -- node scripts/timeline-save-bench.mjs --tree <tmp>/tree [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class standard --machine 3090 -- node scripts/timeline-save-bench.mjs --tree <tmp>/tree
-  routed: exit 0 in 44 ms
+  routed: exit 0 in 43 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ bash scripts/saves-build-at.sh HEAD <tmp>/never
 local-guard: bash scripts/saves-build-at.sh HEAD <tmp>/never: through the queue: heavy-check run --class standard --machine 3090 -- node scripts/local-guard.mjs --class standard --machine 3090 -- bash scripts/saves-build-at.sh HEAD <tmp>/never [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class standard --machine 3090 -- node scripts/local-guard.mjs --class standard --machine 3090 -- bash scripts/saves-build-at.sh HEAD <tmp>/never
-  routed: exit 0 in 59 ms
+  routed: exit 0 in 63 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ bash scripts/sim-differential.sh HEAD
 local-guard: bash scripts/sim-differential.sh HEAD: through the queue: heavy-check run --class playthrough --machine 3090 -- node scripts/local-guard.mjs --class playthrough --machine 3090 -- bash scripts/sim-differential.sh HEAD [queue client: SILTWAKE_HEAVY_CHECK=<tmp>/heavy-check]
 [stand-in queue client] heavy-check run --class playthrough --machine 3090 -- node scripts/local-guard.mjs --class playthrough --machine 3090 -- bash scripts/sim-differential.sh HEAD
-  routed: exit 0 in 63 ms
+  routed: exit 0 in 66 ms
   no queue client: exit 75: refused: the heavy-check queue client isn't available (/nonexistent/heavy-check). On factory-worker it runs only through the heavy-check queue, and nothing ran
 
 $ npm run build:direct
-> node scripts/local-guard.mjs --require 'npm run build' && tsc --noEmit && tsc -p tsconfig.headless.json && node scripts/bake-terrain.mjs && vite build
+> node scripts/local-guard.mjs --require npm run build && node node_modules/typescript/bin/tsc --noEmit && node node_modules/typescript/bin/tsc -p tsconfig.headless.json && node scripts/bake-terrain.mjs && node node_modules/vite/bin/vite.js build
 local-guard: this runs only inside a heavy-check job on factory-worker (not inside a heavy-check job); use `npm run build`, which goes through the queue.
-  routed: exit 75 in 119 ms
+  routed: exit 75 in 129 ms
   no queue client: exit 75: runs only inside a heavy-check job
+
+$ SILTWAKE_HEAVY_LOCK_HELD=1 npm run build   (a v1 lock claim without its scope)
+  exit 75; queue client called: 0; a heavy-check job is claimed but not proven (SILTWAKE_HEAVY_LOCK_HELD is set without SILTWAKE_HEAVY_SCOPE, so its scope can't be checked)
+
+$ node scripts/gate.mjs --only fast --allow-dirty   (the batch's machine)
+  submit --class standard --machine any --review -- node scripts/gate.mjs --batch fast
+
+$ SILTWAKE_FAST_FILE_BUDGET_S=1 node scripts/gate.mjs --only fast --allow-dirty   (the batch's machine)
+  submit --class standard --machine 3090 --review -- node scripts/gate.mjs --batch fast
+
+$ NODE_OPTIONS=--max-old-space-size=1024 node scripts/gate.mjs --only fast --allow-dirty   (the batch's machine)
+  submit --class standard --machine 3090 --review -- node scripts/gate.mjs --batch fast
 
 saves-build-at.sh made no directory: nothing was built here

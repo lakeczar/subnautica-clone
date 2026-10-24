@@ -114,40 +114,48 @@ TT-1 already ran the four timing files alone within the tier, and CW-1's failing
 8. **An alickers export builds the SHA twice:** the export there, the import here. That's the import's trust boundary.
 
 ## Evidence
-All checks ran through the queue; nothing CPU-heavy ran locally (exclusive series from REC-1 were queued throughout).
-- **Fast tier:** 1,649/1,649, none skipped, at `daa1d02` (the last code change; after it, only this handoff), on factory-worker twice:
-  - `261024-200325-c51c`: submitted `--machine any`, run here while alickers was busy;
-  - `261024-200326-b1a4`: `--machine 3090`.
+All checks ran through the queue; nothing CPU-heavy ran locally (exclusive series from CW-1 and REC-1 were queued throughout).
 
-  Both run the inside-a-real-job test in the production queue's own job scope: the recorded cgroup and its parent admit, and a string prefix of it routes. An alickers pass at `883708d` (`261024-193339-bcbf`, 1,649/1,649) covered the sandbox side; between that and `daa1d02`, only that test's form and docs changed.
-- **Heavy tier, `--machine any`:** every file passes on alickers at `3869736` (`261024-194043-b7eb`, 612 s, exit 0, bound). `heavy-tier.heavy.test.ts` passes 8/8: containment, the timing phase, and the clock-form refusals under both containments. Five timing files ran last, one at a time, all ok:
+**R3, at `14e1ed2`** (the last code change; after it, only this handoff and the saved dry-run output):
+- **Fast tier, `--machine any`:** 1,649 → **1,653/1,653**, none skipped, on alickers (`261024-211941-8ecd`, exit 0, bound). It includes:
+  - the package-shape pins;
+  - the v1-scope and unproven-claim cases, Sol's escaped sibling among them;
+  - the real-shim termination run;
+  - the gate's submission-boundary machine policy for the batch and the playthrough.
+- **Heavy tier, `--machine any`:** all 67 files pass on alickers (`261024-211942-f38b`, 575 s, exit 0, bound). Five timing files ran last, one at a time, all ok:
 
   | File | CPU wait: job | CPU wait: host |
   | --- | --- | --- |
-  | `caves-canopy-basin` | 0.2% | 0.3% |
-  | `caves-deep-perf` | 0.1% | 0.2% |
-  | `caves-reef-isles-game` | 0.1% | 0.1% |
+  | `caves-canopy-basin` | 0.1% | 0.2% |
+  | `caves-deep-perf` | 0% | 0.2% |
+  | `caves-reef-isles-game` | 0% | 0.1% |
   | `heavy-tier` | 0% | 0.1% |
-  | `large-cave-canopy` | 0.1% | 0.2% |
-
-  Since `3869736` only docs, the dry-run script and a fast-tier test changed.
-- **Dry run, as a queued 3090 job** (`261024-194131-c1b5`, at `1f8c45b`, [`stew2/dry-run.sh`](stew2/dry-run.sh), output [`stew2/dry-run.txt`](stew2/dry-run.txt)):
-  - **Inside the job:** `runs directly (inside heavy-check job 261024-194131-c1b5)`.
+  | `large-cave-canopy` | 0.1% | 0.3% |
+- **Dry run, as a queued 3090 job** (`261024-211943-ebb6`; [`stew2/dry-run.sh`](stew2/dry-run.sh), output [`stew2/dry-run.txt`](stew2/dry-run.txt)):
+  - **Inside the job:** `runs directly (inside heavy-check job 261024-211943-ebb6)`.
   - **With the job's variables removed:** `goes through the queue`.
   - **All 20 commands, each run both ways:**
-    - **With a stand-in queue client:** every guarded command printed its routed form and handed the client exactly `run --class C --machine M -- <the same command>`, in 32–208 ms.
-    - **With a missing client:** each refused with exit 75: `the heavy-check queue client isn't available … nothing ran`.
-    - **`npm run build:direct`:** refused outright (75: runs only inside a heavy-check job).
+    - **With a stand-in queue client:** 19 handed it exactly `run --class C --machine M -- <the same command>`, with the explicit `--machine` in each wrapper. `npm run build:direct` refused outright (75).
+    - **With a missing client:** all 20 refused with 75.
+  - **A v1 lock claim without its scope:** `npm run build` exited 75 without calling the client (`a heavy-check job is claimed but not proven`).
+  - **The gate's batch:** `--machine any` in an agent's environment; `--machine 3090` with `SILTWAKE_FAST_FILE_BUDGET_S=1`, and with `NODE_OPTIONS`.
   - `saves-build-at.sh` made no directory.
-- **A real routed command, through the production queue** (from this agent's shell, not in a job; output in `/work/tmp/stew2-evidence/real-routed-typecheck.txt`):
-  - `npm run typecheck` printed `through the queue: heavy-check run --class quick --machine any -- …` and became ticket `261024-194237-99e3`.
-  - It waited 10m49s behind REC-1's exclusive series (`blocked by exclusive`), then was admitted to the express slot on the 3090.
-  - It ran `typecheck:direct` inside the job, where it was admitted, in 10 s, and exited 0, bound to `0351cc2`.
-  - The client's own CPU while waiting: 1.5 s user over 11 min (heavy-check's polling).
-- **R1 evidence still standing:**
-  - **Gate batching:** Sol's 6/6 real `--batch` economy steps.
-  - **saves-export:** Sol's private-library checks; my `--job-verify ac734b0` (`261024-173723-788a`).
-- **Not obtained:** a real end-to-end `saves-export.sh` (it would publish a branch commit's library). The first real run is the next post-merge export.
+- **Closed grammar:** SCHED-3's own `resolveScript` (`7aa88a3`, extracted, a pure string check) resolves all four `X:direct` bodies to plain node steps. The playthrough's forwarded arguments land on the last step.
+- **Not repeated:** the composition with SCHED-3. That is SCHED-3's step after this lands, with its alias, its resolver expectations and its machine-HOME npm-config regression on the merged source.
+
+**R2, still standing:**
+- **The fast tier on the 3090** in real production job scopes (`261024-200325-c51c`, `261024-200326-b1a4`).
+- **A real routed command through the production queue**, from this agent's shell, not in a job (output in `/work/tmp/stew2-evidence/real-routed-typecheck.txt`):
+  - `npm run typecheck` printed `through the queue: heavy-check run --class quick --machine any -- …` and became ticket `261024-194237-99e3`;
+  - it waited 10m49s behind REC-1's exclusive series, then was admitted to the express slot on the 3090;
+  - it ran `typecheck:direct` inside the job, admitted there, in 10 s, and exited 0, bound to `0351cc2`;
+  - the client's own CPU while waiting was 1.5 s over 11 min (heavy-check's polling).
+
+**R1, still standing:**
+- **Gate batching:** Sol's 6/6 real `--batch` economy steps.
+- **saves-export:** Sol's private-library checks, and my `--job-verify ac734b0` (`261024-173723-788a`).
+
+**Not obtained:** a real end-to-end `saves-export.sh`, which would publish a branch commit's library. The first real run is the next post-merge export.
 
 ## Files
 - **New:**
@@ -156,7 +164,7 @@ All checks ran through the queue; nothing CPU-heavy ran locally (exclusive serie
   - `docs/build/streams/stew2/` (the dry-run script and its output).
 - **Changed:**
   - `package.json` scripts (wrappers plus `:direct` bodies);
-  - `scripts/gate.mjs`, `saves-export.sh`, `saves-build-at.sh` and `sim-differential.sh`;
+  - `scripts/gate.mjs`, `saves-export.sh`, `saves-build-at.sh`, `sim-differential.sh` and `heavy-check.sh` (v1 exports its exact scope);
   - `scripts/test-build.mjs`, `test-tier.mjs`, `guard-architecture.mjs` and `bake-terrain.mjs`;
   - the six economy scripts and the two benches;
   - `tests/heavy-budgets.json`, `heavy-tier.heavy.test.ts`, `gate.test.ts` and `bake-terrain-store.test.ts`;
