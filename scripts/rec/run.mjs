@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--hold S] [--owner-browser]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -106,6 +106,10 @@ try {
   // --profile S: where the page's main-thread time goes over the first S seconds of travel (a CDP sampling profile).
   const profileS = Number(arg("profile", 0));
   if (profileS > 0) { await g.cdp.send("Profiler.enable"); await g.cdp.send("Profiler.setSamplingInterval", { interval: 200 }); await g.cdp.send("Profiler.start"); }
+  // --alloc: where the page allocates over the measured window (V8's sampling heap profiler, collected objects included: the allocation rate).
+  const allocOn = flag("alloc");
+  if (allocOn) { await g.cdp.send("HeapProfiler.enable"); await g.cdp.send("HeapProfiler.startSampling", { samplingInterval: 4096, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true }); }
+  const allocT0 = Date.now();
   const profileEnd = profileS > 0 ? Date.now() + profileS * 1000 : 0;
   let profiled = false;
   const stopProfile = async () => {
@@ -141,6 +145,15 @@ try {
   }
   await releaseAll(g);
   await stopProfile();
+  if (allocOn) {
+    const { profile } = await g.cdp.send("HeapProfiler.stopSampling");
+    const byFn = new Map(); let total = 0;
+    const walk = (n) => { const self = n.selfSize ?? 0; total += self; if (self) { const f = n.callFrame; const k = `${(f.url ?? "").split("/").pop() || "(native)"}:${f.lineNumber + 1}:${f.columnNumber + 1} ${f.functionName || "(anonymous)"}`; byFn.set(k, (byFn.get(k) ?? 0) + self); } for (const c of n.children ?? []) walk(c); };
+    walk(profile.head);
+    const secs = (Date.now() - allocT0) / 1000;
+    writeFileSync(path.join(out, "alloc.json"), JSON.stringify({ seconds: +secs.toFixed(1), mibPerS: +(total / 1048576 / secs).toFixed(2),
+      top: [...byFn].sort((x, y) => y[1] - x[1]).slice(0, 60).map(([fn, b]) => ({ fn, kibPerS: +(b / 1024 / secs).toFixed(1) })) }));
+  }
   const m1 = await metrics();
   const cpu1 = processCpu(g.browserPid);
   result.travelS = Math.round((Date.now() - started) / 1000);
