@@ -33,6 +33,38 @@ const GPU = new RegExp(process.env.CW1_GPU ?? "RTX 3090");
 const { chromium } = require("playwright-core");
 const [dist, planFile, saveFile, segArg, out, port] = process.argv.slice(2);
 const segment = Number(segArg), plan = JSON.parse(readFileSync(planFile, "utf8")), points = plan.segments[segment];
+// CW1_REENTER=cave,... (R3-3): at those stops, save (F5), pause (Escape) and Continue by
+// ordinary input, then record the entry: how long the cover stayed, whether the cave's light
+// was bound at the reveal, and a screenshot. Frames behind the cover are reported apart.
+const REENTER = new Set((process.env.CW1_REENTER ?? "").split(",").filter(Boolean));
+let reenterPending = 0;
+/** Re-enter the expedition at the current pose through the menu (ordinary input). */
+async function reenter(cave) {
+  await releaseAll();
+  const stream = () => page.evaluate(() => document.querySelector("#ocean").siltwakeCaveStream?.() ?? {});
+  await page.keyboard.press("F5"); await page.waitForTimeout(800);
+  await page.keyboard.press("Escape"); await page.waitForTimeout(400);
+  const before = await stream(), t0 = performance.now();
+  await page.locator("#continue").click();
+  await page.waitForTimeout(200);
+  if (await page.locator("#confirmation").isVisible().catch(() => false)) await page.locator("#confirm-accept").click();
+  // Covered until the HUD shows (the expedition plays) or 20 s.
+  let revealed = false, at = null, covered = 0;
+  for (; performance.now() - t0 < 20000; covered++) {
+    const s1 = await page.evaluate(() => ({ hud: !document.querySelector("#hud")?.hidden, menu: !!document.querySelector("#menu") && !document.querySelector("#menu").hidden }));
+    if (s1.hud && !s1.menu) { revealed = true; at = await stream(); break; }
+    await page.waitForTimeout(20);
+  }
+  const after = await stream();
+  reenterPending += (after.lightPendingFrames ?? 0) - (before.lightPendingFrames ?? 0);
+  const entry = { cave, revealed, coverMs: Math.round(performance.now() - t0), activeAtReveal: at?.active ?? null, lightPendingAtReveal: at?.lightPending ?? null,
+    pendingFramesBehindCover: (after.lightPendingFrames ?? 0) - (before.lightPendingFrames ?? 0) };
+  result.reentries.push(entry);
+  note("reenter", JSON.stringify(entry));
+  if (revealed) { await page.waitForTimeout(500); await shot(`reenter-${cave}`); }
+  await page.locator("#ocean").click().catch(() => {});
+  await page.waitForTimeout(500);
+}
 // Boost unless the power plan says this segment must cruise.
 const SEGMENT_BOOST = plan.power?.segments?.[segment]?.cruise !== true;
 mkdirSync(out, { recursive: true });
@@ -49,7 +81,7 @@ await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
 const log = [];
 const note = (...a) => { const line = `[${(performance.now() / 1000).toFixed(1)}s] ${a.join(" ")}`; log.push(line); console.log(line); };
 const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(), label: process.env.CW1_LABEL ?? "RTX 3090 (factory-worker)", segment, caves: points.filter(p => p.cave).map(p => p.cave),
-  reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0, power: [], stalls: [] };
+  reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0, power: [], stalls: [], reentries: [] };
 // The power plan (derive.mjs): when to swap a reserve cell in; boost or cruise.
 const POWER = plan.power ?? null;
 let cellsLeft = POWER?.cells?.filter(c => c > 0).length ?? 0;
@@ -350,6 +382,7 @@ try {
       s = await read();
       note(ok ? "at" : "near", p.cave, "active light", s.cave || "-", "depth", s.depth);
       if (caveIndex++ % 4 === 0) await shot(p.cave);
+      if (ok && REENTER.has(p.cave)) await reenter(p.cave);
     }
   }
   clearInterval(sampler);
@@ -548,8 +581,14 @@ try {
   if (ours > 0) failures.push(`${ours} streaming frame(s) over 34 ms after stolen time (mixed, clean or unsampled)`);
   if (result.longByCause.streamingHostStopped) note("gate", `${result.longByCause.streamingHostStopped} streaming frame(s) cleared as host-stopped (GPU unknown)`);
   // R2-2: a cave the craft is in whose light is not yet bound is drawn as open water; ordinary travel must have prefetched it.
-  const travelLightPending = (data.stream.lightPendingFrames ?? 0) - pendingAtStart;
+  // Frames presented behind an entry's cover are pending by design (never shown): not travel.
+  const travelLightPending = (data.stream.lightPendingFrames ?? 0) - pendingAtStart - reenterPending;
   if (travelLightPending > 0) failures.push(`${travelLightPending} frame(s) inside a cave whose light was not ready`);
+  // R3-3: every re-entry revealed, and never with the cave's light pending.
+  for (const e of result.reentries) {
+    if (!e.revealed) failures.push(`re-entry at ${e.cave} never revealed`);
+    else if (e.lightPendingAtReveal) failures.push(`re-entry at ${e.cave} revealed with its light pending`);
+  }
   result.gate = { pass: failures.length === 0, failures, travelSync, loadSync: syncAtStart, travelLightPending };
   result.memory = { residentCpuMiB: +(data.cpu / 1048576).toFixed(1), residentGpuMiB: +(data.gpu / 1048576).toFixed(1), regionMiB: +(data.regionBytes / 1048576).toFixed(1),
     budgetMiB: 256, heapMiB: data.heap ? +(data.heap.used / 1048576).toFixed(1) : null };

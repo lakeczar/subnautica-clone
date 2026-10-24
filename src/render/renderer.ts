@@ -403,7 +403,9 @@ export function createRenderer(
         stepMs: +ks.maxStepMs.toFixed(2), buildMs: +worstCaveBuildMs.toFixed(2), pending: streamFrame?.pending ?? -1,
         missing: cv.missing, uploads: cv.uploads, lightBytes: caves?.stats.lightBytes ?? 0,
         textureBytes: cv.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0,
-        lightPendingFrames: cv.pendingFrames, maxAllocMs: +cv.maxAllocMs.toFixed(2), maxWriteMs: +cv.maxWriteMs.toFixed(2), restarts: cv.restarts };
+        lightPendingFrames: cv.pendingFrames, maxAllocMs: +cv.maxAllocMs.toFixed(2), maxWriteMs: +cv.maxWriteMs.toFixed(2), restarts: cv.restarts,
+        // The latest presented pose's cave and whether its light is bound (R3-3 evidence), and the settle state.
+        active: caveView.active, lightPending: caveView.lightPending, presents, settling: settleSince >= 0, lightFailed };
     } });
     return {
       get settling() { return settleSince >= 0; },
