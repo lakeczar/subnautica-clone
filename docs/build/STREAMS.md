@@ -1092,3 +1092,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Lore rulings (coordinator):** the fixtures approved; the optional decoded line via LS-1; L14's lead moves from C07 to `district_controller` (the pod record becomes a post-reveal optional return), with a provenance check for saves holding L14.
   - **Review:** a short Sol R2 to follow, after the lore fold-in.
 - **PACE-1 lore rulings folded in at `d9aaa570`:** F10 moves L14 and the pod-buffer plan to `district_controller`, with a `LEGACY_GRANTS` row `{bp_pod_buffer, C07}` at the next schema step; the fixtures and optional line pass the lint; stage 1 measures both return scenarios. Short Sol R2 running (`siltwake-pace1-plan-review-r2-sol-d9aaa57`).
+- **PACE-1 plan R2** (Sol on `d9aaa570`, report on `review/pace-1-r2` `202c3eb6`): R1 F1–F3 resolved.
+  - **One P2 remains:** F10's C07 provenance lives in story discoveries, not scans, and the grant move must land with a schema step.
+  - **Decision:** `LEGACY_GRANTS` rows carry a source kind (scan or discovery); F10 depends on LS-1 1b (compose into 7→8 if 1b is unmerged, else 8→9).
+  - **Next:** the coordinator inspects the one-finding delta.
