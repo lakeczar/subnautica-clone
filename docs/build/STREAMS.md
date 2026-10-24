@@ -1061,3 +1061,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **SCHED-3 R4** (Sol on `194dcdc8`, report on `review/sched-3-r4` `f8378439`): REQUEST CHANGES.
   - **Findings:** P1 the resolver accepts non-literal npm heads (`VAR=1 npm`, `env npm`, `/usr/bin/npm`, `npx`), newline collapse and npm options; P2 a spoofable `npm_lifecycle_event` exception.
   - **Decisions:** a closed runner grammar (`node <path> args` and recursively expanded `npm test`/`npm run X`, joined by `&&`; anything else runs here); delete the lifecycle exception; `test:heavy` balances via an explicit `--machine any` in `package.json`. R5 is the install decision.
+- **LS-1 stage 1a R1** (Sol on `5288deb5`, report on `review/ls-1-1a-r1` `9de5917e`): REQUEST CHANGES.
+  - **Verified:** 9/9 routes, 139 matching saves, identical timelines, relay solvency, the scout drone's 12 m capture accepted.
+  - **Findings:** P1 the new records never reach the rendered journal; P2 aggregate debt hides new regressions (now per-gap identified debt, ratcheting down, with owners); P2 most `waitFor` calls lack causes (now required at the API, with the baseline recomputed); P2 decoded text bypasses door-code withholding (now one placement-aware authority).
