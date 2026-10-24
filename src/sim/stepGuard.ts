@@ -15,6 +15,7 @@
  * state, or the guard throws `StepGuardDrift` before stepping. */
 import { executeCommand, stepGameInPlace } from "./step.js";
 import { firstDifference } from "./stateDiff.js";
+import { PHASE, stepMeter } from "./stepCosts.js";
 import type { GameCommand, GameEvent, GameState, WorldQueries } from "./types.js";
 
 /** One checkpoint per second of play at the fixed 60 Hz step. */
@@ -63,17 +64,24 @@ export class StepGuard {
 
   /** One fixed step of `state`, in place. */
   step(state: GameState, commands: readonly GameCommand[], world: WorldQueries): GameEvent[] {
-    this.track(state);
-    const tick = state.tick;
-    let events: GameEvent[];
+    const meter = stepMeter.active, own = meter?.open() ?? false;
     try {
-      events = stepGameInPlace(state, commands, world);
-    } catch (cause) {
-      throw this.restore(state, tick, cause);
+      this.track(state);
+      meter?.mark(PHASE.checkpoint);
+      const tick = state.tick;
+      let events: GameEvent[];
+      try {
+        events = stepGameInPlace(state, commands, world);
+      } catch (cause) {
+        throw this.restore(state, tick, cause);
+      }
+      // Commands are flat records; copies keep the journal independent of the caller.
+      this.journal.push({ kind: "step", commands: commands.map((c) => ({ ...c })), world });
+      meter?.mark(PHASE.journal);
+      return events;
+    } finally {
+      if (own) meter!.close(state.tick);
     }
-    // Commands are flat records; copies keep the journal independent of the caller.
-    this.journal.push({ kind: "step", commands: commands.map((c) => ({ ...c })), world });
-    return events;
   }
 
   /** A menu or key command (`executeCommand`, which keeps its own clone, so a

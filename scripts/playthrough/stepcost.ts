@@ -1,0 +1,185 @@
+/** SIM-PERF-1: what each fixed step costs in ordinary play, phase by phase,
+ * and what the slow ones were doing. Every step runs as the app runs it: the
+ * guard's step, then the app's own per-step work (the play timeline's
+ * observation and its 600-tick export, and the 1,800-tick autosave through the
+ * real repository on an in-memory slot, lock body included). Only the HUD's
+ * presentation step is left out (it needs a DOM): it's measured in the browser.
+ *
+ *   node .test-build/scripts/playthrough/stepcost.js [--scenario a,b] [--from-library] [--heap] [--json out.json]
+ *   node .test-build/scripts/playthrough/stepcost.js --save KIND[,KIND] [--minutes M] [--heap] [--json out.json]
+ *
+ * The first form plays the scenarios (all by default). The second steps from
+ * each library save (SAVE-1) with held controls for M minutes of game time
+ * (default 10). `--heap` also reads the heap at every phase mark (allocation by
+ * phase; it adds about 10 µs a step, so time a run without it).
+ * Timings count only from `heavy-check.sh --class exclusive`. */
+import fs from "node:fs";
+import v8 from "node:v8";
+import { PerformanceObserver } from "node:perf_hooks";
+import { createEnvelope } from "../../src/save/codec.js";
+import { SaveRepository } from "../../src/save/repository.js";
+import type { WriterLockPort } from "../../src/save/writer-lock.js";
+import { PHASE, SLOW_STEP_MS, StepCosts, stepMeter } from "../../src/sim/stepCosts.js";
+import type { StepRecord } from "../../src/sim/stepCosts.js";
+import { StepGuard } from "../../src/sim/stepGuard.js";
+import { gameWorld } from "../../src/sim/world.js";
+import { regionAtPoint } from "../../src/content/regions/layout.js";
+import { controlsActive } from "../../src/sim/timeline/activity.js";
+import * as timeline from "../../src/sim/timeline/recorder.js";
+import type { GameCommand, GameEvent, GameState } from "../../src/sim/types.js";
+import { loadCampaign } from "./content.js";
+import { driverHooks } from "./driver.js";
+import type { Driver } from "./driver.js";
+import { librarySave } from "./library.js";
+import { loadSnapshot, MemoryStorage } from "./persistence.js";
+import { playScenarios, SCENARIOS } from "./scenarios.js";
+
+const args = process.argv.slice(2);
+const value = (flag: string): string | undefined => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : undefined; };
+const heap = args.includes("--heap");
+const costs = new StepCosts({ ...(heap ? { heap: () => v8.getHeapStatistics().used_heap_size } : {}), keep: 64 });
+stepMeter.active = costs;
+
+/** V8 collections over 1 ms, on the step clock (matched to slow steps afterwards). */
+const gcs: { at: number; ms: number; kind: number }[] = [];
+const gcObserver = new PerformanceObserver((list) => {
+  for (const e of list.getEntries()) if (e.duration > 1)
+    gcs.push({ at: e.startTime, ms: e.duration, kind: ((e as { detail?: { kind?: number } }).detail)?.kind ?? 0 });
+});
+gcObserver.observe({ entryTypes: ["gc"] });
+
+interface Slow extends StepRecord { run: string; phase: string; mode: string; hull: string | null; region: string | null; position: [number, number, number]; gc?: number }
+const slow: Slow[] = [];
+const SLOW_KEEP = 2000;
+
+/** The app's per-step work around the guard's step (`SiltwakeApp.frame`). */
+class AppWork {
+  private readonly rec: ReturnType<typeof timeline.createRecorder>;
+  private readonly repository = new SaveRepository(new MemoryStorage(), LOCK);
+  private timelineSaved: number;
+  private lastAutosave: number;
+  private activity = false;
+  constructor(readonly run: string, s: GameState) {
+    this.rec = timeline.createRecorder({ id: `stepcost-${run}`.slice(0, 64), started: "2026-10-24T00:00:00.000Z" }, { regionAt: regionAtPoint });
+    this.timelineSaved = this.lastAutosave = s.tick;
+    this.repository.load();
+  }
+  commanded(): void { this.activity = true; }
+  /** Everything the app does after the guard's step, marked as the app marks it. */
+  after(s: GameState, controls: readonly GameCommand[], events: readonly GameEvent[]): void {
+    costs.mark(PHASE.events);
+    const input = controlsActive(controls) || this.activity;
+    this.activity = false;
+    const waiting = [...(s.systems.decodes.length ? ["decode"] : []), ...(s.systems.planters.length ? ["growth"] : [])];
+    timeline.observe(this.rec, s, { input, waiting });
+    const systems = events.flatMap((e) => e.type === "systems" ? [e.event] : []);
+    if (systems.length) timeline.recordSystemsEvents(this.rec, s, systems);
+    costs.mark(PHASE.timeline);
+    if (s.tick - this.timelineSaved >= 600) {
+      this.timelineSaved = s.tick;
+      sink.length = 0;
+      sink.push(timeline.exportTimelineText(this.rec, s, this.rec.sealed.length));
+    }
+    costs.mark(PHASE.timelineSave);
+    if (s.tick - this.lastAutosave >= 1800) {
+      this.lastAutosave = s.tick;
+      // ExpeditionSession.envelope then SaveRepository.commit (its lock body runs inline here).
+      void this.repository.commit(createEnvelope(structuredClone(s), { sessionId: `stepcost-${this.run}`.slice(0, 64),
+        createdAt: "2026-10-24T00:00:00.000Z", savedAt: new Date(Date.parse("2026-10-24T00:00:00.000Z") + s.tick * 1000 / 60).toISOString() }));
+    }
+    costs.mark(PHASE.autosave);
+  }
+}
+const LOCK: WriterLockPort = { runExclusive: async (_name, _signal, action) => action() };
+/** Keeps the latest timeline export reachable, as storage would. */
+const sink: string[] = [];
+
+function close(run: string, phase: string, s: GameState): void {
+  costs.close(s.tick);
+  if (costs.lastMs <= SLOW_STEP_MS || slow.length >= SLOW_KEEP) return;
+  const v = s.fleet.vehicles.find((x) => x.id === s.player.controlledVehicleId) ?? null, p = s.player.pose.position;
+  slow.push({ ...costs.lastStep(s.tick), run, phase, mode: s.player.mode, hull: v?.hull ?? null,
+    region: regionAtPoint(p.x, p.z), position: [+p.x.toFixed(1), +p.y.toFixed(1), +p.z.toFixed(1)] });
+}
+
+await loadCampaign();
+const t0 = performance.now();
+const runs: { run: string; ticks: number; outcome: string }[] = [];
+const saves = value("--save");
+if (saves) {
+  const world = gameWorld(), minutes = Number(value("--minutes") ?? 10);
+  for (const kind of saves.split(",")) {
+    const picked = librarySave(kind);
+    console.log(picked.describe);
+    const s = loadSnapshot(picked.text), guard = new StepGuard(), app = new AppWork(kind, s);
+    const start = s.tick;
+    for (let t = 0; t < minutes * 3600; t++) {
+      // Held travel: ahead, a slow turn, a gentle dive and rise (scripts/sim-bench.mjs).
+      const controls: GameCommand[] = [{ type: "look", yawDelta: 0.004, pitchDelta: t % 240 < 120 ? 0.002 : -0.002 },
+        { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }];
+      costs.open();
+      costs.mark(PHASE.input);
+      const events = guard.step(s, controls, world);
+      app.after(s, controls, events);
+      close(kind, "held", s);
+    }
+    runs.push({ run: kind, ticks: s.tick - start, outcome: "held" });
+  }
+} else {
+  const ids = value("--scenario")?.split(",") ?? SCENARIOS.map((s) => s.id);
+  let library: ((scenario: string, milestone: string) => { text: string; commands: number; detail: string }) | undefined;
+  if (args.includes("--from-library")) {
+    library = (scenario, milestone) => {
+      const p = librarySave(`${scenario}@${milestone}`);
+      return { text: p.text, commands: p.entry.commands, detail: p.describe };
+    };
+  }
+  driverHooks.attach = (d: Driver) => {
+    let app = new AppWork(d.run.scenario, d.state), seen = d.state;
+    return {
+      before() {
+        // A milestone reload hands the driver a new state: the app's session starts over too.
+        if (d.state !== seen) { seen = d.state; app = new AppWork(d.run.scenario, d.state); }
+        costs.open();
+        costs.mark(PHASE.input);
+      },
+      tick(_d, controls, events) {
+        costs.skip(); // the driver's own bookkeeping
+        app.after(d.state, controls, events);
+        close(d.run.scenario, d.phase, d.state);
+      },
+      command() { app.commanded(); },
+    };
+  };
+  for (const r of await playScenarios(ids, args.includes("--verbose"), library ? { fromLibrary: library } : {}))
+    runs.push({ run: r.scenario, ticks: r.ticks, outcome: r.outcome });
+}
+await new Promise((resolve) => setTimeout(resolve, 50));
+gcObserver.disconnect();
+for (const s of slow) {
+  const gc = gcs.filter((g) => g.at < s.at + s.ms && g.at + g.ms > s.at).reduce((n, g) => n + g.ms, 0);
+  if (gc) s.gc = +gc.toFixed(2);
+}
+const snapshot = costs.snapshot();
+for (const w of snapshot.worst) {
+  const gc = gcs.filter((g) => g.at < w.at + w.ms && g.at + g.ms > w.at).reduce((n, g) => n + g.ms, 0);
+  if (gc) (w as StepRecord & { gc?: number }).gc = +gc.toFixed(2);
+}
+const seconds = (performance.now() - t0) / 1000;
+const r2 = (x: number): number => +x.toFixed(3);
+console.log(`${runs.map((r) => `${r.run} ${r.outcome} ${r.ticks}`).join("; ")} in ${seconds.toFixed(0)} s`);
+console.log(`steps ${snapshot.steps}; mean ${r2(snapshot.step.mean)} ms, p50 ${r2(snapshot.step.p50)}, p99 ${r2(snapshot.step.p99)}, ` +
+  `p99.9 ${r2(snapshot.step.p999)}, max ${r2(snapshot.step.max)}; over ${SLOW_STEP_MS} ms: ${snapshot.slow}; GC over 1 ms: ${gcs.length} (max ${r2(Math.max(0, ...gcs.map((g) => g.ms)))} ms)`);
+for (const [name, p] of Object.entries(snapshot.phases).sort((a, b) => b[1].max - a[1].max))
+  console.log(`  ${name.padEnd(13)} mean ${(p.mean * 1000).toFixed(1).padStart(7)} µs  p99 ${(p.p99 * 1000).toFixed(0).padStart(6)} µs  max ${p.max.toFixed(2).padStart(7)} ms` +
+    (p.heap !== undefined ? `  heap ${(p.heap / 1024).toFixed(2)} KiB/step` : ""));
+console.log("worst steps:");
+for (const w of snapshot.worst.slice(0, 16)) {
+  const top = Object.entries(w.phases).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(2)}`).join(", ");
+  const ctx = slow.find((s) => s.at === w.at);
+  console.log(`  ${w.ms.toFixed(2).padStart(7)} ms tick ${w.tick} ${ctx ? `${ctx.run}/${ctx.phase} ${ctx.mode}${ctx.hull ? `/${ctx.hull}` : ""} ${ctx.region} ` : ""}` +
+    `[${top}]${(w as { gc?: number }).gc ? ` gc ${(w as { gc?: number }).gc} ms` : ""}`);
+}
+const json = value("--json");
+if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, snapshot, slow, gcs }, null, 1) + "\n");
+process.exit(runs.some((r) => r.outcome === "blocked") ? 1 : 0);

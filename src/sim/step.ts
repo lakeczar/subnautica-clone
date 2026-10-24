@@ -114,6 +114,7 @@ import { vehicleProfile } from "./fittings.js";
 import { hullDamage, motion } from "./upgrades/effects.js";
 import { BALLAST, ballastStep, overdriveMotion } from "./upgrades/tools.js";
 import { activeDrone, isSignatureAction, lineHolds, settleSignatures, signatureCommand, signatureLoudness, steerDrone, stepSignatures } from "./signatures.js";
+import { PHASE, stepMeter } from "./stepCosts.js";
 const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
 /** Highest rock lip a swimmer glides up onto, metres (one cave voxel, plus margin). */
 const SWIM_LIP = 0.6;
@@ -636,7 +637,7 @@ export function stepGameInPlace(
   world: WorldQueries,
 ): GameEvent[] {
   const pre = preStep(s),
-    events: GameEvent[] = [];
+    events: GameEvent[] = [], meter = stepMeter.active;
   s.tick++;
   let movementActorStable = true;
   for (const c of commands) {
@@ -667,6 +668,7 @@ export function stepGameInPlace(
       );
     }
   }
+  meter?.mark(PHASE.commands);
   if (s.opening.phase < 4) {
     s.opening.phaseTicks++;
     return events;
@@ -1057,6 +1059,7 @@ export function stepGameInPlace(
     loudness = quiet ? 0.03 : sprint ? 0.6 : d > 0.001 ? 0.14 : 0;
     if (hitBoundary) events.push({ type: "foundation-boundary" });
   }
+  meter?.mark(PHASE.movement);
   if (s.player.mode !== pre.mode)
     events.push({ type: "movement-mode-changed", mode: s.player.mode });
   // A current's readable cue, once, as the swimmer or craft enters its flow.
@@ -1079,28 +1082,42 @@ export function stepGameInPlace(
       buoy.position[a] +=
         (s.player.pose.position[a] - buoy.position[a]) * DT * 2;
   }
+  meter?.mark(PHASE.cues);
   updateAction(s, events);
+  meter?.mark(PHASE.action);
   stepUpgrades(s, new Set(s.fleet.vehicles.filter((a) => distance(a.pose.position,
     pre.vehicles.get(a.id) ?? a.pose.position) > 0.003).map((a) => a.id)));
+  meter?.mark(PHASE.upgrades);
   stepSignatures(s, world, events);
+  meter?.mark(PHASE.signatures);
   stepSystems(s, events);
+  meter?.mark(PHASE.systems);
   stepFauna(s, world, events);
+  meter?.mark(PHASE.fauna);
   observeWorldCycles(s, world, events);
+  meter?.mark(PHASE.cycles);
   advanceRenewal(s);
+  meter?.mark(PHASE.renewal);
   advanceStory(s);
+  meter?.mark(PHASE.story);
   // UX-1: a lock cycle's outcome (launched, recovered, stopped) is said, not only stored.
   const lock = s.fleet.docking?.transaction ?? null, before = s.feedback;
   updateBerth(s, world);
   if (lock && !s.fleet.docking?.transaction && s.feedback !== before)
     events.push({ type: "notice", channel: "action", message: s.feedback, error: !s.fleet.docking?.completed.includes(lock.id) });
+  meter?.mark(PHASE.berth);
   const recoveryEvent = updateRecovery(s, world);
   if (recoveryEvent) events.push(recoveryEvent.type === "notice"
     ? { ...recoveryEvent, channel: recoveryEvent.error ? "hazard" : "action", context: "recovery" }
     : recoveryEvent);
+  meter?.mark(PHASE.recovery);
   updateThreat(s, loudness, events, world);
+  meter?.mark(PHASE.threat);
   // S4 ecology beside the hunter, with the same loudness; a scan pulse disturbs.
   updateEcology(s, loudness, commands.some((c) => c.type === "scan"), events, world);
+  meter?.mark(PHASE.ecology);
   updateSurvival(s, events);
+  meter?.mark(PHASE.survival);
   // A command/berth transition or incapacity can replace the moving actor this step.
   // Emit only a measurement that still describes the original active actor and mode.
   if (ascent && pre.phase === 4 && s.player.mode === pre.mode &&
