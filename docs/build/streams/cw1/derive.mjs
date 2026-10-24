@@ -304,10 +304,23 @@ function withService(seg) {
     const cost = d3(seg[i - 1], seg[i]) * POWER.boostPerMetre, site = nearestSite(seg[i]);
     const after = charge - cost - (site ? d3(seg[i], site) * 1.5 * POWER.boostPerMetre : 0);
     if (after >= MARGIN || !SITES.length || seg[i].call || calledFor.has(seg[i])) { charge -= cost; continue; }
-    calledFor.add(seg[i]);
     const here = nearestSite(seg[i - 1]);
-    // A call at the site, then on to the next planned point (swept; the
-    // point itself stays in the route, so only the way there is inserted).
+    // After the call, rejoin the route where the rest is shortest: from the
+    // site to point j, then the route from j to the next cave stop (cruise
+    // corners between are skipped, never a cave). A transit planned shallow
+    // over the highest floor must not be climbed back to from a deep site.
+    let stop = i;
+    while (stop < seg.length - 1 && seg[stop].cruise && !seg[stop].cave && !seg[stop].service) stop++;
+    let j = i, best = Infinity, rest = 0;
+    for (let k = stop; k >= i; k--) {
+      if (k < stop) rest += d3(seg[k], seg[k + 1]);
+      const c = d3(here, seg[k]) + rest;
+      if (c < best) { best = c; j = k; }
+    }
+    seg.splice(i, j - i);
+    calledFor.add(seg[i]);
+    // A call at the site, then on to the rejoin point (swept; the point itself
+    // stays in the route, so only the way there is inserted).
     const call = repair([{ ...seg[i - 1] }, { x: here.x, y: here.y, z: here.z, service: here.id, tol: 3 }, { ...seg[i], cave: undefined, cruise: undefined }]).slice(1, -1)
       .map(q => q.service ? q : { ...q, call: true });
     seg.splice(i, 0, ...call);
