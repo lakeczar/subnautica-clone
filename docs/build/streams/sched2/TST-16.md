@@ -217,8 +217,8 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
   - **S25 (R8, R9):** unit changes under maintenance: a held reload (queued work waits, none fails), a failed one (maintenance kept, rerun recovers), a stale manager with an equal file, an unreadable file, removal.
   - **S26 (R10):** serialized installers (the owner's mark is untouched until its own verified finish), takeover from a killed installer, and the reload's hard deadline with a TERM-ignoring child.
   - **SCHED-1 test 7** checks the job's own measurement.
-- **Full suites** after R9 at `110f12d4`: SCHED-1 **23/23**, SCHED-2 **25/25**, SCHED-2b **27/27**, all local and sequential.
-  - **Fast tier:** passed through the queue on alickers (`--machine 4070`, ticket `261023-231913-e8b7`, exit 0, 138 files, evidence for `110f12d4`), during CW-1's 3090 exclusive window.
+- **Full suites** after R10 at `31ca5821`: SCHED-1 **23/23**, SCHED-2 **26/26**, SCHED-2b **27/27**, all local and sequential.
+  - **Fast tier:** passed through the queue on alickers (`--machine 4070`, ticket `261024-001039-d693`, exit 0, 138 files, evidence for `31ca5821`), during CW-1's 3090 exclusive window.
   - **Units:** policy and contention units 42/42.
   - No units, slices, unit files or drop-ins left behind.
 
