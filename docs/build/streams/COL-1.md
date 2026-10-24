@@ -2,6 +2,52 @@
 
 Opus 5.5 high. Branch `t3/col-1-static-collider` from root `fe27757`; stage A head: see the commit that adds this page. The decision that created this stream is R1 of the [compromise verdict](../audits/COMPROMISE-VERDICT-OPUS.md) (on `research/compromise-audit`), on Sol's findings ART-01/02/03/07, CAV-02/03/20 and TST-05. **New modules only:** `src/world/collision/*` and `tests/col1-*`. No edit to `world.ts`, `app.ts`, `step.ts`, LC's files, or any cave or creature file, with two grants from the coordinator for R6: the floor snap and seam step in `caveGeometry.ts` (and the cave tests that encode the seam), and the memo key in `caveFloor` (`caves/authored.ts`).
 
+## R8 response (Sol R8 on `79dff359`: [report](../reviews/COL-1A-SOL-XHIGH-R8.md), on `review/col-1a-r8`)
+**R8-1: the tiling validator now proves the boundary.** `capProblems` used to check each face's sign, pairwise overlap and total signed area. Sol's notch triangulation passes all three and is still wrong: it uses only boundary vertices, has equal area and no overlap, but fills the notch and leaves a corner bare. An empty triangulation of a Float32-scale strip also passed, because the area tolerance exceeded the strip. The validator now also requires the faces' directed boundary to equal the seam's (`chainDifference`):
+- both are read as 1-chains, with every segment split at each vertex of either set lying on it (within 1 nm of the line, strictly between its ends);
+- pieces are keyed by end position, and opposite pieces cancel, which covers shared interior edges and pinches;
+- what's left must match piece for piece.
+
+With equal boundaries, the faces' summed winding equals the region's everywhere. With each face signed as the region's winding and no two overlapping, every point is then covered exactly once with the right sign. The area check stays as a cheap extra.
+- **Construction enforces it.** `capTriangles` takes an injectable triangulator (default earcut). A test hands it the notch's wrong faces and it throws.
+- **Tests** (`col1-r7.test.ts`):
+  - the notch is refused, and its real triangulation passes;
+  - the empty strip is refused, and its real triangulation passes;
+  - triangles spanning collinear boundary vertices pass;
+  - the enforcement test above.
+- **Mutations:** validator off in construction, and the boundary check off, each fail it. That kills R7's surviving validator-off mutant.
+
+**R8-2: the production fallback is counted, reported and recorded** (the coordinator's contract).
+- **What happens:** when a browser's terrain store has no usable file for a chunk (missing, a failed fetch, or a bake refused by CW-1's source-hash check), `s2.terrain` builds the chunk live. It tessellates and builds the chunk's cave shells synchronously between yields, on the main thread.
+- **The fallback stays,** so a transient fetch failure never leaves the player without terrain. Each such build now:
+  - increments `terrainFallbackStats()`, a pulled stat (convention 6) with a count and the last 16 chunk/LOD pairs, for tests and the recorder;
+  - logs one line naming the chunk.
+
+  Tests and tools that set no store build live as their oracle and aren't counted.
+- **Tested** (`regions-bake.test.ts`): a decoded chunk leaves the count unchanged; a missing file adds exactly one and logs one line. The mutant that doesn't count fails it.
+- **A normal production build never reaches it:** BAKE-COUNTER. That run counts both shell builds and the fallback.
+- **No new provenance mechanism:** CW-1's manifest source-hash refusal is the authority, so on merge its refused bake simply lands in this counted path.
+- **Production compromise:** whenever terrain assets fail to load or are refused, each affected chunk is built on the main thread, unsliced. Each cave shell in it is one synchronous build. R7 made the shell build about 1.2–1.6× slower (crown shaft fine 1.23 → 1.80 s uncached, local, indicative), so a refused or missing bake near a large cave is a visible hitch.
+  - **Root fix:** WK-1's sliced or worker builder for the fallback, with shells baked as packs (conventions 4 and 5). **S–M**, owned by WK-1.
+- **Correction to the R7 response:** "in play, no shell is built" and "dev fallback only" hold only when the bake loads. The fallback is a production path, as above.
+
+**R8-3: the snap guard's own case.** Sol's triangle (0,1,1), (0,2,1), (1,1,1) has an edge in side plane x = 0. Snapping its first vertex to y = 2 would collapse that cut edge onto (0,2,1). A test now calls `snapToFloor` directly; it's exported for this test, and `generateShell` stays its only caller. The test asserts that the vertex stays and no face loses its area. Removing `!tangles(v)` fails this test and the reviewer's shell cases, so R7's surviving guard-off mutant is now killed.
+
+**Mutations at `22ddb717`,** each failing its test, on an archive (`/work/tmp/col1/r8-mutate.sh`, through the queue):
+
+| Mutation | Tests failing |
+| --- | --- |
+| Validator off in construction | `col1-r7` 1 |
+| Boundary check off | `col1-r7` 2 |
+| Snap guard off | `col1-r7` 3 |
+| Fallback not counted | `regions-bake` 1 |
+
+Unmutated: `col1-r7` 11 / 11.
+
+**Evidence correction (Sol):** R7's root-gate receipt ran five economy scripts and omitted the sixth, the upgrade economy. R8's gate runs all six.
+
+**Checks for R8:** CHECKS.
+
 ## R7 response (Sol R7 on `38e50afb`: [report](../reviews/COL-1A-SOL-XHIGH-R7.md), on `review/col-1a-r7`)
 **R7-1 is fixed at the root.** The seam is now built from its boundary in each side plane, instead of extruding each open edge to the floor on its own. The result is checked against that boundary inside the build. The reviewer's cases now pass at half-extents 1e-7, 1e-5 and 1e-4 m:
 - **Step exit:** `hub_step_arch`, a box leaving solid across x = 100, is no longer stopped.
@@ -95,7 +141,7 @@ Two survive:
 **Where the shell build runs** (on root plus CW-1):
 - **Collision and light don't use shells.** CW-1's collision pack and light fields are built from the volume (above).
 - **Shells reach the game only inside terrain chunks.** `npm run build` runs `bake-terrain.mjs` (terrain, cave collision, light) before `vite build`. The browser's `s2.terrain` decodes the baked chunk, fetch and decode sliced by `due()`.
-- **The store refuses a bake from any other source.** It's provenance-bound (STR-13), so a shipped build always draws shells baked from its own code. **In play, no shell is built.**
+- **The store refuses a bake from any other source.** It's provenance-bound (STR-13). (R8 correction: with a bake that loads, no shell is built in play; a missing, failed or refused file falls back to a live build in production too. See *R8 response*.)
 - **The live path** (`liveTerrain`, which calls `caveShellOf` for each cave a chunk touches) runs only when there's no bake or a stale one: the dev fallback. There it is unsliced on the main thread. Each shell is one synchronous build between `due()` yields.
 - **The cost:** uncached shell build, local and indicative, R6 → R7:
   - crown shaft fine 1.23 → 1.80 s;
