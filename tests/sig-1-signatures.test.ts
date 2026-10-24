@@ -16,11 +16,12 @@ import { gameWorld } from "../src/sim/world.js";
 import { armTarget } from "../src/sim/fleet.js";
 import { CAVE_FEATURES, craftActions, lineHolds, liftJob, signatureLoudness, stepSignatures } from "../src/sim/signatures.js";
 import { CUTTING_ARM, GRAPPLE, hostKind, WIDE_SONAR } from "../src/sim/upgrades/tools.js";
-import { berthLocal, carrierRooms, CARRIER_LAYOUT, fixtureGame, freeBerth, nextBerthLayout, slotSize, transferBlock } from "../src/sim/carrier.js";
+import { berthLocal, carrierRooms, CARRIER_LAYOUT, fixtureGame, freeBerth, localToWorld, nextBerthLayout, slotSize, transferBlock } from "../src/sim/carrier.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { playerView } from "../src/render/camera.js";
 import type { GameCommand, GameEvent, GameState, Vec3, VehicleState, WorldQueries } from "../src/sim/types.js";
 import { at, creelFirst, fund, saveable } from "./b1-support.js";
+import { validState } from "../src/save/validation.js";
 import { stagedHull } from "./sig-1-support.js";
 
 const world = gameWorld();
@@ -110,9 +111,51 @@ test("Creel cutting arm: mineral hosts become arm work, in 4 s, yielding half ag
   assert.equal(target?.sourceId, id);
   assert.equal(target!.work.seconds, CUTTING_ARM.seconds);
   assert.equal(target!.work.bundle, Math.min(Math.ceil(SOURCES[id].bundle * CUTTING_ARM.yield), s.world.resources.find((r) => r.id === id)!.stock));
-  const lift = executeCommand(s, { type: "arm-lift" }, world).state;
-  run(lift, CUTTING_ARM.seconds + 0.1);
+  const started = executeCommand(s, { type: "arm-lift" }, world), lift = started.state;
+  // R1: saveable during the mineral work, and at each later step.
+  saveable(lift);
+  assert.deepEqual(signature(started.events), [{ kind: "arm", vehicleId: v.id, phase: "start", sourceId: id, item: SOURCES[id].item,
+    quantity: target!.work.bundle, charge: target!.work.charge }], "a typed start (R2)");
+  const half = run(lift, CUTTING_ARM.seconds / 2);
+  saveable(lift);
+  const events = [...half, ...run(lift, CUTTING_ARM.seconds / 2 + 0.1)];
   assert.equal(count(lift, SOURCES[id].item, v.cargoId), target!.work.bundle, "the bundle comes aboard");
+  // R2: exactly one typed completion, one notice and one sound, from the outcome.
+  const done = signature(events).filter((e) => e.kind === "arm");
+  assert.deepEqual(done, [{ kind: "arm", vehicleId: v.id, phase: "done", sourceId: id, item: SOURCES[id].item, quantity: target!.work.bundle,
+    charge: target!.work.charge }]);
+  assert.equal(events.filter((e) => e.type === "notice" && /Cutting arm ·/.test(e.message)).length, 1);
+  assert.equal(events.filter((e) => e.type === "sound" && e.cue === "collect").length, 1);
+  saveable(lift);
+  // Backing off the host stops the work with a typed outcome; nothing is lifted.
+  const again = executeCommand(lift, { type: "arm-lift" }, world).state;
+  hullIn(again, v).pose.position = { x: p.x + 30, y: p.y, z: p.z };
+  const stopped = run(again, 0.1);
+  assert.equal(signature(stopped).find((e) => e.kind === "arm")?.kind === "arm" &&
+    (signature(stopped).find((e) => e.kind === "arm") as { phase: string }).phase, "stopped");
+  assert.equal(again.world.action, null);
+  saveable(again);
+});
+
+test("R1: a tag aim never outlives its pilot or its tagger: tag, exit and unfit are each saveable", () => {
+  const s = creelFirst(), p = { x: 20, y: -1.6, z: -22 }, v = withHull(s, "dart", p, ["dart_range_tagger"]);
+  const t = (Object.keys(SOURCES) as SourceId[]).map((k) => SOURCES[k]).find((x) => Math.hypot(x.position.x - p.x, x.position.y - p.y, x.position.z - p.z) < 50 &&
+    Math.hypot(x.position.x - p.x, x.position.z - p.z) > 3)!;
+  aim(s, p, t.position);
+  let x = act(s, "tag").state;
+  assert.ok(hullIn(x, v).upgrades.tag, "aiming");
+  saveable(x);
+  x = executeCommand(x, { type: "exit" }, world).state;
+  assert.equal(hullIn(x, v).upgrades.tag, null, "leaving the helm ends the aim");
+  saveable(x);
+  const module = hullIn(x, v).modules[0]!;
+  const removed = executeCommand(x, { type: "remove-module", vehicleId: v.id, itemId: module }, world);
+  assert.ok(!removed.events.some((e) => e.type === "notice" && e.error), "removal at the cradle succeeds");
+  saveable(removed.state);
+  // A state that still names a tag without its tagger stays invalid (strictness kept).
+  const bad = structuredClone(removed.state);
+  hullIn(bad, v).upgrades = { ...hullIn(bad, v).upgrades, tag: { targetId: `source:${(Object.keys(SOURCES) as SourceId[])[0]}`, since: bad.tick } };
+  assert.equal(validState(bad), false);
 });
 
 test("Creel grapple: the line holds the hull at its length, reels it in, and releases", () => {
@@ -228,6 +271,59 @@ test("Mantle scout drone: it flies on the pilot's input while the Mantle holds, 
   assert.equal(h.upgrades.drone, null, "beyond its tether it is recalled");
 });
 
+test("R3: the drone launches only into clear water: past a wall at the bow it finds clear water below; enclosed, it refuses and spends nothing", () => {
+  const s = creelFirst(), p = { x: 300, y: -60, z: -300 }, v = withHull(s, "mantle", p, ["mantle_drone_bay"]);
+  aim(s, p, { x: p.x, y: p.y, z: p.z - 10 });
+  const open = act(s, "drone", createWorldQueries([], () => -2000));
+  const spawn = hullIn(open.state, v).upgrades.drone!.position;
+  assert.ok(createWorldQueries([], () => -2000).clearance(spawn, { radius: 0.35, height: 0.4 }), "clear water: launched ahead");
+  // A small block where the drone would leave ahead: it goes out under the hull instead, never inside rock.
+  const wall = createWorldQueries([{ id: "bow-wall", min: { x: spawn.x - 0.4, y: spawn.y - 0.4, z: spawn.z - 0.4 }, max: { x: spawn.x + 0.4, y: spawn.y + 0.4, z: spawn.z + 0.4 } }], () => -2000);
+  const walled = act(s, "drone", wall), out = hullIn(walled.state, v).upgrades.drone;
+  assert.ok(out && wall.clearance(out.position, { radius: 0.35, height: 0.4 }), "launched clear of the wall");
+  // Rock on every side of the bay: refused, atomically.
+  const c = { x: p.x, y: p.y + 0.5, z: p.z }, h = 5, t2 = 3;
+  const box = (id: string, min: Vec3, max: Vec3) => ({ id, min, max });
+  const cave = createWorldQueries([
+    box("n", { x: c.x - h - t2, y: c.y - h - t2, z: c.z - h - t2 }, { x: c.x + h + t2, y: c.y + h + t2, z: c.z - h }),
+    box("s", { x: c.x - h - t2, y: c.y - h - t2, z: c.z + h }, { x: c.x + h + t2, y: c.y + h + t2, z: c.z + h + t2 }),
+    box("w", { x: c.x - h - t2, y: c.y - h - t2, z: c.z - h }, { x: c.x - h, y: c.y + h + t2, z: c.z + h }),
+    box("e", { x: c.x + h, y: c.y - h - t2, z: c.z - h }, { x: c.x + h + t2, y: c.y + h + t2, z: c.z + h }),
+    box("d", { x: c.x - h, y: c.y - h - t2, z: c.z - h }, { x: c.x + h, y: c.y - h, z: c.z + h }),
+    box("u", { x: c.x - h, y: c.y + h, z: c.z - h }, { x: c.x + h, y: c.y + h + t2, z: c.z + h }),
+  ], () => -2000);
+  const enclosed = act(s, "drone", cave);
+  assert.equal(enclosed.state, s, "nothing changed, no charge spent");
+  assert.match(refusal(enclosed.events) ?? "", /No clear water/);
+});
+
+test("R4: a running lift re-checks its host by ID, never by scanning the roster, also after the roster is replaced", () => {
+  const id = (Object.keys(SOURCES) as SourceId[]).find((k) => SOURCES[k].item === "tagged_frame" && SOURCES[k].stock >= 2)!;
+  const f = SOURCES[id].position;
+  const s = creelFirst(), v = withHull(s, "mantle", { x: f.x, y: f.y + 3, z: f.z }, ["mantle_salvage_clamp"]);
+  const started = act(s, "clamp").state;
+  // A replaced roster (as a load does): the same rows in new objects, and `find` forbidden.
+  started.world.resources = started.world.resources.map((r) => ({ ...r }));
+  const forbid = (rows: unknown[]): void => { Object.defineProperty(rows, "find", { value: () => { throw new Error("roster scanned per step"); } }); };
+  forbid(started.world.resources);
+  for (let i = 0; i < 60; i++) stepSignatures(started, world, []);
+  assert.ok(hullIn(started, v).upgrades.lift, "still lifting after a second of steps");
+  const done: GameEvent[] = [];
+  for (let i = 0; i < 6 * 60; i++) stepSignatures(started, world, done);
+  assert.ok(signature(done).some((e) => e.kind === "lift" && e.phase === "done"));
+  assert.equal(count(started, "tagged_frame", v.cargoId), 2);
+});
+
+/** The fixture carrier at its supported dock, berths emptied, holding station with the diver aboard. */
+function fixtureAtDock(base: GameState): GameState {
+  const s = structuredClone(base), h = s.fleet.vehicles[0]!;
+  h.pose.position.y = -0.9;
+  for (const a of s.fleet.vehicles) if (a.berth) { a.berth = null; a.pose.position = { x: 120 + (a.hull === "dart" ? 0 : 15), y: -1, z: 40 }; }
+  assert.equal(executeCommand(s, { type: "carrier", action: "station-keep" }, world).events.some((e) => e.type === "notice" && e.error), false);
+  const kept = executeCommand(s, { type: "carrier", action: "station-keep" }, world).state;
+  kept.player.pose.position = localToWorld(kept.player.interiorPose!.position, kept.fleet.vehicles[0]!);
+  return kept;
+}
 test("Hearthline berth extension: the mixed layout berths a medium and a compact craft, with the walkway open", () => {
   const s = fixtureGame(), h = s.fleet.vehicles[0]!;
   assert.equal(nextBerthLayout(s, h), "medium", "compact → medium without the extension");
@@ -235,6 +331,11 @@ test("Hearthline berth extension: the mixed layout berths a medium and a compact
   assert.equal(nextBerthLayout(s, h), "compact");
   const ext = addItem(s, "hearthline_berth_extension", 1, h.cargoId, "mount"); h.modules.push(ext.id);
   assert.equal(nextBerthLayout(s, h), "mixed", "with it, medium → mixed");
+  // R2: the refit's outcome is typed: the layout and its slot sizes, with its notice and sound.
+  const refit = executeCommand(fixtureAtDock(s), { type: "carrier", action: "reconfigure" }, world);
+  assert.deepEqual(signature(refit.events), [{ kind: "berths", vehicleId: h.id, configuration: "mixed", slots: ["medium", "compact"] }]);
+  assert.equal(refit.events.filter((e) => e.type === "notice").length, 1);
+  assert.equal(refit.events.filter((e) => e.type === "sound").length, 1);
   s.fleet.docking!.configuration = "mixed";
   assert.equal(slotSize("mixed", 0), "medium"); assert.equal(slotSize("mixed", 1), "compact");
   // The diver walks from the helm aft past both rooms.

@@ -37,11 +37,27 @@ test("field kit: outposts and their modules build near the camera, rebuild on ch
     m.upgrades = { ...m.upgrades, drone: { position: { ...near }, yaw: 0, pitch: 0, launchedAt: s.tick } };
     kit.update(s, near);
     assert.ok(scene.getMeshByName("fieldkit.drone")!.isEnabled(), "the drone shows while it is out (seen from outside)");
-    assert.ok(scene.getMeshByName(`fieldkit.line.tether.${m.id}`)!.isEnabled(), "with its tether");
+    assert.equal(kit.lineMeshes, 1, "with its tether");
     m.upgrades = { ...m.upgrades, drone: null };
     kit.update(s, near);
     assert.equal(scene.getMeshByName("fieldkit.drone")!.isEnabled(), false);
-    assert.equal(scene.getMeshByName(`fieldkit.line.tether.${m.id}`)!.isEnabled(), false);
+    assert.equal(kit.lineMeshes, 0, "its tether released");
+    // R5: replacement hulls reuse the line pool; unloading releases it.
+    for (let n = 0; n < 40; n++) {
+      const c = stagedHull(s, "creel", { ...near, x: near.x + 20 }, [], false);
+      c.id = `creel_replaced_${n}`;
+      c.upgrades = { ...c.upgrades, grapple: { anchor: { ...near }, length: 10, reeling: false, load: null } };
+      kit.update(s, near);
+      assert.ok(kit.lineMeshes <= 16, `bounded (${kit.lineMeshes})`);
+      s.fleet.vehicles = s.fleet.vehicles.filter((v) => v !== c);
+    }
+    kit.update(s, near);
+    assert.equal(kit.lineMeshes, 0, "no line kept for hulls that are gone");
+    m.upgrades = { ...m.upgrades, drone: { position: { ...near }, yaw: 0, pitch: 0, launchedAt: s.tick } };
+    kit.update(s, near);
+    assert.equal(kit.lineMeshes, 1);
+    kit.update(null, near);
+    assert.equal(kit.lineMeshes, 0, "unloading releases every line");
     assert.equal(scene.materials.length, materials + 8, "the cel material and eight flares' (no per-frame materials)");
     kit.dispose();
     assert.deepEqual([scene.meshes.length, scene.geometries.length, scene.materials.length], before, "disposed clean");

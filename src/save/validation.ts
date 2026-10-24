@@ -23,7 +23,7 @@ import {
 import type { HullId, RecipeId, SourceId } from "../content/registry.js";
 import { parseEcology } from "../sim/ecology/persist.js";
 import { isSuitProtection } from "../sim/ecologyLink.js";
-import { CREEL_CABIN, fittedMount, holdCapacity, hullToWorld } from "../sim/fleet.js";
+import { armHost, CREEL_CABIN, fittedMount, fittedUpgradeKinds, holdCapacity, hullToWorld } from "../sim/fleet.js";
 import { CANISTER_CU, recoverableHull, recoveryRouteFor } from "../sim/recovery.js";
 import { renewalCap } from "../sim/renewal.js";
 import { CROWN_RESTORATIONS } from "../content/hub/crownStation.js";
@@ -43,7 +43,7 @@ import { UPGRADES, upgradeId } from "../content/upgrades/catalogue.js";
 import type { UpgradeId } from "../content/upgrades/catalogue.js";
 import { slotCapacity, slotOf } from "../sim/upgrades/fitting.js";
 import { craftProfile } from "../sim/upgrades/effects.js";
-import { DROP_POD, FLARE, GRAPPLE } from "../sim/upgrades/tools.js";
+import { armWork, DROP_POD, FLARE, GRAPPLE } from "../sim/upgrades/tools.js";
 import { CUE_SPECIES, THREATS } from "../content/ecology/species.js";
 import { BIO_CELL } from "../sim/power/charging.js";
 import { MAX_FLARES } from "../sim/fittings.js";
@@ -815,9 +815,11 @@ function semantic(s: GameState, fresh: GameState): boolean {
   const a = s.world.action;
   if (a) {
     const def = SOURCES[a.sourceId], frame = def.item === "tagged_frame";
+    // SIG-1: arm work is valid on the hosts and for the time the fitted arm allows (the cutting arm's minerals, 4 s).
+    const pilot = f.vehicles.find((v) => v.id === s.player.controlledVehicleId);
+    const arm = pilot?.hull === "creel" ? craftProfile(pilot.hull, pilot.rating, fittedUpgradeKinds(s, pilot)) : null;
     if (a.kind === "lift" ? !frame || a.seconds > 10 : a.kind === "arm"
-      ? !(def.region === "silt_basin" && (frame || def.item === "structural_alloy")) || a.seconds > 6 ||
-        f.vehicles.find((v) => v.id === s.player.controlledVehicleId)?.hull !== "creel"
+      ? !arm || !armHost(a.sourceId, arm) || a.seconds > armWork(arm, def.item as Parameters<typeof armWork>[1], def.bundle).seconds
       : frame) return false;
   }
   if (

@@ -40,6 +40,7 @@ import { aimedInteraction } from "./targeting.js";
 import { board, distraction, eat, exit, exitBlock, rechargeCells, reserve } from "./vehicles.js";
 import { installModule, removeModule } from "./modules.js";
 import {
+  berthRefitOutcome,
   carrierCommand,
   carrierHull,
   carrierInteriorSolids,
@@ -112,7 +113,7 @@ import { restBaseHere } from "./survival.js";
 import { vehicleProfile } from "./fittings.js";
 import { hullDamage, motion } from "./upgrades/effects.js";
 import { BALLAST, ballastStep, overdriveMotion } from "./upgrades/tools.js";
-import { activeDrone, isSignatureAction, lineHolds, signatureCommand, signatureLoudness, steerDrone, stepSignatures } from "./signatures.js";
+import { activeDrone, isSignatureAction, lineHolds, settleSignatures, signatureCommand, signatureLoudness, steerDrone, stepSignatures } from "./signatures.js";
 const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
 /** Highest rock lip a swimmer glides up onto, metres (one cave voxel, plus margin). */
 const SWIM_LIP = 0.6;
@@ -261,7 +262,10 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       if (!target) return "No salvage host within reach of the tool arms. Bring the bow within a few metres.";
       if (target.refusal) return target.refusal;
       s.world.action = { sourceId: target.sourceId, seconds: target.work.seconds, kind: "arm" };
-      events.push({ type: "notice", channel: "action", message: `${target.work.seconds === ARM_LIFT_SECONDS ? "Tool arms" : "Cutting arm"} on ${SOURCES[target.sourceId].label} · ${target.work.seconds} s · hold position.` });
+      const def = SOURCES[target.sourceId];
+      events.push({ type: "notice", channel: "action", message: `${target.work.seconds === ARM_LIFT_SECONDS ? "Tool arms" : "Cutting arm"} on ${def.label} · ${target.work.seconds} s · hold position.` },
+        { type: "signature", event: { kind: "arm", vehicleId: s.player.controlledVehicleId!, phase: "start", sourceId: target.sourceId, item: def.item,
+          quantity: target.work.bundle, charge: target.work.charge } });
       return null;
     }
     case "hint": {
@@ -281,6 +285,12 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       if (c.action === "failure-drill" && s.scenario === "carrier-fixture") {
         incapacitate(s, "Fixture incapacity inside the carrier.");
         return null;
+      }
+      if (c.action === "reconfigure") {
+        const no = carrierCommand(s, c.action, c.vehicleId, w), r = no ? null : berthRefitOutcome(s);
+        if (r) events.push({ type: "notice", channel: "action", message: r.message, summary: "Berths refitted" }, { type: "sound", cue: "craft" },
+          { type: "signature", event: r.event });
+        return no;
       }
       return carrierCommand(s, c.action, c.vehicleId, w);
     case "distraction": {
@@ -483,14 +493,17 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       return "That command is not available here.";
   }
 }
-function updateAction(s: GameState): void {
+function updateAction(s: GameState, events: GameEvent[]): void {
   const a = s.world.action;
   if (!a) return;
   if (a.kind === "arm") {
     const target = armTarget(s);
     if (!target || target.sourceId !== a.sourceId || target.refusal) {
+      // SIG-1 (F17): arm work reports typed outcomes; nothing is inferred from feedback.
+      const vehicleId = s.player.controlledVehicleId ?? "", def = SOURCES[a.sourceId];
       s.world.action = null;
-      s.feedback = "Tool arms released · the bow left the host or the hold/power changed. Nothing lifted.";
+      events.push({ type: "notice", channel: "action", message: "Tool arms released · the bow left the host or the hold/power changed. Nothing lifted.", error: true },
+        { type: "signature", event: { kind: "arm", vehicleId, phase: "stopped", sourceId: a.sourceId, item: def.item, quantity: 0, charge: 0 } });
       return;
     }
     a.seconds -= DT;
@@ -505,8 +518,11 @@ function updateAction(s: GameState): void {
     s.metrics.powerUsed += charge;
     s.metrics.collections++;
     if (!s.knowledge.scans.includes(a.sourceId)) s.knowledge.scans.push(a.sourceId);
-    s.feedback = `Tool arms · ${n} × ${ITEMS[def.item].label} → Creel hold · −${charge}% power.`;
     s.world.action = null;
+    const tool = target.work.seconds < ARM_LIFT_SECONDS ? "Cutting arm" : "Tool arms";
+    events.push({ type: "notice", channel: "action", message: `${tool} · ${n} × ${ITEMS[def.item].label} → Creel hold · −${charge}% power.`,
+      summary: `${tool} · +${n} ${ITEMS[def.item].label}` }, { type: "sound", cue: "collect" },
+      { type: "signature", event: { kind: "arm", vehicleId: v.id, phase: "done", sourceId: a.sourceId, item: def.item, quantity: n, charge } });
     return;
   }
   if (
@@ -561,6 +577,8 @@ function updateAction(s: GameState): void {
 function settleArm(s: GameState): void {
   if (s.world.action?.kind === "arm" &&
       s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId)?.hull !== "creel") s.world.action = null;
+  // SIG-1: a tag aim belongs to its piloted, fitted Dart; every command ends saveable.
+  settleSignatures(s);
 }
 /** Menu transactions use the same rules without advancing survival or world time. */
 export function executeCommand(
@@ -1061,7 +1079,7 @@ export function stepGameInPlace(
       buoy.position[a] +=
         (s.player.pose.position[a] - buoy.position[a]) * DT * 2;
   }
-  updateAction(s);
+  updateAction(s, events);
   stepUpgrades(s, new Set(s.fleet.vehicles.filter((a) => distance(a.pose.position,
     pre.vehicles.get(a.id) ?? a.pose.position) > 0.003).map((a) => a.id)));
   stepSignatures(s, world, events);

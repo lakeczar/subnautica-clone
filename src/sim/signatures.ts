@@ -21,6 +21,7 @@ import { BEACON_NAME_MAX } from "../content/systems/navigation.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import { cueHome, sailPositions } from "./ecology/cues.js";
 import { addItem, distance, hasRoom } from "./inventory.js";
+import { rowById } from "./rows.js";
 import { pilotForward, vehicleProfile } from "./fittings.js";
 import { discoverSite } from "./systems/decoder.js";
 import { visitChart } from "./systems/navigation.js";
@@ -50,6 +51,10 @@ export type SignatureEvent =
   | { kind: "lift"; vehicleId: string; tool: "crane" | "clamp"; phase: "start" | "done" | "stopped"; sourceId: string; item: ItemKind; quantity: number; reason?: string }
   | { kind: "tow"; vehicleId: string; towed: string; phase: "held" | "released"; reason?: string }
   | { kind: "drone"; vehicleId: string; phase: "launched" | "recalled" | "found"; position: Vec3; reason?: string; found?: string[] }
+  /** The Creel's tool arms (the cutting arm's faster, larger cuts included): start, done or stopped. */
+  | { kind: "arm"; vehicleId: string; phase: "start" | "done" | "stopped"; sourceId: string; item: ItemKind; quantity: number; charge: number }
+  /** The carrier's berths refitted to a layout (the mixed one needs the berth extension). */
+  | { kind: "berths"; vehicleId: string; configuration: "compact" | "medium" | "mixed"; slots: readonly ("compact" | "medium")[] }
   /** A decoder lattice or survey array fitted to one module (`hostUpgrades.ts`). */
   | { kind: "host-upgrade"; hostId: string; itemId: string; upgrade: HostUpgradeId };
 export type SignatureRefusal = "not-fitted" | "not-piloting" | "cooling" | "power" | "no-target" | "room" | "busy" | "place";
@@ -140,7 +145,7 @@ export function signatureAction(s: GameState, action: SignatureAction, world: Wo
     case "pod": return pod(v, p, world);
     case "crane": return startLift(s, v, p, "crane");
     case "clamp": return clamp(s, v, p);
-    case "drone": return drone(s, v, p);
+    case "drone": return drone(s, v, p, world);
   }
 }
 /** The step's dispatch: the typed outcome as notice, sound and signature events. */
@@ -216,7 +221,7 @@ function grapple(s: GameState, v: VehicleState, p: CraftProfile, world: WorldQue
   }
   const { aim } = aimOf(s, v), origin = bow(v, aim);
   // A frame host along the aim is hooked and reeled in; otherwise the line bites rock.
-  const frame = nearestInCone(origin, aim, FRAME_HOSTS.filter((f) => (s.world.resources.find((r) => r.id === f.id)?.stock ?? 0) > 0),
+  const frame = nearestInCone(origin, aim, FRAME_HOSTS.filter((f) => (rowById(s.world.resources, f.id)?.stock ?? 0) > 0),
     GRAPPLE.range, GRAPPLE_CONE_DEG);
   if (frame && world.lineOfSight(origin, frame.position, [v.id])) {
     const hold = { anchor: { ...frame.position }, length: Math.max(GRAPPLE.minLength, distance(v.pose.position, frame.position)), reeling: true, load: frame.id };
@@ -270,12 +275,21 @@ export function liftJob(s: Readonly<GameState>, v: Readonly<VehicleState>, tool:
   const fitted = tool === "crane" ? has(p, "deck_crane") : has(p, "salvage_clamp");
   if (!fitted) return null;
   const reach = tool === "crane" ? DECK_CRANE.reach : SALVAGE_CLAMP_REACH;
-  const near = (only && Object.hasOwn(SOURCES, only) ? [only as SourceId] : SOURCE_IDS).filter((id) => liftable(tool, SOURCES[id].item) &&
-    (tool === "crane" ? flat(SOURCES[id].position, v.pose.position) <= reach : distance(SOURCES[id].position, v.pose.position) <= reach))
-    .sort((a, b) => distance(SOURCES[a].position, v.pose.position) - distance(SOURCES[b].position, v.pose.position) || a.localeCompare(b));
-  const id = near.find((n) => (s.world.resources.find((r) => r.id === n)?.stock ?? 0) > 0) ?? near[0];
+  const inReach = (id: SourceId): boolean => liftable(tool, SOURCES[id].item) &&
+    (tool === "crane" ? flat(SOURCES[id].position, v.pose.position) <= reach : distance(SOURCES[id].position, v.pose.position) <= reach);
+  let id: SourceId | undefined;
+  if (only !== undefined) {
+    // A running lift re-checks its own host by ID (indexed), never the roster.
+    if (!Object.hasOwn(SOURCES, only) || !inReach(only as SourceId)) return null;
+    id = only as SourceId;
+  } else {
+    // Choosing a host (a command) searches the static source table, nearest stocked first.
+    const near = SOURCE_IDS.filter(inReach)
+      .sort((a, b) => distance(SOURCES[a].position, v.pose.position) - distance(SOURCES[b].position, v.pose.position) || a.localeCompare(b));
+    id = near.find((n) => (rowById(s.world.resources, n)?.stock ?? 0) > 0) ?? near[0];
+  }
   if (!id) return null;
-  const def = SOURCES[id], stock = s.world.resources.find((r) => r.id === id)?.stock ?? 0, cu = ITEMS[def.item].cu;
+  const def = SOURCES[id], stock = rowById(s.world.resources, id)?.stock ?? 0, cu = ITEMS[def.item].cu;
   const quantity = tool === "crane" ? Math.min(def.bundle, stock, Math.floor(DECK_CRANE.maxCu / cu))
     : def.item === "tagged_frame" ? clampFrames(p, stock) : Math.min(stock, Math.floor(SALVAGE_CLAMP.partCu / cu));
   const seconds = tool === "crane" ? DECK_CRANE.seconds : SALVAGE_CLAMP.seconds;
@@ -334,7 +348,7 @@ function clamp(s: GameState, v: VehicleState, p: CraftProfile): SignatureOutcome
   return startLift(s, v, p, "clamp");
 }
 /** The Mantle's drone bay, from the hull's lower bow. */
-function drone(s: GameState, v: VehicleState, p: CraftProfile): SignatureOutcome {
+function drone(s: GameState, v: VehicleState, p: CraftProfile, world: WorldQueries): SignatureOutcome {
   const out = v.upgrades.drone;
   if (out) {
     v.upgrades = { ...v.upgrades, drone: null };
@@ -342,8 +356,8 @@ function drone(s: GameState, v: VehicleState, p: CraftProfile): SignatureOutcome
   }
   const refusal = droneLaunchRefusal(p, { speed: Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z), berthed: !!v.berth, charge: v.charge });
   if (refusal) return no(p.contracts.includes("scout_drone") ? "place" : "not-fitted", refusal);
-  const aim = pilotForward(s), at = v.pose.position, r = HULL_COLLIDERS.mantle.radius + 0.8;
-  const position = { x: at.x + aim.x * r, y: at.y + 0.5, z: at.z + aim.z * r };
+  const position = droneLaunchPoint(s, v, world);
+  if (!position) return no("place", "No clear water off the drone bay. Turn the Mantle away from the rock and launch again.");
   v.charge -= DRONE_LAUNCH_CHARGE;
   s.metrics.powerUsed += DRONE_LAUNCH_CHARGE;
   v.upgrades = { ...v.upgrades, drone: { position, yaw: s.player.pose.yaw, pitch: s.player.pose.pitch, launchedAt: s.tick } };
@@ -351,6 +365,24 @@ function drone(s: GameState, v: VehicleState, p: CraftProfile): SignatureOutcome
     `Scout drone out · ${SCOUT_DRONE.batterySeconds} s battery, ${SCOUT_DRONE.tether} m tether. It steers like the craft and scans within ${SCOUT_DRONE.scanRange} m; press its key again to recall.`, "Drone launched", "scan");
 }
 const DRONE_LAUNCH_CHARGE = 5;
+/** Where the drone leaves its bay: swept as the drone's own capsule from the bay
+ * (under the hull's centre) out past the hull along the aim, else straight down or up.
+ * The first path that is clear all the way, ending in clear water, wins; null if none. */
+export function droneLaunchPoint(s: Readonly<GameState>, v: Readonly<VehicleState>, world: Pick<WorldQueries, "moveCapsule" | "clearance">): Vec3 | null {
+  const aim = pilotForward(s), at = v.pose.position, r = HULL_COLLIDERS[v.hull].radius + 0.8;
+  const bay = { x: at.x, y: at.y + 0.5, z: at.z };
+  const flatAim = Math.hypot(aim.x, aim.z) || 1;
+  const paths: readonly Vec3[] = [
+    { x: (aim.x / flatAim) * r, y: 0, z: (aim.z / flatAim) * r },
+    { x: 0, y: -(HULL_COLLIDERS[v.hull].height + 1.5), z: 0 },
+    { x: 0, y: HULL_COLLIDERS[v.hull].height + 1.5, z: 0 },
+  ];
+  for (const d of paths) {
+    const moved = world.moveCapsule(bay, d, DRONE_SHAPE);
+    if (!moved.hitSolid && !moved.hitBoundary && world.clearance(moved.position, DRONE_SHAPE)) return moved.position;
+  }
+  return null;
+}
 
 // ---------------------------------------------------------------- the drone in the step
 /** The scout drone the pilot is flying, if any. */
@@ -372,6 +404,14 @@ export function steerDrone(v: VehicleState, yaw: number, pitch: number,
   };
   const moved = world.moveCapsule(d.position, delta, DRONE_SHAPE);
   v.upgrades = { ...v.upgrades, drone: { ...d, position: { ...moved.position, y: Math.min(moved.position.y, -0.3) }, yaw, pitch } };
+}
+
+/** After every command, in play or in a menu transaction: a tag aim ends when its
+ * pilot leaves the Dart or its tagger comes off, so the state stays saveable. */
+export function settleSignatures(s: GameState): void {
+  for (const v of s.fleet.vehicles)
+    if (v.upgrades.tag && (s.player.controlledVehicleId !== v.id || !hasContract(vehicleProfile(s, v), "range_tagger")))
+      v.upgrades = { ...v.upgrades, tag: null };
 }
 
 // ---------------------------------------------------------------- per step
@@ -421,7 +461,7 @@ function stepLift(s: GameState, v: VehicleState, events: GameEvent[]): void {
     return;
   }
   if (s.tick < lift.readyAt) return;
-  const node = s.world.resources.find((r) => r.id === job.sourceId)!;
+  const node = rowById(s.world.resources, job.sourceId)!;
   node.stock -= job.quantity;
   addItem(s, job.item, job.quantity, v.cargoId);
   v.charge = Math.max(0, v.charge - job.charge);
@@ -455,7 +495,7 @@ function stepLine(s: GameState, v: VehicleState, world: WorldQueries, events: Ga
     if (!line.reeling) return;
     const length = Math.max(0, Math.min(line.length, reach) - GRAPPLE.reel * DT);
     if (length > GRAPPLE.minLength) { v.upgrades = { ...v.upgrades, grapple: { ...line, length } }; return; }
-    const node = s.world.resources.find((r) => r.id === line.load);
+    const node = rowById(s.world.resources, line.load!);
     if (!node || node.stock <= 0) { release("the frame came loose"); return; }
     if (!hasRoom(s, v.cargoId, ITEMS.tagged_frame.cu)) {
       v.upgrades = { ...v.upgrades, grapple: { ...line, reeling: false } };

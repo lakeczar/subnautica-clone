@@ -10,10 +10,12 @@
  * - **Fitted signature hardware** on each hull (sonar dome, tagger, cutting
  *   arm, grapple winch, deck crane, salvage jaw, drone bay).
  *
- * Built art is keyed by what it shows and rebuilt only when that changes; lines,
- * the drone and the sonar flares are fixed meshes moved each frame (no per-frame
- * allocation beyond a short key per outpost). Hosts build within BUILD_DISTANCE
- * and are released beyond DROP_DISTANCE, like the placed hosts. */
+ * Built art is keyed by what it shows and rebuilt only when that changes; the drone,
+ * the pod, the claw and the sonar flares are fixed meshes moved each frame, and lines
+ * come from a bounded pool (LINES_PER_KIND per kind). Per frame the layer allocates one
+ * short key string per visible outpost, rack (with modules) and fitted hull: bounded by
+ * the outpost limit, the six fixed hosts and the fleet. Hosts build within
+ * BUILD_DISTANCE and are released beyond DROP_DISTANCE, like the placed hosts. */
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder.js";
 import { Color3 } from "@babylonjs/core/Maths/math.color.js";
@@ -34,6 +36,7 @@ import { PALETTE as P } from "./palette.js";
 
 export const BUILD_DISTANCE = 160;
 export const DROP_DISTANCE = 240;
+const FIXED_HOST_IDS = Object.keys(FIXED_HOSTS) as FixedHostId[];
 /** The sweep's front travels at this speed; each contact flares for FLARE_SECONDS. */
 const PULSE_SPEED = 120, FLARE_SECONDS = 12, MAX_FLARES = 8;
 
@@ -156,12 +159,14 @@ function rackKey(s: GameState, id: FixedHostId): string {
 
 // ---------------------------------------------------------------- hull hardware
 type Hardware = "sonar" | "tagger" | "cutting_arm" | "grapple" | "drop_pod" | "deck_crane" | "salvage_clamp" | "scout_drone";
+const TOOL_HARDWARE = ["cutting_arm", "grapple", "drop_pod", "deck_crane", "salvage_clamp"] as const;
+/** The signature hardware a hull's fitting shows. Called only when its fitting changes. */
 function hardwareOf(s: GameState, v: VehicleState): Hardware[] {
   const p = vehicleProfile(s, v), out: Hardware[] = [];
   if (p.contracts.includes("wide_sonar")) out.push("sonar");
   if (p.contracts.includes("range_tagger")) out.push("tagger");
   if (p.contracts.includes("scout_drone")) out.push("scout_drone");
-  for (const t of ["cutting_arm", "grapple", "drop_pod", "deck_crane", "salvage_clamp"] as const) if (p.tools.includes(t)) out.push(t);
+  for (const t of TOOL_HARDWARE) if (p.tools.includes(t)) out.push(t);
   return out;
 }
 /** Hull-local hardware (−Z is the bow), drawn on a mesh that follows the hull. */
@@ -188,9 +193,19 @@ export interface FieldKitLayer {
   update(state: GameState | null, camera: Vec3): void;
   /** What is built now, for diagnostics and tests. */
   readonly built: readonly string[];
+  /** Line meshes held now (bounded by LINE_KINDS × LINES_PER_KIND), for tests. */
+  readonly lineMeshes: number;
   dispose(): void;
 }
-interface Built { mesh: Mesh; key: string }
+/** Lines are pooled by kind, not by hull: a replaced or unloaded hull's line is reused or
+ * released. The pool's bound (convention 8): 4 kinds × 4 slots, each a 5-sided unit tube of
+ * 12 vertices (about 1 KiB of buffers each), so at most 16 meshes and ~16 KiB. The fleet holds
+ * one hull per kind, so 4 per kind is never reached in play; past it a line is not drawn. */
+const LINE_KINDS = { grapple: [P.ochre, 0.035], tether: [P.coral, 0.015], lift: [P.ink, 0.025], tow: [P.steelLight, 0.06] } as const;
+type LineKind = keyof typeof LINE_KINDS;
+const LINES_PER_KIND = 4;
+const dist = (p: Vec3, c: Vec3): number => Math.hypot(p.x - c.x, p.y - c.y, p.z - c.z);
+interface Built { mesh: Mesh; key: string; seen: number }
 export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer {
   const built = new Map<string, Built>();
   const make = (name: string, draw: (b: ArtBatch) => void, contour = 0.12): Mesh => {
@@ -200,36 +215,47 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
     m.renderingGroupId = 1;
     return m;
   };
-  /** Keep `id` built to `key`, or drop it. */
-  const keep = (id: string, key: string | null, draw: (b: ArtBatch) => void, dynamic = false): Mesh | null => {
+  let frame = 0;
+  /** The built mesh for `id` if it still shows `key` (marked seen this frame), else null. */
+  const current = (id: string, key: string): Mesh | null => {
     const was = built.get(id);
-    if (was && was.key === key) return was.mesh;
-    was?.mesh.dispose();
-    built.delete(id);
-    if (key === null) return null;
-    const mesh = make(id, draw);
-    if (dynamic) mesh.unfreezeWorldMatrix();
-    built.set(id, { mesh, key });
+    if (!was || was.key !== key) return null;
+    was.seen = frame;
+    return was.mesh;
+  };
+  const store = (id: string, key: string, mesh: Mesh): Mesh => {
+    built.get(id)?.mesh.dispose();
+    built.set(id, { mesh, key, seen: frame });
     return mesh;
   };
-  // A unit line along +Z, scaled to length and pointed at its far end each frame.
-  const unitLine = (name: string, color: string, radius: number): Mesh => {
-    const m = make(name, (b) => b.tube([[0, 0, 0], [0, 0, 1]], radius, color, 5), 0);
-    m.unfreezeWorldMatrix();
-    m.setEnabled(false);
-    return m;
-  };
-  const lines = new Map<string, Mesh>();
-  const line = (id: string, from: Vec3, to: Vec3, color: string, radius = 0.04): void => {
-    let m = lines.get(id);
-    if (!m) lines.set(id, m = unitLine(`fieldkit.line.${id}`, color, radius));
+  // Line pool: a unit tube along +Z per slot, scaled to length and pointed at its far end.
+  const pools: Record<LineKind, Mesh[]> = { grapple: [], tether: [], lift: [], tow: [] };
+  const used: Record<LineKind, number> = { grapple: 0, tether: 0, lift: 0, tow: 0 };
+  const line = (kind: LineKind, from: Vec3, to: Vec3): void => {
+    const pool = pools[kind], n = used[kind];
+    if (n >= LINES_PER_KIND) return;
+    used[kind] = n + 1;
+    let m = pool[n];
+    if (!m) {
+      const [color, radius] = LINE_KINDS[kind];
+      pool.push(m = make(`fieldkit.line.${kind}.${n}`, (b) => b.tube([[0, 0, 0], [0, 0, 1]], radius, color, 5), 0));
+      m.unfreezeWorldMatrix();
+    }
     const length = Math.hypot(to.x - from.x, to.y - from.y, to.z - from.z);
     m.position.set(from.x, from.y, from.z);
     m.scaling.set(1, 1, Math.max(0.01, length));
     m.rotation.set(-Math.atan2(to.y - from.y, Math.hypot(to.x - from.x, to.z - from.z)), Math.atan2(to.x - from.x, to.z - from.z), 0);
     m.setEnabled(true);
   };
-  const usedLines = new Set<string>();
+  /** After a frame: unused slots are released, so a pool holds only what is drawn. */
+  const releaseLines = (): void => {
+    for (const kind of Object.keys(pools) as LineKind[]) {
+      const pool = pools[kind];
+      while (pool.length > used[kind]) pool.pop()!.dispose();
+      used[kind] = 0;
+    }
+  };
+  const a: Vec3 = { x: 0, y: 0, z: 0 }, b2: Vec3 = { x: 0, y: 0, z: 0 };
   const pod = make("fieldkit.pod", (b) => {
     b.ellipsoid([0, 0.5, 0], [0.7, 0.55, 0.9], P.orange, 12);
     b.box([0, 0.5, 0], [1.42, 0.12, 0.3], P.petrol);
@@ -262,55 +288,57 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
   let disposed = false;
   return {
     get built() { return [...built.keys()]; },
+    get lineMeshes() { return pools.grapple.length + pools.tether.length + pools.lift.length + pools.tow.length; },
     update(s, camera) {
       if (disposed) return;
-      const near = (p: Vec3, d: number): boolean => Math.hypot(p.x - camera.x, p.y - camera.y, p.z - camera.z) <= d;
+      frame++;
       const playing = !!s && s.opening.phase >= 4;
-      // Outposts and fixed-host racks.
-      const want = new Set<string>();
+      // Outposts, fixed-host racks and hull hardware: each keyed by what it shows,
+      // rebuilt only when the key changes, released when it leaves range.
       if (playing) {
         for (const o of s!.systems.outposts) {
-          const id = `outpost.${o.id}`, shown = near(o.position, built.has(id) ? DROP_DISTANCE : BUILD_DISTANCE);
-          if (!shown) continue;
-          want.add(id);
-          keep(id, outpostKey(s!, o), (b) => outpostArt(b, s!, o));
+          const id = `outpost.${o.id}`;
+          if (dist(o.position, camera) > (built.has(id) ? DROP_DISTANCE : BUILD_DISTANCE)) continue;
+          const key = outpostKey(s!, o);
+          if (!current(id, key)) store(id, key, make(id, (b) => outpostArt(b, s!, o)));
         }
-        for (const host of Object.keys(FIXED_HOSTS) as FixedHostId[]) {
+        for (const host of FIXED_HOST_IDS) {
           const id = `rack.${host}`;
-          if (!near(FIXED_HOSTS[host].position, built.has(id) ? DROP_DISTANCE : BUILD_DISTANCE) ||
+          if (dist(FIXED_HOSTS[host].position, camera) > (built.has(id) ? DROP_DISTANCE : BUILD_DISTANCE) ||
             !s!.systems.sockets.some((e) => e.hostId === host)) continue;
-          want.add(id);
-          keep(id, rackKey(s!, host), (b) => { rackArt(b, s!, host); });
+          const key = rackKey(s!, host);
+          if (!current(id, key)) store(id, key, make(id, (b) => { rackArt(b, s!, host); }));
         }
-        // Fitted hardware, following each visible hull.
         for (const v of s!.fleet.vehicles) {
-          if (v.berth || !near(v.pose.position, DROP_DISTANCE)) continue;
-          const kinds = hardwareOf(s!, v);
-          if (!kinds.length) continue;
-          const id = `hardware.${v.id}`;
-          want.add(id);
-          const m = keep(id, `${v.hull}|${kinds.join(",")}`, (b) => hardwareArt(b, v, kinds), true)!;
+          if (v.berth || !v.modules.length || dist(v.pose.position, camera) > DROP_DISTANCE) continue;
+          const id = `hardware.${v.id}`, key = `${v.hull}|${v.modules.join(",")}`;
+          let m = current(id, key);
+          if (!m) {
+            const kinds = hardwareOf(s!, v);
+            if (!kinds.length) continue;
+            m = store(id, key, make(id, (b) => hardwareArt(b, v, kinds)));
+            m.unfreezeWorldMatrix();
+          }
           m.position.set(v.pose.position.x, v.pose.position.y, v.pose.position.z);
           m.rotation.set(v.hull === "dart" ? v.pose.pitch : 0, -v.pose.yaw, 0);
         }
       }
-      for (const id of [...built.keys()]) if (!want.has(id)) keep(id, null, () => {});
+      for (const [id, art] of built) if (art.seen !== frame) { art.mesh.dispose(); built.delete(id); }
       // Tools out in the world.
-      usedLines.clear();
-      let podShown = false, anchorShown = false, droneShown = false;
+      let podShown = false, anchorShown = false, droneShown = false, sweeping = false;
       if (playing) for (const v of s!.fleet.vehicles) {
         const rt = v.upgrades, at = v.pose.position;
-        if (rt.pod && near(rt.pod.position, DROP_DISTANCE)) {
+        if (rt.pod && dist(rt.pod.position, camera) <= DROP_DISTANCE) {
           pod.position.set(rt.pod.position.x, rt.pod.position.y, rt.pod.position.z);
           podShown = true;
         }
         if (rt.grapple) {
           const to = rt.grapple.load ? SOURCES[rt.grapple.load as SourceId].position : rt.grapple.anchor;
           // A hooked frame comes in along the line as it shortens.
-          const d = Math.hypot(to.x - at.x, to.y - at.y, to.z - at.z) || 1, k = rt.grapple.load ? Math.min(1, rt.grapple.length / d) : 1;
-          const end = { x: at.x + (to.x - at.x) * k, y: at.y + (to.y - at.y) * k, z: at.z + (to.z - at.z) * k };
-          line(`grapple.${v.id}`, at, end, P.ochre, 0.035); usedLines.add(`grapple.${v.id}`);
-          anchor.position.set(end.x, end.y, end.z); anchorShown = true;
+          const d = dist(to, at) || 1, k = rt.grapple.load ? Math.min(1, rt.grapple.length / d) : 1;
+          a.x = at.x + (to.x - at.x) * k; a.y = at.y + (to.y - at.y) * k; a.z = at.z + (to.z - at.z) * k;
+          line("grapple", at, a);
+          anchor.position.set(a.x, a.y, a.z); anchorShown = true;
         }
         if (rt.drone) {
           const d = rt.drone.position;
@@ -318,45 +346,49 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
           drone.rotation.set(rt.drone.pitch, -rt.drone.yaw, 0);
           // Seen from outside only: while the pilot flies it, the view is the drone's own camera.
           droneShown = s!.player.controlledVehicleId !== v.id;
-          line(`tether.${v.id}`, at, d, P.coral, 0.015); usedLines.add(`tether.${v.id}`);
+          line("tether", at, d);
         }
         if (rt.lift) {
-          const src = SOURCES[rt.lift.sourceId as SourceId].position;
-          line(`lift.${v.id}`, { x: at.x, y: at.y + (rt.lift.tool === "crane" ? 2.9 : -0.5), z: at.z }, src, P.ink, 0.025); usedLines.add(`lift.${v.id}`);
+          b2.x = at.x; b2.y = at.y + (rt.lift.tool === "crane" ? 2.9 : -0.5); b2.z = at.z;
+          line("lift", b2, SOURCES[rt.lift.sourceId as SourceId].position);
         }
         if (rt.tow) {
           const towed = s!.fleet.vehicles.find((o) => o.id === rt.tow);
-          if (towed) { line(`tow.${v.id}`, at, towed.pose.position, P.steelLight, 0.06); usedLines.add(`tow.${v.id}`); }
+          if (towed) line("tow", at, towed.pose.position);
         }
         if (rt.sonar && v.hull === "dart") {
+          sweeping = true;
           const age = (s!.tick - rt.sonar.at) / 60;
           if (rt.sonar.at !== sweepAt) {
+            // A new sweep (once per sweep, not per frame): place a flare at each contact.
             sweepAt = rt.sonar.at;
             const contacts = sonarContacts(vehicleProfile(s!, v), rt.sonar.origin);
-            flares.forEach((f, i) => { const c = contacts[i]; f.on = !!c; if (c) f.mesh.position.set(c.position.x, c.position.y, c.position.z); });
+            for (let i = 0; i < flares.length; i++) {
+              const f = flares[i]!, c = contacts[i];
+              f.on = !!c;
+              if (c) f.mesh.position.set(c.position.x, c.position.y, c.position.z);
+            }
           }
-          const o = rt.sonar.origin, radius = age * PULSE_SPEED;
+          const radius = age * PULSE_SPEED;
           for (const f of flares) {
-            const p = f.mesh.position, reached = Math.hypot(p.x - o.x, p.y - o.y, p.z - o.z) <= radius;
-            const shown = f.on && reached && age < FLARE_SECONDS;
+            const p = f.mesh.position, shown = f.on && age < FLARE_SECONDS && dist(p, rt.sonar.origin) <= radius;
             f.mesh.setEnabled(shown);
             if (!shown) continue;
-            f.mesh.scaling.setAll(Math.max(3, Math.hypot(p.x - camera.x, p.y - camera.y, p.z - camera.z) * 0.06));
+            f.mesh.scaling.setAll(Math.max(3, dist(p, camera) * 0.06));
             f.material.setFloat("glow", Math.min(1, (FLARE_SECONDS - age) / 4));
           }
         }
       }
-      if (!playing || !s!.fleet.vehicles.some((v) => v.upgrades.sonar)) for (const f of flares) f.mesh.setEnabled(false);
+      if (!sweeping) for (const f of flares) f.mesh.setEnabled(false);
       pod.setEnabled(podShown); anchor.setEnabled(anchorShown); drone.setEnabled(droneShown);
-      for (const [id, m] of lines) if (!usedLines.has(id)) m.setEnabled(false);
+      releaseLines();
     },
     dispose() {
       if (disposed) return;
       disposed = true;
-      for (const b of built.values()) b.mesh.dispose();
+      for (const art of built.values()) art.mesh.dispose();
       built.clear();
-      for (const m of lines.values()) m.dispose();
-      lines.clear();
+      for (const pool of Object.values(pools)) for (const m of pool.splice(0)) m.dispose();
       for (const m of [pod, anchor, drone]) m.dispose();
       for (const f of flares) { f.mesh.dispose(); f.material.dispose(); }
     },

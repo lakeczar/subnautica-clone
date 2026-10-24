@@ -479,6 +479,18 @@ export function carrierInReach(s: GameState, h: VehicleState): boolean {
     distance(s.player.pose.position, h.pose.position) <= 15 ||
     distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) <= 5;
 }
+/** SIG-1 (F17): the typed outcome of a berth refit, read from the layout it left. */
+export function berthRefitOutcome(s: Readonly<GameState>): { message: string; event: { kind: "berths"; vehicleId: string;
+  configuration: CarrierState["configuration"]; slots: readonly ("compact" | "medium")[] } } | null {
+  const dock = s.fleet.docking;
+  if (!dock) return null;
+  const c = dock.configuration;
+  return {
+    message: c === "medium" ? "Berths refitted: one service berth for a medium craft."
+      : c === "mixed" ? "Berths refitted with the extension: the service berth beside a compact berth." : "Berths refitted: two compact berths.",
+    event: { kind: "berths", vehicleId: dock.vehicleId, configuration: c, slots: BERTH_SLOT_SIZES[c] },
+  };
+}
 export function carrierCommand(
   s: GameState,
   action: string,
@@ -610,8 +622,6 @@ export function carrierCommand(
     ], () => -200).clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 }))
       return "Step into the passage clear of the berth rooms before refitting them. Nothing changed.";
     dock.configuration = configuration;
-    s.feedback = dock.configuration === "medium" ? "Berths refitted: one service berth for a medium craft."
-      : dock.configuration === "mixed" ? "Berths refitted with the extension: the service berth beside a compact berth." : "Berths refitted: two compact berths.";
     return null;
   }
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId);
