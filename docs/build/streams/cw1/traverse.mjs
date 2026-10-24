@@ -9,7 +9,8 @@
 // render), cave holds, streaming counters, resident bytes and JS heap.
 // Gate (STR-10, STR-11): during the travel itself no unsliced cave build (the
 // safety net, logged by the game as "unsliced cave build"), no hold frame and
-// no long frame attributed to streaming; the job exits 1 when it fails.
+// no long frame attributed to streaming, and no frame inside a cave whose
+// light was not ready; the job exits 1 when it fails.
 // usage (frame times are performance evidence, so the exclusive class):
 //   $H --class exclusive -- node traverse.mjs <dist> <plan.json> <save.json> <segment> <outdir> <port>
 // Another GPU (the second worker's RTX 4070): CW1_CHROME (a browser wrapper
@@ -28,6 +29,8 @@ const GPU = new RegExp(process.env.CW1_GPU ?? "RTX 3090");
 const { chromium } = require("playwright-core");
 const [dist, planFile, saveFile, segArg, out, port] = process.argv.slice(2);
 const segment = Number(segArg), plan = JSON.parse(readFileSync(planFile, "utf8")), points = plan.segments[segment];
+// Boost unless the power plan says this segment must cruise.
+const SEGMENT_BOOST = plan.power?.segments?.[segment]?.cruise !== true;
 mkdirSync(out, { recursive: true });
 const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".svg": "image/svg+xml", ".json": "application/json", ".bin": "application/octet-stream" };
 const root = path.resolve(dist);
@@ -42,7 +45,10 @@ await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
 const log = [];
 const note = (...a) => { const line = `[${(performance.now() / 1000).toFixed(1)}s] ${a.join(" ")}`; log.push(line); console.log(line); };
 const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(), label: process.env.CW1_LABEL ?? "RTX 3090 (factory-worker)", segment, caves: points.filter(p => p.cave).map(p => p.cave),
-  reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0 };
+  reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0, power: [], stalls: [] };
+// The power plan (derive.mjs): when to swap a reserve cell in; boost or cruise.
+const POWER = plan.power ?? null;
+let cellsLeft = POWER?.cells?.filter(c => c > 0).length ?? 0;
 let traveling = false;
 // Playwright's default SwiftShader fallback flag is refused by a GPU wrapper (and must not apply on the GPU).
 // Collections on the main thread, from a Chrome trace of V8's GC events
@@ -63,14 +69,39 @@ async function read() {
     const c = document.querySelector("#ocean").dataset, q = (s) => document.querySelector(s);
     const pitch = Number(/(-?\d+)/.exec(q("#pitch-cue")?.getAttribute("aria-label") ?? "Pitch 0")?.[1] ?? 0);
     return { cam: (c.cameraPosition ?? "0,0,0").split(",").map(Number), bearing: parseFloat(q("#bearing")?.textContent ?? "0"), pitch,
-      depth: parseFloat(q("#depth")?.textContent ?? "0"), cave: c.cave ?? "", hold: c.caveHold ?? "", vitals: q("#vitals")?.innerText.replace(/\s+/g, " ") ?? "",
+      depth: parseFloat(q("#depth")?.textContent ?? "0"), cave: c.cave ?? "", hold: c.caveHold ?? "", vitals: q("#vitals")?.innerText.replace(/\s+/g, " ") ?? "", air: q("#vitals")?.dataset.airSource ?? "",
       notices: [q("#system-status"), q("#notification")].filter(e => e && !e.hidden).map(e => e.textContent.trim()).join(" | ") };
   });
 }
 const pos = (s) => ({ x: s.cam[0], y: s.cam[1] - eye, z: s.cam[2] });
+/** The piloted craft's battery from the HUD ("… 63% power"), or null on foot. */
+const charge = (s) => { const m = /(\d+)% power/.exec(s.vitals); return m ? Number(m[1]) : null; };
+const where = (s) => s.cam.map(v => v.toFixed(0)).join(",");
+/** Open the inventory (Tab), press the named craft button, close it (Escape)
+ * and take the controls back: ordinary input for servicing and reserve cells. */
+async function panelAction(name, why) {
+  await releaseAll();
+  const before = await read();
+  await page.keyboard.press("Tab");
+  const button = page.getByRole("button", { name }).first();
+  const pressed = await button.waitFor({ state: "visible", timeout: 4000 }).then(() => button.isEnabled()).catch(() => false);
+  if (pressed) await button.click();
+  await page.waitForTimeout(400);
+  await page.keyboard.press("Escape");
+  await page.waitForTimeout(300);
+  await page.locator("#ocean").click();
+  await page.waitForTimeout(500);
+  const after = await read();
+  const entry = { t: +(performance.now() / 1000).toFixed(1), action: String(name), why, pressed, at: where(after), before: before.vitals, after: after.vitals };
+  result.power.push(entry);
+  note("power", JSON.stringify(entry));
+  return pressed;
+}
 // Every hold state change and HUD notice, logged as it happens (a relocation must say why).
-let lastHold = "clear", lastNotice = "";
+// The craft's state (air source, O₂, health, charge, hull) every 15 s too, so a stall can be read from it.
+let lastHold = "clear", lastNotice = "", lastVitals = -Infinity;
 const watch = (s) => {
+  if (performance.now() - lastVitals > 15000) { lastVitals = performance.now(); note("vitals", `[${s.air}]`, s.vitals, "at", s.cam.map(v => v.toFixed(0)).join(","), "depth", s.depth); }
   if ((s.hold || "clear") !== lastHold) { note("hold", lastHold, "->", s.hold || "clear", "at", s.cam.map(v => v.toFixed(0)).join(","), s.vitals); lastHold = s.hold || "clear"; }
   if (s.notices && s.notices !== lastNotice) { note("notice", JSON.stringify(s.notices.slice(0, 200)), "at", s.cam.map(v => v.toFixed(0)).join(",")); lastNotice = s.notices; }
 };
@@ -88,8 +119,17 @@ async function goto(t, { tol = 4, label = "", boost = true, timeout = 100, from 
     const p = pos(s), dx = t.x - p.x, dy = t.y - p.y, dz = t.z - p.z, h = Math.hypot(dx, dz), d3 = Math.hypot(h, dy);
     if (d3 <= tol) { await releaseAll(); return true; }
     if (d3 < best - 0.3) { best = d3; bestAt = performance.now(); }
+    // Emergency power: a reserve cell before the battery runs out (the craft then supplies air again).
+    const c = charge(s);
+    if (POWER && c !== null && c < POWER.swapBelow && cellsLeft > 0) { cellsLeft--; await panelAction("Use reserve cell for hull power", `battery ${c}%`); bestAt = performance.now(); continue; }
     if (performance.now() - bestAt > 5000 && recoveries < 3) {
-      recoveries++; result.recoveries++; note("recover", label, `${d3.toFixed(1)} m short`);
+      recoveries++; result.recoveries++;
+      // Everything the driver saw at the stall: where, which way, what it held, the craft's state.
+      const yaw = s.bearing * Math.PI / 180, want = Math.atan2(dx, -dz);
+      const stall = { t: +(performance.now() / 1000).toFixed(1), label, short: +d3.toFixed(1), at: where(s), target: [t.x, t.y, t.z].map(v => +v.toFixed(1)), bearing: s.bearing, pitch: s.pitch,
+        headingErr: +wrap(want - yaw).toFixed(2), keys: [...held], hold: s.hold, cave: s.cave, air: s.air, vitals: s.vitals, notices: s.notices };
+      result.stalls.push(stall);
+      note("recover", JSON.stringify(stall));
       await releaseAll(); await key("KeyS", true); await key("Space", true); await page.waitForTimeout(1200); await releaseAll();
       bestAt = performance.now(); best = Infinity; continue;
     }
@@ -100,7 +140,7 @@ async function goto(t, { tol = 4, label = "", boost = true, timeout = 100, from 
     await key("ArrowRight", err > 0.04); await key("ArrowLeft", err < -0.04);
     await key("ArrowUp", s.pitch < -2); await key("ArrowDown", s.pitch > 2);
     await key("KeyW", Math.abs(err) < (h > 12 ? 0.5 : 0.3) && h > tol * 0.5);
-    await key("ShiftLeft", boost && h > 25 && Math.abs(err) < 0.3);
+    await key("ShiftLeft", boost && SEGMENT_BOOST && h > 25 && Math.abs(err) < 0.3);
     let wantY = t.y;
     if (from) {
       const total = Math.hypot(t.x - from.x, t.z - from.z), left = Math.min(total, h);
@@ -232,12 +272,13 @@ try {
   note("renderer main thread", sched.pid ?? "not found");
   const sampler = setInterval(sampleSched, 5);
   const markAt = await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; performance.mark("cw1-align"); return performance.now(); });
-  const started = performance.now(), syncAtStart = records.sync ?? 0;
+  const started = performance.now(), syncAtStart = records.sync ?? 0, pendingAtStart = records.lightPendingFrames ?? 0;
   traveling = true;
   let caveIndex = 0;
   for (const [i, p] of points.entries()) {
     if (i === 0) continue;
     const ok = await goto(p, { tol: p.tol ?? (p.cave ? 4 : 7), label: p.cave ?? p.view ?? `cruise#${i}`, boost: !(p.view || p.tol), from: points[i - 1] });
+    if (p.service) await panelAction(/^(Service|Charge at)/, `call at ${p.service}${ok ? "" : " (not reached)"}`);
     if (p.view) {
       if (p.surface) await rise();
       const faced = await face(p.look);
@@ -260,6 +301,14 @@ try {
   }
   clearInterval(sampler);
   result.seconds = +((performance.now() - started) / 1000).toFixed(1);
+  {
+    // The power ledger at the end: the battery, the cells still aboard, and what
+    // the way home (or to the nearest service site) costs at cruise.
+    const s1 = await read(), c = charge(s1), e = POWER?.segments?.[segment];
+    result.powerEnd = { charge: c, cellsLeft, air: s1.air, vitals: s1.vitals, at: where(s1), planned: e ?? null,
+      homeOk: e && c !== null ? c + cellsLeft * 35 / (POWER.capacity ?? 1) >= e.homePercent : null };
+    note("power end", JSON.stringify(result.powerEnd));
+  }
   traveling = false;
   const profile = cdp ? (await cdp.send("Profiler.stop")).profile : null;
   let profileAt = null;
@@ -329,6 +378,19 @@ try {
     gcShaped: result.long.filter(l => l.gc || l.gcPauseMs >= 0.4 * l.gap).length,
     streamingGcShaped: result.long.filter(l => l.streaming && (l.gc || l.gcPauseMs >= 0.4 * l.gap) && l.gap > 34).length,
   };
+  // Every streaming sub-part over the travel, separately (p99 and max ms): the
+  // wanted list, the builds, eviction and the light lists of the cave streamer,
+  // the texture upload, the view, and the lights' scan, placement and selection.
+  const PARTS = { chunks: p => p.chunks, regions: p => p.regions, caves: p => p.caves, caveWanted: p => p.cavePasses?.score, caveBuild: p => p.caveBuildMs,
+    caveEvict: p => p.cavePasses?.evict, caveLightList: p => p.cavePasses?.light, caveTexture: p => p.caveStream, caveUpload: p => p.caveUpload?.ms, caveView: p => p.caveView,
+    lights: p => p.lights, lightScan: p => p.lightScan, lightPlace: p => p.lightPlace, lightSelect: p => p.lightSelect, render: p => p.render };
+  result.parts = {};
+  for (const [name, of] of Object.entries(PARTS)) {
+    const v = data.perf.map(e => e.parts ? of(e.parts) ?? 0 : 0).sort((a, b) => a - b);
+    result.parts[name] = { p99: quant(v, 0.99), max: v.length ? +v.at(-1).toFixed(2) : null };
+  }
+  const sims = data.perf.map(e => e.sim ?? 0).sort((a, b) => a - b);
+  result.parts.sim = { p99: quant(sims, 0.99), max: sims.length ? +sims.at(-1).toFixed(2) : null };
   result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });
   result.holdFrames = data.perf.filter(e => e.hold && e.hold !== "clear").length;
   result.stream = data.stream;
@@ -344,11 +406,14 @@ try {
   if (travelSync > 0 || result.unsliced.some(u => u.traveling)) failures.push(`${Math.max(travelSync, result.unsliced.filter(u => u.traveling).length)} unsliced cave build(s) in travel`);
   if (result.holdFrames > 0) failures.push(`${result.holdFrames} hold frame(s)`);
   if (result.longByCause.streamingOver34 > 0) failures.push(`${result.longByCause.streamingOver34} streaming frame(s) over 34 ms`);
-  result.gate = { pass: failures.length === 0, failures, travelSync, loadSync: syncAtStart };
+  // R2-2: a cave the craft is in whose light is not yet bound is drawn as open water; ordinary travel must have prefetched it.
+  const travelLightPending = (data.stream.lightPendingFrames ?? 0) - pendingAtStart;
+  if (travelLightPending > 0) failures.push(`${travelLightPending} frame(s) inside a cave whose light was not ready`);
+  result.gate = { pass: failures.length === 0, failures, travelSync, loadSync: syncAtStart, travelLightPending };
   result.memory = { residentCpuMiB: +(data.cpu / 1048576).toFixed(1), residentGpuMiB: +(data.gpu / 1048576).toFixed(1), regionMiB: +(data.regionBytes / 1048576).toFixed(1),
     budgetMiB: 256, heapMiB: data.heap ? +(data.heap.used / 1048576).toFixed(1) : null };
   note("gate", result.gate.pass ? "pass" : `FAIL: ${result.gate.failures.join("; ")}`);
-  note("result", JSON.stringify({ frames: result.frames, longByCause: result.longByCause, work: result.work, holds: result.holdFrames, memory: result.memory, stream: result.stream }));
+  note("result", JSON.stringify({ frames: result.frames, longByCause: result.longByCause, work: result.work, parts: result.parts, holds: result.holdFrames, memory: result.memory, stream: result.stream }));
 } catch (error) {
   result.errors.push(String(error?.stack ?? error)); note("error", String(error));
   result.gate ??= { pass: false, failures: ["the run did not finish"] };

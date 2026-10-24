@@ -23,8 +23,16 @@ const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
 const { gameWorld, hullClearance, hullFloor, sweptHullClearance } = await import(B + "src/sim/world.js");
 const { HULL_COLLIDERS } = await import(B + "src/content/registry.js");
 const { decodeSave } = await import(B + "src/save/codec.js");
+const { vehicleProfile } = await import(B + "src/sim/fittings.js");
+const { motion } = await import(B + "src/sim/upgrades/effects.js");
+const { supportedServiceSite } = await import(B + "src/sim/inventory.js");
+const { STOP_IDS, WORKING_STOPS, SERVICE_MOORINGS } = await import(B + "src/content/stops.js");
 const HULL = process.env.CW1_HULL ?? "dart", SAVE = process.env.CW1_SAVE ?? "tour-ready";
 const world = gameWorld(), DART = HULL_COLLIDERS[HULL], DEEPEST = Number(process.env.CW1_DEEPEST ?? -340);
+// Every kit cave's solids resident: the caves stream in play, and the planner
+// must sweep the hull against them (mouths, terraces, overhangs), not only the floor.
+world.kitCaves.step(world.kitCaves.clusters.map(c => c.index), Infinity, () => performance.now());
+console.log(`kit caves resident for planning: ${world.kitCaves.resident.length} clusters, ${world.kitCaves.stats.residentBoxes} boxes`);
 const clamp = (y, x, z) => Math.min(-2, Math.max(DEEPEST, worldFloor(x, z) + 3, y));
 // The library save every segment starts from, and its craft.
 const picked = execFileSync(process.execPath, [path.join(B, "scripts/playthrough/saves.js"), "pick", SAVE], { cwd: repo, encoding: "utf8" }).trim().split("\n");
@@ -35,6 +43,34 @@ if (!base.ok) throw new Error(`${SAVE}: ${base.error}`);
 const craft = base.value.state.fleet.vehicles.find(v => v.id === base.value.state.player.controlledVehicleId);
 if (!craft || craft.hull !== HULL || craft.rating < -DEEPEST + 10) throw new Error(`${SAVE}: not piloting a ${HULL} rated below ${-DEEPEST} m`);
 const START = { ...craft.pose.position };
+// The power plan, from the game's own drain for this craft: battery percent per
+// metre at boost and at cruise, the charge aboard and the reserve cells the
+// diver or the craft's hold carries (each swapped in through the inventory
+// panel when the battery runs low). A powered craft supplies air; its 120 s
+// of emergency air begins only when power is lost, so power is the budget.
+const profile = vehicleProfile(base.value.state, craft);
+const perMetre = (mode) => { const m = motion(profile, mode, { lamp: true }); return m.drain / m.speed; };
+const cells = base.value.state.inventory.items.filter(i => i.kind === "reserve_cell" && (i.containerId === "diver" || i.containerId === craft.cargoId)).map(i => i.charge ?? 0);
+const POWER = { charge: +craft.charge.toFixed(1), cells, capacity: profile.capacity, boostPerMetre: +perMetre("boost").toFixed(5), cruisePerMetre: +perMetre("cruise").toFixed(5),
+  swapBelow: 20, emergencyAirS: craft.emergencyAir };
+// Where this save's craft can be serviced (power, hull and air full, cells
+// charged): the working stops and charging moorings the save has restored,
+// each with a clear pose for the hull inside its service radius.
+const SITES = [...STOP_IDS.map(id => ({ id, at: WORKING_STOPS[id].mooring, radius: WORKING_STOPS[id].serviceRadius })),
+  ...SERVICE_MOORINGS.map(m => ({ id: `mooring:${m.id}`, at: m.position, radius: 14 }))].flatMap(site => {
+  const probe = structuredClone(craft);
+  probe.pose.position = { ...site.at };
+  if (!supportedServiceSite(base.value.state, probe)) return [];
+  for (const r of [0, 3, 6, 9]) for (let k = 0; k < (r ? 8 : 1); k++) for (const up of [0, 2, 4]) {
+    const q = { x: site.at.x + r * Math.cos(k * Math.PI / 4), z: site.at.z + r * Math.sin(k * Math.PI / 4), y: 0 };
+    q.y = clamp(site.at.y + up, q.x, q.z);
+    probe.pose.position = q;
+    if (Math.hypot(q.x - site.at.x, q.y - site.at.y, q.z - site.at.z) < site.radius - 3 && hullClearance(world, q, DART) && q.y >= hullFloor(world, q, DART) + KEEL &&
+      supportedServiceSite(base.value.state, probe)) return [{ id: site.id, x: q.x, y: q.y, z: q.z }];
+  }
+  return [];
+});
+console.log(`service sites on this save: ${SITES.map(s => s.id).join(", ")}`);
 /** The keel's margin over the floor under the hull's footprint, metres. */
 const KEEL = 1;
 /** A clear pose near `p`: step outward along `n`, then up, until it fits. */
@@ -241,10 +277,54 @@ else {
   cuts.push(points.length - 1);
   for (let k = 0; k < SEGMENTS; k++) segments.push(k === 0 ? points.slice(0, cuts[1] + 1) : fromStart(points.slice(cuts[k], cuts[k + 1] + 1)));
 }
+// Power: walk each segment at boost from the save's charge; before a leg that
+// would leave less than MARGIN after it plus the way to the nearest site, call
+// at the nearest site from where the craft is (a `service` point), which fills
+// the battery. Inserted legs are swept and repaired like any other.
+const MARGIN = 15;
+const d3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
+const nearestSite = (p) => SITES.reduce((b, s) => !b || d3(p, s) < d3(p, b) ? s : b, null);
+function withService(seg) {
+  let charge = POWER.charge, called = -Infinity;
+  for (let i = 1; i < seg.length; i++) {
+    if (seg[i].service) { charge = 100; called = i; continue; }
+    const cost = d3(seg[i - 1], seg[i]) * POWER.boostPerMetre, site = nearestSite(seg[i]);
+    const after = charge - cost - (site ? d3(seg[i], site) * 1.5 * POWER.boostPerMetre : 0);
+    // Fresh from a call, a leg is flown as planned (no call loop on one long leg).
+    if (after >= MARGIN || !SITES.length || i - called < 8) { charge -= cost; continue; }
+    const here = nearestSite(seg[i - 1]);
+    // A call at the site, then back to where the route left off.
+    const call = repair([{ ...seg[i - 1] }, { x: here.x, y: here.y, z: here.z, service: here.id }, { ...seg[i - 1], cave: undefined, cruise: true }]).slice(1);
+    seg.splice(i, 0, ...call);
+    charge -= d3(seg[i - 1], seg[i]) * POWER.boostPerMetre;
+    i--; // the next leg is to the first point of the call
+  }
+  return seg;
+}
+if (SITES.length) for (const seg of segments) withService(seg);
+reportBlocked();
 // Every segment's save is the library save itself, unedited.
 segments.forEach((_, k) => copyFileSync(saveFile, path.join(out, `seg${k}.json`)));
 reportBlocked();
-writeFileSync(path.join(out, "plan.json"), JSON.stringify({ save: { kind: SAVE, file: saveFile, start: START }, totalMetres: Math.round(total), stops: tour, segments }, null, 1));
+// Each segment's energy: out along its points at boost, then home to the berth
+// at cruise (its straight distance, half again for detours), against the charge
+// and cells aboard. A plan that cannot come home on them is refused.
+const metres = (seg) => seg.reduce((m, q, i) => i ? m + Math.hypot(q.x - seg[i - 1].x, q.y - seg[i - 1].y, q.z - seg[i - 1].z) : 0, 0);
+const have = POWER.charge + POWER.cells.reduce((a, c) => a + Math.min(100, c / POWER.capacity), 0);
+// With service calls the budget runs from the last call (or the start); home
+// is the berth or the nearest service site, whichever is nearer.
+const energy = segments.map((seg, k) => {
+  const last = seg.findLastIndex(q => q.service), from = last < 0 ? 0 : last, fill = last < 0 ? have : 100 + (have - POWER.charge);
+  const end = seg.at(-1), home = Math.min(d3(end, START), ...SITES.map(s => d3(end, s))) * 1.5;
+  const back = home * POWER.cruisePerMetre, boosted = metres(seg.slice(from)) * POWER.boostPerMetre;
+  // Boost if the budget allows it, else cruise (the driver holds Shift only when boosting).
+  const cruise = boosted + back > fill, out = cruise ? metres(seg.slice(from)) * POWER.cruisePerMetre : boosted;
+  return { segment: k, metres: Math.round(metres(seg)), calls: seg.filter(q => q.service).map(q => q.service), cruise, outPercent: +out.toFixed(1), homePercent: +back.toFixed(1),
+    havePercent: +fill.toFixed(1), viable: out + back <= fill };
+});
+for (const e of energy) console.log(`segment ${e.segment} power: ${e.metres} m out ${e.outPercent}% + home ${e.homePercent}% of ${e.havePercent}%${e.viable ? "" : " NOT VIABLE"}`);
+if (energy.some(e => !e.viable)) process.exitCode = 2;
+writeFileSync(path.join(out, "plan.json"), JSON.stringify({ save: { kind: SAVE, file: saveFile, start: START }, power: { ...POWER, segments: energy }, totalMetres: Math.round(total), stops: tour, segments }, null, 1));
 console.log(`${tour.length} caves, ${Math.round(total)} m, ${segments.length} segments:`,
   segments.map(s => `${s.filter(p => p.cave).length} caves`).join(", "));
 console.log("regions", [...new Set(tour.map(s => s.region))].join(", "));

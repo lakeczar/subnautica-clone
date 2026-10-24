@@ -531,7 +531,8 @@ export function createRenderer(
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump, stepUnit: world?.maxStepUnit ?? null,
-          caveStep: +caveStepMs.toFixed(2), cavePasses: streamFrame?.passMs ?? null, caveStream: +caveStreamMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered,
+          caveStep: +caveStepMs.toFixed(2), // The streamer reuses its pass timings: a copy per frame (wanted list, eviction, light lists).
+          cavePasses: streamFrame ? { score: +streamFrame.passMs.score.toFixed(2), evict: +streamFrame.passMs.evict.toFixed(2), light: +streamFrame.passMs.light.toFixed(2) } : null, caveStream: +caveStreamMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered,
           lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
         };
         canvas.dataset.meshes = String(scene.meshes.length);
