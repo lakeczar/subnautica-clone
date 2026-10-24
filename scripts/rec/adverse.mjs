@@ -56,13 +56,15 @@ function decode(ff, file) {
 }
 /** R2-7's verdict from a run's raw facts and recording: every frame dated within its picture's lifetime. */
 function judgeClock(raw, rec, failed) {
-  const ff = decoder(), draws = raw.draws, cutoff = raw.header.exported.cutoff, pauses = raw.pauses ?? [];
+  // The export's own header (the live one may already name a segment begun after the cutoff).
+  const header = JSON.parse(readFileSync(path.join(rec, "header.json"), "utf8"));
+  const ff = decoder(), draws = raw.draws, cutoff = header.exported.cutoff, pauses = raw.pauses ?? [];
   const inPause = (T) => pauses.some((p) => T >= p.from && T <= p.to);
   const lastDrawBefore = (T) => { let k = null; for (const d of draws) if (d.t <= T) k = d; return k; };
   if (!ff) { failed.push("clock: no ffmpeg here decodes VP9 with showinfo; judge this run with --decode where one does"); return { undecoded: true }; }
   const byId = new Map(draws.map((d, i) => [d.id, { t: d.t, next: draws[i + 1]?.t ?? Infinity }]));
   const segments = [];
-  for (const seg of raw.header.video?.segments ?? []) {
+  for (const seg of header.video?.segments ?? []) {
     const file = path.join(rec, seg.file), fixed = `${file}.remux.webm`;
     if (!remux(file, fixed)) { segments.push({ ...seg, error: "remux failed" }); continue; }
     const { times, ids } = decode(ff, fixed);
