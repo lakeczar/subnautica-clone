@@ -747,8 +747,8 @@ test("B28 (SCHED-3): standard and gpu jobs go to alickers by default; one that c
     assert.deepEqual([args.join(" "), r.remote, r.machineTag, r.goal.routed], [args.join(" "), undefined, "3090", undefined]);
   }
   // Each reason a job can't go: routed to the 3090, printed once at submit, recorded.
-  const hold = submit(c, c.repoDir, "--class", "quick", "--machine", "3090", "--", "sleep", "15"); // holds the worktree, so the next one stays queued
-  await running(c, hold);
+  const hold = submit(c, c.repoDir, "--class", "quick", "--machine", "3090", "--", "sh", "-c", "echo started; sleep 15"); // holds the worktree, so the next one stays queued
+  await until("hold started", () => log(c, hold).includes("started"), 30000); // before the tree changes: its holder checks the tree at the start
   writeFileSync(join(c.repoDir, "file.txt"), "dirty\n");
   const d = hc(c, ["submit", "--class", "standard", "--", "true"], { cwd: c.repoDir });
   assert.equal(d.code, 0, d.err);

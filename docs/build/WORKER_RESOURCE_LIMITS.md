@@ -86,11 +86,14 @@ Options:
 
 | Tag | Default for | Where it runs |
 | --- | --- | --- |
-| `any` | `playthrough`, `heavy-suite` | alickers when its one slot is free; otherwise here at once (never waits for it) |
-| `3090` | every other class | here only. `exclusive` is always 3090 |
+| `any` | `standard`, `gpu`, `playthrough`, `heavy-suite` (SCHED-3) | alickers when its one slot is free; otherwise here at once (never waits for it). One that can't go to alickers (below) is routed to `3090` at submit, with the reason |
+| `3090` | `quick` (the express slot), `bake` (local artifacts), `exclusive` (always 3090) | here only |
 | `4070` | (ask for it) | alickers only. It waits through pauses and outages until its queue timeout, and is never faked here |
 | `soak` | `soak` | alickers first. It runs here only while alickers is paused or unreachable |
 
+- **Balance (SCHED-3; DIRECTION, "Balance the two GPUs"):** submit without `--machine` unless the question needs a machine; the queue sends the job to whichever frees first. Only acceptance numbers are `--class exclusive` on the 3090. An explicit `--machine` always wins.
+  - **Routed here:** an `any` job that can't go to alickers (the remote lane is off; not a git tree; uncommitted changes; a local path outside the worktree; reading `.test-build*` or `dist`; or a command that only builds, such as `npm run build`, whose output is wanted here) runs on the 3090. `submit` prints `runs here (factory-worker), not on alickers: <reason>` once; the ticket and result record it (`goal.routed`); `status` marks it `3090^` (`here^` once running) with a `^ <ticket>: any, routed here: <reason>` line; the final line says so.
+  - **`--snapshot`** needs no rule of its own: alickers runs the submit-time commit, which is the snapshot of a clean tree; a dirty tree is routed here.
 - **Only a commit goes to alickers.** A dirty tree, or a command that names a local path outside the worktree (`/work/...`, `/tmp/...`; inputs would be missing, outputs left behind), runs here, and `--machine 4070` is refused with the reason. Put inputs in the commit. Declare outputs with `--artifact`:
   - a relative path is in the job's directory in the sandbox checkout; an absolute path is on the sandbox;
   - each one comes back **whole**, an evidence pack directory included, into `/work/tmp/<ticket>/<name>`, also when the job failed. Outputs are staged inside the sandbox's job lock, so another job can never replace them. The transfer is bounded and cancellable; a failed one is reported with where the staged copy waits on alickers;
