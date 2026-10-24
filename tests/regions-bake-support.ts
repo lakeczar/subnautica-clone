@@ -8,12 +8,12 @@ import { liveTerrain } from "../src/render/biomes/terrain.js";
 import { decodeTerrain } from "../src/render/biomes/terrainCodec.js";
 import type { MeshRecipe } from "../src/render/kit/types.js";
 import type { ChunkDescriptor, LodLevel } from "../src/world/types.js";
+import { drain, rectOf } from "./shared-support.js";
 
 export const layout = worldLayout();
 export const pick = (x: number, z: number): ChunkDescriptor =>
   layout.chunks.find(c => x >= c.bounds.min.x && x < c.bounds.max.x && z >= c.bounds.min.z && z < c.bounds.max.z)!;
-export const rectOf = (c: ChunkDescriptor) => ({ minX: c.bounds.min.x, maxX: c.bounds.max.x, minZ: c.bounds.min.z, maxZ: c.bounds.max.z });
-export const drain = <T>(g: Generator<void, T>): T => { let r = g.next(); while (!r.done) r = g.next(); return r.value; };
+export { drain, rectOf };
 export const live = (c: ChunkDescriptor, lod: LodLevel): MeshRecipe[] =>
   drain(liveTerrain({ floor: worldFloor, random: seededStream, due: () => false }, c, lod)).meshes as MeshRecipe[];
 // Stack ramp, Meridian pair, Divide brine (mirror mesh), legacy seam (skirt), Rift.

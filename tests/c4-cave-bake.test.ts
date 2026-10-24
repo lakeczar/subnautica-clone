@@ -10,14 +10,13 @@ import { liveTerrain } from "../src/render/biomes/terrain.js";
 import { decodeTerrain } from "../src/render/biomes/terrainCodec.js";
 import type { ChunkRecipe, MeshRecipe } from "../src/render/kit/types.js";
 import type { ChunkDescriptor, LodLevel } from "../src/world/types.js";
+import { drain, rectOf } from "./shared-support.js";
 
 /** C4: the Fanvault in the baked world. Its chunk keeps the heightfield out
  * of the footprint, carries the cave shell, decodes to the same meshes, and
  * still shares every edge with its neighbours. */
 const def = caveDef("fanvault", worldFloor), f = def.replacementFootprints[0]!;
 const layout = worldLayout();
-const drain = <T>(g: Generator<void, T>): T => { let r = g.next(); while (!r.done) r = g.next(); return r.value; };
-const rectOf = (c: ChunkDescriptor) => ({ minX: c.bounds.min.x, maxX: c.bounds.max.x, minZ: c.bounds.min.z, maxZ: c.bounds.max.z });
 const ctx = { floor: worldFloor, random: seededStream, due: () => false };
 const live = (c: ChunkDescriptor, lod: LodLevel): MeshRecipe[] => drain(liveTerrain(ctx, c, lod)).meshes as MeshRecipe[];
 const home = layout.chunks.find(c => c.bounds.min.x <= f.minX && c.bounds.max.x >= f.maxX && c.bounds.min.z <= f.minZ && c.bounds.max.z >= f.maxZ)!;

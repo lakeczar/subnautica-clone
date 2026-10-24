@@ -5,8 +5,7 @@ import type { AccessKind, AccessPoint, Aabb, BiomeDescriptor, ChunkArtRef, Chunk
 import { ROUTES } from "./passages.js";
 import { SITES } from "./sites.js";
 import { STRUCTURES } from "./structures.js";
-import { TERRAIN_EXTENT } from "../../render/terrainSurface.js";
-import { MERIDIAN_CENTRE, MERIDIAN_TERRACES, terrainMasks, type TerrainMasks } from "./terrain.js";
+import { MERIDIAN_CENTRE, MERIDIAN_TERRACES, TERRAIN_EXTENT, terrainMasks, type TerrainMasks } from "./terrain.js";
 import { worldFloor } from "./worldFloor.js";
 import { CAVE_SOURCES } from "./caves.js";
 
@@ -61,11 +60,14 @@ const DEPTH_RATING: Readonly<Record<RegionId, number>> = {
   thermal_rift: 350, brine_divide: 450, deep_district: 800,
 };
 
-/** Fine region lookup from footprints (exact rectangles, not chunk owners). */
+/** Fine region lookup from footprints (exact rectangles, not chunk owners): the
+ * one semantic answer to "which region is this?" (audio, optics, timeline, HUD). */
 export function regionAtPoint(x: number, z: number): RegionId | null {
   for (const [id, rects] of FOOTPRINTS) if (rects.some(r => rectContains(r, x, z))) return id;
   return null;
 }
+/** `regionAtPoint` for a world position (audio's `RegionResolver` shape). */
+export const regionAtPosition = (p: Readonly<{ x: number; z: number }>): RegionId | null => regionAtPoint(p.x, p.z);
 
 const box = (min: Vec3, max: Vec3): Aabb => ({ min, max });
 

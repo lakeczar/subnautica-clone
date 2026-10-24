@@ -15,6 +15,13 @@ import { FLOOR_PADS, type FloorPad } from "./sites.js";
  * Z -332.34..88, including the fracture rows south of the Basin) and its route
  * bounds (X -76..248, Z -320..66). Inside it the floor IS `terrainHeight`. */
 export const LEGACY_PRESERVE = { minX: -96, maxX: 272, minZ: -336, maxZ: 88 } as const;
+/** Accepted B1's whole render mesh: its 190 x 178 grid over X -95..205, Z -202..88
+ * (render/terrainSurface.ts' TERRAIN_GRID), extended 40 columns east and 80 rows
+ * south for the fracture. Content, so the region layout needs no render import. */
+export const TERRAIN_EXTENT = {
+  minX: -95, maxX: 205 + 40 * 300 / 190,
+  minZ: -202 - 80 * 290 / 178, maxZ: 88,
+} as const;
 export const LEGACY_BLEND = 96;
 
 export type FloorFunction = (x: number, z: number) => number;

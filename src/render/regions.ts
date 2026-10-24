@@ -37,9 +37,11 @@ export function legacyRegionMap(): WorldMap {
   return legacyMap ??= createWorldMap(legacyLayout());
 }
 
-/** The world map's region at a point, or null outside every authored footprint
- * (audio keeps its previous region then, per S6). Region selection uses the same map. */
-export const worldRegionAt = (p: Readonly<Vec3>): RegionId | null => legacyRegionMap().regionAt(p);
+/** The legacy art map's region at a point, for art residency only: the four
+ * B1-era owners and their handover lines. It is NOT the semantic region (the
+ * Rift, the Divide and the Deep District fall inside its Reef and Basin); that is
+ * `regionAtPoint` in content/regions/layout.ts. */
+export const legacyArtRegionAt = (p: Readonly<Vec3>): RegionId | null => legacyRegionMap().regionAt(p);
 
 /** The region the viewer is in, except that `previous` is kept while the
  * viewer is inside the `hold` box of the new region's link back to it. */

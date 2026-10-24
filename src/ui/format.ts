@@ -2,6 +2,8 @@ import { RECOVERY_NOTICES } from "../sim/recovery.js";
 import { distance } from "../sim/inventory.js";
 import type { Vec3 } from "../sim/types.js";
 
+export { formatDuration as duration } from "../sim/clock.js";
+
 export const escapeHtml = (s: string): string =>
   s.replace(
     /[&<>"']/g,

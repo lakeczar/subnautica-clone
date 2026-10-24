@@ -22,7 +22,7 @@ import { moduleOfItem, tierOfKit } from "../content/systems/hosts.js";
 /** SYS-2's identity rule (systems/instances.ts `retainsIdentity`), inlined to keep imports one-way. */
 const retainsIdentity = (kind: string): boolean => moduleOfItem(kind) !== null || tierOfKit(kind) !== null;
 import { upgradeId } from "../content/upgrades/catalogue.js";
-const DT = 1 / 60;
+import { FIXED_SECONDS as DT } from "./clock.js";
 const OCCUPIED_RECOVERY = "the Dart is occupied. Tow and salvage require an empty hull. Exit only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
 const OCCUPIED_CREEL = "the Creel is occupied. Tow and salvage require an empty hull. Leave the helm or cabin only when depth and clearance allow it safely, then approach the exterior collar; a bound field patch remains available if eligible.";
 export const RECOVERY_NOTICES = {
