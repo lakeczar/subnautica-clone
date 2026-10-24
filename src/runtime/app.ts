@@ -515,7 +515,7 @@ export class SiltwakeApp {
     let mark = performance.now();
     const charge = (part: string) => { const t = performance.now(); fl.recorder.charge(t - mark, part); mark = t; };
     this.flightFrames++;
-    if (now >= this.flightSampleAt) {
+    if (now >= this.flightSampleAt && this.flightSampling) {
       this.flightSampleAt = now + FLIGHT_SAMPLE_MS;
       const r = this.hookRead();
       fl.sample(gameSample(now, this.state, this.renderer?.stats() ?? null, r?.camera ?? null, hold, this.active, this.flightFrames));
@@ -599,6 +599,8 @@ export class SiltwakeApp {
       // The renderer's per-part timing and GPU timer queries feed the frame rows; `?rectiming=0` (measurement only) leaves them off.
       this.renderer.timing = new URLSearchParams(globalThis.location?.search ?? "").get("rectiming") !== "0";
       this.flightStartedAt = performance.now();
+      // `?recsample=0` (measurement only, R3b): no 4 Hz samples, to separate their cost.
+      this.flightSampling = new URLSearchParams(globalThis.location?.search ?? "").get("recsample") !== "0";
     } catch (error) {
       console.warn(`flight recorder unavailable: ${errorText(error)}`);
       this.flight = null;
@@ -645,6 +647,7 @@ export class SiltwakeApp {
   private ownerCheck: OwnerCheck | null = null;
   private ownerCheckTried = false;
   private flightStartedAt = 0;
+  private flightSampling = true;
   private startOwnerCheck(): void {
     const q = new URLSearchParams(globalThis.location?.search ?? ""), seconds = Number(q.get("reccheck"));
     if (!(seconds > 0) || q.get("recmeasure") !== "1" || this.flight?.mode !== "playtest") return;

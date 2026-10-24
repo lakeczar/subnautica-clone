@@ -13,17 +13,26 @@ npm run build > "$out/build.log" 2>&1 || { tail -5 "$out/build.log"; exit 1; }
 git rev-parse HEAD > dist/COMMIT
 npx tsc -p scripts/playthrough/tsconfig.json > "$out/saves-build.log" 2>&1 || { tail -5 "$out/saves-build.log"; exit 1; }
 node .test-build/scripts/playthrough/saves.js pick "$kind" --json > "$out/save.json" || { echo "the save library refused $kind (see above)"; exit 3; }
-save=$(node -e 'const p=require(process.argv[1]);console.log(p.path ?? p.file)' "$PWD/$out/save.json")
-echo "save: $kind $(node -e 'const p=require(process.argv[1]);console.log(p.commit ?? "", p.path ?? p.file)' "$PWD/$out/save.json")"
+save=$(node -e 'const p=require(require("path").resolve(process.argv[1]));console.log(p.path ?? p.file)' "$out/save.json")
+echo "save: $kind $(node -e 'const p=require(require("path").resolve(process.argv[1]));console.log(p.commit ?? "", p.path ?? p.file)' "$out/save.json")"
 run() { local name="$1"; shift
   node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack \
     --rec playtest --hold "$secs" --alternate 10 --out "$out/$name" "$@" 2>&1 | grep -E 'probe|Error|refused' | cut -c1-200
-  echo "$name: $(node -e 'const r=require(process.argv[1]).probe.alternation;console.log(JSON.stringify({pairs:r.pairs,mean:r.mean,lo:r.lo,hi:r.hi}))' "$PWD/$out/$name/run.json" 2>/dev/null || echo failed)"
+  echo "$name: $(node -e 'const r=require(require("path").resolve(process.argv[1])).probe.alternation;console.log(JSON.stringify({pairs:r.pairs,mean:r.mean,lo:r.lo,hi:r.hi}))' "$out/$name/run.json" 2>/dev/null || echo failed)"
 }
-run telemetry --video off
-run capture-bitmap --encode off
-run capture-frame --encode off --capture frame
-run vp9-bitmap --codec vp9
-run vp8-bitmap --codec vp8
-run h264-bitmap --codec h264
-run vp8-frame --codec vp8 --capture frame
+# VARIANTS (env): which to run, space-separated; default all of the first decomposition.
+for v in ${VARIANTS:-telemetry capture-bitmap capture-frame vp9-bitmap vp8-bitmap h264-bitmap vp8-frame}; do
+  case "$v" in
+    telemetry) run "$v" --video off ;;
+    telemetry-notiming) run "$v" --video off --no-timing ;;
+    telemetry-nosample) run "$v" --video off --no-sample ;;
+    telemetry-bare) run "$v" --video off --no-timing --no-sample ;;
+    capture-bitmap) run "$v" --encode off ;;
+    capture-frame) run "$v" --encode off --capture frame ;;
+    vp9-bitmap) run "$v" --codec vp9 ;;
+    vp8-bitmap) run "$v" --codec vp8 ;;
+    h264-bitmap) run "$v" --codec h264 ;;
+    vp8-frame) run "$v" --codec vp8 --capture frame ;;
+    *) echo "unknown variant $v" ;;
+  esac
+done
