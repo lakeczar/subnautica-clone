@@ -4,6 +4,9 @@
  * Node's type stripping; keep it that way. */
 
 export const TIMELINE_FORMAT = "siltwake.timeline";
+/** The longest note save reference (`TimelineEvent.saveRef`). */
+export const SAVE_REF_MAX = 200;
+export const validSaveRef = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= SAVE_REF_MAX;
 export const TIMELINE_VERSION = 2;
 /** Version 1 exports (one capped event list) still parse and analyse. */
 export const TIMELINE_VERSIONS: readonly number[] = [1, 2];
@@ -38,6 +41,10 @@ export interface TimelineEvent {
   /** Notes only. */
   text?: string;
   wall?: string;
+  /** Notes only: a reference to the game state saved with the note (REC-2 owns the
+   * save and where it is kept). At most `SAVE_REF_MAX` characters, so a 1,000-event
+   * chunk stays bounded. */
+  saveRef?: string;
 }
 /** One death not yet recovered. `losses` are craft still lost (`recovery.losses`
  * vehicle IDs); `cargo` is the specific stacks the death put in its cache (or a
@@ -143,9 +150,32 @@ const num = (v: unknown): v is number => typeof v === "number" && Number.isFinit
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 export function parseTimeline(text: string): { ok: true; value: TimelineExport } | { ok: false; error: string } {
   let v: unknown;
-  try { v = JSON.parse(text); } catch (e) { return { ok: false, error: `Not JSON: ${(e as Error).message}` }; }
+  try { v = JSON.parse(text); } catch (e) { return { ok: false, error: `Not JSON: ${e instanceof Error ? e.message : "unparseable"}` }; }
+  return validTimeline(v);
+}
+/** The deepest nesting a timeline value may have (real records nest about 7 deep). Deeper
+ * untrusted JSON is refused, so no later clone or stringify of it can overflow the stack. */
+export const TIMELINE_MAX_DEPTH = 32;
+/** Whether `v` nests deeper than `limit` (iterative, so it can't overflow itself). */
+export function tooDeep(v: unknown, limit = TIMELINE_MAX_DEPTH): boolean {
+  const stack: [unknown, number][] = [[v, 0]];
+  while (stack.length) {
+    const [x, d] = stack.pop()!;
+    if (typeof x !== "object" || x === null) continue;
+    if (d >= limit) return true;
+    for (const y of Object.values(x)) stack.push([y, d + 1]);
+  }
+  return false;
+}
+/** The one timeline validator, over an already parsed value. Total: any input gives a result. */
+export function validTimeline(v: unknown): { ok: true; value: TimelineExport } | { ok: false; error: string } {
+  try { return validate(v); } catch { return { ok: false, error: "Malformed timeline." }; }
+}
+function validate(v: unknown): { ok: true; value: TimelineExport } | { ok: false; error: string } {
+  if (tooDeep(v)) return { ok: false, error: "Nested too deeply." };
   if (!obj(v) || v.format !== TIMELINE_FORMAT) return { ok: false, error: `Not a ${TIMELINE_FORMAT} file.` };
-  if (typeof v.version !== "number" || !TIMELINE_VERSIONS.includes(v.version)) return { ok: false, error: `Unsupported timeline version ${String(v.version)}.` };
+  if (typeof v.version !== "number" || !TIMELINE_VERSIONS.includes(v.version))
+    return { ok: false, error: `Unsupported timeline version${typeof v.version === "number" ? ` ${v.version}` : ""}.` };
   const session = v.session;
   if (!obj(session) || typeof session.id !== "string" || typeof session.started !== "string" || !obj(session.end) ||
     !num(session.end.tick) || !num(session.end.play) || !num(session.end.idle)) return { ok: false, error: "Malformed session header." };
@@ -156,16 +186,25 @@ export function parseTimeline(text: string): { ok: true; value: TimelineExport }
       num(c.quantity) && c.quantity > 0 && num(c.last) && c.last >= 0))))
     return { ok: false, error: "Malformed pending recoveries." };
   if (!Array.isArray(v.events) || !num(v.dropped) || (v.seq !== undefined && !num(v.seq))) return { ok: false, error: "Malformed events." };
+  // Every known field is checked when present (SIM-1b R2 F1): an otherwise-valid record with one wrong field is malformed.
+  const str = (x: unknown): boolean => typeof x === "string";
+  const opt = (x: unknown, ok: (y: unknown) => boolean): boolean => x === undefined || ok(x);
+  const regionOk = (x: unknown): boolean => x === undefined || x === null || typeof x === "string";
   const event = (e: unknown): boolean => obj(e) && typeof e.kind === "string" && KINDS.includes(e.kind) && num(e.tick) && num(e.play) &&
-      (e.seconds === undefined || num(e.seconds)) && (e.of === undefined || num(e.of)) &&
-      (e.keys === undefined || (Array.isArray(e.keys) && e.keys.every((k) => typeof k === "string"))) && (e.stationary === undefined || num(e.stationary)) && (e.at === undefined || (Array.isArray(e.at) && e.at.length === 3 && e.at.every(num)));
+      opt(e.what, str) && opt(e.id, str) && opt(e.label, str) && opt(e.quantity, num) && regionOk(e.region) &&
+      opt(e.seconds, num) && opt(e.stationary, num) && opt(e.metres, num) && opt(e.hull, str) && opt(e.waiting, strings) &&
+      opt(e.keys, strings) && opt(e.of, num) && opt(e.text, str) && opt(e.wall, str) &&
+      opt(e.at, (a) => Array.isArray(a) && a.length === 3 && a.every(num)) && opt(e.saveRef, validSaveRef) &&
+      (e.kind !== "note" || typeof e.text === "string");
   for (const [n, e] of v.events.entries()) if (!event(e)) return { ok: false, error: `Malformed event ${n}.` };
   const counts = (r: unknown): boolean => obj(r) && Object.values(r).every(num);
+  const travelStretch = (x: unknown): boolean => obj(x) && num(x.play) && num(x.seconds) && str(x.hull) && regionOk(x.region);
+  const idleStretch = (x: unknown): boolean => obj(x) && num(x.play) && num(x.tick) && num(x.seconds) && strings(x.waiting) && regionOk(x.region);
   if (v.rotated !== undefined && !(Array.isArray(v.rotated) && v.rotated.every((r) => obj(r) && obj(r.from) && obj(r.to) &&
     (r.n === undefined || num(r.n)) && num(r.from.tick) && num(r.from.play) && num(r.to.tick) && num(r.to.play) && counts(r.kinds) && Array.isArray(r.kept) && r.kept.every(event) &&
     obj(r.gathering) && num(r.gathering.count) && counts(r.gathering.byItem) &&
-    obj(r.travel) && num(r.travel.count) && num(r.travel.seconds) && num(r.travel.stationary) && counts(r.travel.byHull) && Array.isArray(r.travel.long) &&
-    obj(r.idle) && num(r.idle.count) && num(r.idle.seconds) && num(r.idle.waitingSeconds) && Array.isArray(r.idle.long) &&
+    obj(r.travel) && num(r.travel.count) && num(r.travel.seconds) && num(r.travel.stationary) && counts(r.travel.byHull) && Array.isArray(r.travel.long) && r.travel.long.every(travelStretch) &&
+    obj(r.idle) && num(r.idle.count) && num(r.idle.seconds) && num(r.idle.waitingSeconds) && Array.isArray(r.idle.long) && r.idle.long.every(idleStretch) &&
     Array.isArray(r.regions) && r.regions.every((x) => typeof x === "string"))))
     return { ok: false, error: "Malformed rotated chunks." };
   return { ok: true, value: v as unknown as TimelineExport };

@@ -169,7 +169,7 @@ function viewFixture(t: test.TestContext, world = createWorldQueries()) {
     command: (c) => commands.push(c), audio: (a) => audio.push(a),
     panel: noop, closePanel: noop, fixture: noop, newGame: noop, exportTimeline: noop,
     continueGame: noop, resume: noop, pause: noop, save: noop,
-    exportGame: noop, exportBackup: noop, exportRaw: noop,
+    exportGame: noop, exportBackup: noop, exportRaw: noop, repairTimeline: noop,
     importFile: noop, confirm: noop, cancelConfirm: noop, lockMouse: noop, settings: noop,
   };
   const view = new GameView(root as unknown as HTMLElement, actions, world);

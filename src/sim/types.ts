@@ -292,7 +292,8 @@ export type GameCommand =
       vehicleId?: string;
     };
 export type NoticeChannel = "action" | "hazard" | "system" | "persistence";
-export type NoticeContext = "threat" | "oxygen" | "food" | "hull" | "recovery" | "ecology";
+/** `timeline`: the local play timeline's storage (SIM-1b), apart from the game save's. */
+export type NoticeContext = "threat" | "oxygen" | "food" | "hull" | "recovery" | "ecology" | "timeline";
 export type ExitRefusalCode = "not-piloting" | "carrier" | "depth" | "obstructed";
 export interface NoticeOptions {
   channel?: NoticeChannel;
