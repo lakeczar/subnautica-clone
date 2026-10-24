@@ -1121,3 +1121,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **LS-1 stage 1a ACCEPTED** (R2, Sol `d5818cc0` on `review/ls-1-1a-r2`: 41 focused tests, 9/9 playthroughs, 139 matching reloads, timelines reproduce exactly). Merged locally at `a3409226`; gate parts through the queue (`d50c`, `1afd`); no bake-relevant files.
   - **Hygiene note:** use absolute evidence paths outside the checkout in submissions.
 - **LS-1 stage 1a merged to root at `a3409226`:** fast, build and 6 economy pass (`d50c`); playthrough 9/9 with 15 reloads matching (`1afd`), both run in the queue. The saves export is deferred while REC-1's exclusive is queued (its local compile would disturb); the next export covers `a3409226`, which also brings SIM-PERF-1's `a38b951e` up to date.
+- **SCHED-3 R5 part 1 done at `6045fddc`** (code `f361238e`):
+  - **Fixes:** the `stepBoundary` realpath boundary (repo or its own `node_modules`, checked at submit and again in the runner); faithful signals (128+signo; a stop always wins); the v1 parser accepts `--machine` and `--artifact`; queued progress prints only on change, plus every 5 min. B43 added.
+  - **Checks:** units 55/55, B 11/11, suites 23/27/43 through the queue, fast on the 4070.
+  - **Part 2** (the STEW-2 alias, `cgroup-scope.mjs`, `package.json` composition) waits for STEW-2 on root. R6 on the composed candidate is the install decision.
