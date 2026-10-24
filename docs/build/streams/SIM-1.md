@@ -13,6 +13,68 @@ Branch `t3/sim-1-inplace-step`, from root `feat/siltwake-first-expedition`. It w
 
 **Source SHA:** `68a2c5bd` (SIM-1a). The stepping evidence below was tested at `bebc19a4`/`950d8796`; SIM-1a changes only timeline persistence since then. **No save schema change.** The timeline export format is now v2 (rotation summaries), and v1 still parses.
 
+## SIM-1b: the incremental play-timeline journal
+
+Branch `t3/sim-1b-timeline-journal`, rebuilt on root `96255382` (SIM-1a, SIG-1, STEW-1, TST-16) from the parked `f6fee338` (kept as `backup/sim-1b-f6fee338`). The spec is contract v2, plus the coordinator's R5 decisions and R6 rulings. It replaces SIM-1a's whole-export save; the compromise SIM-1a filed is closed by this.
+
+**What a save costs now** (`scripts/timeline-save-bench.mjs`, full 20,000-event window, 60 saves about 10 s of play apart; characters exact, times indicative; the 4070 run at the final head is under "Evidence" below):
+
+| | Characters written per save | Time |
+| --- | --- | --- |
+| Root model (whole export) | 2,916,953 | stringify median ~12 ms (local smoke) |
+| Journal, steady commit | 44,905 (the journal only) | median ~1.4 ms (local smoke) |
+| Journal, a commit that seals a chunk | 188,497 in 3 keys | ~3.6 ms (local smoke) |
+
+**Design** (`src/sim/timeline/store.ts`, `src/runtime/liveTimeline.ts`):
+- **The commit point:** one journal record, `siltwake.timeline.v2.journal = { current, previous, v1Superseded }`. Each head names its chunk keys (`siltwake.timeline.v2|<session>|<n>`). A chunk is written once when it seals and once more as its summary when it rotates.
+- **Each commit runs inside one `runExclusive`** on `siltwake.timeline.v2.writer`. The generation's `AbortSignal` is checked inside the lock before anything is written.
+- **Planned before it writes (R6 F1):** each commit, with no cache:
+  - reads the journal afresh, and treats a text different from the one this tab last saw as a conflict;
+  - parses it and both heads through a total reader;
+  - lists the chunk keys once, to check that every chunk either head names exists;
+  - reads a head about to be displaced whole, chunks included;
+  - reads a chunk a fold would overwrite first; a damaged one protects. The fold itself always comes from the recorder's own loaded events.
+
+  Under quota, previous is read whole before anything is folded for room. Collection removes only keys the journal just committed doesn't name.
+- **Total reader (R6 F2):** every head field is checked before anything spreads or reads it. Events go through the one parser (`parseTimeline`). Any malformed shape, in either position and from any expedition, is `protected` and never thrown.
+- **Protection** (unreadable or malformed journal, head, chunk or v1, including a journal read failing mid-commit, R6 F5) stays until a replacement commits (R6 F3). The menu's **Repair play timeline** exports the raw records, confirms, and replaces them inside the lock. If the records changed since the export, the repair is a conflict. A refused repair stays offered.
+- **v1:** migrated into current or previous by its session. The first committed journal holding that session sets `v1Superseded`, after which a leftover v1 record is garbage, never a veto, and is removed after the commit (R6 F4).
+- **Retention:** current plus previous. Under quota, this expedition's oldest chunks fold first, then previous is dropped (reported with an ID-free label once committed), then the commit fails.
+- **Notes commit like game saves:**
+  - "Saving note…" at once, then "Note saved to the play timeline." only once a commit holding the note returns;
+  - "Waiting to save the play timeline…" after about 2 s pending, re-armed for a note queued behind a pending commit (R6 F7);
+  - closing during a pending note commit can lose that note, and the notices never claimed it saved.
+- **Failure policy (R6 F6 ruling, an amendment to R5):**
+  - a **rejected lock** or a **full quota**: the note is in memory only *for now*, and the next scheduled save tries again;
+  - a **conflict**, **protection** or **no lock API**: memory only with export, and no retry.
+
+**Note save reference (owner, 2026-10-24; for REC-2):** a note event can carry `saveRef: string`, a reference to the game state saved with that note. REC-2 owns the save itself and where it is kept; the timeline only carries the reference.
+- **Bound:** at most 200 characters (`SAVE_REF_MAX`), so a 1,000-event chunk stays bounded.
+- **API:** `addNote(rec, s, text, wall?, saveRef?)` and `LiveTimeline.note(s, text, saveRef?)`. `parseTimeline` rejects a malformed `saveRef`.
+- **Retention:** kept verbatim through rotation like the note itself.
+- **REC-2's side:** drop its save when the note's expedition leaves the journal; a committed journal naming neither head is the signal.
+
+**Contracts changed:**
+- `exportTimeline` and `exportTimelineText` lose SIM-1a's `whole` fold argument (the journal folds for quota now), and `TIMELINE_WHOLE_FLOOR` is gone.
+- The recorder exports `closingEvents`, `exportHead`, `rotateOldest` and `retainedEvents` again for the store, and `resumeRecorder` takes the stored partition.
+- `ExpeditionSession.ask` is public, for the repair's confirmation.
+
+**Tests** (`tests/timeline-store.test.ts`, `tests/timeline-app.test.ts`, `tests/timeline-recorder.test.ts`):
+- **Kept from R1–R5:**
+  - the boundary matrix and fault injection at every write and read, with crash images;
+  - the export round trip, folds and retention swaps;
+  - conflicts, aborted and replaced generations, malformed records, v1 migration, repair and note notices;
+  - R3's app flows (A, B, import A, and session-only B then Continue).
+- **New for R6:** F1 paths 1–3 (a removed chunk; a damaged chunk about to fold; a journal edited with commit IDs kept; quota with a damaged previous), each with zero mutations. Also:
+  - F2: seven malformed head shapes, in both positions, for three expeditions, plus Continue onto `events: null` offering the repair;
+  - F3: a refused repair (quota and permission) retried in-session, with notes kept;
+  - F4: v1 removal refused after the repair, plus the crash image right after the journal write;
+  - F5: an unreadable journal mid-commit, then a repair after reads recover;
+  - F6: a rejected lock and a full quota, each saved by the next scheduled save;
+  - F7: a queued note's own waiting notice.
+- **Also:** every browser quota form (QuotaExceededError, NS_ERROR_DOM_QUOTA_REACHED, codes 22 and 1014) against a non-quota refusal; the `saveRef` round trip; and "a steady commit writes the journal only".
+- **Checked against the reviewed code:** the R6 store tests (F1, F2, F3/F4, F5) fail against `f6fee338`'s store, and the R6 app tests for F3, F6 and F7 fail against its live timeline. All pass here.
+
 ## What changed
 
 **`stepGameInPlace(s, commands, world): GameEvent[]`** (`src/sim/step.ts`) is the step, and it mutates `s`.
