@@ -132,7 +132,9 @@ const DRAW = `async (cap, ms) => {
   await new Promise((done) => { const f = (now) => {
     if (now - last > 83) { last = now; id++; draws.push({ id, t: now }); x.fillStyle = "#246578"; x.fillRect(0, 0, 640, 360);
       for (let bit = 0; bit < 16; bit++) { x.fillStyle = id & (1 << bit) ? "#fff" : "#000"; x.fillRect(bit * 40, 0, 40, 80); } }
-    try { cap.afterRender(now); } catch (e) { (window.drawErrors ??= []).push(String(e?.message ?? e)); }
+    // A frame row each frame (the game writes one): the pack's measured window is the recording's.
+    try { cap.recorder.frame({ t: now, gap: now - (window.lastFrameT ?? now), work: 1, sim: 0, steps: 1, save: 0, hud: 0, hold: "clear", heapDrop: -1, chunks: 0, caves: 0, regions: 0, lights: 0, actors: 0, render: 0, dom: 0, gpuTag: -1 }); window.lastFrameT = now;
+      cap.afterRender(now); } catch (e) { (window.drawErrors ??= []).push(String(e?.message ?? e)); }
     if (now - t0 < ms) requestAnimationFrame(f); else done(); }; requestAnimationFrame(f); });
   return draws;
 }`;

@@ -187,7 +187,7 @@ function videoFrame(m: Extract<Message, { op: "video-frame" }>): void {
   const frame = new VideoFrame(picture!, { timestamp: Math.round(m.t * 1000) });
   try { encoder.encode(frame, { keyFrame: seg.frames % KEY_EVERY === 0 }); } finally { frame.close(); }
   seg.frames++;
-  scope.postMessage({ videoFrame: 1, kept: true });
+  scope.postMessage({ videoFrame: 1, kept: true, t: m.t });
 }
 async function drain(): Promise<void> {
   if (encoder && encoder.state === "configured") { try { await encoder.flush(); } catch { /* reported by its error callback */ } }
