@@ -121,6 +121,9 @@ class AppWork {
       this.timelineSaved = s.tick;
       sink.length = 0;
       sink.push(timeline.exportTimelineText(this.rec, s, this.rec.sealed.length));
+      timelineSize.events = Math.max(timelineSize.events, this.rec.seq);
+      timelineSize.chars = Math.max(timelineSize.chars, sink[0]!.length);
+      timelineSize.playHours = Math.max(timelineSize.playHours, this.rec.playTicks / 216_000);
     }
     costs.mark(PHASE.timelineSave);
     if (s.tick - this.lastAutosave >= 1800) {
@@ -135,6 +138,8 @@ class AppWork {
 const LOCK: WriterLockPort = { runExclusive: async (_name, _signal, action) => action() };
 /** Keeps the latest timeline export reachable, as storage would. */
 const sink: string[] = [];
+/** The largest play timeline any run reached (its export grows with it). */
+const timelineSize = { events: 0, chars: 0, playHours: 0 };
 
 function close(run: string, phase: string, s: GameState, world: WorldQueries): void {
   costs.close(s.tick);
@@ -218,6 +223,7 @@ for (const w of snapshot.worst) {
 const seconds = (performance.now() - t0) / 1000;
 const r2 = (x: number): number => +x.toFixed(3);
 console.log(`${runs.map((r) => `${r.run} ${r.outcome} ${r.ticks}`).join("; ")} in ${seconds.toFixed(0)} s`);
+console.log(`largest play timeline: ${timelineSize.events} events, ${timelineSize.chars} chars exported, ${timelineSize.playHours.toFixed(2)} h of play`);
 console.log(`steps ${snapshot.steps}; mean ${r2(snapshot.step.mean)} ms, p50 ${r2(snapshot.step.p50)}, p99 ${r2(snapshot.step.p99)}, ` +
   `p99.9 ${r2(snapshot.step.p999)}, max ${r2(snapshot.step.max)}; over ${SLOW_STEP_MS} ms: ${snapshot.slow}; GC over 1 ms: ${gcs.length} (max ${r2(Math.max(0, ...gcs.map((g) => g.ms)))} ms)`);
 for (const [name, p] of Object.entries(snapshot.phases).sort((a, b) => b[1].max - a[1].max))
@@ -232,5 +238,5 @@ for (const w of snapshot.worst.slice(0, 16)) {
     `[${top}]${(w as { gc?: number }).gc ? ` gc ${(w as { gc?: number }).gc} ms` : ""}${ctx?.caveBuilds ? ` cave builds ${ctx.caveBuilds}` : ""}`);
 }
 const json = value("--json");
-if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, snapshot, slow, gcs }, null, 1) + "\n");
+if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, timelineSize, snapshot, slow, gcs }, null, 1) + "\n");
 process.exit(runs.some((r) => r.outcome === "blocked") ? 1 : 0);
