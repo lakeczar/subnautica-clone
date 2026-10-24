@@ -64,6 +64,15 @@ The coordinator's decisions applied:
   - **B42:** registered spellings whose scripts are `CHECK=1 npm run inner` and `npx …` run here as submitted, never through the runner.
   - **Fixtures:** the R2/R3 fixture scripts became `node scripts/case.mjs` (a `sh` step is now outside the grammar).
 
+- **Checks** at `d70237bd`, all through the queue:
+  - **One `--class standard --machine 3090 --review` job** (ticket `261024-192453-ee15`), job variables cleared:
+    - units **50/50**;
+    - B28 and B34–B42 **10/10**;
+    - SCHED-1 **23/23**;
+    - SCHED-2 **27/27**;
+    - SCHED-2b **42/42**.
+  - **Fast tier:** `--machine 4070`, ticket `261024-192453-9293`, exit 0, 149 files, at `d70237bd`; the tier exercises the new `playthrough` and `test:heavy` scripts only through `package.json`'s parse.
+
 ## R3 review responses
 
 Review `7c188ded` on `review/sched-3-r3`, by Sol on `3850c9bd`: REQUEST CHANGES. E1–E5 and the base control pass 6/6. The findings:
