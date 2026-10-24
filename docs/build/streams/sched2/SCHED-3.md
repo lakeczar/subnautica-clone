@@ -71,7 +71,12 @@ The coordinator's decisions applied:
     - SCHED-1 **23/23**;
     - SCHED-2 **27/27**;
     - SCHED-2b **42/42**.
-  - **Fast tier:** `--machine 4070`, ticket `261024-192453-9293`, exit 0, 149 files, at `d70237bd`; the tier exercises the new `playthrough` and `test:heavy` scripts only through `package.json`'s parse.
+  - **Fast tier:** `--machine 4070`, ticket `261024-192453-9293`, exit 0, 149 files, at `d70237bd`.
+  - **The runner on the real 4070** (ticket `261024-194232-0fe4`, `--machine 4070 -- node scripts/heavy/portable-run.mjs --script playthrough --jobs 3 --quiet`, at `d5ee8018`):
+    - it resolved the new script to `node node_modules/typescript/bin/tsc -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js --jobs 3 --quiet`;
+    - every scenario passed, with no blockers, exit 0, and bound evidence.
+
+    This is not the installed automatic routing, which stays for the live canary.
 
 ## R3 review responses
 
