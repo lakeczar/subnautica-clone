@@ -25,7 +25,7 @@ With equal boundaries, the faces' summed winding equals the region's everywhere.
 
   Tests and tools that set no store build live as their oracle and aren't counted.
 - **Tested** (`regions-bake.test.ts`): a decoded chunk leaves the count unchanged; a missing file adds exactly one and logs one line. The mutant that doesn't count fails it.
-- **A normal production build never reaches it:** BAKE-COUNTER. That run counts both shell builds and the fallback.
+- **A normal production build never reaches it:** this is pending the 3090 traversal (tickets `261024-130411-46ed`, `261024-130411-ccc2`), which counts every shell build in the page on a fresh-bake build of CW-1 + COL-1.
 - **No new provenance mechanism:** CW-1's manifest source-hash refusal is the authority, so on merge its refused bake simply lands in this counted path.
 - **Production compromise:** whenever terrain assets fail to load or are refused, each affected chunk is built on the main thread, unsliced. Each cave shell in it is one synchronous build. R7 made the shell build about 1.2–1.6× slower (crown shaft fine 1.23 → 1.80 s uncached, local, indicative), so a refused or missing bake near a large cave is a visible hitch.
   - **Root fix:** WK-1's sliced or worker builder for the fallback, with shells baked as packs (conventions 4 and 5). **S–M**, owned by WK-1.
@@ -46,7 +46,14 @@ Unmutated: `col1-r7` 11 / 11.
 
 **Evidence correction (Sol):** R7's root-gate receipt ran five economy scripts and omitted the sixth, the upgrade economy. R8's gate runs all six.
 
-**Checks for R8:** CHECKS.
+**Checks for R8,** at `0d8f033c` after merging root (STEW-1 and the rest), on the RTX 4070 and bound to the commit. These are the gate's steps run as queued jobs, not `npm run gate` itself, whose local steps would run on the 3090 host during the exclusive series:
+- **Ticket `261024-140712-34dd`:**
+  - fast tier 1,555 / 1,555, including STEW-1's architecture guard and the headless typecheck;
+  - terrain bake;
+  - `npm run build`;
+  - all six economy scripts exit 0;
+  - the whole heavy tier passes.
+- **Ticket `261024-140712-8fc5`:** playthrough, every scenario, no blockers, every milestone reload matched.
 
 ## R7 response (Sol R7 on `38e50afb`: [report](../reviews/COL-1A-SOL-XHIGH-R7.md), on `review/col-1a-r7`)
 **R7-1 is fixed at the root.** The seam is now built from its boundary in each side plane, instead of extruding each open edge to the floor on its own. The result is checked against that boundary inside the build. The reviewer's cases now pass at half-extents 1e-7, 1e-5 and 1e-4 m:
