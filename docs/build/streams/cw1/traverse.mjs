@@ -22,6 +22,7 @@ import { createServer } from "node:http";
 import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
 import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
+import { Worker } from "node:worker_threads";
 requireGpuLease("CW-1 traversal");
 const require = createRequire(process.env.CW1_PW ?? "/work/tmp/gpu-prep/pw/");
 const CHROME = process.env.CW1_CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`;
@@ -55,6 +56,8 @@ let traveling = false;
 // (aligned to performance.now by a user-timing mark), so every long frame is
 // checked against the pauses that ran in it.
 let gcTrace = [];
+/** SIMPERF_TRACE: long main-thread slices (renderer, GPU process, viz) on the page clock. */
+let threadSlices = [];
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, timeout: 30000,
   ...(process.env.CW1_CHROME ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}),
   args: [...(process.env.CW1_CHROME ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", "--cw1-traverse"] });
@@ -257,7 +260,8 @@ try {
   let s = await read(); eye = s.cam[1] + s.depth;
   note("loaded", JSON.stringify({ cam: s.cam, depth: s.depth, vitals: s.vitals }));
   // Measured from here: the traversal itself.
-  await browser.startTracing(page, { categories: ["disabled-by-default-v8.gc", "v8", "blink.user_timing"], screenshots: false });
+  // SIMPERF_TRACE=1: what a blocked main thread waited on (tasks, GPU, IPC).
+  await browser.startTracing(page, { categories: ["disabled-by-default-v8.gc", "v8", "blink.user_timing", ...(process.env.SIMPERF_TRACE ? ["toplevel", "gpu", "ipc"] : [])], screenshots: false });
   // CW1_PROFILE=1 (diagnosis): a sampled CPU profile of the page over the travel.
   const cdp = process.env.CW1_PROFILE ? await page.context().newCDPSession(page) : null;
   let profileStartPage = null;
@@ -271,6 +275,30 @@ try {
   sched.pid = findRenderer();
   note("renderer main thread", sched.pid ?? "not found");
   const sampler = setInterval(sampleSched, 5);
+  // SIM-PERF-1 (SIMPERF_HOST=1): on its own thread, a 1 ms CLOCK_MONOTONIC canary (a gap
+  // means this whole process, on another vCPU, did not run), every vCPU's steal from
+  // /proc/stat and the vCPU the renderer's main thread is on, every 10 ms (epoch ms).
+  const host = process.env.SIMPERF_HOST ? new Worker(`
+    const { parentPort } = require("node:worker_threads"), fs = require("node:fs");
+    const late = [], steal = [], where = [], last = [], sleeper = new Int32Array(new SharedArrayBuffer(4));
+    let pid = null, stop = false, prev = performance.timeOrigin + performance.now(), n = 0, cpuWas = -1;
+    parentPort.on("message", (m) => { if (m === "stop") stop = true; else pid = m; });
+    const tick = () => {
+      if (stop) { parentPort.postMessage({ late, steal, where }); return; }
+      Atomics.wait(sleeper, 0, 0, 1);
+      const now = performance.timeOrigin + performance.now();
+      if (now - prev > 3) late.push([prev, +(now - prev).toFixed(2)]);
+      prev = now;
+      if (++n % 10 === 0) {
+        try { for (const line of fs.readFileSync("/proc/stat", "utf8").split("\n")) { const m = /^cpu(\d+) /.exec(line); if (!m) continue;
+          const c = +m[1], v = +line.trim().split(/\s+/)[8]; if (last[c] !== undefined && v > last[c]) steal.push([now, c, v - last[c]]); last[c] = v; } } catch {}
+        if (pid) try { const f = fs.readFileSync("/proc/" + pid + "/task/" + pid + "/stat", "utf8"); const c = +f.slice(f.lastIndexOf(")") + 2).split(" ")[36];
+          if (c !== cpuWas) { where.push([now, c]); cpuWas = c; } } catch {}
+      }
+      setImmediate(tick);
+    };
+    tick();`, { eval: true }) : null;
+  if (host && sched.pid) host.postMessage(sched.pid);
   const markAt = await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; performance.mark("cw1-align"); return performance.now(); });
   const started = performance.now(), syncAtStart = records.sync ?? 0, pendingAtStart = records.lightPendingFrames ?? 0;
   traveling = true;
@@ -317,6 +345,13 @@ try {
   {
     const trace = JSON.parse((await browser.stopTracing()).toString()), events = trace.traceEvents ?? trace;
     const mark = events.find(e => e.name === "cw1-align");
+    if (process.env.SIMPERF_TRACE && mark) {
+      // The renderer's and GPU process's main-thread slices of 2 ms or more, on the page clock.
+      const names = new Map(events.filter(e => e.ph === "M" && e.name === "thread_name").map(e => [`${e.pid}:${e.tid}`, e.args?.name]));
+      const keep = (e) => ["CrRendererMain", "CrGpuMain", "VizCompositorThread"].includes(names.get(`${e.pid}:${e.tid}`));
+      threadSlices = events.filter(e => e.ph === "X" && e.dur >= 2000 && keep(e))
+        .map(e => ({ at: markAt + (e.ts - mark.ts) / 1000, ms: e.dur / 1000, name: e.name, thread: names.get(`${e.pid}:${e.tid}`) }));
+    }
     // Profile samples on the page clock, each with its leaf and the nearest frames of our code.
     if (profile) {
       const byId = new Map(profile.nodes.map(n => [n.id, n])), parentOf = new Map();
@@ -338,6 +373,8 @@ try {
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
     regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
     heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));
+  const hostData = host ? await new Promise((resolve) => { host.once("message", resolve); host.postMessage("stop"); }) : null;
+  if (host) await host.terminate();
   // SIM-PERF-1: the step meter's snapshot (pulled once), worst steps by phase on the page clock.
   result.stepCosts = await page.evaluate(() => globalThis.__siltwakeStepCosts?.() ?? null);
   const gaps = data.gaps.map(([, g]) => g).sort((a, b) => a - b);
@@ -365,7 +402,17 @@ try {
     }
     const steps = (result.stepCosts?.worst ?? []).filter(w => w.at >= at - g - 1 && w.at <= at + 1)
       .map(w => ({ tick: w.tick, ms: +w.ms.toFixed(2), phases: Object.fromEntries(Object.entries(w.phases).filter(([, v]) => v >= 0.05).map(([k, v]) => [k, +v.toFixed(2)])) }));
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, steps, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    // SIM-PERF-1's verdict data: the canary's gaps, steal by vCPU, the renderer's vCPU, long slices.
+    const host = hostData ? (() => {
+      const e0 = data.origin + at - g, e1 = data.origin + at;
+      const stealIn = {}; for (const [t, c, j] of hostData.steal) if (t >= e0 - 10 && t <= e1 + 30) stealIn[c] = (stealIn[c] ?? 0) + j;
+      let cpus = new Set(); for (let i = 0; i < hostData.where.length; i++) { const [t, c] = hostData.where[i], next = hostData.where[i + 1]?.[0] ?? Infinity; if (t <= e1 && next >= e0) cpus.add(c); }
+      return { canary: hostData.late.filter(([t, ms]) => t < e1 && t + ms > e0).map(([, ms]) => ms), steal: stealIn, rendererCpus: [...cpus],
+        stealOnRendererCpu: [...cpus].reduce((n, c) => n + (stealIn[c] ?? 0), 0) };
+    })() : null;
+    const slices = threadSlices.filter(x => x.at < at && x.at + x.ms > at - g).sort((a, b) => b.ms - a.ms).slice(0, 8)
+      .map(x => `${x.thread} ${x.name} ${x.ms.toFixed(1)} ms`);
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, steps, host, slices, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
@@ -403,6 +450,8 @@ try {
   // The page clock's epoch origin: long gaps at origin + at line up with outside samples (PSI, ps).
   result.pageOrigin = data.origin;
   result.thread = { pid: sched.pid, samples: sched.n };
+  if (hostData) result.host = { canaryGaps: hostData.late.length, canaryMaxMs: Math.max(0, ...hostData.late.map(([, ms]) => ms)),
+    stealJiffies: hostData.steal.reduce((n, [, , j]) => n + j, 0) };
   result.gc = { collections: gcTrace.length, byKind: gcTrace.reduce((m, x) => ({ ...m, [x.kind]: (m[x.kind] ?? 0) + 1 }), {}),
     maxPauseMs: Math.max(0, ...gcTrace.map(x => x.pauseMs)), over16: gcTrace.filter(x => x.pauseMs > 16).map(x => `${x.kind} ${x.pauseMs} ms at ${x.at.toFixed(0)}`) };
   // The gate: the travel's own unsliced builds (the counter, and the logged
