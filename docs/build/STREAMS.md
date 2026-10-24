@@ -1177,3 +1177,4 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Owner decision pending:** (1) a read-only Windows reader, which needs consent (the coordinator recommends this), or (2) VM-side evidence labelled "Windows host CPU: unmeasured".
   - **Probe:** a read-only Linux-side probe is queued (`8117`). The coordinator corrected it: no runtime-assembled `/mnt` path to slip past the lane's guard.
   - **Shaders:** the 4070 gate judges warmed frames and records first-use shader compiles.
+- **Owner (2026-10-24): reading the Windows laptop is allowed, read-only** (SCHED-4b option 1). New **`docs/build/ALICKERS-LEDGER.md`** records every laptop change (fleet's baseline plus ours) with undo and redo steps; the owner decides undos. Rule added to `WORKER_RESOURCE_LIMITS.md`.

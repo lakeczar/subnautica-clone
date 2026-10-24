@@ -219,6 +219,7 @@ scripts/alickers-job.sh --deadline 1800 -- npm run test:heavy
 - **Performance numbers** from the sandbox are labelled **"RTX 4070 Laptop (alickers, shared desktop host)"**. The Windows host can be in use, so treat them as indicative, never as the 3090's exclusive-mode evidence. Functional evidence (play, screenshots, passes) counts like any other run at the recorded SHA.
 - **One job at a time** on the sandbox, and the checkout is shared. Don't leave long interactive sessions holding it, and don't edit files there; everything comes from commits.
 - **Coordination, provider logins and GitHub pushes stay on factory-worker.** The sandbox has no logins.
+- **Reading Windows is allowed, read-only** (owner, 2026-10-24): CPU load, idle time, power source and power mode, for 4070 quiet-run proof (SCHED-4b). Never change a Windows setting, never use the desktop. **Every change on the laptop, Windows or Linux side, is recorded in [ALICKERS-LEDGER.md](ALICKERS-LEDGER.md) with its undo and redo, before it's made.** Windows-side changes are made by fleet or the owner.
 
 ## Shared save library (SAVE-1, 2026-10-23)
 
