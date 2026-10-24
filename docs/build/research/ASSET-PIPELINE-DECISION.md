@@ -19,7 +19,11 @@
 2. **The working session (Option A):**
    - **Where it runs:** a long-lived Blender session inside the alickers Linux sandbox, on the 4070, under a queue **session reservation**.
    - **How agents reach it:** agents on factory-worker drive it over stdin/stdout through the existing SSH lane. **No Blender RPC listener is exposed.**
-   - **MCP:** optional and later. The official Blender Lab MCP's background mode is the candidate, never the unauthenticated community server.
+   - **MCP: the official Blender Lab MCP is the live channel** (owner question, 2026-10-24).
+     - **Where it runs:** its server runs inside the sandbox, bound to sandbox-local loopback only, in background mode. The agent reaches it over the SSH stdio lane, so nothing on factory-worker can reach Blender.
+     - **What it's for:** the agent uses MCP's scene queries, screenshots and code execution to work interactively.
+     - **The rule:** everything that ships still ends as a committed script, rebuilt by the clean canonical job, so reproducibility doesn't depend on a live session.
+     - **Never the community server:** it has no authentication and depends on a GUI timer.
    - **Viewer:** an optional view-only viewer for the owner.
 3. **The session is a sketchbook; committed scripts are the source of truth.** Every shipped asset is rebuilt by a clean queued Blender job from committed scripts.
    - **The canonical builder is pinned:** one machine path, with AO baked on CPU. GPU-bake determinism has not been tested, so GPU AO bakes are not canonical.
@@ -60,3 +64,11 @@
 ## What the owner is asked to approve
 
 These are listed in STREAMS; each becomes a row in `ALICKERS-LEDGER.md` before anything is done.
+
+## Owner answers (2026-10-24)
+
+1. **Install command:** approved; the exact command is given when AP-1 starts.
+2. **When Blender may use the 4070: any time,** unless the owner says to stop. The owner's pause always wins.
+3. **The view-only viewer:** yes, if it isn't hard to set up.
+4. **The style reference board:** yes, and it's important. AP-1 drafts one from GAME-DIRECTION, OPENING-DESIGN and the regional palettes, with annotated reference images used for internal reference only, never shipped. The owner approves or edits it before the bake-off.
+5. **The laptop's hybrid GPU mode stays as it is.**
