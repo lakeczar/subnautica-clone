@@ -37,7 +37,7 @@ import { GeometryCache } from "./geometryCache.js";
 import { createCaveView, liveCaveFields, type CaveFieldSource } from "./caves/caveView.js";
 import { gameCaveStore } from "./caves/caveStore.js";
 import { createKitStreamer, type KitStreamFrame } from "../world/caves/kitStream.js";
-import { terrainStore } from "./biomes/terrain.js";
+import { terrainFallbackStats, terrainStore } from "./biomes/terrain.js";
 import { CAVE_SOURCES } from "../content/regions/caves.js";
 import { createCurrentStreaks } from "./currentStreaks.js";
 import { createHubArt } from "./hub.js";
@@ -408,7 +408,9 @@ export function createRenderer(
         textureBytes: cv.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0,
         lightPendingFrames: cv.pendingFrames, maxAllocMs: +cv.maxAllocMs.toFixed(2), maxWriteMs: +cv.maxWriteMs.toFixed(2), restarts: cv.restarts,
         // The latest presented pose's cave and whether its light is bound (R3-3 evidence), and the settle state.
-        active: caveView.active, lightPending: caveView.lightPending, presents, settling: settleSince >= 0, lightFailed };
+        active: caveView.active, lightPending: caveView.lightPending, presents, settling: settleSince >= 0, lightFailed,
+        // COL-1 R8-2's counted production fallback (live terrain and shells, unsliced): an ordinary route with its bake has none.
+        terrainFallbacks: terrainFallbackStats().builds, terrainFallbackRecent: terrainFallbackStats().recent };
     } });
     return {
       get settling() { return settleSince >= 0; },

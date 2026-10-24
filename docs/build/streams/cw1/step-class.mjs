@@ -4,7 +4,8 @@
 // vCPU that thread was on can excuse it, and only time that provably fell inside the step.
 // What counts as provable:
 //   - per-vCPU steal from /proc/stat (USER_HZ jiffies, 10 ms each), sampled every 5 ms with
-//     the vCPU the renderer's main thread was on;
+//     the vCPU the renderer's main thread was on; a row read between t0 and t1 (CW-1 R4's
+//     sampler worker) is taken at its widest for what lies outside and its narrowest for cover;
 //   - an interval wholly inside the step counts its steal on that vCPU in full; a boundary
 //     interval counts only what can't fit in its part outside the step; an interval in
 //     which the thread changed vCPU counts nothing (uncertain);
@@ -25,14 +26,15 @@ const CANARY_PERIOD_MS = 1;
 
 /**
  * @param step   { e0, e1 } epoch ms (the step's start and end)
- * @param rows   sampler rows in time order: { t, cpu, steal: number[] } (epoch ms, the renderer
+ * @param rows   sampler rows in time order: { t0, t1, cpu, steal: number[] } (epoch ms acquisition
+ *               start and end, or one `t` for rows recorded before CW-1 R4; the renderer
  *               main thread's vCPU at the sample, every vCPU's steal in jiffies)
  * @param canary the canary's late wakes: [startEpochMs, gapMs][]
  */
 export function classifyStep({ e0, e1 }, rows, canary = []) {
   const ms = e1 - e0;
-  const first = rows.findIndex((r) => r.t > e0) - 1, lastAfter = rows.findIndex((r) => r.t >= e1);
-  if (first < 0 || lastAfter < 0) return { cause: "unsampled", ms: round(ms), remainderMs: round(ms) };
+  const first = rows.findIndex((r) => t0Of(r) > e0) - 1, lastAfter = rows.findIndex((r) => t1Of(r) >= e1);
+  if (first < 0 || lastAfter <= first) return { cause: "unsampled", ms: round(ms), remainderMs: round(ms) };
   let covered = 0, stolen = 0, migrations = 0, stealSeen = false;
   for (let k = first; k < lastAfter; k++) {
     const a = rows[k], b = rows[k + 1];
@@ -43,8 +45,8 @@ export function classifyStep({ e0, e1 }, rows, canary = []) {
     }
     const d = (b.steal[a.cpu] - a.steal[a.cpu]) * JIFFY_MS;
     if (d > 0) stealSeen = true;
-    const outside = Math.max(0, e0 - a.t) + Math.max(0, b.t - e1), span = b.t - a.t;
-    covered += span - outside;
+    const outside = Math.max(0, e0 - t0Of(a)) + Math.max(0, t1Of(b) - e1);
+    covered += Math.max(0, Math.min(t0Of(b), e1) - Math.max(t1Of(a), e0));
     stolen += Math.max(0, d - outside);
   }
   // Steal on the thread's vCPU in the intervals just around the step also argues against "ours".
@@ -61,3 +63,4 @@ export function classifyStep({ e0, e1 }, rows, canary = []) {
     remainderMs: round(remainderMs), coveredMs: round(covered), migrations };
 }
 const round = (x) => +x.toFixed(2);
+const t0Of = (r) => r.t0 ?? r.t, t1Of = (r) => r.t1 ?? r.t;

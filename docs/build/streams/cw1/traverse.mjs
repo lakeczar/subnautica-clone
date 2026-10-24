@@ -87,7 +87,7 @@ await new Promise((r) => server.listen(Number(port), "127.0.0.1", r));
 const log = [];
 const note = (...a) => { const line = `[${(performance.now() / 1000).toFixed(1)}s] ${a.join(" ")}`; log.push(line); console.log(line); };
 const result = { commit: readFileSync(path.join(dist, "COMMIT"), "utf8").trim(), label: process.env.CW1_LABEL ?? "RTX 3090 (factory-worker)", segment, caves: points.filter(p => p.cave).map(p => p.cave),
-  reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], recoveries: 0, power: [], stalls: [], reentries: [] };
+  reached: [], skipped: [], shots: [], views: [], errors: [], holds: [], long: [], unsliced: [], terrainFallbacks: [], recoveries: 0, power: [], stalls: [], reentries: [] };
 // The power plan (derive.mjs): when to swap a reserve cell in; boost or cruise.
 const POWER = plan.power ?? null;
 let cellsLeft = POWER?.cells?.filter(c => c > 0).length ?? 0;
@@ -111,7 +111,7 @@ function keepTraced(e) {
   if (GC_SLICE.test(e.name) && e.dur > 0) traced.gc.push({ ts: e.ts, dur: e.dur, name: e.name, tid: e.tid });
   if (process.env.CW1_TRACE && e.dur > 4000) traced.slices.push({ ts: e.ts, dur: e.dur, name: e.name, cat: e.cat, pid: e.pid, tid: e.tid, args: JSON.stringify(e.args ?? {}).slice(0, 160) });
 }
-let trace = null, host = null;
+let trace = null, host = null, sampler = null;
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, timeout: 30000,
   ...(process.env.CW1_CHROME ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}),
   args: [...(process.env.CW1_CHROME ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", "--cw1-traverse"] });
@@ -241,11 +241,12 @@ async function shot(name) {
 // Each vCPU's steal (jiffies, /proc/stat) and the CPU the thread last ran on:
 // a long frame inside a host pause of the VM is the host's, not the game's.
 const NCPU = (readFileSync("/proc/stat", "utf8").match(/^cpu\d+ /gm) ?? []).length;
-const COLS = 9 + NCPU; // time, run, wait, minor, major, gpu run, gpu wait, renderer cpu, gpu cpu, steal per vCPU
-const STEAL = 9; // first steal column
-const sched = { pid: null, gpu: null, n: 0, data: new Float64Array(COLS * 65536) };
+// Taken by sampler-worker.mjs on its own thread (CW-1 R4), handed over when the travel ends.
+const COLS = 10 + NCPU; // acquisition start, end, run, wait, minor, major, gpu run, gpu wait, renderer cpu, gpu cpu, steal per vCPU
+const STEAL = 10; // first steal column
+const sched = { pid: null, gpu: null, n: 0, data: new Float64Array(0), threads: null, errors: [], polls: 0 };
 const sample = (i) => sched.data.subarray(i * COLS, i * COLS + COLS);
-/** The index of the last sample at or before `t` (or the first at or after, `after`), or -1. */
+/** The index of the last sample started at or before `t` (or the first at or after, `after`), or -1. */
 const indexAt = (t, after) => {
   let lo = 0, hi = sched.n - 1;
   if (hi < 0) return -1;
@@ -260,12 +261,21 @@ const sampleAt = (t, after) => { const i = indexAt(t, after); return i < 0 ? nul
 const stolenBetween = (a, b) => {
   let ms = 0;
   for (let i = a; i < b; i++) {
-    const r = sched.data[i * COLS + 7], g = sched.data[i * COLS + 8];
+    const r = sched.data[i * COLS + 8], g = sched.data[i * COLS + 9];
     const dr = sched.data[(i + 1) * COLS + STEAL + r] - sched.data[i * COLS + STEAL + r];
     const dg = g >= 0 ? sched.data[(i + 1) * COLS + STEAL + g] - sched.data[i * COLS + STEAL + g] : 0;
     ms += Math.max(dr, dg) * 10;
   }
   return ms;
+};
+/** Each thread's states that could have held in [a, b], and its coverage spans meeting it (raw evidence for a verdict). */
+const sliceThreads = (a, b) => {
+  const slice = (o) => {
+    if (!o) return undefined;
+    const states = o.states.filter((st, i) => st[0] < b && (i + 1 < o.states.length ? o.states[i + 1][1] : Infinity) > a);
+    return { states, cover: o.cover.filter(([s, e]) => s < b && e > a) };
+  };
+  return { renderer: slice(sched.threads?.renderer), ...(sched.threads?.gpu ? { gpu: slice(sched.threads.gpu) } : {}) };
 };
 function findRenderer() {
   const procs = readdirSync("/proc").filter(d => /^\d+$/.test(d)).map(pid => {
@@ -280,20 +290,6 @@ function findRenderer() {
   sched.gpu = procs.find(p => ours.has(p.pid) && p.cmd.includes("--type=gpu-process"))?.pid ?? null;
   return procs.filter(p => ours.has(p.pid) && p.cmd.includes("--type=renderer") && !p.cmd.includes("extension")).sort((a, b) => cpu(b) - cpu(a))[0]?.pid ?? null;
 }
-function sampleSched() {
-  if (!sched.pid) return;
-  try {
-    const [run, wait] = readFileSync(`/proc/${sched.pid}/task/${sched.pid}/schedstat`, "utf8").split(" ").map(Number);
-    const f = readFileSync(`/proc/${sched.pid}/task/${sched.pid}/stat`, "utf8"), rest = f.slice(f.lastIndexOf(")") + 2).split(" ");
-    // The GPU process's main thread too: busy while the renderer is blocked means the renderer waits on it.
-    const g = sched.gpu ? readFileSync(`/proc/${sched.gpu}/task/${sched.gpu}/schedstat`, "utf8").split(" ").map(Number) : [0, 0];
-    const gs = sched.gpu ? readFileSync(`/proc/${sched.gpu}/task/${sched.gpu}/stat`, "utf8") : null, gcpu = gs ? +gs.slice(gs.lastIndexOf(")") + 2).split(" ")[36] : -1;
-    if ((sched.n + 1) * COLS > sched.data.length) { const grown = new Float64Array(sched.data.length * 2); grown.set(sched.data); sched.data = grown; }
-    const steal = readFileSync("/proc/stat", "utf8").split("\n").filter(l => /^cpu\d+ /.test(l)).map(l => +l.split(/\s+/)[8]);
-    sched.data.set([performance.timeOrigin + performance.now(), run / 1e6, wait / 1e6, +rest[7], +rest[9], g[0] / 1e6, g[1] / 1e6, +rest[36], gcpu, ...steal], sched.n * COLS);
-    sched.n++;
-  } catch { sched.pid = null; }
-}
 const quant = (s, f) => s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(1) : null;
 try {
   const context = await browser.newContext({ viewport: { width: 1920, height: 1080 }, deviceScaleFactor: 1 });
@@ -303,6 +299,8 @@ try {
   page.on("console", (m) => {
     if (m.type() === "error") result.errors.push(m.text().slice(0, 300));
     if (m.type() === "warning" && m.text().startsWith("unsliced cave build")) { result.unsliced.push({ traveling, text: m.text() }); note(traveling ? "UNSLICED" : "unsliced (load)", m.text()); }
+    // COL-1 R8-2: a live terrain (and cave shell) build on the main thread: the bake was missing or refused.
+    if (m.type() === "warning" && m.text().startsWith("terrain: live build")) { result.terrainFallbacks.push({ traveling, text: m.text() }); note("TERRAIN FALLBACK", m.text()); }
   });
   await page.addInitScript(() => {
     window.__siltwakePerf = []; window.__gaps = [];
@@ -349,13 +347,14 @@ try {
   }
   sched.pid = findRenderer();
   note("renderer main thread", sched.pid ?? "not found");
-  const sampler = setInterval(sampleSched, 5);
-  // The canary and the renderer thread's state and syscall (simperf-host-worker.mjs, on its
-  // own thread), always on: the frame gate needs both (a VM pause stalls the canary; only a
-  // runnable renderer, or one waiting on the GPU process, can be delayed by steal; CW-1 R3-1).
+  // The scheduling sampler (sampler-worker.mjs: rows, both main threads' states and their
+  // coverage, errors) and the canary (simperf-host-worker.mjs), each on its own thread, off this
+  // event loop (CW-1 R4), always on: the frame gate needs both (a VM pause stalls the canary;
+  // only a runnable renderer, or one waiting on a runnable GPU thread, can be delayed by steal).
   // SIMPERF_HOST=1 adds the GPU process's NVIDIA shader-cache settings.
+  sampler = new Worker(new URL("./sampler-worker.mjs", import.meta.url));
+  if (sched.pid) sampler.postMessage({ pid: sched.pid, gpu: sched.gpu });
   host = new Worker(new URL("./simperf-host-worker.mjs", import.meta.url));
-  if (sched.pid) host.postMessage(sched.pid);
   if (process.env.SIMPERF_HOST && sched.gpu) try {
     result.gpuEnv = readFileSync(`/proc/${sched.gpu}/environ`, "utf8").split("\0").filter(v => v.startsWith("__GL_"));
     note("gpu process env", JSON.stringify(result.gpuEnv));
@@ -436,6 +435,19 @@ try {
     heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));
   const hostData = await new Promise((resolve) => { host.once("message", resolve); host.postMessage("stop"); });
   await host.terminate();
+  const taken = await new Promise((resolve) => { sampler.once("message", resolve); sampler.postMessage("stop"); });
+  await sampler.terminate();
+  if (taken.cols !== COLS) throw new Error(`sampler columns ${taken.cols}, expected ${COLS}`);
+  Object.assign(sched, { data: taken.rows, n: taken.n, threads: { renderer: taken.renderer, ...(taken.gpu ? { gpu: taken.gpu } : {}) }, errors: taken.errors, polls: taken.polls });
+  // Coverage over the travel (heartbeat): how much of it each thread's states were observed, and the sampler's errors.
+  const span = [data.origin + markAt, performance.timeOrigin + performance.now()];
+  const coveredOf = (o) => o ? +(o.cover.reduce((n, [a, b]) => n + Math.max(0, Math.min(b, span[1]) - Math.max(a, span[0])), 0) / (span[1] - span[0])).toFixed(4) : 0;
+  const rowGaps = []; for (let k = 1; k < sched.n; k++) rowGaps.push(sched.data[k * COLS + 1] - sched.data[(k - 1) * COLS]);
+  rowGaps.sort((a, b) => a - b);
+  result.sampler = { rows: sched.n, polls: sched.polls, rendererCovered: coveredOf(taken.renderer), gpuCovered: coveredOf(taken.gpu),
+    coverSpans: { renderer: taken.renderer.cover.length, gpu: taken.gpu?.cover.length ?? 0 }, rowIntervalP99: quant(rowGaps, 0.99), rowIntervalMax: rowGaps.length ? +rowGaps.at(-1).toFixed(1) : null,
+    rowIntervalsOver12: rowGaps.filter(g => g > 12).length, errors: sched.errors.map(([a, b, n, what]) => ({ from: +a.toFixed(0), to: +b.toFixed(0), n, what })) };
+  note("sampler", JSON.stringify(result.sampler));
   // SIM-PERF-1: the step meter's snapshot (pulled once): the worst steps by phase on the page clock.
   result.stepCosts = await page.evaluate(() => globalThis.__siltwakeStepCosts?.() ?? null);
   const gaps = data.gaps.map(([, g]) => g).sort((a, b) => a - b);
@@ -453,12 +465,12 @@ try {
     // The main thread over the gap (epoch ms): on CPU, waiting to run, faults.
     const t1 = data.origin + at, t0 = t1 - g, i0 = indexAt(t0, false), i1 = indexAt(t1, true);
     const first = i0 < 0 ? null : sample(i0), last = i1 < 0 ? null : sample(i1);
-    const thread = first && last ? { spanMs: +(last[0] - first[0]).toFixed(1), onCpuMs: +(last[1] - first[1]).toFixed(1), waitingMs: +(last[2] - first[2]).toFixed(1),
-      minorFaults: last[3] - first[3], majorFaults: last[4] - first[4], gpuOnCpuMs: +(last[5] - first[5]).toFixed(1), gpuWaitingMs: +(last[6] - first[6]).toFixed(1),
+    const thread = first && last ? { spanMs: +(last[1] - first[0]).toFixed(1), onCpuMs: +(last[2] - first[2]).toFixed(1), waitingMs: +(last[3] - first[3]).toFixed(1),
+      minorFaults: last[4] - first[4], majorFaults: last[5] - first[5], gpuOnCpuMs: +(last[6] - first[6]).toFixed(1), gpuWaitingMs: +(last[7] - first[7]).toFixed(1),
       // Steal in the gap (10 ms jiffies): stolen from the renderer or GPU main
       // thread (per 5 ms interval, on the vCPU each was on; the larger of the
       // two), and summed over every vCPU (how much of the VM paused).
-      cpus: [first[7], last[7]], gpuCpus: [first[8], last[8]], stolenMs: stolenBetween(i0, i1),
+      cpus: [first[8], last[8]], gpuCpus: [first[9], last[9]], stolenMs: stolenBetween(i0, i1),
       stealAllCpusMs: Array.from({ length: NCPU }, (_, c) => last[STEAL + c] - first[STEAL + c]).reduce((a, b) => a + b, 0) * 10 } : null;
     let hot = null;
     if (profileAt) {
@@ -474,11 +486,14 @@ try {
     const steps = result.stepCosts ? result.stepCosts.worst.filter(w => w.at >= at - g - 1 && w.at <= at + 1)
       .map(w => ({ tick: w.tick, ms: +w.ms.toFixed(2), phases: Object.fromEntries(Object.entries(w.phases).filter(([, v]) => v >= 0.05).map(([k, v]) => [k, +v.toFixed(2)])) })) : undefined;
     const hostIn = hostData ? (() => {
-      const states = {};
-      for (let k = 0; k < hostData.states.length; k++) {
-        const [t, st, w] = hostData.states[k], next = hostData.states[k + 1]?.[0] ?? t1, a = Math.max(t, t0), b = Math.min(next, t1);
+      // The renderer's time in each state over the gap (changes at the poll that saw them; unobserved time as "?").
+      const states = {}, rs = sched.threads.renderer.states;
+      for (let k = 0; k < rs.length; k++) {
+        const [, seen, st, w] = rs[k], next = rs[k + 1]?.[1] ?? t1, a = Math.max(seen, t0), b = Math.min(next, t1);
         if (b > a) { const key = w ? `${st}:${w}` : st; states[key] = +((states[key] ?? 0) + b - a).toFixed(1); }
       }
+      const observed = sched.threads.renderer.cover.reduce((n, [a, b]) => n + Math.max(0, Math.min(b, t1) - Math.max(a, t0)), 0);
+      if (t1 - t0 - observed > 0.05) states["?"] = +(t1 - t0 - observed).toFixed(1);
       return { canary: hostData.late.filter(([t, ms]) => t < t1 && t + ms > t0).map(([, ms]) => ms), states };
     })() : undefined;
     // The raw evidence the gate judges (frame-class.mjs), kept so any verdict can be re-judged:
@@ -487,11 +502,10 @@ try {
     const ra = indexAt(t0 - 20, false), rb = indexAt(t1 + 20, true), rawRows = [];
     for (let k = Math.max(0, ra), last = rb < 0 ? sched.n - 1 : rb; k <= last; k++) {
       const r = sample(k);
-      rawRows.push({ t: r[0], run: r[1], grun: r[5], cpu: r[7], gpuCpu: r[8], steal: Array.from(r.subarray(STEAL)) });
+      rawRows.push({ t0: r[0], t1: r[1], run: r[2], grun: r[6], cpu: r[8], gpuCpu: r[9], steal: Array.from(r.subarray(STEAL)) });
     }
-    const before = hostData.states.filter(([t]) => t < t0 - 20).at(-1);
     const raw = { window: { e0: t0, e1: t1 }, rows: rawRows, canary: hostData.late.filter(([t, ms]) => t < t1 + 20 && t + ms > t0 - 20),
-      states: [...(before ? [before] : []), ...hostData.states.filter(([t]) => t >= t0 - 20 && t <= t1 + 20)] };
+      threads: sliceThreads(t0 - 20, t1 + 20) };
     result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, raw, hot, ...(inGap ? { trace: inGap } : {}), ...(steps ? { steps } : {}), ...(hostIn ? { host: hostIn } : {}), gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
@@ -502,9 +516,10 @@ try {
   const streamingOf = (f) => (f?.parts ? (f.parts.chunks ?? 0) + (f.parts.caves ?? 0) + (f.parts.regions ?? 0) + (f.parts.lights ?? 0) : 0);
   for (const l of result.long) if (l.frame) l.streaming = l.frame.total > 16.7 && streamingOf(l.frame) >= 0.5 * l.frame.total;
   // Each long frame's class (frame-class.mjs), from its raw rows: only steal provably inside
-  // it, on a thread that could be delayed, agreed by the canary; host-stopped only when most
-  // of the VM provably stopped and our two main threads were within budget on CPU (the GPU's
-  // busy time is not measured here, so such a frame says "GPU unknown"). Doubt is ours.
+  // it, on a thread observed runnable on that vCPU (or the renderer in a futex while the GPU
+  // thread was observed runnable on its vCPU), agreed by the canary. Host-stopped (most of the
+  // VM stopped, our threads within budget on CPU, GPU unknown) is a label only, judged ours
+  // (R4-1). Doubt, unobserved state included, is ours.
   result.ncpu = NCPU;
   for (const l of result.long) Object.assign(l, classify(l, NCPU));
   // SIM-PERF-1 (review R1-F1): each simulation step over 8 ms (half a frame), judged by
@@ -517,12 +532,12 @@ try {
     const rows = [];
     for (let k = Math.max(0, a), last = b < 0 ? sched.n - 1 : b; k <= last; k++) {
       const r = sample(k);
-      rows.push({ t: r[0], cpu: r[7], gpuCpu: r[8], steal: Array.from(r.subarray(STEAL)) });
+      rows.push({ t0: r[0], t1: r[1], cpu: r[8], gpuCpu: r[9], steal: Array.from(r.subarray(STEAL)) });
     }
     const canary = hostData ? hostData.late.filter(([t, ms]) => t < e1 + 20 && t + ms > e0 - 20) : [];
-    const states = hostData ? hostData.states.filter(([t]) => t >= e0 - 20 && t <= e1 + 20) : null;
+    const threads = sliceThreads(e0 - 20, e1 + 20);
     const top = Object.entries(w.phases).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(1)}`);
-    return { tick: w.tick, top, ...classifyStep({ e0, e1 }, rows, canary), raw: { rows, canary, states } };
+    return { tick: w.tick, top, ...classifyStep({ e0, e1 }, rows, canary), raw: { rows, canary, threads } };
   });
   if (result.stepVerdicts) note("step verdicts", JSON.stringify(result.stepVerdicts.map(({ raw, ...v }) => v)));
   result.host = { canaryGaps: hostData.late.length, canaryMaxMs: Math.max(0, ...hostData.late.map(([, ms]) => ms)) };
@@ -582,10 +597,14 @@ try {
   const failures = [];
   if (travelSync > 0 || result.unsliced.some(u => u.traveling)) failures.push(`${Math.max(travelSync, result.unsliced.filter(u => u.traveling).length)} unsliced cave build(s) in travel`);
   if (result.holdFrames > 0) failures.push(`${result.holdFrames} hold frame(s)`);
+  // The composed bake (CW-1 after COL-1): an ordinary route builds no terrain or shell live, at load or in travel.
+  const terrainFallbacks = Math.max(data.stream.terrainFallbacks ?? 0, result.terrainFallbacks.length);
+  if (data.stream.terrainFallbacks === undefined) failures.push("the terrain fallback counter is missing (a build before the composed one)");
+  else if (terrainFallbacks > 0) failures.push(`${terrainFallbacks} live terrain/shell build(s): ${(data.stream.terrainFallbackRecent ?? []).join(", ")}`);
   // The gate: streaming frames whose remainder, after stolen time, is still over 34 ms.
   const ours = result.longByCause.streamingOurs;
-  if (ours > 0) failures.push(`${ours} streaming frame(s) over 34 ms after stolen time (mixed, clean or unsampled)`);
-  if (result.longByCause.streamingHostStopped) note("gate", `${result.longByCause.streamingHostStopped} streaming frame(s) cleared as host-stopped (GPU unknown)`);
+  if (ours > 0) failures.push(`${ours} streaming frame(s) over 34 ms after stolen time (host-stopped label, mixed, clean or unsampled)`);
+  if (result.longByCause.streamingHostStopped) note("gate", `${result.longByCause.streamingHostStopped} of them labelled host-stopped (GPU unknown): a diagnostic, judged ours (R4-1)`);
   // R2-2: a cave the craft is in whose light is not yet bound is drawn as open water; ordinary travel must have prefetched it.
   // Frames presented behind an entry's cover are pending by design (never shown): not travel.
   const travelLightPending = (data.stream.lightPendingFrames ?? 0) - pendingAtStart - reenterPending;
@@ -595,7 +614,7 @@ try {
     if (!e.revealed) failures.push(`re-entry at ${e.cave} never revealed`);
     else if (e.lightPendingAtReveal) failures.push(`re-entry at ${e.cave} revealed with its light pending`);
   }
-  result.gate = { pass: failures.length === 0, failures, travelSync, loadSync: syncAtStart, travelLightPending };
+  result.gate = { pass: failures.length === 0, failures, travelSync, loadSync: syncAtStart, travelLightPending, terrainFallbacks };
   result.memory = { residentCpuMiB: +(data.cpu / 1048576).toFixed(1), residentGpuMiB: +(data.gpu / 1048576).toFixed(1), regionMiB: +(data.regionBytes / 1048576).toFixed(1),
     budgetMiB: 256, heapMiB: data.heap ? +(data.heap.used / 1048576).toFixed(1) : null };
   note("gate", result.gate.pass ? "pass" : `FAIL: ${result.gate.failures.join("; ")}`);
@@ -607,6 +626,7 @@ try {
   trace?.abandon();
   // A live worker thread keeps Node from exiting: on an error path it would hang the job.
   await host?.terminate().catch(() => {});
+  await sampler?.terminate().catch(() => {});
   delete result.slices;
   writeFileSync(path.join(out, `segment-${segment}.json`), JSON.stringify(result, null, 1));
   writeFileSync(path.join(out, `segment-${segment}.log`), log.join("\n"));

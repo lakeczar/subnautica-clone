@@ -21,7 +21,7 @@ const inWindow = (ms) => { const d = new Date(ms), m = d.getUTCHours() * 60 + d.
 const gateOther = (s) => !(s.gate?.failures ?? []).some(f => !/streaming frame/.test(f));
 const f1 = (v) => v == null ? "–" : (+v).toFixed(1);
 const out = [];
-out.push("| Run | Ticket | Admitted UTC (window) | Min | Caves | Gate | >34 ms streaming / other | Long frames: host / host-stopped (GPU unknown) / mixed / clean | Streaming over 34 ms: raw → removed by host, by host-stopped → ours | Gate (host-stopped rule) | Pass max ms: wanted · build · evict · light list · upload · place · scan · select · optics | Light lag: sent worst / sent within 30 m (frames) / nearest lag m | Chunk max ms: plan · evict · dispose (updates) | Steal p95 / max % | Major faults | Swap-ins | Boost | Disturbed | Power |");
+out.push("| Run | Ticket | Admitted UTC (window) | Min | Caves | Gate | >34 ms streaming / other | Long frames: host / host-stopped label (ours) / mixed / clean | Streaming over 34 ms: raw → removed by host → ours (host-stopped labels) | Gate (R4-1 rule) | Pass max ms: wanted · build · evict · light list · upload · place · scan · select · optics | Light lag: sent worst / sent within 30 m (frames) / nearest lag m | Chunk max ms: plan · evict · dispose (updates) | Steal p95 / max % | Major faults | Swap-ins | Boost | Disturbed | Power |");
 out.push("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|");
 const pending = [];
 for (const [name, ticket] of rows) {
@@ -51,7 +51,9 @@ for (const [name, ticket] of rows) {
       n[c]++;
       if (!l.streaming) continue;
       raw++;
-      if (c === "host") byHost++; else if (c === "host-stopped") byStopped++; else if (OURS.has(c)) ours++;
+      // Host-stopped is a label only (R4-1): it stays ours.
+      if (c === "host") byHost++; else if (OURS.has(c)) ours++;
+      if (c === "host-stopped") byStopped++;
     }
     return { n, raw, byHost, byStopped, ours, legacy };
   })() : null;
@@ -61,7 +63,7 @@ for (const [name, ticket] of rows) {
   out.push(`| ${name} | ${ticket} | ${hm(r.admittedAt)}${inWindow(r.admittedAt) || inWindow(r.endedAt) ? " **in window**" : ""} | ${s ? (s.seconds / 60).toFixed(1) : "–"} | ` +
     `${s ? `${s.reached.length}/${s.reached.length + s.skipped.length}` : "–"} | ${s ? (s.gate?.pass ? "pass" : `**fail**: ${s.gate?.failures?.join("; ")}`) : `exit ${r.code}`} | ` +
     `${s ? `${lb.streamingOver34 ?? "–"} / ${other}` : "–"} | ${cls ? `${cls.n.host} / ${cls.n["host-stopped"]} / ${cls.n.mixed} / ${cls.n.clean}${cls.n.unsampled ? ` +${cls.n.unsampled} unsampled` : ""}${cls.legacy ? " (legacy rule, upper bound)" : ""}` : "not measured"} | ` +
-    `${cls ? `${cls.raw} → −${cls.byHost}, −${cls.byStopped} → **${cls.ours}**` : "–"} | ${cls ? (cls.ours > 0 || !gateOther(s) ? "**fail**" : cls.legacy && cls.byHost + cls.byStopped > 0 ? "**unresolved** (passes only by legacy excuses)" : cls.byStopped ? "pass (with host-stopped, GPU unknown)" : "pass") : "–"} | ${[mx("caveWanted"), mx("caveBuild"), mx("caveEvict"), mx("caveLightList"), mx("caveUpload"), mx("lightPlace"), mx("lightScan"), mx("lightSelect"), mx("optics")].join(" · ")} | ` +
+    `${cls ? `${cls.raw} → −${cls.byHost} → **${cls.ours}**${cls.byStopped ? ` (${cls.byStopped} labelled host-stopped)` : ""}` : "–"} | ${cls ? (cls.ours > 0 || !gateOther(s) ? "**fail**" : cls.legacy && cls.byHost > 0 ? "**unresolved** (passes only by legacy excuses)" : "pass") : "–"} | ${[mx("caveWanted"), mx("caveBuild"), mx("caveEvict"), mx("caveLightList"), mx("caveUpload"), mx("lightPlace"), mx("lightScan"), mx("lightSelect"), mx("optics")].join(" · ")} | ` +
     `${s?.lightLag ? `${s.lightLag.worstSentFrames} / ${s.lightLag.worstSentWithin30m} / ${s.lightLag.nearestM ?? "none"}` : "not measured"} | ` +
     `${p.chunkPlan ? `${mx("chunkPlan")} · ${mx("chunkEvict")} · ${mx("chunkDispose")} (${mx("chunkUpdates")})` : "not measured"} | ` +
     `${f1(q(steal, 0.95))} / ${f1(steal.at(-1))} | ${c?.job?.majorFaults ?? "–"} (worst ${c?.job?.majorFaultsWorst ?? "–"}) | ${c?.job?.swapIns ?? "–"} | ` +

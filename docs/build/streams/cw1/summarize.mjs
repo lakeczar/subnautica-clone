@@ -15,7 +15,7 @@ const cls = (r) => {
   for (const l of r.long) if (l.gap > 34) { const c = classify(l, r.ncpu ?? 8); legacy ||= c.rule === "legacy"; n[c.cause]++; if (l.streaming && OURS.has(c.cause)) ours++; }
   return `${n.host} / ${n["host-stopped"]} / ${n.mixed} / ${n.clean}${n.unsampled ? ` (+${n.unsampled} unsampled)` : ""} (${ours})${legacy ? " legacy rule (upper bound)" : ""}`;
 };
-console.log("| Run | Commit | Caves reached | Minutes | Frames | p50 / p95 / p99 / max ms | Gaps > 33 ms | Streaming > 34 ms (GC-shaped) | Over 34 ms: host / host-stopped (GPU unknown) / mixed / clean (streaming ours) | Holds | Unsliced in travel (at load) | Dark cave frames | Gate |");
+console.log("| Run | Commit | Caves reached | Minutes | Frames | p50 / p95 / p99 / max ms | Gaps > 33 ms | Streaming > 34 ms (GC-shaped) | Over 34 ms: host / host-stopped label / mixed / clean (streaming ours; labels are ours, R4-1) | Holds | Unsliced in travel (at load) | Dark cave frames | Gate |");
 console.log("|---|---|---|---|---|---|---|---|---|---|---|---|---|");
 for (const r of runs) {
   const f = r.frames ?? {}, l = r.longByCause ?? {}, g = r.gate ?? {};
