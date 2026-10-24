@@ -17,13 +17,15 @@ Branch `t3/sim-1-inplace-step`, from root `feat/siltwake-first-expedition`. It w
 
 Branch `t3/sim-1b-timeline-journal`, rebuilt on root `96255382` (SIM-1a, SIG-1, STEW-1, TST-16) from the parked `f6fee338` (kept as `backup/sim-1b-f6fee338`). The spec is contract v2, plus the coordinator's R5 decisions and R6 rulings. It replaces SIM-1a's whole-export save; the compromise SIM-1a filed is closed by this.
 
-**What a save costs now** (`scripts/timeline-save-bench.mjs`, full 20,000-event window, 60 saves about 10 s of play apart; characters exact, times indicative; the 4070 run at the final head is under "Evidence" below):
+**What a save costs now:** `scripts/timeline-save-bench.mjs`, run at `989c3786` via the queue on `--machine 4070` (RTX 4070 Laptop, alickers, a shared desktop host, so the times are indicative). The bench fills the full 20,000-event window (22,595 events recorded: 20 sealed chunks, 595 open, 2 folded), then saves 60 times about 10 s of play apart. Character counts are exact.
 
-| | Characters written per save | Time |
+| | Characters written per save | Time per save |
 | --- | --- | --- |
-| Root model (whole export) | 2,916,953 | stringify median ~12 ms (local smoke) |
-| Journal, steady commit | 44,905 (the journal only) | median ~1.4 ms (local smoke) |
-| Journal, a commit that seals a chunk | 188,497 in 3 keys | ~3.6 ms (local smoke) |
+| Root model (whole export) | 2,956,608 | stringify median 9.36 ms, max 14.04 ms |
+| Journal, steady commit | 63,959, the journal only (the head with its open chunk) | median 0.80 ms, max 3.93 ms |
+| Journal, a commit that seals a chunk | 208,263 in 3 keys (the journal, the new chunk, one fold) | 2.80 ms |
+
+A steady save now writes about 2% of what root's model wrote, and costs about 0.8 ms against 9–14 ms. That meets the bar: the head plus any new sealed chunk, not the whole history.
 
 **Design** (`src/sim/timeline/store.ts`, `src/runtime/liveTimeline.ts`):
 - **The commit point:** one journal record, `siltwake.timeline.v2.journal = { current, previous, v1Superseded }`. Each head names its chunk keys (`siltwake.timeline.v2|<session>|<n>`). A chunk is written once when it seals and once more as its summary when it rotates.
