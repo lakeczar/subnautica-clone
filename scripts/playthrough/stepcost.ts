@@ -32,7 +32,7 @@ import v8 from "node:v8";
 import { PerformanceObserver } from "node:perf_hooks";
 import { Worker } from "node:worker_threads";
 import { createEnvelope, encodeSave } from "../../src/save/codec.js";
-import { SaveRepository } from "../../src/save/repository.js";
+import { SaveRepository, warmCommit } from "../../src/save/repository.js";
 import type { WriterLockPort } from "../../src/save/writer-lock.js";
 import { PHASE, SLOW_STEP_MS, StepCosts, stepMeter } from "../../src/sim/stepCosts.js";
 import type { StepRecord } from "../../src/sim/stepCosts.js";
@@ -59,7 +59,13 @@ stepMeter.active = costs;
 
 /** V8 collections over 1 ms, on the step clock (matched to slow steps afterwards). */
 const gcs: { at: number; ms: number; kind: number }[] = [];
+/** Every collection by kind (1 minor, 4 major, 8 incremental, 16 weak callbacks): count and total ms. */
+const gcAll = new Map<number, { count: number; ms: number }>();
 const gcObserver = new PerformanceObserver((list) => {
+  for (const e of list.getEntries()) {
+    const kind = ((e as { detail?: { kind?: number } }).detail)?.kind ?? 0, k = gcAll.get(kind) ?? gcAll.set(kind, { count: 0, ms: 0 }).get(kind)!;
+    k.count++; k.ms += e.duration;
+  }
   for (const e of list.getEntries()) if (e.duration > 1)
     gcs.push({ at: e.startTime, ms: e.duration, kind: ((e as { detail?: { kind?: number } }).detail)?.kind ?? 0 });
 });
@@ -151,7 +157,7 @@ class AppWork {
   constructor(readonly run: string, s: GameState, world: WorldQueries) {
     // The app's entry warm-up (SiltwakeApp.warm), outside any measured step.
     warmSimulation(s, world);
-    encodeSave(createEnvelope(structuredClone(s), { sessionId: "stepcost-warm", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:00.000Z" }));
+    warmCommit(createEnvelope(structuredClone(s), { sessionId: "stepcost-warm", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:00.000Z" }));
     this.rec = timeline.createRecorder({ id: `stepcost-${run}`.slice(0, 64), started: "2026-10-24T00:00:00.000Z" }, { regionAt: regionAtPoint });
     this.timelineSaved = this.lastAutosave = s.tick;
     this.repository.load();
@@ -308,6 +314,8 @@ const seconds = (performance.now() - t0) / 1000;
 const r2 = (x: number): number => +x.toFixed(3);
 console.log(`${runs.map((r) => `${r.run} ${r.outcome} ${r.ticks}`).join("; ")} in ${seconds.toFixed(0)} s`);
 console.log(`largest play timeline: ${timelineSize.events} events, ${timelineSize.chars} chars exported, ${timelineSize.playHours.toFixed(2)} h of play`);
+console.log(`collections: ${[...gcAll].sort((a, b) => a[0] - b[0]).map(([k, v]) => `kind ${k} ${v.count} (${v.ms.toFixed(0)} ms)`).join(", ")}; ` +
+  `heap at the end ${(v8.getHeapStatistics().used_heap_size / 1048576).toFixed(0)} MiB`);
 console.log(`steps ${snapshot.steps}; mean ${r2(snapshot.step.mean)} ms, p50 ${r2(snapshot.step.p50)}, p99 ${r2(snapshot.step.p99)}, ` +
   `p99.9 ${r2(snapshot.step.p999)}, max ${r2(snapshot.step.max)}; over ${SLOW_STEP_MS} ms: ${snapshot.slow}; GC over 1 ms: ${gcs.length} (max ${r2(Math.max(0, ...gcs.map((g) => g.ms)))} ms)`);
 for (const [name, p] of Object.entries(snapshot.phases).sort((a, b) => b[1].max - a[1].max))
@@ -326,16 +334,25 @@ for (const w of snapshot.worst.slice(0, 16)) {
 if (alloc) {
   // Self bytes by function over every kind's held steps (each run's app work included).
   type Node = { callFrame: { functionName: string; url: string; lineNumber: number }; selfSize: number; children: Node[] };
-  const self = new Map<string, number>(); let total = 0;
-  const walk = (n: Node): void => {
-    const f = n.callFrame, name = `${f.functionName || "(anon)"} ${path.basename(f.url)}:${f.lineNumber + 1}`;
-    total += n.selfSize; if (n.selfSize) self.set(name, (self.get(name) ?? 0) + n.selfSize);
-    for (const c of n.children) walk(c);
+  const self = new Map<string, number>(), callers = new Map<string, Map<string, number>>(); let total = 0;
+  const label = (n: Node): string => `${n.callFrame.functionName || "(anon)"} ${path.basename(n.callFrame.url)}:${n.callFrame.lineNumber + 1}`;
+  const walk = (n: Node, parent: string): void => {
+    const name = label(n);
+    total += n.selfSize;
+    if (n.selfSize) {
+      self.set(name, (self.get(name) ?? 0) + n.selfSize);
+      const by = callers.get(name) ?? callers.set(name, new Map()).get(name)!;
+      by.set(parent, (by.get(parent) ?? 0) + n.selfSize);
+    }
+    for (const c of n.children) walk(c, name);
   };
-  for (const p of allocProfiles) walk((p as unknown as { head: Node }).head);
+  for (const p of allocProfiles) walk((p as unknown as { head: Node }).head, "");
   console.log(`allocation: ${(total / allocSteps / 1024).toFixed(1)} KiB per step over ${allocSteps} held steps; by function:`);
-  for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(`  ${(v / allocSteps / 1024).toFixed(2).padStart(6)} KiB  ${k}`);
+  for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 25)) {
+    const top = [...callers.get(k)!].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, b]) => `${c} ${(b / allocSteps / 1024).toFixed(2)}`).join("; ");
+    console.log(`  ${(v / allocSteps / 1024).toFixed(2).padStart(6)} KiB  ${k}  ← ${top}`);
+  }
 }
 const json = value("--json");
-if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, timelineSize, snapshot, slow, gcs }, null, 1) + "\n");
+if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, timelineSize, gcAll: Object.fromEntries(gcAll), snapshot, slow, gcs }, null, 1) + "\n");
 process.exit(runs.some((r) => r.outcome === "blocked") ? 1 : 0);
