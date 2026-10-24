@@ -38,6 +38,7 @@ import { PHASE, SLOW_STEP_MS, StepCosts, stepMeter } from "../../src/sim/stepCos
 import type { StepRecord } from "../../src/sim/stepCosts.js";
 import { StepGuard } from "../../src/sim/stepGuard.js";
 import { executeCommand, stepGameInPlace } from "../../src/sim/step.js";
+import { warmSimulation } from "../../src/sim/warmup.js";
 import { gameWorld } from "../../src/sim/world.js";
 import { regionAtPoint } from "../../src/content/regions/layout.js";
 import { controlsActive } from "../../src/sim/timeline/activity.js";
@@ -147,7 +148,10 @@ class AppWork {
   private timelineSaved: number;
   private lastAutosave: number;
   private activity = false;
-  constructor(readonly run: string, s: GameState) {
+  constructor(readonly run: string, s: GameState, world: WorldQueries) {
+    // The app's entry warm-up (SiltwakeApp.warm), outside any measured step.
+    warmSimulation(s, world);
+    encodeSave(createEnvelope(structuredClone(s), { sessionId: "stepcost-warm", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:00.000Z" }));
     this.rec = timeline.createRecorder({ id: `stepcost-${run}`.slice(0, 64), started: "2026-10-24T00:00:00.000Z" }, { regionAt: regionAtPoint });
     this.timelineSaved = this.lastAutosave = s.tick;
     this.repository.load();
@@ -216,7 +220,7 @@ if (saves) {
   for (const kind of saves.split(",")) {
     const picked = librarySave(kind);
     console.log(picked.describe);
-    const s = loadSnapshot(picked.text), guard = new StepGuard(), app = new AppWork(kind, s);
+    const s = loadSnapshot(picked.text), guard = new StepGuard(), app = new AppWork(kind, s, world);
     const start = s.tick;
     // Warm (60 steps), so first-use compilation isn't counted as allocation.
     if (alloc) for (let t = 0; t < 60; t++) guard.step(s, [{ type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], world);
@@ -249,12 +253,12 @@ if (saves) {
     };
   }
   driverHooks.attach = (d: Driver) => {
-    let app = new AppWork(d.run.scenario, d.state), seen = d.state;
+    let app = new AppWork(d.run.scenario, d.state, d.world), seen = d.state;
     return {
       before() {
         // A milestone reload hands the driver a new state: the app's session starts over too.
         // (A command's new state is the same session: `command` below follows it.)
-        if (d.state !== seen) { seen = d.state; app = new AppWork(d.run.scenario, d.state); }
+        if (d.state !== seen) { seen = d.state; app = new AppWork(d.run.scenario, d.state, d.world); }
         captureBefore(d.run.scenario, d.state);
         replayer?.before(d.state);
         costs.open();
