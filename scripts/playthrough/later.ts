@@ -520,14 +520,14 @@ function mantleHome(d: Driver): void {
   d.waitFor("the Mantle to settle", 20, (s) => {
     const v = s.fleet.vehicles.find((x) => x.id === mantle.id)!.velocity;
     return Math.hypot(v.x, v.y, v.z) <= 1;
-  });
+  }, "docking:settle");
   // Capture from the interface inside the vestibule: taking the helm would turn the
   // carrier and swing the corridor off the waiting craft.
   enterCarrier(d);
   unload(d, "diver", h.cargoId);
   d.command({ type: "carrier", action: "station-keep" }, { allowRefusal: true });
   d.command({ type: "carrier", action: "capture", vehicleId: d.vehicle("mantle")!.id });
-  d.waitFor("the Mantle capture", 60, (s) => !s.fleet.docking?.transaction);
+  d.waitFor("the Mantle capture", 60, (s) => !s.fleet.docking?.transaction, "docking:capture");
   d.command({ type: "carrier", action: "leave-helm" }, { allowRefusal: true });
 }
 
@@ -572,7 +572,7 @@ function toMeridian(d: Driver, strategy: Strategy): void {
 }
 function launchMantle(d: Driver): void {
   d.command({ type: "carrier", action: "launch", vehicleId: d.vehicle("mantle")!.id });
-  d.waitFor("the Mantle launch", 60, (s) => !s.fleet.docking?.transaction);
+  d.waitFor("the Mantle launch", 60, (s) => !s.fleet.docking?.transaction, "docking:launch");
   walkAboard(d, CARRIER_LAYOUT.vestibule, "to the vestibule");
   d.command({ type: "carrier", action: "leave-interior" });
   boardCraft(d, "mantle");
@@ -665,7 +665,7 @@ function worksVisit(d: Driver, actions: readonly WorksAction[], take: Cargo): vo
     for (const action of actions) {
       worksStep(d, action);
       // 5,400 active steps; the panel shows progress while the diver waits in reach.
-      if (action === "equalize") d.waitFor("the gate to equalize", 100, (s) => s.story.works.gate === "equalized");
+      if (action === "equalize") d.waitFor("the gate to equalize", 100, (s) => s.story.works.gate === "equalized", "works:equalize");
     }
     for (const id of take.ids)
       if (d.state.inventory.items.some((i) => i.id === id)) throw new Blocked(`The works did not consume assembly ${id}`, where(d.state));
@@ -753,7 +753,7 @@ const works = (strategy: Strategy): Phase => ({
       if (cargoCu(d, items) > d.freeCu(mantle.cargoId))
         throw new Blocked(`The Mantle hold has ${d.freeCu(mantle.cargoId)} CU free; this trip needs ${cargoCu(d, items)} CU`, where(d.state));
       d.command({ type: "carrier", action: "launch", vehicleId: mantle.id });
-      d.waitFor("the Mantle launch", 60, (s) => !s.fleet.docking?.transaction);
+      d.waitFor("the Mantle launch", 60, (s) => !s.fleet.docking?.transaction, "docking:launch");
       ferryFromCarrier(d, mantle.id, items);
       exitCarrierToBoard(d, mantle.id);
       visit();

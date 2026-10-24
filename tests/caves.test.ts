@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assertDisjointFootprints, CAVE_SOURCES, EXTERIOR, MIN_ROCK, type CaveSource } from "../src/content/regions/caves.js";
-import { buildCave, caveSampler, caveShellByColumn, caveVolume, clipMeshToRect } from "../src/content/regions/caveGeometry.js";
+import { buildCave, caveSampler, caveShellByColumn, caveVolume, clipMeshToRect, shellSeamProblems } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { withoutBuildCache } from "../src/content/buildCache.js";
 import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
@@ -240,11 +240,8 @@ test("Fanvault: the collar meets the heightfield at the footprint edge", () => {
     const top = world.supportHeight(x + SHIFT.x, z + SHIFT.z, 1000), outside = worldFloor(ox, oz);
     assert.ok(Math.abs(top - outside) <= 0.75, `collar step ${(top - outside).toFixed(2)} m at ${x}, ${z}`);
   }
-  for (const m of [fine, coarse]) for (let v = 0; v < m.positions.length / 3; v++) {
-    const p = vertex(m, v);
-    if (Math.abs(p.x - f.minX) > 1e-6 && Math.abs(p.x - f.maxX) > 1e-6 && Math.abs(p.z - f.minZ) > 1e-6 && Math.abs(p.z - f.maxZ) > 1e-6) continue;
-    assert.ok(Math.abs(p.y - worldFloor(p.x, p.z)) < 1e-4, `collar vertex ${p.y.toFixed(2)} vs floor ${worldFloor(p.x, p.z).toFixed(2)}`);
-  }
+  // The seam meets the floor at both LODs: on it, or through a skirt (COL-1 R6).
+  for (const [lod, m] of [["fine", fine], ["coarse", coarse]] as const) assert.deepEqual(shellSeamProblems(def, lod, worldFloor, m), []);
 });
 
 test("Fanvault: craft park on the open shelf beside the north mouth", () => {

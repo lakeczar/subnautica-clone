@@ -4,18 +4,23 @@
 // Optional: --out <result.json>
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { CONTENT_VERSION, CREEL_BUILD_POSE, DART_BUILD_POSE, FRAME_ALLOY, ITEMS, MATERIALS, RECIPES, SOURCE_RENEWAL, SOURCES } from "../.test-build/src/content/registry.js";
-import { CANOPY_STOP } from "../.test-build/src/content/routes.js";
-import { createGame } from "../.test-build/src/sim/state.js";
-import { collectWithOutcome, completeOpening, craft, craftingBlock, discover, readTechRecord } from "../.test-build/src/sim/progression.js";
-import { addItem, available, fabricationContainers, hasRoom, storeMaterials, transfer, usedCapacity } from "../.test-build/src/sim/inventory.js";
-import { installModule } from "../.test-build/src/sim/modules.js";
-import { disableVehicle, recoveryCommand } from "../.test-build/src/sim/recovery.js";
-import { executeCommand, stepGame } from "../.test-build/src/sim/step.js";
-import { personalLimit } from "../.test-build/src/sim/capabilities.js";
-import { createWorldQueries } from "../.test-build/src/sim/world.js";
-import { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } from "../.test-build/src/save/codec.js";
-import { validState } from "../.test-build/src/save/validation.js";
+import { guardLocalRun } from "./local-guard.mjs";
+
+// On factory-worker, only inside a heavy-check job (STEW-2), and admitted before the
+// compiled modules load. Routed, the job compiles them first.
+guardLocalRun({ cls: "quick", before: "node scripts/test-build.mjs" });
+const { CONTENT_VERSION, CREEL_BUILD_POSE, DART_BUILD_POSE, FRAME_ALLOY, ITEMS, MATERIALS, RECIPES, SOURCE_RENEWAL, SOURCES } = await import("../.test-build/src/content/registry.js");
+const { CANOPY_STOP } = await import("../.test-build/src/content/routes.js");
+const { createGame } = await import("../.test-build/src/sim/state.js");
+const { collectWithOutcome, completeOpening, craft, craftingBlock, discover, readTechRecord } = await import("../.test-build/src/sim/progression.js");
+const { addItem, available, fabricationContainers, hasRoom, storeMaterials, transfer, usedCapacity } = await import("../.test-build/src/sim/inventory.js");
+const { installModule } = await import("../.test-build/src/sim/modules.js");
+const { disableVehicle, recoveryCommand } = await import("../.test-build/src/sim/recovery.js");
+const { executeCommand, stepGame } = await import("../.test-build/src/sim/step.js");
+const { personalLimit } = await import("../.test-build/src/sim/capabilities.js");
+const { createWorldQueries } = await import("../.test-build/src/sim/world.js");
+const { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } = await import("../.test-build/src/save/codec.js");
+const { validState } = await import("../.test-build/src/save/validation.js");
 
 const args = process.argv.slice(2), out = args[args.indexOf("--out") + 1];
 assert.ok(args.length === 0 || (args.length === 2 && args[0] === "--out"), "only --out is supported");

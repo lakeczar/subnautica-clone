@@ -9,6 +9,10 @@
 # there (its node_modules is this tree's). Heavy: run it through the queue
 # (`--class playthrough`) or on the second worker.
 set -euo pipefail
+# On factory-worker only inside a heavy-check job (STEW-2); otherwise this same command
+# runs through the queue, here (its base build is in /work/tmp).
+guard="$(dirname "$0")/local-guard.mjs"
+node "$guard" --require --quiet "bash $0" || exec node "$guard" --class playthrough --machine 3090 -- bash "$0" "$@"
 sha="$(git rev-parse --verify "${1:?usage: $0 BASE_SHA [options]}^{commit}")"; shift
 dir="/work/tmp/sim1-base-${sha:0:12}"
 # .compiled-2: the build also covers src/sim (the timeline recorder).

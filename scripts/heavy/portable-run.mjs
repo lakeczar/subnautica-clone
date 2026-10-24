@@ -34,11 +34,13 @@ const SESSION = ["HOME", "USER", "LOGNAME", "TMPDIR", "TZ", "LANG", "LANGUAGE", 
 /** The runner's environment: the allowlist only, PATH with root/node_modules/.bin first. */
 export function portableEnv(env, root) {
   const out = {};
-  for (const [k, v] of Object.entries(env)) if (v != null && (SESSION.includes(k) || k.startsWith("LC_") || (QUEUE_OWNED(k) && !k.startsWith("SILTWAKE_SCHED_")))) out[k] = v;
+  // Of the queue's configuration, only where its state is: the guard's --require step finds its own job there.
+  for (const [k, v] of Object.entries(env)) if (v != null && (SESSION.includes(k) || k.startsWith("LC_") || (QUEUE_OWNED(k) && (!k.startsWith("SILTWAKE_SCHED_") || k === "SILTWAKE_SCHED_DIR")))) out[k] = v;
   out.PATH = [join(root, "node_modules", ".bin"), env.PATH ?? "/usr/local/bin:/usr/bin:/bin"].join(":");
   return out;
 }
 
+const GUARD = "scripts/local-guard.mjs";
 // The grammar's words: plain, never quoted, expanded or an option of node's own.
 const PLAIN = /^[A-Za-z0-9_@%+=:,./-]+$/;
 const repoPath = (w) => PLAIN.test(w) && !w.startsWith("/") && !w.startsWith("-") && !w.split("/").includes("..");
@@ -78,6 +80,16 @@ export function stepBoundary(root, path) {
  * head, an assignment, env, a path to npm, npx, an npm option, quoting, a
  * newline or any other separator, pre/post scripts) isn't portable:
  * { error }, and the job runs where it was submitted, as typed.
+ * STEW-2's local-run guard (scripts/local-guard.mjs) is a node step of a
+ * special kind, never run as one when it would route (SCHED-3 R5):
+ *   node scripts/local-guard.mjs --class <C> --machine any -- npm run <X>:direct -- [args]
+ *     an alias: <X>:direct is expanded under this grammar (inside a job the
+ *     guard runs it directly anyway), so neither the guard nor npm runs;
+ *   node scripts/local-guard.mjs --require [--quiet] <plain words>
+ *     the admission check at the head of a :direct body: a plain node step
+ *     (it spawns nothing, and admits a job's own processes);
+ *   any other guard step (--machine 3090, a bash script, any other shape)
+ *     isn't portable.
  * Returns { steps: [argv, …], command } or { error }.
  */
 export function resolveScript(scripts, name, args = [], depth = 0) {
@@ -91,6 +103,14 @@ export function resolveScript(scripts, name, args = [], depth = 0) {
   for (const [i, line] of lines.entries()) {
     const w = line.split(" "), last = i === lines.length - 1, extra = last ? args : [];
     if (!line || w.some((x) => !PLAIN.test(x))) return { error: `${name}'s step \`${line}\` isn't plain words` };
+    if (w[0] === "node" && w[1] === GUARD && w[2] !== "--require") {
+      const alias = w[2] === "--class" && w[3] && w[4] === "--machine" && w[6] === "--" && w[7] === "npm" && w[8] === "run" && /^[\w:.-]+:direct$/.test(w[9] ?? "") && w[10] === "--";
+      if (!alias || w[5] !== "any") return { error: `${name}'s step \`${line}\` ${alias ? `is a local-guard wrapper with --machine ${w[5]}, which is work for factory-worker` : "is a local-guard step other than its npm alias"}` };
+      const r = resolveScript(scripts, w[9], [...w.slice(11), ...extra], depth + 1);
+      if (r.error) return r;
+      steps.push(...r.steps);
+      continue;
+    }
     if (w[0] === "node" && repoPath(w[1] ?? "-")) { steps.push([...w, ...extra]); continue; }
     const npm = w[0] === "npm" && (w[1] === "test" ? { inner: "test", rest: w.slice(2) } : w[1] === "run" && w[2] && !w[2].startsWith("-") ? { inner: w[2], rest: w.slice(3) } : null);
     if (!npm || (npm.rest.length && npm.rest[0] !== "--") || (extra.length && !npm.rest.length)) return { error: `${name}'s step \`${line}\` isn't one the portable runner runs` };

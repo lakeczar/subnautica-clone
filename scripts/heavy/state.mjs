@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import { cpus } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cgroupPathOf, hasScopeComponent } from "./cgroup-scope.mjs";
 import { unmeasuredContext } from "./contention.mjs";
 import { DEFAULTS, MACHINE_LABELS, PROTOCOL, plannedFor, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
@@ -477,6 +478,9 @@ export function readStats(dir) {
   return Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
 }
 
+/** Whether a complete component of the cgroup path `path` matches `re` (anchored), never a substring (SCHED-3 R5). */
+export const componentMatches = (path, re) => String(path ?? "").split("/").some((c) => re.test(c));
+
 /**
  * Processes with an NVIDIA device open (/dev/nvidia0 …), which is what a GPU
  * Chrome (ANGLE GL-EGL) or any other GPU client does; SwiftShader does not.
@@ -485,7 +489,7 @@ export function readStats(dir) {
  * so it counts as leased. Only this user's processes are readable. ~10 ms.
  */
 export function gpuUsers(cfg, state) {
-  const scopes = Object.values(state?.tickets ?? {}).filter((t) => t.state === "running" && t.unit).map((t) => [`/${t.unit}.scope`, t]);
+  const scopes = Object.values(state?.tickets ?? {}).filter((t) => t.state === "running" && t.unit).map((t) => [t.unit, t]);
   const users = [];
   let pids = [];
   try { pids = readdirSync("/proc").filter((p) => /^\d+$/.test(p)); } catch { return users; }
@@ -493,11 +497,12 @@ export function gpuUsers(cfg, state) {
     let fds;
     try { fds = readdirSync(`/proc/${pid}/fd`); } catch { continue; }
     if (!fds.some((fd) => { try { return /^\/dev\/nvidia\d/.test(readlinkSync(`/proc/${pid}/fd/${fd}`)); } catch { return false; } })) continue;
-    const cgroup = readFileSafe(`/proc/${pid}/cgroup`) ?? "";
-    const owner = scopes.find(([s]) => cgroup.includes(s))?.[1];
+    // Membership by whole cgroup path components (cgroup-scope.mjs), never a substring (SCHED-3 R5).
+    const cgroup = cgroupPathOf(readFileSafe(`/proc/${pid}/cgroup`)) ?? "";
+    const owner = scopes.find(([unit]) => hasScopeComponent(cgroup, unit))?.[1];
     // A v1 scope is siltwake-heavy-<dir>-<pid>; a v2 job scope of any queue
     // (another state's, e.g. the queue job running these suites) ends in a ticket id, and isn't one (R2-F4).
-    const v1 = !owner && /\/siltwake-heavy-[^/]*\.scope/.test(cgroup) && !/-\d{6}-\d{6}-[0-9a-f]{4}\.scope/.test(cgroup) && !scopes.some(([s]) => cgroup.includes(s));
+    const v1 = !owner && componentMatches(cgroup, /^siltwake-heavy-.+\.scope$/) && !componentMatches(cgroup, /-\d{6}-\d{6}-[0-9a-f]{4}\.scope$/);
     users.push({ pid: Number(pid), cmd: (readFileSafe(`/proc/${pid}/cmdline`) ?? "").replace(/\0/g, " ").trim().slice(0, 160),
       ticket: owner?.id ?? null, leased: Boolean(owner?.req.gpu) || v1 });
   }

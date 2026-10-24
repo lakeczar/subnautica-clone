@@ -229,3 +229,13 @@ test("the carrier bridge takes a decoder; the Hearthline powers 2 system sockets
   h.modules.push(addItem(s, "hearthline_system_bay", 1, h.cargoId).id);
   assert.equal(carrierSocketRefusal(s, host), null, "the bay powers two more");
 });
+
+test("the power drain's occupied hosts are every host with something in a socket, in listing order (SIM-PERF-1)", () => {
+  for (const s of [busyOutpost().s, fixtureGame()]) {
+    const all = listHosts(s, s.systems), occupied = listHosts(s, s.systems, { occupied: true });
+    const filled = (h: { sockets: { occupant: unknown }[] }) => h.sockets.some((k) => k.occupant);
+    assert.ok(all.some(filled), "the fixture has an occupied host");
+    assert.deepEqual(occupied.filter(filled).map((h) => h.id), all.filter(filled).map((h) => h.id));
+    assert.deepEqual(occupied, all.filter((h) => occupied.some((o) => o.id === h.id)), "the same views, in the same order");
+  }
+});

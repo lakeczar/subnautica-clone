@@ -1153,3 +1153,35 @@ test("B43 (SCHED-3 R5-F1, Sol's symlink probe): a committed node step that links
   await done(c, t.out.trim(), 60000);
   assert.deepEqual([ticketOf(c, t.out.trim()).goal.portable.name, ticketOf(c, t.out.trim()).argv[1]], ["the fast tier", "scripts/heavy/portable-run.mjs"]);
 });
+
+test("B44 (SCHED-3 R5, STEW-2 composed): a guarded public script runs through the runner as its :direct body; the guard's --require is admitted inside the job; a machine-HOME ~/.npmrc never reaches npm, while the pinned run (as submitted, through npm and the guard) does", async () => {
+  const c = await lane("guarded");
+  const guard = readFileSync(join(here, "..", "local-guard.mjs"), "utf8"), scope = readFileSync(join(here, "..", "cgroup-scope.mjs"), "utf8");
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "scripts/local-guard.mjs": guard, "scripts/cgroup-scope.mjs": scope,
+    "scripts/case.mjs": 'if (process.env.CASE === "REQUESTED") { console.log("CASE-REQUESTED"); process.exit(19); } console.log("CASE-DEFAULT");\n',
+    "package.json": JSON.stringify({ name: "fixture", private: true, scripts: {
+      test: "npm run test:fast",
+      "test:fast": "node scripts/local-guard.mjs --class standard --machine any -- npm run test:fast:direct --",
+      "test:fast:direct": "node scripts/local-guard.mjs --require npm run test:fast && node scripts/case.mjs",
+    } }) + "\n" });
+  const shell = join(c.dir, "test-shell"), home = join(c.dir, "machine-home");
+  writeFileSync(shell, "#!/bin/sh\nexport CASE=REQUESTED\nexec /bin/sh \"$@\"\n", { mode: 0o755 });
+  mkdirSync(home);
+  writeFileSync(join(home, ".npmrc"), `script-shell=${shell}\n`);
+  c.fake.pause(true); // here, so the guard's admission is the real one: inside this job
+  await probeNow(c);
+  const env = { HOME: home };
+  const s = hc(c, ["submit", "--class", "standard", "--", "npm", "test"], { cwd: c.repoDir, env });
+  assert.equal(s.code, 0, s.err);
+  assert.doesNotMatch(s.err, /runs here/);
+  const id = s.out.trim();
+  assert.equal(waitFor(c, id).code, 0, log(c, id));
+  assert.deepEqual([result(c, id).argv[1], result(c, id).goal.machine, result(c, id).remote], ["scripts/heavy/portable-run.mjs", "any", undefined]);
+  assert.match(log(c, id), /portable-run: node scripts\/local-guard\.mjs --require npm run test:fast && node scripts\/case\.mjs\n/);
+  assert.match(log(c, id), /^CASE-DEFAULT/m, "no npm, so no ~/.npmrc shell");
+  assert.doesNotMatch(log(c, id), /local-guard: .*refused|through the queue/, "admitted inside the job");
+  // Pinned here, as submitted: npm, its ~/.npmrc, the guard (admitted in the job), its :direct body.
+  const pinned = hc(c, ["submit", "--class", "standard", "--machine", "3090", "--", "npm", "test"], { cwd: c.repoDir, env });
+  assert.equal(waitFor(c, pinned.out.trim()).code, 19);
+  assert.match(log(c, pinned.out.trim()), /^CASE-REQUESTED/m);
+});

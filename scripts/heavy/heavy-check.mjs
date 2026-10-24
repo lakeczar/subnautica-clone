@@ -29,10 +29,11 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, intentEnv, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
 import { resolveScript, stepBoundary } from "./portable-run.mjs";
+import { hasScopeComponent, ownCgroupPath } from "./cgroup-scope.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
 import { buildOnly, builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
-  alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState, terminalRecord,
+  alive, componentMatches, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState, terminalRecord,
   reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
 } from "./state.mjs";
 
@@ -86,15 +87,15 @@ function parseJob(args) {
 async function nested(opts, command) {
   const ticket = process.env.SILTWAKE_JOB_TICKET, legacy = process.env.SILTWAKE_HEAVY_LOCK_HELD;
   if (!ticket && !legacy) return null;
-  const cgroup = readFileSync("/proc/self/cgroup", "utf8");
+  const cgroup = ownCgroupPath() ?? "";
   const cls = classInfo(opts.class ?? classifyCommand(command));
   if (ticket) {
     const grant = readJson(join(jobDir(cfg, ticket), "grant.json"));
-    if (!grant || !cgroup.includes(`/${grant.unit}.scope`))
+    if (!grant || !hasScopeComponent(cgroup, grant.unit))
       fail(`SILTWAKE_JOB_TICKET=${ticket}, but this process is not inside that ticket's scope; refusing. Unset it, or run inside the job.`);
     if (cls.gpu && !grant.gpu) fail(`nested ${opts.class ?? "exclusive"} call inside ${grant.class} ticket ${ticket}, which has no GPU lease; submit the GPU work as its own --class gpu job`);
     if (cls.exclusive && !grant.exclusive) fail(`nested exclusive call inside ${grant.class} ticket ${ticket}; submit it as its own --class exclusive job`);
-  } else if (!/\/siltwake-heavy-[^/]*\.scope$/m.test(cgroup) && !cgroup.includes(`/${cfg.unitPrefix}-`)) {
+  } else if (!componentMatches(cgroup, /^siltwake-heavy-.+\.scope$/) && !componentMatches(cgroup, new RegExp(`^${cfg.unitPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-.+\\.scope$`))) {
     fail("SILTWAKE_HEAVY_LOCK_HELD is set, but this process is not inside a heavy-check scope; refusing");
   }
   // The outer job's own stall window and limit govern; this only bounds a runaway.

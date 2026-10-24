@@ -82,6 +82,17 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
 - **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive` on the 3090.
   - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. That declares the job portable: its outputs come back with `--artifact` (SCHED-3). An undeclared job runs on the 3090. Results from the 4070 are labelled indicative.
   - Pin a job to one machine only when the question needs that machine (e.g. factory-worker's host pauses, or a 4070 player-floor check).
+- **Graphics first; integrated graphics later** (owner, 2026-10-24):
+  - **Order:** build for the best graphics first; the dedicated-GPU gates stay (3090 at 60 fps, the 4070 laptop as the player floor). Integrated-graphics laptops come later, through a settings change (a lower preset), not as a target now.
+  - **The low preset, when it comes:** a steady **30 fps at a reduced internal resolution**, keeping readable exits, warning poses, lamp reach and landmark silhouettes.
+  - **Keep it reachable:** don't make choices that rule it out. Quality must stay scalable through settings (resolution scale, draw distance, effects), and memory and streaming budgets must stay parameterised rather than hard-wired to the 3090.
+  - **Still open:** the representative integrated-GPU device is chosen later.
+  - **No battery mode and no frame-cap setting** (owner, 2026-10-24). The browser already paces frames to the display's refresh rate.
+- **High refresh rates** (owner, 2026-10-24): on 120 Hz-and-above displays, motion should look as smooth as the hardware allows.
+  - **The gap today:** the simulation steps at a fixed 60 Hz and the renderer draws the latest step without interpolation, so above 60 Hz frames repeat (and 144 Hz judders).
+  - **Fix:** render interpolation between the last two fixed steps (camera, craft, creatures, particles), with the simulation unchanged and deterministic.
+  - **When:** a small stream after CW-1 merges (CW-1 owns `renderer.ts` and `app.ts`).
+  - **Acceptance:** the 60 fps gate on the 3090 stays. Measure at 120 Hz (8.3 ms budget) as indicative, not a gate.
 - **Evidence:**
   - Functional results count from either machine, bound to the exact SHA tested.
   - 3090 exclusive numbers are the target.

@@ -69,7 +69,9 @@ export function nearestOnPolyline(x: number, z: number, pts: readonly (readonly 
   let best = Infinity, bestS = 0, side = 0, run = 0, tx = 1, tz = 0;
   const n = pts.length - 1;
   for (let i = 0; i < n; i++) {
-    const [ax, az] = pts[i]!, [bx, bz] = pts[i + 1]!;
+    // Indexed, not destructured: destructuring runs the iterator protocol, and this is
+    // sampled many times a step (SIM-PERF-1: about 9 KiB of iterators a step).
+    const a = pts[i]!, b = pts[i + 1]!, ax = a[0], az = a[1], bx = b[0], bz = b[1];
     const dx = bx - ax, dz = bz - az, len = Math.hypot(dx, dz);
     const t = clamp01(((x - ax) * dx + (z - az) * dz) / (len * len));
     const px = ax + dx * t, pz = az + dz * t, d = Math.hypot(x - px, z - pz);
@@ -79,7 +81,7 @@ export function nearestOnPolyline(x: number, z: number, pts: readonly (readonly 
       let nx = -dz / len, nz = dx / len;
       const j = t <= 0 && i > 0 ? i - 1 : t >= 1 && i < n - 1 ? i + 1 : -1;
       if (j >= 0) {
-        const [cx, cz] = pts[j]!, [ex, ez] = pts[j + 1]!, l2 = Math.hypot(ex - cx, ez - cz);
+        const c = pts[j]!, e = pts[j + 1]!, cx = c[0], cz = c[1], ex = e[0], ez = e[1], l2 = Math.hypot(ex - cx, ez - cz);
         nx += -(ez - cz) / l2; nz += (ex - cx) / l2;
       }
       side = nx * (x - px) + nz * (z - pz);

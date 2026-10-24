@@ -35,6 +35,34 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
 
+## R5 review responses (part 2: composed with STEW-2)
+
+STEW-2 is on root at `e136beb6` (R3 accepted, `899db9a1` on `review/stew-2-r3`), merged in here.
+- **The alias** (`portable-run.mjs` `resolveScript`). A `node scripts/local-guard.mjs` step is one of three:
+  - **The npm alias, exactly** `--class <C> --machine any -- npm run <X>:direct -- [args]`: `<X>:direct` is expanded under the same grammar, with caller arguments last. Neither the guard nor npm runs; inside a job the guard runs its command directly anyway, so this is equivalent.
+  - **The admission check, `--require [--quiet] <plain words>`:** the head of every `:direct` body. A plain node step: it spawns nothing, and admits the job's own processes:
+    - inside a job, by `SILTWAKE_JOB_TICKET` and the job's cgroup. The runner's allowlist keeps `SILTWAKE_SCHED_DIR`, where the guard finds its ticket; that's unset in production;
+    - on alickers, by the sandbox's identity.
+  - **Anything else isn't portable,** and runs here as submitted with the reason: a wrapper with `--machine 3090` (`build`, local-product work), the `bash scripts/<name>.sh` form, a wrapper without `--machine`, `--status`.
+- **`package.json`:** root's scripts as STEW-2 wrote them. The explicit compiler and vite paths are already in the `:direct` bodies, so my R4 `playthrough` rewrite is dropped. `test:heavy` keeps `--machine any`.
+- **`cgroup-scope.mjs`:** the queue's membership checks now use whole cgroup path components instead of substrings:
+  - heavy-check's nested call: `hasScopeComponent` on its ticket's unit, and a whole-component match for v1 and private scope names;
+  - `gpuUsers`' owner and v1 detection;
+  - `gpu-lease.mjs`'s ticket, sandbox and v1 checks.
+
+  STEW-2's accepted module exports `cgroupPathOf`, `ownCgroupPath`, `withinCgroup` and `hasScopeComponent`. For patterns there is a one-line `state.mjs` `componentMatches`, so STEW-2's file stays untouched.
+  - **In the repository,** `scripts/heavy/cgroup-scope.mjs` re-exports `scripts/cgroup-scope.mjs`.
+  - **When installed,** `install.sh` copies the real file into each version and into the GPU guard's own install, and hashes it into both version ids.
+- **Tests:**
+  - **Units:**
+    - the exact composed expansions: `npm test` → `test:fast` → its alias → the `test:fast:direct` steps, `--require` first, and the playthrough;
+    - the three public expansions are npm-free node steps, with the guard only as `--require`;
+    - `build` (3090) refused;
+    - eight other guard shapes refused;
+    - caller arguments last.
+  - **B44** (a STEW-2-shaped fixture with the real `local-guard.mjs`): a default `npm test` runs through the runner here, and the guard's `--require` is admitted inside the job. A machine-HOME `~/.npmrc` with `script-shell` never reaches npm (`CASE-DEFAULT`, exit 0). The same submission pinned to the 3090 runs as submitted, through npm, its `.npmrc` and the guard (19).
+  - **Admission on alickers** can't be shown on the fake sandbox, whose host isn't alickers. It is checked on the real 4070: the runner running this repository's `test` there.
+
 ## R5 review responses (part 1: F1–F3 and follow-ups, before composing with STEW-2)
 
 Review `36018341` on `review/sched-3-r5`, by Sol on `7aa88a3d`: REQUEST CHANGES. The R4 cases pass. The coordinator's decisions:

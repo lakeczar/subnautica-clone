@@ -94,10 +94,15 @@ export function carrierHost(s: GameState, sys: SystemsState, v: VehicleState): S
   };
 }
 
-export function listHosts(s: GameState, sys: SystemsState): SocketHost[] {
+/** Every host, in one order. `occupied`: only hosts with something in a socket (fixed hosts
+ * and outposts with a socket entry, and every carrier, whose seeded fittings also occupy
+ * sockets), for per-step readers that skip empty hosts anyway (SIM-PERF-1: the power drain
+ * built every host's whole view every step). */
+export function listHosts(s: GameState, sys: SystemsState, options: { occupied?: boolean } = {}): SocketHost[] {
+  const used = (id: string): boolean => !options.occupied || sys.sockets.some((e) => e.hostId === id);
   return [
-    ...(Object.keys(FIXED_HOSTS) as FixedHostId[]).map((id) => fixedHost(s, sys, id)),
-    ...sys.outposts.map((o) => outpostHost(sys, o)),
+    ...(Object.keys(FIXED_HOSTS) as FixedHostId[]).filter(used).map((id) => fixedHost(s, sys, id)),
+    ...sys.outposts.filter((o) => used(o.id)).map((o) => outpostHost(sys, o)),
     ...s.fleet.vehicles.filter((v) => v.hull === "hearthline").map((v) => carrierHost(s, sys, v)),
   ];
 }
