@@ -157,6 +157,13 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
 
     The targeted store tests are kept. The seed-66769815 store test now uses Sol's smaller replacement, which fails the number-reuse mutant.
   - **Self-check (heavy tier):** `timeline-model.heavy.test.ts` patches the real sources with the review's mutants (by text anchor), transpiles them into a private copy of the compiled tree, and requires the fast tier's scripts and seeds to catch each one. The unchanged copy must pass. Detection per mutant is below.
+  - **Found by the new harness (heavy seed 29276833), a store defect:** a stored head's open events are up to 999 recorded events plus the commit's closing travel and idle events. `resumeRecorder` kept all of them open, so the first event recorded after a reload sealed a 1,001- or 1,002-event chunk. The chunk validator rightly rejects that, and the store became protected, with nothing damaged. A reload now seals a full chunk as recording would.
+    - Regressions: a store test (999 open events, closing idle, and travel plus idle; reload, record, commit, reload whole), a fast-tier script, and a self-check mutant that restores the old resume. R1-F1's test reloaded this state but never recorded after the reload.
+  - **Harness false positives, fixed in the harness:**
+    - a second "stale" repair didn't change the exported records;
+    - a failed quota commit legitimately folds stored chunks (the same history), which sums per-hull minutes in another order and lists tied stretches apart.
+
+    Totals are now compared canonically.
 - **F3 (P2), a timeline warning suppressed urgent hazards.** A timeline storage warning keeps its own identity (`persistence` channel, `timeline` context), but now ranks 2.5: below hazard captions (3) and game-save warnings (4). When something more urgent takes the central caption, the warning moves to the status line, which already exists, for the rest of its 12-second lifetime, styled as a warning. One that arrives while a higher caption shows goes straight there. A routine confirmation doesn't push it off; it expires or is resolved.
   - Regressions (`timeline-app.test.ts`), using the real `EncounterPresentation`:
     - the chimney-lip ecology caption, before and after a timeline warning;
