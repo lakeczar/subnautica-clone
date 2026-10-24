@@ -231,7 +231,7 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   assert.deepEqual(p.loss.lines.map((l) => [l.kind, l.quantity, l.from]), [["structural_alloy", 1, outpostLockerId(id)], ["flex_membrane", 1, "diver"]]);
   assert.deepEqual(p.locker.map((m) => [m.kind, m.quantity]).sort(), [["meal", 24], ["reserve_cell", 1], ["structural_alloy", 2]]);
   assert.deepEqual(p.work, [
-    'Decode "Relay hut fragment" at 55% pauses and travels with its decoder module. It resumes when the module is socketed again.',
+    'Decode "Pump house log" at 27% pauses and travels with its decoder module. It resumes when the module is socketed again.',
     "The ribbon fan crop at 23% stops growing while packed and carries on when the planter is socketed again.",
   ]);
   assert.equal(packOutpost(s, sys, id), null);

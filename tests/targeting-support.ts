@@ -161,7 +161,7 @@ export const NORMAL_VIEWS: readonly { id: string; position: Vec3; mode: Movement
   {id: "lost:divide_mixing_site", position: {x: 880, y: -378.7, z: -1147.5}, mode: "swimming"},
   {id: "lost:meridian_allotments_site", position: {x: 1150, y: -599.5, z: -1247.5}, mode: "swimming"},
   // LS-1: the hub spur's two lost sites.
-  {id: "lost:hub_keepers_racks", position: {x: 175, y: -39.5, z: -459.5}, mode: "swimming"},
+  {id: "lost:hub_keepers_racks", position: {x: 175, y: -47.5, z: -459.5}, mode: "swimming"},
   {id: "lost:hub_beacon_house", position: {x: 341, y: -47.5, z: -574}, mode: "swimming"},
   {id: "basin_pale_spores", position: {x: 212.5, y: -179, z: -220}, mode: "swimming"},
   // CR-1: creature grounds, residents' shed, protected egg cases and fall salvage,

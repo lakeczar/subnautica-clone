@@ -83,7 +83,7 @@ export const CB_LOST_SITES = {
   meridian_allotments_site: { label: "Terrace allotments", region: "deep_district", position: { x: 1150, y: -600.03, z: -1250 }, path: "near",
     see: "A rota board with a sealed data tag on the allotment post.",
     plate: "Rota. Last crop: READY.", tell: { kind: "light", range: 80 } },
-  hub_keepers_racks: { label: "Keeper's racks", region: "silt_basin", position: { x: 175, y: -40, z: -462 }, path: "main",
+  hub_keepers_racks: { label: "Keeper's racks", region: "silt_basin", position: { x: 175, y: -48, z: -462 }, path: "main",
     see: "Three tiers of grow racks bolted up the step's sunward face, gone wild, under a dead grow-lamp pole.",
     plate: "Cups on the top tier, fans below, fronds in the shade.", tell: { kind: "silhouette", range: 150 } },
   // W2's beacon house (regions/sites.ts `hub.beacon_house`): its lamp is the hub's lit
@@ -190,7 +190,7 @@ export const CB_DECODABLES = {
     label: "Mixing-line logger", site: "divide_mixing_site", region: "brine_divide", size: "archive",
     gates: ["divide_mixing_logger", "note_mixing_aside"], blueprints: [], story: false,
     reveals: [
-      cave("divide_brine_cistern", "Brine cistern", { x: 880, y: -422.6, z: -1290 }, 60),
+      cave("divide_brine_cistern", "Brine cistern", { x: 930, y: -446, z: -1200 }, 60),
     ],
     logs: [
       "Brine profiles along the mixing line, with dense-water spikes flagged in red.",
