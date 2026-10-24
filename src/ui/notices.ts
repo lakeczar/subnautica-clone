@@ -70,7 +70,8 @@ export class EncounterPresentation {
     // A confirmed local write resolves its obsolete failure/reminder. System
     // successes (including exports) cannot establish local-save recovery.
     if ((channel === "system" || channel === "persistence") && !error) {
-      if (channel === "persistence" && this.central?.channel === "persistence") this.central = null;
+      // A game save's success resolves only a game-save failure, never the play timeline's.
+      if (channel === "persistence" && this.central?.channel === "persistence" && this.central.context !== "timeline" && options.context !== "timeline") this.central = null;
       this.status = { message, expiresAt: now + NOTICE_SECONDS.system * 1000 };
       return;
     }

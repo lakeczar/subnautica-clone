@@ -499,7 +499,9 @@ export class SiltwakeApp {
     let opened = false;
     const say = (message: string, error: boolean): void => {
       if (!opened) opening.push([message, error]);
-      else if (!this.disposed) this.view.notify(message, error, { channel: "system" });
+      // A timeline storage failure is a persistence warning (it outranks system notices), kept
+      // apart from the game save's own: a later game save never resolves it.
+      else if (!this.disposed) this.view.notify(message, error, error ? { channel: "persistence", context: "timeline" } : { channel: "system" });
     };
     this.live = LiveTimeline.open(storage, this.writerLock, { id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION },
       { regionAt: (x: number, z: number) => regionAtPoint(x, z) }, say,

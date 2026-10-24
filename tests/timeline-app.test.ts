@@ -251,6 +251,7 @@ test("R6-F2: Continue onto a head with malformed events protects, never throws, 
     app.dispose();
     app = seams(new SiltwakeApp({} as HTMLElement)); f.frames();
     assert.doesNotThrow(() => { GameView.current.actions.continueGame(); f.frames(); });
+    await settled();
     assert.equal(app.live.protected, true);
     assert.equal(GameView.current.repairVisible, true, "the repair is offered");
     assert.ok(GameView.current.notices.some((n) => /local play-timeline store can't be read/.test(n)));
@@ -410,4 +411,14 @@ test("SIM-1b R1-F1: a refused repair keeps the version 1 record and says nothing
     assert.ok(GameView.current.notices.some((n) => /Nothing was changed/.test(n)));
     assert.equal(GameView.current.repairVisible, true);
   } finally { app.dispose(); f.restore(); }
+});
+
+test("SIM-1b R1-F5: a game save's success resolves its own failure notice, never the play timeline's", () => {
+  const p = new EncounterPresentation();
+  p.notify("The play timeline is kept in memory only.", true, { channel: "persistence", context: "timeline" }, 0);
+  p.notify("Saved locally", false, { channel: "persistence" }, 1);
+  assert.equal(p.central?.message, "The play timeline is kept in memory only.");
+  p.notify("Saving failed.", true, { channel: "persistence" }, 2);
+  p.notify("Saved locally", false, { channel: "persistence" }, 3);
+  assert.equal(p.central, null, "a game save's own failure is resolved");
 });
