@@ -50,7 +50,7 @@ const judged = (() => {
   try { return !!t && JSON.parse(readFileSync(path.join(process.env.SILTWAKE_SCHED_DIR || "/work/tmp/siltwake-sched", "jobs", t, "grant.json"), "utf8")).exclusive === true; } catch { return false; }
 })();
 /** --hold: the scene's settling time before the measured window. */
-const HOLD_SETTLE_MS = 20_000;
+const HOLD_SETTLE_MS = 20_000, HOLD_WINDOW_S = 10;
 const machine = arg("machine", hostname() === "factory-worker" ? "RTX 3090 (factory-worker)" : hostname());
 
 // The like-for-like probe (every mode): rAF gaps and the time of the frame's
@@ -114,7 +114,20 @@ try {
     const { profile } = await g.cdp.send("Profiler.stop");
     writeFileSync(path.join(out, "profile.json"), JSON.stringify(profileSummary(profile, profileS)));
   };
-  if (holdS > 0) { await g.page.waitForTimeout(holdS * 1000); await stopProfile(); }
+  // In a hold, main-thread time in 10 s windows too: the recorder's work recurs within every
+  // window (12 fps video, 4 Hz samples, a 5 s flush), the game's occasional bursts do not, so the
+  // median window is a robust per-run figure beside the whole window's (R3-4).
+  const windows = [];
+  if (holdS > 0) {
+    let at = await metrics(), n = await g.page.evaluate(() => window.__recProbe.work.length);
+    for (let left = holdS; left > 0; left -= HOLD_WINDOW_S) {
+      await g.page.waitForTimeout(Math.min(left, HOLD_WINDOW_S) * 1000);
+      const now = await metrics(), m = await g.page.evaluate(() => window.__recProbe.work.length);
+      if (m > n) windows.push(+(((now.TaskDuration - at.TaskDuration) * 1000) / (m - n)).toFixed(3));
+      at = now; n = m;
+    }
+    await stopProfile();
+  }
   for (const [i, pt] of (holdS > 0 ? [] : points).entries()) {
     if (i === 0) continue;
     if (Date.now() > deadline) break;
@@ -143,6 +156,7 @@ try {
     mainThread: { taskMsPerFrame: per("TaskDuration"), scriptMsPerFrame: per("ScriptDuration"), taskMsPerSecond: perSecond("TaskDuration"),
       heapMiBEnd: m1.JSHeapUsedSize ? +(m1.JSHeapUsedSize / 1048576).toFixed(1) : null },
     // ms of CPU per measured second, all threads: renderer process (page, workers, media), GPU process, the browser's whole tree.
+    ...(windows.length ? { windows: { seconds: HOLD_WINDOW_S, taskMsPerFrame: windows, median: +[...windows].sort((x, y) => x - y)[Math.floor(windows.length / 2)].toFixed(3) } } : {}),
     processCpu: probe.seconds > 0 ? Object.fromEntries(Object.keys(cpu1).map((k) => [`${k}MsPerS`, +(((cpu1[k] - cpu0[k]) * 1000) / probe.seconds).toFixed(1)])) : null };
   writeFileSync(path.join(out, "probe.json"), JSON.stringify({ gaps: probe.gaps.map((x) => +x.toFixed(2)), work: probe.work.map((w) => +w.toFixed(3)), metrics: { start: m0, end: m1 } }));
   if (rec) result.header = await rec.stop({ reached: result.reached, skipped: result.skipped, probe: result.probe, pageErrors: g.errors.length });

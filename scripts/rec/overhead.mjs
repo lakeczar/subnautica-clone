@@ -88,7 +88,7 @@ function paired(mode, f) {
 }
 const deltas = Object.fromEntries(Object.keys(stats).filter((k) => k !== "off").map((k) => {
   const frame = paired(k, (x) => x?.probe?.mainThread?.taskMsPerFrame);
-  return [k, { mainThreadMsPerFrame: frame, mainThreadMsPerSecond: paired(k, (x) => x?.probe?.mainThread?.taskMsPerSecond),
+  return [k, { mainThreadMsPerFrame: frame, medianWindowMsPerFrame: paired(k, (x) => x?.probe?.windows?.median), mainThreadMsPerSecond: paired(k, (x) => x?.probe?.mainThread?.taskMsPerSecond),
     rendererCpuMsPerS: paired(k, (x) => x?.probe?.processCpu?.rendererMsPerS), gpuCpuMsPerS: paired(k, (x) => x?.probe?.processCpu?.gpuMsPerS),
     workMs: paired(k, (x) => x?.probe?.work?.mean),
     budget: frame.hi == null ? `not established (n = ${frame.n}: an interval needs two pairs)` : frame.hi < BUDGET_MS ? `met: the interval's upper end ${frame.hi} ms is under ${BUDGET_MS.toFixed(3)} ms` : `not shown: the interval's upper end ${frame.hi} ms is not under ${BUDGET_MS.toFixed(3)} ms` }];
@@ -102,8 +102,9 @@ const md = [
   "| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |",
   ...Object.entries(stats).map(([k, s]) => `| ${k} | ${s.runs} | ${s.frames} | ${s.gapP50} | ${s.gapP99} | ${s.over33} | ${s.workP50} | ${s.workP99} | ${s.workMean} | ${s.taskMsPerFrame ?? "—"} | ${s.taskMsPerSecond ?? "—"} | ${s.rendererCpuMsPerS ?? "—"} | ${s.gpuCpuMsPerS ?? "—"} | ${s.recorderSelfMs ?? "—"} |`), "",
   "Against off, paired by round (each run one unit): mean difference, its range, and a paired t 95% interval. Assumes independent pairs with roughly normal differences; with few pairs the interval is wide by design.", "",
-  "| Mode | Main thread Δ ms/frame | Main thread Δ ms/s | Renderer CPU Δ ms/s | GPU process CPU Δ ms/s | Budget (1% of a frame) |", "| --- | --- | --- | --- | --- | --- |",
-  ...Object.entries(deltas).map(([k, x]) => `| ${k} | ${iv(x.mainThreadMsPerFrame)} | ${iv(x.mainThreadMsPerSecond)} | ${iv(x.rendererCpuMsPerS)} | ${iv(x.gpuCpuMsPerS)} | ${x.budget} |`), "",
+  "| Mode | Main thread Δ ms/frame | Median 10 s window Δ ms/frame (holds) | Main thread Δ ms/s | Renderer CPU Δ ms/s | GPU process CPU Δ ms/s | Budget (1% of a frame) |", "| --- | --- | --- | --- | --- | --- | --- |",
+  ...Object.entries(deltas).map(([k, x]) => `| ${k} | ${iv(x.mainThreadMsPerFrame)} | ${iv(x.medianWindowMsPerFrame)} | ${iv(x.mainThreadMsPerSecond)} | ${iv(x.rendererCpuMsPerS)} | ${iv(x.gpuCpuMsPerS)} | ${x.budget} |`), "",
+  "Budget: judged on the whole window's paired interval. The median 10 s window is a robust figure for a hold (the recorder's work recurs in every window, the game's occasional bursts do not); it is reported, not substituted.", "",
   "Recorder self-time by part (mean ms per frame): " + Object.entries(stats).filter(([, s]) => s.recorderParts).map(([k, s]) => `${k}: ${Object.entries(s.recorderParts).map(([p, v]) => `${p} ${v}`).join(", ")}`).join(" · "), "",
   "Frames: display frames, one per rAF timestamp. Work: that frame's rAF callbacks together (the game's, with the recorder when on, and the soak's tiny frame recorder). Main thread: CDP TaskDuration over the measured window (every task and collection). Renderer and GPU process CPU: user and system time of all their threads (the page's worker and media threads are in the renderer's). Gap: the rAF interval a player sees.",
 ];
