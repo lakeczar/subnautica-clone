@@ -1184,3 +1184,12 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **r14 exclusive:** tour 1 PASS (nothing excused); deep 2 FAIL (49.9 ms `lightPlace`; canary stalled 48.9 ms; renderer 0.2 ms) → carried as a provisional compromise. 8/9 proven. Also a 93 ms on-CPU render frame in deep 2 (game work).
   - **Review:** Sol R5 running (`siltwake-cw1-review-r5-sol-42786dc`), deciding ACCEPT, provisional or changes.
 - **Process gap found:** `npm run gate` does not run the heavy tier, so root-side budget overruns go unseen. This goes to the test-efficiency debate and the STEW owner (decide whether the gate runs the heavy tier, or a tracked nightly does).
+- **SCHED-3 R5 part 2 (composed with STEW-2) done at `f0d41605`** (code `6c736791`):
+  - **Changes:** the exact STEW-2 npm-wrapper alias expands `X:direct`; other guard shapes run locally; `--require` is a node step; `cgroup-scope.mjs` adopted (installed and hashed); a `v1Scope()` fix for a forged legacy lock inside v2 scopes (stricter v1 GPU lease).
+  - **Checks:** 56/56 units, B 12/12, suites 23/27/44; fast through the guard on alickers; the real runner on the 4070 with no npm.
+  - **Review:** Sol R6 (install decision) running (`siltwake-sched3-review-r6-sol-f0d4160`).
+- **Test-efficiency debate result** (`/work/tmp/test-efficiency/RECOMMENDATION.md`):
+  - **The finding:** the cost is the exclusive lane (70% of 3090 seat-time over 45 h; a 49-min median wait; about 1,270 idle seat-min behind drains; 95 runs under 3 min taking the whole machine; 58 of 113 GPU traversals failing; compiles inside exclusive windows).
+  - **Correction:** "root over heavy budget" was an artefact of CW-1's `SILTWAKE_HEAVY_BUDGET_MIB=8000` override (real-budget peaks pass). The CW-1 R5 reviewer has been told.
+  - **Ranked:** (1) measurement hygiene rules now; (2) exclusive only for acceptance, with microbenchmarks on CPU time and allocations, duet A/Bs, and an exclusive preflight refusing compiles; (3) stored per-file heavy results; (4) the full heavy tier in the root gate on `--machine any`; (5) SCHED-5 drain windows and backfill; (6) caching and affected-test selection later.
+  - **Owner decisions pending:** amend convention 9, approve SCHED-5, accept about +10 min per root gate.
