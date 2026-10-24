@@ -535,7 +535,7 @@ const divide: Phase = {
     // identity for the next frontier, and nothing brings the Creel back this way.
     if (forwardBase(d)) {
       atForwardBase(d, "charge", () => {});
-      atForwardBase(d, "pack it", (id) => { d.command({ type: "pack-outpost", outpostId: id, to: "diver" }); });
+      atForwardBase(d, "pack it", (id) => { d.command({ type: "pack-outpost", outpostId: id, to: d.vehicle("creel")!.cargoId }); });
     }
     followS2(d, "route.basin.divide");
     // PACE-1 R2: lattice for the plans held (the dock, Creel 800, suit 800), not for
@@ -1009,6 +1009,7 @@ const works = (strategy: Strategy): Phase => ({
     for (const id of ["route.canopy_east.basin", "route.isles.canopy_east"]) followS2(d, id, true);
     // The lattice and core rode home in the stores: ashore with the diver to the bench.
     const stores = carrier(d).cargoId, aboard = planned(d, fabricate, ["brine_lattice", "thermal_core"]);
+    unload(d, "diver", stores);
     for (const k of ["brine_lattice", "thermal_core"] as const)
       move(d, k, Math.min(aboard[k] ?? 0, d.count(k, [stores])), stores, "diver");
     ashoreFromCarrier(d);
