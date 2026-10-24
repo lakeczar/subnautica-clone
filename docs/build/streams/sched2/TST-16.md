@@ -18,6 +18,27 @@ Four review rounds each found another lifetime race in one mechanism: changing a
 - **Deleted:** `handover.mjs`, the boost journal (`state.boost`), the freeze (`state.frozen`), the backstop, the runtime setter and read-back, `install.sh --rollback` and the thaw. Rollback is back to its pre-TST-16 form.
 - **R4's findings** (F1 freeze ownership across installer operations, F2 a reset outliving a killed handover, F3 freeze visibility) concern only that machinery, so they are removed with it. The diff is much smaller.
 
+## TST-16b: the installer tail (R11's P3s) and the R4-F3 flake
+
+TST-16 was accepted at `1bc6c8dc` (R11, `a9196eec` on `review/tst-16-r11`), with two nonblocking P3s, done here on `t3/tst-16b-installer-tail`.
+- **P3-F1, publication ran after the installer lock was released.** `install.sh` now takes `<state>/install.lock` itself, on fd 9, right after parsing its arguments. It holds it for every path: the exclusive unit, publication (the immutable version, `current`, mode, slice unit, guard), `--uninstall`, `--remove-exclusive-slice` and the guard switches.
+  - **One owner:** `exclusive-unit.mjs` takes no lock of its own. It gets the fd number (`SILTWAKE_INSTALL_LOCK_FD`), checks that the fd is `install.lock` (same device and inode) and that it holds the lock (`flock -n` on that same open file succeeds only if no one else holds it), and otherwise refuses with exit 2 and pauses nothing. So there's one lock lifecycle, and the maintenance mark's identity still decides who may clear it.
+  - **The lock ends with its last holder:** processes started by the installer inherit fd 9, so an outstanding reload keeps the next installer waiting until it ends. A second installer waits up to 10 minutes, then exits 3 with nothing changed.
+  - **Admission:** `state.lock` is still held only for the short transactions, so systemd work never blocks admission.
+- **P3-F2, production was a spelling.** `loadConfig` classifies by directory identity: `sameDir(dir, PRODUCTION_DIR)` compares device and inode when both exist, else the normalized absolute path. A trailing slash, `//`, `.`, `..` or a symlink to `/work/tmp/siltwake-sched` is production, so it gets no test seams: the shortened reload deadline, host overrides and the remote lane's private-off.
+  - `install.sh` asks the same loader whether its state is production, instead of comparing text.
+  - The alickers transport's test-mode guard (`scripts/alickers-job.sh`) also compares by identity (`-ef`, else `realpath -m`), instead of stripping one trailing slash.
+- **The R4-F3 soak-runner flake** (`tests/soak-runner.test.ts`): the test drove the real recorder with `setTimeout` frames and `performance.now()` stamps, and stalled the event loop for real. Under host load, a late timer could add a gap or reorder a frame against the 10 ms tick. The recorder's only clock is the rAF timestamp, so the shim now keeps the callback and the test delivers frames itself, 8 ms apart on a virtual clock, at fixed points: two before each tick's frame sample, one before and one after each GC stall (inside the excluded window). Stalls add to that clock. The assertions are unchanged.
+- **Tests:**
+  - **S26:** the killed-installer case now also stops the orphaned shim's child, which holds the inherited lock fd.
+  - **S27, new:** a second `install.sh` waits while the first is held in publication (`cp`), after its unit step finished and its mark cleared. The lock stays held, nothing is published until A finishes, then both succeed and `current` is a complete version. The unit helper run outside `install.sh` (no fd, or a fd that isn't the lock) is refused with exit 2 and pauses nothing.
+  - **`tests/heavy-sched-config.test.ts`, new:** the production directory in six spellings and by default; a private directory, a symlinked alias of one, missing paths and look-alike names (`-private`, `x`, a subdirectory); a symlink to this machine's production state, only named.
+  - **Negative controls:** with the R10 code (`1bc6c8dc`), S27 fails at "the installer lock is still held through publication". With the root loader (`4229a17e`), `heavy-sched-config` fails on `/work/tmp/siltwake-sched/` (classified private) and on the missing `sameDir`.
+- **Checks** at `d2e54642` (code), on root `4229a17e`:
+  - **Full suites, local and sequential:** SCHED-1 **23/23**, SCHED-2 **27/27**, SCHED-2b **27/27**. No units, slices or unit files left behind.
+  - **Fast tier:** through the queue on alickers (`--machine 4070`, ticket `261024-010219-b252`, exit 0, 142 files). This was during CW-1's 3090 exclusive window. The first try, at `feedbf69`, failed typecheck on the rAF restore under `exactOptionalPropertyTypes`, fixed in this commit.
+  - **R4-F3, repeated:** 25/25 on alickers (ticket `261024-004957-9e69`), plus the whole soak-runner file 21/21. The policy, contention and config units passed 44/44.
+
 ## R10 review responses
 
 Review `1895713a` on `review/tst-16-r10`, on `028793ae`: two P2s and one P3, all in how `exclusive-unit.mjs` ends an operation.

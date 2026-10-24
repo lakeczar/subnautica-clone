@@ -770,3 +770,31 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Design question:** the Creel's ~13 min air limit makes 4 Meridian east deep caves unreachable by cold approach. Decide whether that's intended (an upgrade gate) or a route or pacing issue.
 - **STEW-1 MERGED and pushed** (root `a7ca6054`). `npm run gate` passed 10/10 at a7ca6054 (playthrough ticket 261024-031515-c0ed on the 3090). The root merge gate is now `npm run gate`. The saves export follows.
 - **TST-16b ACCEPTED** (Sol `98940eed` on `review/tst-16b`), safe to install. P3 follow-ups: a missing-directory symlink alias can read as private; the fd check accepts an unlocked matching descriptor; the soak rewrite lacks window-end frame coverage.
+- **Owner request (2026-10-24):** how to read the flight-recorder packs for real gameplay feedback without low-value checks. Plan: Sol 6.1 xhigh research (`siltwake-evidence-feedback-research-sol`, writing `docs/build/research/RECORDING-FEEDBACK-SOL.md` on `research/recording-feedback`), then an independent Opus 5.5 view built on that report, then the coordinator consolidates the options for the owner.
+- **REC-1 R2 fixes done at `becc169f`** (runtime `126b2cc6`):
+  - **Fixed:** the WebCodecs VP9 spool-worker video, with encoder-stamped times and honest gaps; the probe corrected; Off finalisation; the loss ledger; budget stops; worker retirement; bounded timeline.html.
+  - **Open:** the inclusive cost isn't established (0.30 ms mean, noise-bound). A fixed-pose A/B is approved after the TST-16 install.
+  - **Review:** Sol R3 running (`siltwake-rec1-review-r3-sol-becc169`).
+  - **Merge order:** CW-1, then REC-1.
+- **CW-1 at `92527bc2`:** REC-1's three findings folded in.
+  - **Cave readiness:** a `data-cave-light` and lights-settled stat, waited on at load and after jumps.
+  - **Light selection:** a pure function of pose and candidates.
+  - **Simulation spikes:** not cave-driven (6 frames over 30 ms in 3 h, the biggest far from caves), so routed to a SIM perf follow-up, owner to be chosen.
+  - The R2 review covers 699b575d; 92527bc2 goes into the next round. The 15-ticket clean remeasure is held for the TST-16 install.
+  - **Simulation spike detail (CW-1):** the 3 biggest (63–136 ms) were far from caves; the near-cave ones line up with the diver's collision checks costing about 11× in dense deep-cave geometry (380 vs 34 µs per step). That's input for COL-1 stage B (the unified collider) and the SIM perf follow-up.
+- **CW-1 R2** (Sol on `699b575d`, report on `review/cw-1-r2` `8463b5d7`): REQUEST CHANGES, 5 P2s. Binding bypasses upload slices; light readiness missing from entry and diagnostics; tie-break history; roster-proportional tick allocation; unbounded lighting geometry cache. R1 and R2 are verified fixed. Decision: fix all five, then one clean 3090 remeasure on the final code.
+- **TST-16b MERGED and pushed** (root `5f9bd604`). `npm run gate` passed 10/10. No saves export is needed (no game code). The full SCHED-1/2/2b suites are running at the merged root before install.
+- **TST-16 + TST-16b INSTALLED LIVE** at 04:02Z: heavy-check v2 `baf9369c3418` from root `5f9bd604`.
+  - **Before install:** full suites at the merged root (SCHED-1 23/23, SCHED-2 27/27, SCHED-2b 27/27, policy and config units 35/35). Pre-state in `/work/tmp/cutover-tst16/` (previous `95f340380c25`).
+  - **Unit:** `siltwake_exclusive.slice` is loaded: CPUWeight 10000, 700%, 8 GiB, swap 0.
+  - **Canary:** exclusive canary 261024-040242-6f8a was placed in the slice, boost applied, not disturbed, with steal, faults and swap reported per job.
+  - **Notified:** REC-1 (fixed-pose A/B go) and CW-1 (remeasure after R2 fixes).
+- **Recording-feedback research:** Sol report on `research/recording-feedback` (`60196347`, pushed). The Opus independent view is running (`siltwake-evidence-feedback-opus-view`).
+- **REC-1 R3** (Sol on `becc169f`, report on `review/rec-1-r3` `31378375`): REQUEST CHANGES, 4 P2s and 1 P3. The clock passes (204/204).
+  - **Findings:** an encoder throw kills the serial queue; a locked older recording is credited as removed; encoder drops are invisible to completeness and strips; the inclusive cost is unestablished (a cheap fixed-pose plan of 2 pairs × 30–60 s, now under TST-16); the "conclusive" label.
+  - **Scope:** kept narrow; the Opus pack-format ideas are held for the owner's decision.
+- **Opus recording-feedback view** at `e5738b9b` on `research/recording-feedback-opus` (pushed). It recommends plan B: a play debrief plus a health split in REC-2, reading habits now, and an owner playtest protocol. DIRECTION rule changes await owner approval.
+- **Owner decision, recording feedback (2026-10-24): plan B plus all four DIRECTION rule changes** (now in DIRECTION "Evidence reading and quality review"). No outside blind tester.
+  - **REC-1b**, a short follow-up after REC-1 merges: two verdicts in `summary.json`; no strips for unjudged hitches; pacing suppressed on traversal and short runs; one control strip; fixed views tagged by region and system for subset capture.
+  - **REC-2, before the first owner playtest (after OP-1):** one pacing model (`analyseTimeline`, deleting the `analyse.mjs` heuristic); major/minor new things; the note context snapshot; `debrief.md` plus a ribbon with a tension trace and moment cards; a separate `health.md`; then the shared driver.
+- **Owner request (2026-10-24): each note also saves the full game state.** Added to REC-2's note-context item: at each feedback-key note, embed a save (existing codec; the largest save today is 44 KiB) in the flight recording. Agents can then load the exact moment, reproduce it, test fixes from it, and keep it as a regression save (via SAVE-1's library format).

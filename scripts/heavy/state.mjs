@@ -12,7 +12,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unmeasuredContext } from "./contention.mjs";
 import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
@@ -20,6 +20,16 @@ import { dropSnapshot } from "./snapshot.mjs";
 
 export const PRODUCTION_DIR = "/work/tmp/siltwake-sched";
 export const PRODUCTION_LEGACY_LOCK = "/work/tmp/siltwake-heavy-check.lock";
+
+/**
+ * Whether two paths name the same directory: by identity (device and inode)
+ * when both exist, else by the normalized absolute path. A trailing slash, a
+ * `..` or a symlink to the production state is still the production state.
+ */
+export function sameDir(a, b) {
+  try { const x = statSync(a), y = statSync(b); return x.isDirectory() && x.dev === y.dev && x.ino === y.ino; }
+  catch { return resolve(a) === resolve(b); }
+}
 
 export function loadConfig(env = process.env) {
   const dir = env.SILTWAKE_SCHED_DIR || PRODUCTION_DIR;
@@ -37,7 +47,7 @@ export function loadConfig(env = process.env) {
   if (env.SILTWAKE_SCHED_LEGACY_LOCK) cfg.legacyLock = env.SILTWAKE_SCHED_LEGACY_LOCK;
   if (env.SILTWAKE_SCHED_UNIT_PREFIX) cfg.unitPrefix = env.SILTWAKE_SCHED_UNIT_PREFIX;
   if (env.SILTWAKE_SCHED_SUPERVISOR_PREFIX) cfg.supervisorPrefix = env.SILTWAKE_SCHED_SUPERVISOR_PREFIX;
-  cfg.production = dir === PRODUCTION_DIR;
+  cfg.production = sameDir(dir, PRODUCTION_DIR);
   // The top-level slice exclusive jobs run in, whose CPU weight is fixed in its
   // unit file (TST-16, contention.mjs). A private state directory (tests) uses
   // only a slice its environment or config.json names.

@@ -784,7 +784,8 @@ exec /usr/bin/systemctl "$@"
   await sleep(1000);
   killOwned(k.by);
   await K.done;
-  spawnSync("pkill", ["-KILL", "-f", join(d, "systemctl")]); // its orphaned reload shim (ours, in the private dir)
+  // Its orphaned reload shim (ours, in the private dir) and the shim's sleep still hold the installer lock's fd: stop them.
+  for (const pid of spawnSync("pgrep", ["-f", join(d, "systemctl")], { encoding: "utf8" }).stdout.split("\n").filter(Boolean)) { spawnSync("pkill", ["-KILL", "-P", pid]); spawnSync("kill", ["-KILL", pid]); }
   assert.equal(stateOf(c).maintenance?.op, k.op, "a killed installer's mark stays");
   assert.match(hc(c, ["status"]).out, /MAINTENANCE .*ended.*Recover: rerun scripts\/heavy\/install\.sh/);
   const r = install();
@@ -805,4 +806,37 @@ exec /usr/bin/systemctl "$@"
   writeFileSync(join(d, "mode"), "");
   assert.equal(install().status, 0);
   assert.equal(stateOf(c).maintenance, undefined);
+});
+
+test("S27 (TST-16b): one installer lock covers the whole install, publication included: a second install.sh waits while the first copies its version; the unit helper runs only under that lock", async () => {
+  const c = context("install-tail", { config: fast });
+  const home = join(c.dir, "home"), d = join(c.dir, "shim"), held = join(d, "held"), go = join(d, "go");
+  mkdirSync(d, { recursive: true });
+  // cp held at publication (after the exclusive unit is done) until released.
+  writeFileSync(join(d, "cp"), `#!/bin/bash\n: > '${held}'\nwhile [[ ! -e '${go}' ]]; do sleep 0.05; done\nexec /usr/bin/cp "$@"\n`, { mode: 0o755 });
+  const env = (extra = {}) => ({ ...c.env, SILTWAKE_SCHED_HOME: home, ...extra });
+  const start = (extra = {}) => { const p = spawn("bash", [join(here, "install.sh")], { env: env(extra), stdio: ["ignore", "pipe", "pipe"] }); p.out = ""; p.stdout.on("data", (x) => { p.out += x; }); p.stderr.on("data", (x) => { p.out += x; }); p.done = new Promise((res) => p.on("exit", res)); return p; };
+  const A = start({ PATH: `${d}:${process.env.PATH}` });
+  try {
+    await until("A publishing", () => existsSync(held), 30000);
+    assert.equal(stateOf(c).maintenance, undefined, "the unit step is done");
+    assert.equal(spawnSync("flock", ["-n", join(c.sched, "install.lock"), "true"]).status, 1, "the installer lock is still held through publication");
+    const B = start();
+    await sleep(2000);
+    assert.equal(B.exitCode, null, "B waits for A's whole run");
+    assert.equal(existsSync(join(home, "current")), false, "nothing published yet");
+    writeFileSync(go, "");
+    assert.equal(await A.done, 0, A.out);
+    assert.equal(await B.done, 0, B.out);
+    assert.ok(existsSync(join(home, "current", "heavy-check.mjs")));
+    assert.equal(spawnSync("bash", ["-c", `cd '${join(home, "current")}' && for f in *; do cmp -s "$f" '${here}/'"$f" || [[ $f == alickers-job.sh ]] || echo "$f"; done`], { encoding: "utf8" }).stdout, "", "a complete version");
+  } finally { writeFileSync(go, ""); await A.done; }
+  // The unit helper outside install.sh (no lock fd, or a fd that isn't the lock): refused, nothing paused.
+  const slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE, unitDir = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user");
+  for (const extra of [{}, { SILTWAKE_INSTALL_LOCK_FD: "0" }]) {
+    const r = spawnSync(process.execPath, [join(here, "exclusive-unit.mjs"), "write", slice, unitDir], { env: env(extra), encoding: "utf8", timeout: 30000 });
+    assert.equal(r.status, 2, r.stderr);
+    assert.match(r.stderr, /runs only under install\.sh's installer lock/);
+    assert.equal(stateOf(c).maintenance, undefined);
+  }
 });
