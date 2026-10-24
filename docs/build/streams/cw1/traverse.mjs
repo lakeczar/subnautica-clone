@@ -23,6 +23,7 @@ import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSy
 import path from "node:path";
 import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
 import { streamTrace } from "./stream-trace.mjs";
+import { Worker } from "node:worker_threads";
 requireGpuLease("CW-1 traversal");
 const require = createRequire(process.env.CW1_PW ?? "/work/tmp/gpu-prep/pw/");
 const CHROME = process.env.CW1_CHROME ?? `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`;
@@ -309,6 +310,14 @@ try {
   sched.pid = findRenderer();
   note("renderer main thread", sched.pid ?? "not found");
   const sampler = setInterval(sampleSched, 5);
+  // SIM-PERF-1 (SIMPERF_HOST=1, probe only): the canary and the renderer thread's state and
+  // syscall (simperf-host-worker.mjs), and the GPU process's NVIDIA shader-cache settings.
+  const host = process.env.SIMPERF_HOST ? new Worker(new URL("./simperf-host-worker.mjs", import.meta.url)) : null;
+  if (host && sched.pid) host.postMessage(sched.pid);
+  if (host && sched.gpu) try {
+    result.gpuEnv = readFileSync(`/proc/${sched.gpu}/environ`, "utf8").split("\0").filter(v => v.startsWith("__GL_"));
+    note("gpu process env", JSON.stringify(result.gpuEnv));
+  } catch (error) { result.gpuEnv = `unreadable: ${error.message}`; }
   const markAt = await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; performance.mark("cw1-align"); return performance.now(); });
   const started = performance.now(), syncAtStart = records.sync ?? 0, pendingAtStart = records.lightPendingFrames ?? 0;
   traveling = true;
@@ -382,6 +391,10 @@ try {
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
     regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
     heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));
+  const hostData = host ? await new Promise((resolve) => { host.once("message", resolve); host.postMessage("stop"); }) : null;
+  if (host) await host.terminate();
+  // SIM-PERF-1: the step meter's snapshot (pulled once): the worst steps by phase on the page clock.
+  result.stepCosts = await page.evaluate(() => globalThis.__siltwakeStepCosts?.() ?? null);
   const gaps = data.gaps.map(([, g]) => g).sort((a, b) => a - b);
   result.frames = { count: gaps.length, p50: quant(gaps, 0.5), p95: quant(gaps, 0.95), p99: quant(gaps, 0.99), max: gaps.length ? +gaps.at(-1).toFixed(1) : null,
     over33: gaps.filter(g => g > 33.4).length, over50: gaps.filter(g => g > 50).length };
@@ -414,7 +427,18 @@ try {
     // CW1_TRACE: the trace's slices inside the gap, longest first (renderer, GPU process and the rest).
     const inGap = result.slices ? result.slices.filter(x => x.at < at && x.at + x.ms > at - g).sort((a, b) => b.ms - a.ms).slice(0, 10)
       .map(x => `${x.ms} ms ${x.thread} ${x.cat}:${x.name} ${x.args}`) : undefined;
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, ...(inGap ? { trace: inGap } : {}), gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    // SIM-PERF-1: the meter's steps inside the gap, the canary's gaps and the renderer thread's states.
+    const steps = result.stepCosts ? result.stepCosts.worst.filter(w => w.at >= at - g - 1 && w.at <= at + 1)
+      .map(w => ({ tick: w.tick, ms: +w.ms.toFixed(2), phases: Object.fromEntries(Object.entries(w.phases).filter(([, v]) => v >= 0.05).map(([k, v]) => [k, +v.toFixed(2)])) })) : undefined;
+    const hostIn = hostData ? (() => {
+      const states = {};
+      for (let k = 0; k < hostData.states.length; k++) {
+        const [t, st, w] = hostData.states[k], next = hostData.states[k + 1]?.[0] ?? t1, a = Math.max(t, t0), b = Math.min(next, t1);
+        if (b > a) { const key = w ? `${st}:${w}` : st; states[key] = +((states[key] ?? 0) + b - a).toFixed(1); }
+      }
+      return { canary: hostData.late.filter(([t, ms]) => t < t1 && t + ms > t0).map(([, ms]) => ms), states };
+    })() : undefined;
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, ...(inGap ? { trace: inGap } : {}), ...(steps ? { steps } : {}), ...(hostIn ? { host: hostIn } : {}), gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
@@ -435,6 +459,19 @@ try {
     l.remainderMs = +(l.gap - stolen).toFixed(1);
     l.cause = stolen <= 10 ? "clean" : l.remainderMs <= 34 ? "host" : "mixed";
   }
+  // SIM-PERF-1, the same rule for each simulation step over 8 ms (half a frame): the time stolen
+  // from the renderer or GPU main thread inside the step (stolenBetween, CW-1's 5 ms intervals)
+  // is subtracted; a remainder still over 8 ms is the game's.
+  if (result.stepCosts) result.stepVerdicts = result.stepCosts.worst.filter(w => w.ms > 8).map(w => {
+    const e0 = data.origin + w.at, e1 = e0 + w.ms, i0 = indexAt(e0, false), i1 = indexAt(e1, true);
+    const stolen = i0 < 0 || i1 < 0 ? null : Math.min(w.ms, stolenBetween(i0, i1)), remainder = stolen === null ? w.ms : +(w.ms - stolen).toFixed(2);
+    const top = Object.entries(w.phases).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(1)}`);
+    const canary = hostData ? hostData.late.filter(([t, ms]) => t < e1 && t + ms > e0).map(([, ms]) => ms) : null;
+    return { tick: w.tick, ms: +w.ms.toFixed(2), top, stolenMs: stolen, remainderMs: remainder, canary,
+      cause: stolen === null ? "unsampled" : remainder > 8 ? (stolen > 0 ? "mixed" : "clean") : "host" };
+  });
+  if (result.stepVerdicts) note("step verdicts", JSON.stringify(result.stepVerdicts));
+  if (hostData) result.host = { canaryGaps: hostData.late.length, canaryMaxMs: Math.max(0, ...hostData.late.map(([, ms]) => ms)) };
   result.longByCause = {
     over34: result.long.filter(l => l.gap > 34).length,
     streaming: result.long.filter(l => l.streaming).length,
