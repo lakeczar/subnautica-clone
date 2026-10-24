@@ -12,7 +12,8 @@ import { execFileSync } from "node:child_process";
 import { inflateSync } from "node:zlib";
 import path from "node:path";
 const REPO = path.resolve(process.argv[2] ?? "."), B = path.join(REPO, ".test-build") + "/", SAVE = process.argv[3] ?? "tour-ready";
-const { gameWorld } = await import(B + "src/sim/world.js");
+const { gameWorld, setKitCaveRecords } = await import(B + "src/sim/world.js");
+const { decodeKitCavePack } = await import(B + "src/world/caves/kitCollision.js");
 const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
 const { decodeTerrain } = await import(B + "src/render/biomes/terrainCodec.js");
 const { selectLights, lightUniforms } = await import(B + "src/render/lighting/localLights.js");
@@ -54,7 +55,12 @@ async function profile(name, units, run) {
 }
 
 // 1. The save's world and craft: the streamer's tick over a pass that crosses caves.
+// The browser's records: the baked collision pack, decoded and installed as the game does.
+const caveManifest = JSON.parse(readFileSync(path.join(REPO, "public/caves/manifest.json"), "utf8"));
+const pack = decodeKitCavePack(new Uint8Array(inflateSync(readFileSync(path.join(REPO, "public/caves", caveManifest.collision.file)))), caveManifest.sourceHash);
 const state = save.value.state, w = gameWorld(), ks = w.kitCaves;
+setKitCaveRecords(new Map(pack.map(r => [r.id, r])));
+console.log(`collision pack: ${pack.length} caves from the bake of ${caveManifest.sourceHash.slice(0, 12)}…`);
 const craft = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId);
 const start = craft?.pose.position ?? state.player.pose.position;
 const streamer = createKitStreamer(ks, new Map(CAVE_SOURCES.map(c => [c.id, c.footprint])));
