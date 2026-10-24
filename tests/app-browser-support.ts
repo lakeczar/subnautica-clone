@@ -120,6 +120,10 @@ export class TestRenderer {
   settling = false;
   /** The view's cave drawn as open water until its light lands (CW-1 R1). */
   caveLightPending = false;
+  /** A settle that reached its bound with the cave unlit (CW-1 R3-3). */
+  caveLightFailed = false;
+  /** Called on every present with the presented state: a test sets readiness as the real renderer would for that pose. */
+  onPresent: ((state: unknown) => void) | null = null;
   constructor(
     private readonly canvas: TestCanvas,
     private readonly availability?: (available: boolean) => void,
@@ -128,7 +132,8 @@ export class TestRenderer {
   }
   /** The helm head look of the latest present (UX-1). */
   look: { yaw: number; pitch: number } | null = null;
-  present(_state?: unknown, overlay?: { look?: { yaw: number; pitch: number } }): void {
+  present(state?: unknown, overlay?: { look?: { yaw: number; pitch: number } }): void {
+    this.onPresent?.(state);
     this.presents++;
     this.look = overlay?.look ? { ...overlay.look } : null;
     this.canvas.dataset.ready = "true";

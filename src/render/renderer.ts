@@ -67,8 +67,14 @@ export interface GameRenderer {
    * `SETTLE_MAX_MS`. */
   readonly settling: boolean;
   /** The cave the camera is in (or next to) draws as open water: its light
-   * field has not landed (CW-1 R1). The load waits on it, bounded. */
+   * field has not landed (CW-1 R1). The load waits on it, bounded. It is the
+   * latest presented pose's (R3-3): `presents` says which frame that was. */
   readonly caveLightPending: boolean;
+  /** Frames presented so far (a caller binds readiness to a pose presented after a change). */
+  readonly presents: number;
+  /** A settle reached its bound with the cave's light still pending: it stays
+   * dark (never drawn unlit) and the caller moves to safe water (R3-3). */
+  readonly caveLightFailed: boolean;
   /** Pulled diagnostics (convention 6: never pushed per frame), in REC-1's
    * `RendererStats` shape, plus cave light readiness and light settling. */
   stats(): RendererStats;
@@ -95,6 +101,14 @@ const JUMP = 64;
 const CATCH_UP_MS = 2500, MENU_BUILD_MS = 12, PLAY_BUILD_MS = 4;
 /** Longest a jump during play may keep the screen dark while the near world builds. */
 const SETTLE_MAX_MS = 5000;
+/** One frame's settle decision (CW-1 R3-3), from this pose's readiness: done
+ * once the near world is drawn and its cave lit; at the bound, done anyway if
+ * only the world is still building, but never with the cave unlit: then still
+ * settling (dark) and `failed`. `settleSince` -1 means settled. */
+export function settleStep(settleSince: number, now: number, nearReady: boolean, lightPending: boolean): { settleSince: number; failed: boolean } {
+  if (!lightPending && (nearReady || now - settleSince > SETTLE_MAX_MS)) return { settleSince: -1, failed: false };
+  return { settleSince, failed: lightPending && now - settleSince > SETTLE_MAX_MS };
+}
 /** Underwater fog hides chunks beyond about this distance. */
 const VISIBLE_WORLD = 200;
 
@@ -350,7 +364,7 @@ export function createRenderer(
     let disposed = false,
       available = true,
       generation = 0;
-    let lastViewer: Vector3 | null = null, settleSince = -1;
+    let lastViewer: Vector3 | null = null, settleSince = -1, presents = 0, lightFailed = false;
     let whenReady: (() => void) | null = null;
     const cancelReady = (): void => {
       if (whenReady) scene.onReadyObservable.removeCallback(whenReady);
@@ -394,6 +408,8 @@ export function createRenderer(
     return {
       get settling() { return settleSince >= 0; },
       get caveLightPending() { return caveView.lightPending; },
+      get presents() { return presents; },
+      get caveLightFailed() { return lightFailed; },
       stats(): RendererStats {
         const ks = caveWorld.kitCaves.stats, cv = caveView.stats, ls = lights.stats;
         return {
@@ -461,15 +477,13 @@ export function createRenderer(
         const timed = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
         const jumped = !lastViewer || Vector3.Distance(lastViewer, camera.position) > JUMP;
         const cinematic = !state || state.opening.phase < 4;
-        if (jumped && lastViewer && !cinematic) settleSince = performance.now();
+        if (jumped && lastViewer && !cinematic) { settleSince = performance.now(); lightFailed = false; }
         // A jump during play builds the near world before the frame draws: say from where to where.
         const jump = jumped && lastViewer && timed ? [...lastViewer.asArray(), ...camera.position.asArray()].map(n => Math.round(n)) : null;
         lastViewer = camera.position.clone();
         const extraMs = cinematic || settleSince >= 0 ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
         const tStream = timed ? performance.now() : 0;
         const world = art.stream(camera.position, { ...(jumped && settleSince < 0 ? { nearRadius: NEAR_WORLD } : {}), extraMs });
-        // Settled once the near world is drawn and the cave there (if any) is lit (CW-1 R1); bounded.
-        if (settleSince >= 0 && ((art.residency.isReady(NEAR_WORLD) && !caveView.lightPending) || performance.now() - settleSince > SETTLE_MAX_MS)) settleSince = -1;
         const chunkMs = timed ? performance.now() - tStream : 0;
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
         corridor.update(state, gameWorld());
@@ -514,6 +528,14 @@ export function createRenderer(
         caveView.update(lamp ?? camera.position, camera.getTarget().subtract(camera.position),
           !!state && state.opening.phase >= 4 && lampOn(state) && underwater === 1);
         const caveViewMs = timed ? performance.now() - tView : 0;
+        // Settled once the near world is drawn and the cave at *this* pose is
+        // lit, judged after this pose's cave update (R3-3). At the bound: a
+        // world still building is shown (as before), but an unlit cave never
+        // is: it stays dark and reports `caveLightFailed`.
+        if (settleSince >= 0) {
+          const s1 = settleStep(settleSince, performance.now(), art.residency.isReady(NEAR_WORLD), caveView.lightPending);
+          settleSince = s1.settleSince; lightFailed = s1.failed;
+        }
         const caveMs = timed ? performance.now() - tCaves : 0;
         // This frame's texture upload work, wherever it ran (prefetch or activation).
         const caveUpload = caveView.stats.frameUploadBytes > 0 ? { ms: +caveView.stats.frameUploadMs.toFixed(2), bytes: caveView.stats.frameUploadBytes } : null;
@@ -536,6 +558,7 @@ export function createRenderer(
         // CR-1: the sim tick, for evidence drivers timing creature rhythms (as cameraPosition is for steering).
         canvas.dataset.tick = String(state?.tick ?? 0);
         const tRender = timed ? performance.now() : 0;
+        presents++;
         if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
         else { scene.render(); canvas.dataset.settling = "false"; }
         if (timed) (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent = {

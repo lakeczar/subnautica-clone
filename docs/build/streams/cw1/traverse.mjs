@@ -24,6 +24,7 @@ import path from "node:path";
 import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
 import { streamTrace } from "./stream-trace.mjs";
 import { classify, OURS } from "./frame-class.mjs";
+import { classifyStep } from "./step-class.mjs";
 import { Worker } from "node:worker_threads";
 requireGpuLease("CW-1 traversal");
 const require = createRequire(process.env.CW1_PW ?? "/work/tmp/gpu-prep/pw/");
@@ -311,11 +312,13 @@ try {
   sched.pid = findRenderer();
   note("renderer main thread", sched.pid ?? "not found");
   const sampler = setInterval(sampleSched, 5);
-  // SIM-PERF-1 (SIMPERF_HOST=1, probe only): the canary and the renderer thread's state and
-  // syscall (simperf-host-worker.mjs), and the GPU process's NVIDIA shader-cache settings.
-  const host = process.env.SIMPERF_HOST ? new Worker(new URL("./simperf-host-worker.mjs", import.meta.url)) : null;
-  if (host && sched.pid) host.postMessage(sched.pid);
-  if (host && sched.gpu) try {
+  // The canary and the renderer thread's state and syscall (simperf-host-worker.mjs, on its
+  // own thread), always on: the frame gate needs both (a VM pause stalls the canary; only a
+  // runnable renderer, or one waiting on the GPU process, can be delayed by steal; CW-1 R3-1).
+  // SIMPERF_HOST=1 adds the GPU process's NVIDIA shader-cache settings.
+  const host = new Worker(new URL("./simperf-host-worker.mjs", import.meta.url));
+  if (sched.pid) host.postMessage(sched.pid);
+  if (process.env.SIMPERF_HOST && sched.gpu) try {
     result.gpuEnv = readFileSync(`/proc/${sched.gpu}/environ`, "utf8").split("\0").filter(v => v.startsWith("__GL_"));
     note("gpu process env", JSON.stringify(result.gpuEnv));
   } catch (error) { result.gpuEnv = `unreadable: ${error.message}`; }
@@ -392,8 +395,8 @@ try {
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
     regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
     heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));
-  const hostData = host ? await new Promise((resolve) => { host.once("message", resolve); host.postMessage("stop"); }) : null;
-  if (host) await host.terminate();
+  const hostData = await new Promise((resolve) => { host.once("message", resolve); host.postMessage("stop"); });
+  await host.terminate();
   // SIM-PERF-1: the step meter's snapshot (pulled once): the worst steps by phase on the page clock.
   result.stepCosts = await page.evaluate(() => globalThis.__siltwakeStepCosts?.() ?? null);
   const gaps = data.gaps.map(([, g]) => g).sort((a, b) => a - b);
@@ -439,7 +442,18 @@ try {
       }
       return { canary: hostData.late.filter(([t, ms]) => t < t1 && t + ms > t0).map(([, ms]) => ms), states };
     })() : undefined;
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, ...(inGap ? { trace: inGap } : {}), ...(steps ? { steps } : {}), ...(hostIn ? { host: hostIn } : {}), gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    // The raw evidence the gate judges (frame-class.mjs), kept so any verdict can be re-judged:
+    // sampler rows ±20 ms (renderer and GPU main-thread CPU, their vCPUs, every vCPU's steal),
+    // the canary's late wakes and the renderer's states over the same window.
+    const ra = indexAt(t0 - 20, false), rb = indexAt(t1 + 20, true), rawRows = [];
+    for (let k = Math.max(0, ra), last = rb < 0 ? sched.n - 1 : rb; k <= last; k++) {
+      const r = sample(k);
+      rawRows.push({ t: r[0], run: r[1], grun: r[5], cpu: r[7], gpuCpu: r[8], steal: Array.from(r.subarray(STEAL)) });
+    }
+    const before = hostData.states.filter(([t]) => t < t0 - 20).at(-1);
+    const raw = { window: { e0: t0, e1: t1 }, rows: rawRows, canary: hostData.late.filter(([t, ms]) => t < t1 + 20 && t + ms > t0 - 20),
+      states: [...(before ? [before] : []), ...hostData.states.filter(([t]) => t >= t0 - 20 && t <= t1 + 20)] };
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, raw, hot, ...(inGap ? { trace: inGap } : {}), ...(steps ? { steps } : {}), ...(hostIn ? { host: hostIn } : {}), gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
@@ -448,25 +462,31 @@ try {
   // browser, reported but not streaming's.
   const streamingOf = (f) => (f?.parts ? (f.parts.chunks ?? 0) + (f.parts.caves ?? 0) + (f.parts.regions ?? 0) + (f.parts.lights ?? 0) : 0);
   for (const l of result.long) if (l.frame) l.streaming = l.frame.total > 16.7 && streamingOf(l.frame) >= 0.5 * l.frame.total;
-  // Each long frame's class (frame-class.mjs): stolen time subtracted, the
-  // remainder judged against 34 ms; host-stopped only when most of the VM
-  // stopped and our two main threads were within budget on CPU (the GPU's
-  // busy time is not measured here, so such a frame says "GPU unknown").
+  // Each long frame's class (frame-class.mjs), from its raw rows: only steal provably inside
+  // it, on a thread that could be delayed, agreed by the canary; host-stopped only when most
+  // of the VM provably stopped and our two main threads were within budget on CPU (the GPU's
+  // busy time is not measured here, so such a frame says "GPU unknown"). Doubt is ours.
   result.ncpu = NCPU;
   for (const l of result.long) Object.assign(l, classify(l, NCPU));
-  // SIM-PERF-1, the same rule for each simulation step over 8 ms (half a frame): the time stolen
-  // from the renderer or GPU main thread inside the step (stolenBetween, CW-1's 5 ms intervals)
-  // is subtracted; a remainder still over 8 ms is the game's.
+  // SIM-PERF-1 (review R1-F1): each simulation step over 8 ms (half a frame), judged by
+  // step-class.mjs: only steal provably inside the step, on the vCPU the renderer's main thread
+  // (where the step runs) was on, and agreed by the canary; doubt is "unresolved", never "host".
+  // Each verdict keeps its raw samples (the rows around the step with every vCPU's steal, the
+  // canary's late wakes and the thread's states) so it can be audited from the JSON.
   if (result.stepCosts) result.stepVerdicts = result.stepCosts.worst.filter(w => w.ms > 8).map(w => {
-    const e0 = data.origin + w.at, e1 = e0 + w.ms, i0 = indexAt(e0, false), i1 = indexAt(e1, true);
-    const stolen = i0 < 0 || i1 < 0 ? null : Math.min(w.ms, stolenBetween(i0, i1)), remainder = stolen === null ? w.ms : +(w.ms - stolen).toFixed(2);
-    const top = Object.entries(w.phases).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(1)}`);
-    const canary = hostData ? hostData.late.filter(([t, ms]) => t < e1 && t + ms > e0).map(([, ms]) => ms) : null;
-    return { tick: w.tick, ms: +w.ms.toFixed(2), top, stolenMs: stolen, remainderMs: remainder, canary,
-      cause: stolen === null ? "unsampled" : remainder > 8 ? (stolen > 0 ? "mixed" : "clean") : "host" };
+    const e0 = data.origin + w.at, e1 = e0 + w.ms, a = indexAt(e0 - 20, false), b = indexAt(e1 + 20, true);
+    const rows = [];
+    for (let k = Math.max(0, a), last = b < 0 ? sched.n - 1 : b; k <= last; k++) {
+      const r = sample(k);
+      rows.push({ t: r[0], cpu: r[7], gpuCpu: r[8], steal: Array.from(r.subarray(STEAL)) });
+    }
+    const canary = hostData ? hostData.late.filter(([t, ms]) => t < e1 + 20 && t + ms > e0 - 20) : [];
+    const states = hostData ? hostData.states.filter(([t]) => t >= e0 - 20 && t <= e1 + 20) : null;
+    const top = Object.entries(w.phases).sort((x, y) => y[1] - x[1]).slice(0, 3).map(([k, v]) => `${k} ${v.toFixed(1)}`);
+    return { tick: w.tick, top, ...classifyStep({ e0, e1 }, rows, canary), raw: { rows, canary, states } };
   });
-  if (result.stepVerdicts) note("step verdicts", JSON.stringify(result.stepVerdicts));
-  if (hostData) result.host = { canaryGaps: hostData.late.length, canaryMaxMs: Math.max(0, ...hostData.late.map(([, ms]) => ms)) };
+  if (result.stepVerdicts) note("step verdicts", JSON.stringify(result.stepVerdicts.map(({ raw, ...v }) => v)));
+  result.host = { canaryGaps: hostData.late.length, canaryMaxMs: Math.max(0, ...hostData.late.map(([, ms]) => ms)) };
   result.longByCause = {
     over34: result.long.filter(l => l.gap > 34).length,
     streaming: result.long.filter(l => l.streaming).length,

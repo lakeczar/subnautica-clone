@@ -15,8 +15,14 @@ import type { CaveLightField } from "./lightField.js";
 
 const RGBA = 5; // Constants.TEXTUREFORMAT_RGBA
 const RED = 6; // Constants.TEXTUREFORMAT_R
-/** Bytes of field data written to the GPU per frame by a sliced upload. */
+/** Bytes of field data written to the GPU per frame by a sliced upload. A slab
+ * (whole z planes) is written only if it fits what is left of the budget; the
+ * one allowance: a single plane larger than the whole budget is written alone,
+ * as a frame's first write (else such a field could never progress). */
 export const UPLOAD_BYTES_PER_FRAME = 128 * 1024;
+/** Partial fills kept at once (CW-1 R3-2): the active cave's and the next wish's
+ * progress survive each other; the oldest unwanted partial is dropped beyond. */
+export const PARTIAL_FILLS = 2;
 /** Babylon's engine as `prepare` drives it: its raw GL and texture binding (internal API). */
 interface EngineGL {
   readonly _gl: WebGL2RenderingContext;
@@ -92,16 +98,21 @@ interface FillJob<T> { readonly field: CaveLightField; readonly textures: Textur
 
 /** Owns the cave textures and feeds every cave material. One cave is active
  * at a time; others draw as open water. CW-1: textures are kept per field
- * (up to `keep`, least recently bound dropped), filled ahead of use a slab
- * at a time under one byte budget per frame (`beginFrame`), and a field is
- * bound only once complete (R2: activation never uploads synchronously). */
+ * (up to `keep`, least recently bound dropped), filled a slab at a time under
+ * one byte budget per frame (`beginFrame`), and a field is bound only once
+ * complete (R2: activation never uploads synchronously). It is the one upload
+ * scheduler (R3-2): `fill` spends the frame's budget on the active field
+ * first, then the prefetch wishes in order, and every partial fill keeps its
+ * progress (at most PARTIAL_FILLS), so prefetch and activation never cancel
+ * each other's work. */
 export class CaveLighting<T = RawTexture3D> {
   private field: CaveLightField | null = null;
   private light: T;
   private rock: T;
   private readonly empty: TexturePair<T>;
   private readonly cached = new Map<CaveLightField, TexturePair<T> & { bytes: number }>();
-  private filling: FillJob<T> | null = null;
+  /** Fills in progress, by field, oldest first. */
+  private readonly filling = new Map<CaveLightField, FillJob<T>>();
   private budget = 0;
   /** Fields completed (uploads), textures and bytes held; the longest
    * allocation and slab write, ms (bounded-work evidence); fills restarted by
@@ -117,7 +128,7 @@ export class CaveLighting<T = RawTexture3D> {
     this.empty = { light, rock };
     this.light = light; this.rock = rock;
     // A context restore re-creates the textures from their complete data; a fill in progress starts over.
-    port.onRestored(() => { if (this.filling) { for (const p of this.filling.parts) p.z = 0; this.stats.restarts++; } });
+    port.onRestored(() => { for (const job of this.filling.values()) { for (const p of job.parts) p.z = 0; this.stats.restarts++; } });
     this.apply({ on: false, position: Vector3.Zero(), direction: new Vector3(0, 0, 1) });
   }
   /** Whether a field's textures exist and are complete. */
@@ -133,38 +144,59 @@ export class CaveLighting<T = RawTexture3D> {
   /** Continue filling a field's textures within what is left of this frame's
    * budget; true once they are complete and cached (CW-1: a field's whole
    * texImage3D, up to a megabyte, took 65-84 ms in one frame on the 3090).
-   * One field fills at a time; asking for another abandons the first. */
+   * A partial fill keeps its progress until it completes or `fill` drops it. */
   prepare(field: CaveLightField): boolean {
     if (this.cached.has(field)) return true;
-    if (this.filling?.field !== field) {
-      if (this.filling) { this.port.dispose(this.filling.textures.light); this.port.dispose(this.filling.textures.rock); }
+    let job = this.filling.get(field);
+    if (!job) {
+      // No allocation for a fill that can't write a plane this frame.
+      const plane = field.nx * field.ny * 4;
+      if (this.budget < plane && !(plane > UPLOAD_BYTES_PER_FRAME && this.frame.bytes === 0 && this.budget > 0)) return false;
       const t0 = performance.now();
       const light = this.port.create(field.nx, field.ny, field.nz, 4), rock = this.port.create(field.rock.nx, field.rock.ny, field.rock.nz, 1);
       const allocMs = performance.now() - t0;
       this.stats.maxAllocMs = Math.max(this.stats.maxAllocMs, allocMs); this.frame.ms += allocMs;
-      this.filling = { field, textures: { light, rock }, parts: [
+      job = { field, textures: { light, rock }, parts: [
         { texture: light, data: field.data, nx: field.nx, ny: field.ny, nz: field.nz, channels: 4, z: 0 },
         { texture: rock, data: field.rock.data, nx: field.rock.nx, ny: field.rock.ny, nz: field.rock.nz, channels: 1, z: 0 },
       ] };
+      this.filling.set(field, job);
     }
-    const job = this.filling!;
     for (const p of job.parts) {
       const plane = p.nx * p.ny * p.channels;
-      while (p.z < p.nz && this.budget > 0) {
-        const dz = Math.max(1, Math.min(p.nz - p.z, Math.floor(this.budget / plane)));
+      while (p.z < p.nz) {
+        // Whole planes that fit what is left; a plane larger than the whole
+        // budget only as the frame's first write.
+        const fit = Math.floor(this.budget / plane);
+        const dz = fit > 0 ? Math.min(p.nz - p.z, fit) : (plane > UPLOAD_BYTES_PER_FRAME && this.frame.bytes === 0 && this.budget > 0 ? 1 : 0);
+        if (dz === 0) return false;
         const t0 = performance.now();
         this.port.write(p.texture, p.data, p.nx, p.ny, p.z, dz, p.channels);
         const writeMs = performance.now() - t0;
         this.stats.maxWriteMs = Math.max(this.stats.maxWriteMs, writeMs); this.frame.ms += writeMs; this.frame.bytes += dz * plane;
-        p.z += dz; this.budget -= dz * plane;
+        p.z += dz; this.budget = Math.max(0, this.budget - dz * plane);
       }
-      if (p.z < p.nz) return false;
     }
     for (const p of job.parts) this.port.complete(p.texture, p.data);
-    this.filling = null;
+    this.filling.delete(field);
     this.adopt(field, job.textures);
     return true;
   }
+  /** One frame's uploads, most important first (the active field, then the
+   * prefetch wishes): each continues its own fill within what is left of the
+   * frame's budget. Partial fills of fields no longer asked for are kept up to
+   * PARTIAL_FILLS, oldest dropped first; a field in `order` is never dropped. */
+  fill(order: readonly (CaveLightField | null)[]): void {
+    for (const f of order) if (f && !this.prepare(f) && this.budget <= 0) break;
+    if (this.filling.size <= PARTIAL_FILLS) return;
+    for (const [f, job] of this.filling) {
+      if (this.filling.size <= PARTIAL_FILLS) break;
+      if (order.includes(f)) continue;
+      this.port.dispose(job.textures.light); this.port.dispose(job.textures.rock); this.filling.delete(f);
+    }
+  }
+  /** Fills in progress (measurement and tests). */
+  get partial(): number { return this.filling.size; }
   private adopt(field: CaveLightField, textures: TexturePair<T>): void {
     const bytes = field.data.byteLength + field.rock.data.byteLength;
     this.cached.set(field, { ...textures, bytes });
@@ -219,7 +251,8 @@ export class CaveLighting<T = RawTexture3D> {
   dispose(): void {
     for (const t of this.cached.values()) { this.port.dispose(t.light); this.port.dispose(t.rock); }
     this.cached.clear();
-    if (this.filling) { this.port.dispose(this.filling.textures.light); this.port.dispose(this.filling.textures.rock); this.filling = null; }
+    for (const job of this.filling.values()) { this.port.dispose(job.textures.light); this.port.dispose(job.textures.rock); }
+    this.filling.clear();
     this.port.dispose(this.empty.light); this.port.dispose(this.empty.rock);
   }
 }

@@ -203,15 +203,103 @@ test("R1 (REC-1): an expedition loaded in a cave whose light has not landed wait
   assert.equal(f.view.screen, "playing", "shown once the light lands");
 });
 
-test("R1 (REC-1): a cave light that never lands does not hold the load forever", async (t) => {
-  const open: Vec3 = { x: 1160, y: -100, z: -640 };
+// CW-1 R3-3: readiness is the entered pose's, and an unlit cave is never revealed.
+const FAILED = "This cave's light could not be loaded, even at a safe pose. Load another save or try again.";
+const atPose = (st: unknown, p: Vec3): boolean => near((st as GameState).player.pose.position, p);
+
+test("R3-3: a ready previous pose, then a cold cave: entry waits for the entered pose's own readiness", async (t) => {
+  const open: Vec3 = { x: 1150, y: -100, z: -650 };
   const pack = pendingStore();
   pack.land([]);
   const f = await app(t, swimmingAt(open), pack.store);
-  TestRenderer.current.caveLightPending = true;
+  const r = TestRenderer.current;
+  r.caveLightPending = false; // the title's (previous) pose was ready
+  // The real renderer learns the entered pose is a cold cave when it presents it.
+  let entered = 0;
+  r.onPresent = (st) => { if (st && atPose(st, open)) { entered++; if (entered < 40) r.caveLightPending = true; else r.caveLightPending = false; } };
+  f.view.actions.continueGame();
+  for (let i = 0; i < 38; i++) {
+    f.frames(1);
+    assert.equal(f.view.screen, "menu", `frame ${i}: not revealed on the previous pose's readiness`);
+    assert.equal(f.state().tick, 300);
+  }
+  f.frames(4);
+  assert.equal(f.view.screen, "playing", "revealed once this pose is lit");
+  assert.equal(r.caveLightPending, false);
+});
+
+test("R3-3: delayed success: the light lands at 4 s and entry reveals then, lit", async (t) => {
+  const open: Vec3 = { x: 1145, y: -100, z: -655 };
+  const pack = pendingStore();
+  pack.land([]);
+  const f = await app(t, swimmingAt(open), pack.store);
+  const r = TestRenderer.current;
+  let presented = 0;
+  r.onPresent = (st) => { if (st && atPose(st, open)) r.caveLightPending = ++presented < 240; };
   f.view.actions.continueGame();
   let frames = 0;
-  while (f.view.screen === "menu" && frames < 60 * 20) { f.frames(1); frames++; }
+  while (f.view.screen === "menu" && frames < 60 * 10) { f.frames(1); frames++; assert.ok(f.view.screen === "menu" || !r.caveLightPending); }
   assert.equal(f.view.screen, "playing");
-  assert.ok(frames >= 60 * 8 - 2 && frames < 60 * 9, `released at the 8 s bound (${frames} frames)`);
+  assert.ok(frames >= 239 && frames < 250, `${frames} frames`);
+  assert.ok(near(f.state().player.pose.position, open), "no move: the light landed in time");
+});
+
+test("R3-3: never ready at the cave: at the bound the expedition moves to safe water, lit there, and plays (never revealed unlit)", async (t) => {
+  // Beside a real cave (admission never remembers open water there).
+  const id = "canopy_root_arch", cave = beside(id), pack = pendingStore();
+  pack.land([id]);
+  const f = await app(t, swimmingAt(cave), pack.store);
+  const r = TestRenderer.current;
+  // Unlit at the cave's pose, lit anywhere else (the refuge).
+  r.onPresent = (st) => { if (st) r.caveLightPending = atPose(st, cave); };
+  f.view.actions.continueGame();
+  let frames = 0;
+  while (f.view.screen === "menu" && frames < 60 * 20) {
+    f.frames(1); frames++;
+    assert.ok(f.view.screen === "menu" || !atPose(f.state(), cave), "never playing at the unlit cave");
+  }
+  assert.equal(f.view.screen, "playing");
+  assert.ok(frames >= 60 * 8 - 2 && frames < 60 * 9 + 10, `moved at the 8 s bound (${frames} frames)`);
+  const s1 = f.state(), wake = REST_BASES[s1.player.refugeId].wake;
+  assert.ok(near(s1.player.pose.position, wake) || near(s1.player.pose.position, REST_BASES.home_pod.wake), "at the refuge");
+  assert.ok(f.view.notices.some(n => /light could not be loaded in time/.test(n)), f.view.notices.join(" | "));
+  assert.equal(r.caveLightPending, false);
+});
+
+test("R3-3: never ready anywhere: entry keeps the loading cover with a message and never plays; the menu is free again", async (t) => {
+  const id = "canopy_fin_cleft", cave = beside(id), pack = pendingStore();
+  pack.land([id]);
+  const f = await app(t, swimmingAt(cave), pack.store);
+  const r = TestRenderer.current;
+  r.onPresent = (st) => { if (st) r.caveLightPending = true; };
+  f.view.actions.continueGame();
+  for (let i = 0; i < 60 * 20; i++) { f.frames(1); assert.equal(f.view.screen, "menu", `frame ${i}`); }
+  assert.equal(f.view.reason, FAILED);
+  assert.equal(f.view.busy, false, "load another save or try again");
+  f.view.actions.resume();
+  assert.equal(f.view.screen, "menu", "Resume is refused: never revealed unlit");
+  assert.equal(f.state().tick, 300);
+});
+
+test("R3-3: a settle that reaches its bound unlit moves back to the remembered open water once, then settles there", async (t) => {
+  // Open water A is remembered; the player then stands beside cave B, whose settle fails unlit.
+  const open: Vec3 = { x: 1130, y: -100, z: -670 }, id = "reef_wrackhollow", cave = beside(id);
+  const pack = pendingStore();
+  pack.land([id]);
+  const f = await app(t, swimmingAt(open), pack.store);
+  f.view.actions.continueGame();
+  f.frames(10);
+  assert.equal(f.view.screen, "playing");
+  f.state().player.pose.position = { ...cave }; // a jump into the cave (as a respawn or rescue would)
+  f.frames(2);
+  const r = TestRenderer.current;
+  r.settling = true; r.caveLightFailed = true;
+  f.frames(1);
+  assert.ok(near(f.state().player.pose.position, open), `back at the remembered open water (${JSON.stringify(f.state().player.pose.position)})`);
+  assert.ok(f.view.notices.some(n => /light could not be loaded in time/.test(n)));
+  f.frames(5);
+  assert.ok(near(f.state().player.pose.position, open), "once, not every frame");
+  r.settling = false; r.caveLightFailed = false;
+  f.frames(5);
+  assert.equal(f.view.screen, "playing");
 });

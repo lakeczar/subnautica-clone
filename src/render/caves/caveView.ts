@@ -66,6 +66,8 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
   const live = source === liveCaveFields;
   const built = new Map<string, CaveLightField>();
   let active: string | null = null, missing = 0, near: readonly string[] = [], lightPending = false, pendingFrames = 0;
+  let wishes: readonly string[] = [];
+  const order: (CaveLightField | null)[] = [];
   const field = (id: string): CaveLightField | null => {
     let f = built.get(id) ?? null;
     if (!f) { f = source.field(id); if (f && live) built.set(id, f); }
@@ -93,13 +95,9 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
       near = light;
       if (live) return;
       for (let k = 0; k < light.length; k++) source.field(light[k]!);
-      // One texture set filling at a time, nearest first, a slab budget per
-      // frame (CaveLighting.prepare), and never more caves than the texture
-      // cache keeps (more would evict and re-upload forever).
-      for (let k = 0; k < upload.length && k < UPLOAD_AHEAD; k++) {
-        const f = source.field(upload[k]!);
-        if (f && !lighting.has(f)) { lighting.prepare(f); break; }
-      }
+      // Only the wishes are recorded here: the frame's uploads run in `update`,
+      // once the active cave is known, so it comes first (R3-2).
+      wishes = upload;
     },
     update(camera, forward, lamp) {
       let best: CaveSource | null = null, bestReach = CAVE_ACTIVE_RANGE;
@@ -111,9 +109,13 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
       active = best?.id ?? null;
       const f = best ? field(best.id) : null;
       if (best && !f) missing++;
-      // The active field continues filling within this frame's budget; it is
-      // bound only once complete (never a synchronous upload).
-      if (f && !lighting.has(f)) lighting.prepare(f);
+      // One scheduler (R3-2): the active field first, then the prefetch wishes,
+      // each resuming its own fill within this frame's budget, never more caves
+      // than the texture cache keeps. Bound only once complete.
+      order.length = 0;
+      order.push(f);
+      for (let k = 0; k < wishes.length && k < UPLOAD_AHEAD; k++) { const w = live ? null : source.field(wishes[k]!); if (w && w !== f) order.push(w); }
+      lighting.fill(order);
       lighting.setField(f);
       lightPending = !!best && (!f || lighting.bound !== f);
       if (lightPending) pendingFrames++;

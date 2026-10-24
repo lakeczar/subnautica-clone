@@ -11,9 +11,9 @@ const s = (v) => v == null ? "–" : String(v);
 // Long frames reclassified by the shared rule (frame-class.mjs); recorded runs predate result.ncpu (factory-worker: 8).
 const cls = (r) => {
   if (!(r.long ?? []).some(l => l.thread?.stolenMs !== undefined)) return "–";
-  const n = { host: 0, "host-stopped": 0, mixed: 0, clean: 0, unsampled: 0 }; let ours = 0;
-  for (const l of r.long) if (l.gap > 34) { const c = classify(l, r.ncpu ?? 8).cause; n[c]++; if (l.streaming && OURS.has(c)) ours++; }
-  return `${n.host} / ${n["host-stopped"]} / ${n.mixed} / ${n.clean}${n.unsampled ? ` (+${n.unsampled} unsampled)` : ""} (${ours})`;
+  const n = { host: 0, "host-stopped": 0, mixed: 0, clean: 0, unsampled: 0 }; let ours = 0, legacy = false;
+  for (const l of r.long) if (l.gap > 34) { const c = classify(l, r.ncpu ?? 8); legacy ||= c.rule === "legacy"; n[c.cause]++; if (l.streaming && OURS.has(c.cause)) ours++; }
+  return `${n.host} / ${n["host-stopped"]} / ${n.mixed} / ${n.clean}${n.unsampled ? ` (+${n.unsampled} unsampled)` : ""} (${ours})${legacy ? " legacy rule (upper bound)" : ""}`;
 };
 console.log("| Run | Commit | Caves reached | Minutes | Frames | p50 / p95 / p99 / max ms | Gaps > 33 ms | Streaming > 34 ms (GC-shaped) | Over 34 ms: host / host-stopped (GPU unknown) / mixed / clean (streaming ours) | Holds | Unsliced in travel (at load) | Dark cave frames | Gate |");
 console.log("|---|---|---|---|---|---|---|---|---|---|---|---|---|");

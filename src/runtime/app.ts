@@ -55,6 +55,10 @@ const IDLE_PREPARE_MS = 250;
 const ENTRY_LOADING = "Loading the caves near your expedition…";
 /** Longest the entry waits for the light of a cave the view stands in, ms. */
 const ENTRY_LIGHT_WAIT_MS = 8000;
+/** Entry's cave light never landed, even at the safe pose (CW-1 R3-3): entry stays behind the cover. */
+const ENTRY_LIGHT_FAILED = "This cave's light could not be loaded, even at a safe pose. Load another save or try again.";
+/** The notice when entry or a settle moves the expedition out of an unlit cave. */
+const UNLIT_MOVED = "The cave's light could not be loaded in time: you were moved to safe water.";
 /** Vite's development build (false in production and in Node tests). */
 const DEV = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV === true;
 /** A browser's full-storage error: the standard name and code 22, and Firefox's legacy name and code 1014. */
@@ -121,7 +125,11 @@ export class SiltwakeApp {
   /** CW-1 R1: an entered expedition waits here, behind the menu's loading
    * presentation, until its caves are admitted (or its rescue or refuge is
    * applied); only then is it shown or resumed. */
-  private entryPending: { readonly generation: number; readonly since: number } | null = null;
+  /** CW-1 R3-3: readiness counts only from a present of the entered pose (`presents`
+   * at entry); `fallback` once moved to a safe pose; `failed` when even that stays unlit. */
+  private entryPending: { readonly generation: number; readonly since: number; readonly presents: number; readonly fallback: boolean; readonly failed: boolean } | null = null;
+  /** A settle's unlit-cave fallback already applied for the current settle. */
+  private settleFallback = false;
   /** The last frame's timestamp: admission's timers run on the frame clock. */
   private frameAt = 0;
   private readonly caves = createCaveRuntime({
@@ -428,6 +436,10 @@ export class SiltwakeApp {
     // While a cave holds, the simulation clock is paused (no oxygen, exposure,
     // power or AI ticks); rendering carries on.
     const hold = this.active ? this.caveAdmission(now) : null;
+    // A settle whose cave light never landed stays dark (the renderer never
+    // shows it unlit): move to safe water once, and settle there (R3-3).
+    if (this.renderer?.caveLightFailed && !this.settleFallback && this.active) { this.settleFallback = true; this.toSafeWater(); }
+    else if (!this.renderer?.caveLightFailed) this.settleFallback = false;
     // Likewise while the view settles after a jump (respawn, refuge, rescue).
     this.clock.advance(now, this.active && !hold?.holding && !this.renderer?.settling, () => {
       if (!this.state || !this.active) return;
@@ -533,7 +545,8 @@ export class SiltwakeApp {
       this.session.persistenceMessage,
       this.session.autoSaveAllowed,
       this.state !== null,
-      this.session.busy || this.entryPending !== null,
+      // Busy while entry waits; a failed entry frees the menu (load another save, or Continue to try again).
+      this.session.busy || (this.entryPending !== null && !this.entryPending.failed),
     );
     const choice = this.session.confirmation;
     if (choice)
@@ -635,7 +648,7 @@ export class SiltwakeApp {
     // CW-1 R1: the expedition stays behind the menu's loading presentation
     // (paused, busy, no HUD) until its caves are admitted: records installed,
     // admission clear, or a rescue or refuge applied. Usually that is now.
-    this.entryPending = { generation: this.sessionGeneration, since: this.frameAt };
+    this.entryPending = { generation: this.sessionGeneration, since: this.frameAt, presents: this.renderer?.presents ?? 0, fallback: false, failed: false };
     this.paused = true;
     this.clock.reset();
     this.view.showMenu(true, ENTRY_LOADING);
@@ -650,15 +663,45 @@ export class SiltwakeApp {
     if (pending.generation !== this.sessionGeneration || !this.state) { this.entryPending = null; this.syncSessionUi(); return; }
     this.installCaveRecords();
     const hold = this.caveAdmission(now, true);
-    // Held: keep waiting (the refuge timeout bounds it). Relocated: admit again at the new pose next frame.
-    if (hold?.holding) return;
+    // Held: keep waiting (the refuge timeout bounds it), presenting the entered pose behind the cover
+    // so its readiness is known when the records land. Relocated: admit again at the new pose next frame.
+    if (hold?.holding) { this.dirty = true; return; }
     // A cave the view stands in is lit before it is shown (never a pop of open
-    // water inside a cave, CW-1 R1); the view keeps presenting meanwhile, and
-    // the wait is bounded (an absent light field draws as before).
-    if (this.renderer?.caveLightPending && now - pending.since < ENTRY_LIGHT_WAIT_MS) { this.dirty = true; return; }
+    // water inside a cave, CW-1 R1). Readiness is the entered pose's: only a
+    // frame presented since entry counts (R3-3). The wait is bounded; if the
+    // light never lands, the expedition moves to safe water (the remembered
+    // open water, else the refuge) and waits again there; if even that stays
+    // unlit, entry keeps the loading cover with a message. Never revealed unlit.
+    if (this.renderer && this.graphicsAvailable) {
+      if (pending.failed) return;
+      const seen = this.renderer.presents > pending.presents;
+      if (!seen || this.renderer.caveLightPending) {
+        this.dirty = true;
+        if (!seen || now - pending.since < ENTRY_LIGHT_WAIT_MS) return;
+        if (!pending.fallback) {
+          this.toSafeWater();
+          this.entryPending = { ...pending, since: now, presents: this.renderer.presents, fallback: true };
+          return;
+        }
+        this.entryPending = { ...pending, failed: true };
+        this.view.showMenu(true, ENTRY_LIGHT_FAILED);
+        this.syncSessionUi();
+        return;
+      }
+    }
     this.entryPending = null;
     this.syncSessionUi();
     this.finishEntry();
+  }
+
+  /** Out of an unlit cave (CW-1 R3-3): to the remembered open water, else the refuge. */
+  private toSafeWater(): void {
+    const s = this.state;
+    if (!s) return;
+    const back = this.caves.lastSafe;
+    this.session.state = relocateForCave(s, back ? { kind: "point", position: back } : { kind: "refuge" });
+    this.view.notify(UNLIT_MOVED, false, { channel: "system" });
+    this.dirty = true;
   }
 
   private finishEntry(): void {
@@ -727,7 +770,7 @@ export class SiltwakeApp {
     this.releaseMouse();
     this.view.target(null);
     this.lookAction();
-    this.view.showMenu(this.state !== null, this.entryPending && !reason ? ENTRY_LOADING : reason);
+    this.view.showMenu(this.state !== null, this.entryPending?.failed ? ENTRY_LIGHT_FAILED : this.entryPending && !reason ? ENTRY_LOADING : reason);
     this.syncSessionUi();
     this.dirty = true;
   }

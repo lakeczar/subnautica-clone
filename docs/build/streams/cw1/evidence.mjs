@@ -42,24 +42,25 @@ for (const [name, ticket] of rows) {
   // Reclassified with the shared rule: needs the stolen-time samples (CW-1 harness at e60108f1+).
   const cls = s && (s.long ?? []).some(l => l.thread?.stolenMs !== undefined) ? (() => {
     const n = { host: 0, "host-stopped": 0, mixed: 0, clean: 0, unsampled: 0 };
-    let raw = 0, byHost = 0, byStopped = 0, ours = 0;
+    let raw = 0, byHost = 0, byStopped = 0, ours = 0, legacy = false;
     for (const l of s.long ?? []) {
       if (l.gap <= 34) continue;
-      const c = classify(l, NCPU).cause;
+      const cl = classify(l, NCPU), c = cl.cause;
+      legacy ||= cl.rule === "legacy";
       n[c]++;
       if (!l.streaming) continue;
       raw++;
       if (c === "host") byHost++; else if (c === "host-stopped") byStopped++; else if (OURS.has(c)) ours++;
     }
-    return { n, raw, byHost, byStopped, ours };
+    return { n, raw, byHost, byStopped, ours, legacy };
   })() : null;
   const other = s ? (s.long ?? []).filter(l => l.gap > 34 && !l.streaming).length : null;
   const pw = s?.power?.length ? s.power.map(x => `${/cell/.test(x.action) ? "cell" : "call"} ${x.pressed ? "ok" : "NOT PRESSED"}`).join(", ") : "no calls";
   const end = s?.powerEnd ? `; end ${s.powerEnd.charge}%, home ${s.powerEnd.homeOk ? "ok" : s.powerEnd.homeOk === false ? "**short**" : "–"}` : "";
   out.push(`| ${name} | ${ticket} | ${hm(r.admittedAt)}${inWindow(r.admittedAt) || inWindow(r.endedAt) ? " **in window**" : ""} | ${s ? (s.seconds / 60).toFixed(1) : "–"} | ` +
     `${s ? `${s.reached.length}/${s.reached.length + s.skipped.length}` : "–"} | ${s ? (s.gate?.pass ? "pass" : `**fail**: ${s.gate?.failures?.join("; ")}`) : `exit ${r.code}`} | ` +
-    `${s ? `${lb.streamingOver34 ?? "–"} / ${other}` : "–"} | ${cls ? `${cls.n.host} / ${cls.n["host-stopped"]} / ${cls.n.mixed} / ${cls.n.clean}${cls.n.unsampled ? ` +${cls.n.unsampled} unsampled` : ""}` : "not measured"} | ` +
-    `${cls ? `${cls.raw} → −${cls.byHost}, −${cls.byStopped} → **${cls.ours}**` : "–"} | ${cls ? (cls.ours === 0 && gateOther(s) ? (cls.byStopped ? "pass (with host-stopped, GPU unknown)" : "pass") : "**fail**") : "–"} | ${[mx("caveWanted"), mx("caveBuild"), mx("caveEvict"), mx("caveLightList"), mx("caveUpload"), mx("lightPlace"), mx("lightScan"), mx("lightSelect"), mx("optics")].join(" · ")} | ` +
+    `${s ? `${lb.streamingOver34 ?? "–"} / ${other}` : "–"} | ${cls ? `${cls.n.host} / ${cls.n["host-stopped"]} / ${cls.n.mixed} / ${cls.n.clean}${cls.n.unsampled ? ` +${cls.n.unsampled} unsampled` : ""}${cls.legacy ? " (legacy rule, upper bound)" : ""}` : "not measured"} | ` +
+    `${cls ? `${cls.raw} → −${cls.byHost}, −${cls.byStopped} → **${cls.ours}**` : "–"} | ${cls ? (cls.ours > 0 || !gateOther(s) ? "**fail**" : cls.legacy && cls.byHost + cls.byStopped > 0 ? "**unresolved** (passes only by legacy excuses)" : cls.byStopped ? "pass (with host-stopped, GPU unknown)" : "pass") : "–"} | ${[mx("caveWanted"), mx("caveBuild"), mx("caveEvict"), mx("caveLightList"), mx("caveUpload"), mx("lightPlace"), mx("lightScan"), mx("lightSelect"), mx("optics")].join(" · ")} | ` +
     `${s?.lightLag ? `${s.lightLag.worstSentFrames} / ${s.lightLag.worstSentWithin30m} / ${s.lightLag.nearestM ?? "none"}` : "not measured"} | ` +
     `${p.chunkPlan ? `${mx("chunkPlan")} · ${mx("chunkEvict")} · ${mx("chunkDispose")} (${mx("chunkUpdates")})` : "not measured"} | ` +
     `${f1(q(steal, 0.95))} / ${f1(steal.at(-1))} | ${c?.job?.majorFaults ?? "–"} (worst ${c?.job?.majorFaultsWorst ?? "–"}) | ${c?.job?.swapIns ?? "–"} | ` +
