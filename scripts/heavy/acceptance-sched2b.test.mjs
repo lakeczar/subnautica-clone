@@ -771,7 +771,7 @@ test("B28 (SCHED-3): standard and gpu jobs go to alickers by default; one that c
   for (const [argv, reason] of [
     [["node", "/work/tmp/some-local-input.mjs"], /it names local paths alickers lacks: \/work\/tmp\/some-local-input\.mjs/],
     [["node", ".test-build/x.js"], /it reads build output a commit lacks \(\.test-build\)/],
-    [["sh", "-c", "npm run build"], /it only builds \(npm run build\), and its output is wanted here/],
+    [["sh", "-c", "npm run build"], /it only builds \(npm run build\): build output must stay here/],
   ]) {
     const s = hc(c, ["submit", "--class", "gpu", "--queue-timeout", "1", "--", ...argv], { cwd: c.repoDir });
     assert.equal(s.code, 0, s.err);

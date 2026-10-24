@@ -131,7 +131,7 @@ async function submit(opts, command, { quiet = false } = {}) {
   const why = !lane.enabled ? `the remote lane is off (${readHealth(cfg).detail})` : !tree.head ? "not a git tree"
     : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)`
     : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …`
-    : builds ? `it only builds (${builds}), and its output is wanted here` : null;
+    : builds ? `it only builds (${builds}): build output must stay here` : null;
   const routed = resolveMachine(req.goal.machine, why);
   if (routed.error) fail(`refused: ${routed.error}`);
   const machine = req.goal.machine = routed.machine;
