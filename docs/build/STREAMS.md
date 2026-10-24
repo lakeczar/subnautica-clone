@@ -882,3 +882,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Owner and fleet:** a question about what pauses the whole VM for about 100 ms; this strengthens the option-B case.
   - **Surf cave stall:** a driver drift onto a shallow bump; root fix is the planner sweeping legs with lateral margin.
 - **SIM-1b R3** (Sol on `16961a67`, report on `review/sim-1b-r3` `9bacc5ff`): REQUEST CHANGES, one P2. The timeline warning (rank 2.5) hides failed-import errors (rank 2) in both arrival orders; fix is to put the timeline warning below general errors. Everything else passed: library saves under the stricter validator, the seal boundaries, all R2 mutants. Short check next.
+- **REC-1 R3b probes:**
+  - **Results:** no hardware encoder on either Linux machine (factory-worker Chrome 156.0.8078.4, alickers 156.0.8078.47), even with `AcceleratedVideoEncoder`. Software AV1, VP9, VP8 and H.264 are available. The media log identifies the encoder.
+  - **Sandbox VA-API:** there was no driver or `vainfo` at all, so the owner approved installing `mesa-va-drivers`, `vainfo` and `ffmpeg` inside the WSL sandbox only (no Windows or host changes), recorded with a removal path.
+  - **540p confirmation:** stopped by the stall detector (the hold printed nothing), now resubmitted with per-window logging.
+  - **Queued:** the decomposition. The owner-PC probe script is being prepared.
