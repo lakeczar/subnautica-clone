@@ -40,5 +40,12 @@ commands=(
     outside env SILTWAKE_HEAVY_CHECK=/nonexistent/heavy-check $c >"$tmp/r" 2>&1; rc=$?
     echo "  no queue client: exit $rc: $(grep -m1 -o "refused: .*nothing ran\|runs only inside a heavy-check job" "$tmp/r")"
   done
+  echo; echo "\$ SILTWAKE_HEAVY_LOCK_HELD=1 npm run build   (a v1 lock claim without its scope)"
+  outside env SILTWAKE_HEAVY_LOCK_HELD=1 SILTWAKE_HEAVY_CHECK="$tmp/heavy-check" npm run build >"$tmp/r" 2>&1; rc=$?
+  echo "  exit $rc; queue client called: $(grep -c stand-in "$tmp/r"); $(grep -m1 -o 'a heavy-check job is claimed but not proven[^.]*' "$tmp/r")"
+  for settings in "" "SILTWAKE_FAST_FILE_BUDGET_S=1" "NODE_OPTIONS=--max-old-space-size=1024"; do
+    echo; echo "\$ ${settings:+$settings }node scripts/gate.mjs --only fast --allow-dirty   (the batch's machine)"
+    outside env $settings SILTWAKE_HEAVY_CHECK="$tmp/heavy-check" node scripts/gate.mjs --only fast --allow-dirty 2>&1 | grep -o "submit --class standard --machine [a-z0-9]* --review -- node scripts/gate.mjs --batch fast" | head -1 | sed 's/^/  /'
+  done
   if [[ -e "$tmp/never" ]]; then echo "FAIL: saves-build-at.sh made its directory"; else echo; echo "saves-build-at.sh made no directory: nothing was built here"; fi
 } | tee "$out"

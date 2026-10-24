@@ -1,20 +1,34 @@
 # STEW-2: local work can't disturb a 3090 exclusive run (handoff)
 
-Opus 5.5 high. Branch `t3/stew-2-exclusive-guard`, on root `6ee488a`. Head: see the report. Story-neutral; no spoilers read. `scripts/heavy/*` and game code are untouched. R1 (Sol, `e8764aa`): request changes, five findings. R2 follows the coordinator's decision: **no leases; on factory-worker, guarded commands don't run locally at all, they go through the queue.**
+Opus 5.5 high. Branch `t3/stew-2-exclusive-guard`, on root `6ee488a`. Head: see the report. Story-neutral; no spoilers read. `scripts/heavy/*` and game code are untouched. R1 (Sol, `e8764aa`): request changes, five findings. R2 follows the coordinator's decision: **no leases; on factory-worker, guarded commands don't run locally at all, they go through the queue.** R2 (Sol, `2136b023`): request changes, three findings; R3 answers them below.
 
 ## Outcome
 - **On factory-worker, the repo's CPU work runs only through the queue.** Each CPU-heavy entry point asks `scripts/local-guard.mjs` first. Unless it is admitted, it runs **the same command again** through `heavy-check run --class <its class> --machine <any|3090> -- …`, in the foreground, and exits with its code, so it reads like a local run. The queue then knows every sanctioned CPU job, and an exclusive run drains them like any other job: no race, no lifetimes, no SCHED patch.
   - **Admitted (runs directly):**
-    - inside a real heavy-check job (`SILTWAKE_JOB_TICKET`, and this process in that ticket's recorded cgroup, by whole path components);
+    - inside a real heavy-check job (`SILTWAKE_JOB_TICKET`, and this process in that ticket's recorded cgroup, by whole path components); under v1's lock (the shim's fallback), only inside the exact scope that lock created, which the shim exports as `SILTWAKE_HEAVY_SCOPE`;
     - on the alickers sandbox, positively identified: hostname `siltwake-alickers`, its `/usr/local/bin/siltwake-job`, and no queue state there;
     - with `SILTWAKE_LOCAL_OVERRIDE="<why>"`, logged to `/work/tmp/siltwake-sched/local-overrides.jsonl` once per command tree. If the log can't be written, it refuses.
   - **If the queue client can't be run** (missing, not executable, killed), the command refuses with exit 75 and the reason. It never falls back to running locally. The guard reads no queue state; the queue decides.
+  - **A job claim it can't prove** (`SILTWAKE_JOB_TICKET` outside that job's cgroup, or `SILTWAKE_HEAVY_LOCK_HELD` without its exact scope) refuses with 75 rather than queueing again. Under v1 a nested call runs inline, so requeueing would never end.
   - **Guarded:**
     - the npm scripts: `npm test`/`test:fast`, `build`, `typecheck`, `playthrough`, `check`, `test:build`, `bake:terrain`;
     - the node entry points: `scripts/test-tier.mjs`, `test-build.mjs`, `guard-architecture.mjs`, `bake-terrain.mjs`, the six economy scripts, `sim-bench.mjs`, `timeline-save-bench.mjs`;
     - the shell scripts: `saves-build-at.sh`, `sim-differential.sh`.
 
-    Each package script is a wrapper (`local-guard.mjs --class C -- npm run X:direct --`). `X:direct` refuses outside a job, so it isn't a way round.
+    **The package scripts have one literal shape each** (pinned by `tests/local-guard.test.ts`), which SCHED-3's portable-runner alias will match:
+
+    ```
+    build        node scripts/local-guard.mjs --class standard --machine 3090 -- npm run build:direct --
+    typecheck    node scripts/local-guard.mjs --class quick --machine any -- npm run typecheck:direct --
+    test:fast    node scripts/local-guard.mjs --class standard --machine any -- npm run test:fast:direct --
+    playthrough  node scripts/local-guard.mjs --class playthrough --machine any -- npm run playthrough:direct --
+    ```
+
+    npm appends a caller's arguments after the trailing `--`.
+
+    **Each `X:direct` body is in SCHED-3's closed grammar:** `node <repo-relative path> <plain words>` steps joined by ` && `, with no quoting, no shell and no npm. It starts with `node scripts/local-guard.mjs --require npm run X`, which refuses outside a job (75), so `X:direct` is no way round. `tsc` is spelled `node node_modules/typescript/bin/tsc` and `vite` is `node node_modules/vite/bin/vite.js`. All four resolve to plain node steps under SCHED-3's `resolveScript` (`7aa88a3`).
+
+    **A second form**, for the two shell scripts re-running themselves, is `node scripts/local-guard.mjs --class C --machine 3090 -- bash scripts/<name>.sh [args…]`.
   - **Where a routed command runs:**
     - **`any`** (alickers when free, else here): tests and checks;
     - **`3090`:**
@@ -25,7 +39,7 @@ Opus 5.5 high. Branch `t3/stew-2-exclusive-guard`, on root `6ee488a`. Head: see 
     The tiers and the economy scripts compile inside their job, because on alickers there is no `.test-build` until they do.
 - **Nothing expensive loads before admission (F3).** The economy scripts import their compiled `.test-build` modules dynamically after the guard. `guard-architecture.mjs` loads TypeScript, and `bake-terrain.mjs` loads esbuild, only after it. A routed or refused script loads none of them, even with no build output.
 - **Scope membership is one shared predicate (F4):** `scripts/cgroup-scope.mjs` compares whole cgroup path components, against the job's recorded scope path (`jobs/<ticket>/cgroup`) or else its unit. A process is inside only if it is in the scope or below it, so `<unit>.scope-escaped.scope` isn't. SCHED's nested and GPU checks share the weaker `includes` rule; the coordinator has SCHED-3 adopt this helper in its follow-up.
-- **`npm run gate`:** where local steps aren't admitted (factory-worker), fast, build and economy go to the queue as **one** `--class standard --machine any --review` job (`gate.mjs --batch <ids>`). The bake runs first; each step is reported from the job's `gate-batch:` line and judged on its receipt (exit, stop reason, DISTURBED, bound to the pinned commit). Admitted (in a job, on alickers, or overridden), they run directly. `--machine` moves the batch too. The R1 behaviour of choosing per step is gone, along with `--queued`, since on factory-worker there's no other choice.
+- **`npm run gate`:** where local steps aren't admitted (factory-worker), fast, build and economy go to the queue as **one** `--class standard --machine any --review` job (the 3090 when the caller's environment carries settings, R2-F3) (`gate.mjs --batch <ids>`). The bake runs first; each step is reported from the job's `gate-batch:` line and judged on its receipt (exit, stop reason, DISTURBED, bound to the pinned commit). Admitted (in a job, on alickers, or overridden), they run directly. The batch and the `any` playthrough take their machine from the guard's own policy (`machineFor`), so a caller's `SILTWAKE_*` or `NODE_OPTIONS` pins them to the 3090, as it would a guarded command; an explicit `--machine` wins. The R1 behaviour of choosing per step is gone, along with `--queued`, since on factory-worker there's no other choice.
 - **`scripts/saves-export.sh` compiles nothing outside the queue** (unchanged in R2; Sol passed it).
   - **The export:** one `--machine any --class playthrough --snapshot --artifact <root>/<sha>` job builds the SHA, exports and verifies where it ran.
   - **The import:** only when the export ran on alickers, a small `--machine 3090` job imports (decodes) the copy.
@@ -38,6 +52,24 @@ Opus 5.5 high. Branch `t3/stew-2-exclusive-guard`, on root `6ee488a`. Head: see 
     - the CPU-usage clocks;
     - `console.time`.
   - **Newly classified:** `heavy-tier.heavy.test.ts` asserts its runner ends promptly, so it is a timing file. `terrain-borders`, `world-kit-render` and `regions-bake-decode` poll through `shared-support`'s `waitUntil` timeout, so they are clock-without-bound.
+
+## R2 findings and what changed
+- **F1 (P1), SCHED-3's composition reaches npm again:** belongs to SCHED-3's composition step (coordinator's decision). STEW-2 lands first; SCHED-3 then rebases and adds a grammar alias for the exact wrapper shape above. The alias expands `X:direct` itself into its node steps, never running the guard's wrapper or npm.
+  - **My part:**
+    - `--machine` is explicit on all four wrappers;
+    - each `X:direct` body is in the closed grammar (all four, none needing an exception);
+    - the shapes are pinned by a test.
+  - **Until SCHED-3's alias lands, the guarantee that npm configuration can't affect a registered default doesn't hold for these four scripts.** Run through SCHED-3's portable runner, the wrapper is one opaque node step and the admitted guard runs real npm. That guarantee lands with SCHED-3's alias. Today's live queue has no portable runner, so this merge alone doesn't open it.
+- **F2 (P2), legacy admission by name pattern:**
+  - **The shim:** `scripts/heavy-check.sh`'s v1 fallback exports the exact unit it creates (`SILTWAKE_HEAVY_SCOPE`).
+  - **The guard:** it admits under v1's lock only when that unit is a whole component of its cgroup path (`hasScopeComponent`). Any other claim, Sol's escaped sibling included, refuses with 75.
+  - **Recursion ends:** an unproven ticket or lock flag never requeues, so the shim-to-guard recursion terminates.
+  - **Tests:** Sol's probe is a regression, alongside an unnamed scope, another v1 job's scope, a unit embedding `.scope`, and the alickers lane (admitted by identity). An end-to-end run uses the real shim with `SILTWAKE_SCHED_V1=1` and the lock flag set: `npm run build`, `test-build.mjs` and `saves-build-at.sh` each exit 75 at once.
+- **F3 (P2), the gate dropped caller settings:** `local-guard.mjs` exports `machineFor`, the one machine policy; `routeArgs` and the gate's `queueOptions` both use it. Tested at the submission boundary against a stand-in queue, for the batch and the playthrough:
+  - clean environment → `any`;
+  - `SILTWAKE_FAST_FILE_BUDGET_S` → `3090`;
+  - `NODE_OPTIONS` → `3090`;
+  - an explicit `--machine 4070` → `4070`.
 
 ## R1 findings and what changed
 - **F1 (P1), leases aren't mutual exclusion:** dropped entirely, with the SCHED patch and its check script. On factory-worker the guarded commands are queue jobs, so the queue's own admission is the exclusion: an exclusive drains them like any job, and nothing is registered, aged or expired.
