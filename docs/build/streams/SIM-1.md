@@ -160,7 +160,7 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
     - every storage call failing once or for good at three positions;
     - the lock and live boundaries.
 
-    The targeted store tests are kept. The seed-66769815 store test now uses Sol's smaller replacement, which fails the number-reuse mutant.
+    They run in their own fast file, `timeline-model-regressions.test.ts`, beside the seeds. The targeted store tests are kept. The seed-66769815 store test now uses Sol's smaller replacement, which fails the number-reuse mutant.
   - **Self-check (heavy tier):** `timeline-model.heavy.test.ts` patches the real sources with the review's mutants (by text anchor), transpiles them into a private copy of the compiled tree, and requires the fast tier's scripts and seeds to catch each one. The unchanged copy must pass. Detection per mutant is below.
   - **Found by the new harness (heavy seed 29276833), a store defect:** a stored head's open events are up to 999 recorded events plus the commit's closing travel and idle events. `resumeRecorder` kept all of them open, so the first event recorded after a reload sealed a 1,001- or 1,002-event chunk. The chunk validator rightly rejects that, and the store became protected, with nothing damaged. A reload now seals a full chunk as recording would.
     - Regressions: a store test (999 open events, closing idle, and travel plus idle; reload, record, commit, reload whole), a fast-tier script, and a self-check mutant that restores the old resume. R1-F1's test reloaded this state but never recorded after the reload.
@@ -183,6 +183,13 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
 
 - **R3 (Sol 6.1 xhigh, on `16961a67`), F1 (P2): a timeline warning (2.5) still hid general system errors.** A failed import ("This file is not valid JSON…", "could not be read…", "exceeds the 1 MiB save limit…") was dropped in both arrival orders. The warning now ranks 1.5, below general errors (2), hazards (3) and game-save warnings (4), and "Calls fading" replaces it too. Its own resolution identity is unchanged; when outranked, it waits on the status line.
   - Regressions (`timeline-app.test.ts`): all three real failed-import paths, in both arrival orders. A protected store's warning comes first, or a refused timeline commit comes after the import. The import error is the central caption and the timeline warning is on the status line. A presentation test covers each outranking kind in both orders.
+  - **Evidence at `c690de5e`, on `--machine 4070`:**
+    - typecheck passes;
+    - `npm run test:fast` passes (148 files, 64.8 s);
+    - focused suites 207/207;
+    - heavy tier (2,000 sequences and the mutant self-check, with the new `seq` check) passes, in 4 min 28 s.
+
+    The fast tier warned that `timeline-model.test.js` used 8.8 s CPU (target 5 s, failing at 10 s), so the regression scripts were split into their own file.
 
 **Mutant detection, at `80b11146`:** the self-check, via the queue on `--machine 4070`. The review's mutants are Sol's `mutations.mjs` patches, unchanged, on the same anchors. Three are new: a read that rewrites identical bytes, R2-F1's validator reverted, and the old resume.
 
