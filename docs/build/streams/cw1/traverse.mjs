@@ -338,6 +338,8 @@ try {
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
     regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
     heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));
+  // SIM-PERF-1: the step meter's snapshot (pulled once), worst steps by phase on the page clock.
+  result.stepCosts = await page.evaluate(() => globalThis.__siltwakeStepCosts?.() ?? null);
   const gaps = data.gaps.map(([, g]) => g).sort((a, b) => a - b);
   result.frames = { count: gaps.length, p50: quant(gaps, 0.5), p95: quant(gaps, 0.95), p99: quant(gaps, 0.99), max: gaps.length ? +gaps.at(-1).toFixed(1) : null,
     over33: gaps.filter(g => g > 33.4).length, over50: gaps.filter(g => g > 50).length };
@@ -361,7 +363,9 @@ try {
       const total = [...counts.values()].reduce((a, b) => a + b, 0);
       hot = [`${total} ms sampled`, ...[...counts].sort((a, b) => b[1] - a[1]).slice(0, 5).map(([k, ms]) => `${ms} ms: ${k}`)];
     }
-    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
+    const steps = (result.stepCosts?.worst ?? []).filter(w => w.at >= at - g - 1 && w.at <= at + 1)
+      .map(w => ({ tick: w.tick, ms: +w.ms.toFixed(2), phases: Object.fromEntries(Object.entries(w.phases).filter(([, v]) => v >= 0.05).map(([k, v]) => [k, +v.toFixed(2)])) }));
+    result.long.push({ at: +at.toFixed(0), gap: +g.toFixed(1), camera, thread, hot, steps, gcPauseMs: +gcs.reduce((n, x) => n + x.pauseMs, 0).toFixed(1), gcs: gcs.map(x => `${x.kind} ${x.pauseMs} ms`), heapFreedMiB: +(freed / 1048576).toFixed(1), gc: freed > 2 * 1048576, frame: e ? { total: +e.total.toFixed(1), sim: +e.sim.toFixed(1), steps: e.steps, save: +(e.save ?? 0).toFixed(1), hud: +(e.hud ?? 0).toFixed(1), present: +e.present.toFixed(1), parts: e.parts, hold: e.hold } : null });
   }
   // Attribution: a long frame is streaming's when the streaming work in it
   // (chunk residency, cave streaming, region activation, the lights' scan of
