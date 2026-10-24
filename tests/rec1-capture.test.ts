@@ -235,7 +235,7 @@ test("R2-4: a campaign-length timeline page is bounded and draws without spreadi
   } finally { rmSync(dir, { recursive: true, force: true }); }
 });
 
-test("R2 (4070 run): a picture still encoding through a long stall is never expired; an export in between notes it, and it supersedes the note when it lands", async () => {
+test("R2 (4070 run): a picture still encoding through a long stall is never expired, and is written when it lands, across an export", async () => {
   const { c, worker } = await capture();
   c.recorder.event("note", "note: before a 21 s stall", { t: 1 });
   c.afterRender(2);
