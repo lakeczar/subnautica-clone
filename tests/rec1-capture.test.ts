@@ -41,9 +41,10 @@ class FakeWorker {
     } else if (m.op === "remove") this.reply(FakeWorker.refuseRemove?.(m) ? { removed: m.id, refused: "NoModificationAllowedError", error: "in use" } : { removed: m.id });
     else if (m.op === "release") this.reply({ released: m.id });
     else if (m.op === "video-open") {
-      const o = m as Msg & { hardware?: boolean; hardwareCodec?: string | null };
-      const id = !o.hardware ? "V_VP9" : o.hardwareCodec?.startsWith("avc1") ? "V_MPEG4/ISO/AVC" : o.hardwareCodec?.startsWith("vp09") ? "V_VP9" : "V_AV1";
-      this.reply({ videoOpened: m.file, codec: id, hardware: o.hardware === true });
+      // The worker opens the first rung it is offered (the page planned it).
+      const key = (m as Msg & { rungs: string[] }).rungs[0] ?? "vp9";
+      const id = key.startsWith("h264") ? "V_MPEG4/ISO/AVC" : key.startsWith("av1") ? "V_AV1" : key.startsWith("vp8") ? "V_VP8" : "V_VP9";
+      this.reply({ videoOpened: m.file, codec: id, hardware: key.endsWith("-hw"), rung: key });
     }
     else if (m.op === "video-frame") {
       const t = (m as Msg & { t: number }).t, answer = FakeWorker.videoAnswer?.(m as Msg & { t: number }) ?? "kept";
@@ -361,7 +362,8 @@ test("R3-2: a recording this page still holds (the latest completed, exportable)
 
 // --- R3b ----------------------------------------------------------------------
 
-const opens = (w: FakeWorker) => w.posted.filter((m) => m.op === "video-open") as (Msg & { width: number; height: number; hardware: boolean })[];
+const opens = (w: FakeWorker) => (w.posted.filter((m) => m.op === "video-open") as (Msg & { width: number; height: number; rungs: string[] })[])
+  .map((m) => Object.assign(m, { hardware: m.rungs[0]!.endsWith("-hw") }));
 
 test("R3b: a hardware encoder is preferred at 1280x720 (AV1, VP9, then H.264 in Matroska); without one, software at 960x540; the summary says which", async () => {
   hardwareEncoders = new Set(["av01", "vp09", "avc1"]);

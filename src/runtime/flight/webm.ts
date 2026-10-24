@@ -12,12 +12,6 @@ export type WebmCodec = "V_VP9" | "V_VP8" | "V_AV1" | "V_MPEG4/ISO/AVC";
 
 const CLUSTER_MAX_MS = 30_000;
 
-/** Hardware encoders the page and the worker try first (R3b): they take the GPU's picture without a CPU
- * readback. H.264 last: nearly every GPU has one (integrated ones included); it is written as Matroska (.mkv). */
-export const HARDWARE_CODECS = ["av01.0.04M.08", "vp09.00.10.08", "avc1.42001f"];
-/** WebCodecs' configuration for a codec string: H.264 as length-prefixed NAL units with its avcC (what Matroska carries). */
-export const encoderConfig = (codec: string): Record<string, unknown> => (codec.startsWith("avc1") ? { avc: { format: "avc" } } : {});
-
 /** EBML variable-size integer for an element's size. */
 function size(n: number): Uint8Array {
   for (let len = 1; len <= 8; len++) {

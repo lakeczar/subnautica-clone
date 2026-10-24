@@ -16,14 +16,16 @@
  *   Any operation that throws is answered { opFailed: op, error } (with its request's reply key when it has one); the queue goes on.
  *
  * Video (WebCodecs, one segment file at a time, see webm.ts):
- *   { op: "video-open", dir, file, width, height, fps, bitrate } → { videoOpened: file, codec } or { videoError }
+ *   { op: "video-open", dir, file, width, height, fps, bitrate, rungs } → { videoOpened: file, codec, hardware, rung } or { videoError }:
+ *     the first rung of the ladder (encoders.ts) the browser accepts for the file's container (.mkv Matroska, else WebM)
  *   { op: "video-frame", t, bitmap? } → { videoFrame: 1, kept }: the picture (or, without one,
  *     the last picture again) encoded with page time `t` (ms); kept false when the encoder is behind
  *   { op: "video-flush", id } → { videoFlushed: id }: everything encoded so far is in the file
  *   { op: "video-close", id, final } → { videoClosed: id, file, frames, firstMs, lastMs }
  *   unprompted: { wrote: file, bytes } after each cluster; { failed: file, ... } as above. */
 import { crc32, zipLayout, type ZipLayoutEntry } from "./zip.js";
-import { encoderConfig, HARDWARE_CODECS, WebmClusters, webmHead, type WebmCodec } from "./webm.js";
+import { WebmClusters, webmHead, type WebmCodec } from "./webm.js";
+import { encoderConfig, ladder, type Container } from "./encoders.js";
 
 interface SyncHandle {
   getSize(): number;
@@ -41,7 +43,7 @@ type Message =
   | { op: "export"; dir: string; out: string; id: number }
   | { op: "barrier"; id: number }
   | { op: "release"; dir: string; id: number }
-  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; codecs?: string[]; hardware?: boolean; hardwareCodec?: string | null }
+  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; rungs: string[] }
   | { op: "video-frame"; t: number; bitmap?: ImageBitmap }
   | { op: "video-flush"; id: number }
   | { op: "video-close"; id: number; final: boolean };
@@ -133,42 +135,34 @@ function writeVideo(seg: Segment, bytes: Uint8Array): void {
     scope.postMessage({ failed: seg.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: error instanceof Error ? error.message : String(error), video: true });
   }
 }
-/** Software codecs by name, as the main thread orders them. */
-const CODECS: Record<string, [string, WebmCodec]> = { vp9: ["vp09.00.10.08", "V_VP9"], vp8: ["vp8", "V_VP8"], avc: ["avc1.42001f", "V_MPEG4/ISO/AVC"] };
-/** Tried first: a hardware encoder takes the GPU's picture without a CPU readback and costs the page almost nothing (R3b). */
-const WEBM_ID: Record<string, WebmCodec> = { av01: "V_AV1", vp09: "V_VP9", vp8: "V_VP8", avc1: "V_MPEG4/ISO/AVC" };
-const HARDWARE: [string, WebmCodec][] = HARDWARE_CODECS.map((c) => [c, WEBM_ID[c.split(".")[0]!]!]);
-let hardware = false, head: { width: number; height: number; docType: "webm" | "matroska" } | null = null;
-async function openEncoder(width: number, height: number, fps: number, bitrate: number, order: readonly string[] = ["vp9", "vp8"], tryHardware = false,
-  docType: "webm" | "matroska" = "webm", hardwareCodec: string | null = null): Promise<void> {
-  const size = `${width}x${height}:${tryHardware ? `hw ${hardwareCodec ?? "any"},` : ""}${order.join(",")}`;
-  head = { width, height, docType };
-  if (encoder && encoder.state === "configured" && encoderSize === size) return;
+let hardware = false, rungKey = "", head: { width: number; height: number; container: Container } | null = null;
+/** The encoder's decoder configuration (H.264's avcC, AV1's av1C), kept: a reused encoder gives it only once, and every segment's head needs it. */
+let description: Uint8Array | undefined;
+/** Opens the first rung of `keys` the browser accepts for this container and size (the ladder: encoders.ts). */
+async function openEncoder(width: number, height: number, fps: number, bitrate: number, keys: readonly string[], container: Container): Promise<void> {
+  const want = `${width}x${height}:${container}:${keys.join(",")}`;
+  head = { width, height, container };
+  if (encoder && encoder.state === "configured" && encoderSize === want) return;
   try { encoder?.close(); } catch { /* closed */ }
-  encoder = null;
+  encoder = null; description = undefined;
   if (typeof VideoEncoder === "undefined") throw new Error("this browser has no WebCodecs video encoder");
-  // The page chose the hardware codec (its file's container follows it); the others stay as fallbacks.
-  const hw = hardwareCodec ? [...HARDWARE.filter(([c]) => c === hardwareCodec), ...HARDWARE.filter(([c]) => c !== hardwareCodec)] : HARDWARE;
-  const tries: [string, WebmCodec, boolean][] = [...(tryHardware ? hw : []).map(([c, id]) => [c, id, true] as [string, WebmCodec, boolean]),
-    ...order.map((k) => CODECS[k]).filter((x): x is [string, WebmCodec] => !!x).map(([c, id]) => [c, id, false] as [string, WebmCodec, boolean])];
-  for (const [c, id, isHw] of tries) {
-    const config = { codec: c, width, height, bitrate, framerate: fps, latencyMode: "realtime", hardwareAcceleration: isHw ? "prefer-hardware" : "prefer-software", ...encoderConfig(c) } as VideoEncoderConfig;
+  // A rung's container must be this file's: Matroska carries every codec, WebM no H.264.
+  for (const r of ladder(keys).filter((x) => container === "matroska" || x.container === "webm")) {
+    const config = encoderConfig(r, width, height, bitrate, fps);
     let ok = false;
     try { ok = (await VideoEncoder.isConfigSupported(config)).supported === true; } catch { ok = false; }
     if (!ok) continue;
-    // H.264 needs Matroska: a .webm file cannot carry it.
-    if (id === "V_MPEG4/ISO/AVC" && docType !== "matroska") continue;
-    codec = id; hardware = isHw;
-    encoderSize = size;
+    codec = r.codecId; hardware = r.hardware; rungKey = r.key;
+    encoderSize = want;
     encoder = new VideoEncoder({
       output: (chunk, meta) => {
         const seg = segment;
         if (!seg || seg.origin === null) return;
-        // The file's head waits for the first chunk: AV1 in WebM carries the encoder's configuration.
+        const given = meta?.decoderConfig?.description;
+        if (given) description = new Uint8Array(given instanceof ArrayBuffer ? given.slice(0) : (given as ArrayBufferView).buffer.slice(0));
+        // A segment's head waits for its first chunk: it carries the encoder's configuration.
         if (!seg.headWritten && head) {
-          const description = meta?.decoderConfig?.description;
-          const priv = description ? new Uint8Array(description instanceof ArrayBuffer ? description : (description as ArrayBufferView).buffer.slice(0)) : undefined;
-          writeVideo(seg, webmHead(codec, head.width, head.height, priv, head.docType));
+          writeVideo(seg, webmHead(codec, head.width, head.height, description, head.container));
           seg.headWritten = true;
         }
         const bytes = new Uint8Array(chunk.byteLength);
@@ -180,17 +174,17 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
     encoder.configure(config);
     return;
   }
-  throw new Error(`no hardware or software (${order.join(", ")}) encoder for ${width}x${height}`);
+  throw new Error(`no encoder on the ladder (${keys.join(", ")}) for ${width}x${height} in ${container}`);
 }
 async function videoOpen(m: Extract<Message, { op: "video-open" }>): Promise<void> {
   try {
-    await openEncoder(m.width, m.height, m.fps, m.bitrate, m.codecs, m.hardware === true, m.file.endsWith(".mkv") ? "matroska" : "webm", m.hardwareCodec ?? null);
+    await openEncoder(m.width, m.height, m.fps, m.bitrate, m.rungs, m.file.endsWith(".mkv") ? "matroska" : "webm");
     const h = await handle(m.dir, m.file);
     h.truncate(0);
     const seg: Segment = { dir: m.dir, file: m.file, h, clusters: null as unknown as WebmClusters, origin: null, frames: 0, broken: false, headWritten: false };
     seg.clusters = new WebmClusters((b) => writeVideo(seg, b));
     segment = seg;
-    scope.postMessage({ videoOpened: m.file, codec, hardware });
+    scope.postMessage({ videoOpened: m.file, codec, hardware, rung: rungKey });
   } catch (error) { scope.postMessage({ videoError: error instanceof Error ? error.message : String(error) }); }
 }
 function videoFrame(m: Extract<Message, { op: "video-frame" }>): void {

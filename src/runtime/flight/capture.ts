@@ -12,7 +12,7 @@
 import { FlightRecorder, FLIGHT_FORMAT, FLIGHT_VERSION, FRAME_COLUMNS, HOLD_CODES } from "./recorder.js";
 import type { FlightEvent, FlightSample, FlightSnapshot, SnapshotRequest } from "./recorder.js";
 import { zipBlob, type ZipEntry } from "./zip.js";
-import { encoderConfig, HARDWARE_CODECS } from "./webm.js";
+import { DEFAULT_RUNGS, describeCodec, encoderConfig, ladder, type EncoderRung } from "./encoders.js";
 import { budgetFor, DEFAULT_BUDGET_BYTES, MIN_VIDEO_BUDGET_BYTES, planRetention, videoAllowed, type RetentionPlan, type StoredFile, type StoredKind } from "./retention.js";
 
 export type FlightMode = "off" | "driver" | "playtest";
@@ -122,12 +122,12 @@ export class FlightCapture {
   private readonly ledger: Ledger;
   private readonly segmentMs: number;
   private softwareWidth: number = SOFTWARE_VIDEO_WIDTH;
-  private videoCodecs: string[] = ["vp9", "vp8"];
-  private tryHardware = true;
+  /** The ladder's rungs this recording may use (encoders.ts); measurements narrow it. */
+  private videoRungs: string[] = [...DEFAULT_RUNGS];
   /** The encoder chosen for this recording (R3b): hardware at VIDEO_SIZE, else software at the fallback's width. Decided once, on the page. */
-  private videoPlan: { hardware: boolean; codec: string | null; width: number } | null = null;
+  private videoPlan: { rung: EncoderRung | null; width: number } | null = null;
   private videoWanted = false;
-  private get videoWidth(): number { return this.videoPlan?.hardware ? VIDEO_SIZE.width : this.softwareWidth; }
+  private get videoWidth(): number { return this.videoPlan?.width ?? this.softwareWidth; }
   private minVideo = MIN_VIDEO_BUDGET_BYTES;
   private readonly restoreConsole: (() => void) | null = null;
   private readonly encoder = new TextEncoder();
@@ -149,10 +149,10 @@ export class FlightCapture {
     this.segmentMs = Number(q.get("recsegment")) || SEGMENT_MS;
     // Test overrides: a budget in MiB (then no minimum for video), and the segment length.
     if (Number(q.get("recbudget")) > 0) { this.budget = Number(q.get("recbudget")) * 1048576; this.minVideo = 0; }
-    // Measurement overrides (R3b): the software fallback's width and codec order; ?rechw=0 skips hardware (as ?reccodec does).
+    // Measurement overrides (R3b): the software fallback's width; the ladder's rungs (`?reccodec=vp8,h264`); ?rechw=0 drops the hardware rungs.
     if (Number(q.get("recvideowidth")) >= 320) this.softwareWidth = Math.round(Number(q.get("recvideowidth")) / 2) * 2;
-    if (q.get("reccodec")) { this.videoCodecs = q.get("reccodec")!.split(","); this.tryHardware = false; }
-    if (q.get("rechw") === "0") this.tryHardware = false;
+    if (q.get("reccodec")) this.videoRungs = q.get("reccodec")!.split(",");
+    if (q.get("rechw") === "0") this.videoRungs = ladder(this.videoRungs, false).map((r) => r.key);
     const gl = canvas.getContext("webgl2");
     const info = gl?.getExtension("WEBGL_debug_renderer_info");
     const script = document.querySelector<HTMLScriptElement>("script[type=module][src]")?.src ?? "";
@@ -422,21 +422,20 @@ export class FlightCapture {
     }
     const v: Video = { segment: this.newSegment(performance.now()), next: 0, frames: 0, inflight: 0, capturing: 0, skipped: 0, lastSent: -Infinity, paused: false };
     this.video = v;
-    this.recorder.event("session", `video started (WebCodecs, ${this.videoPlan.hardware ? "hardware" : "software"}, ${VIDEO_FPS} fps, ${v.segment.width}x${v.segment.height}, ${v.segment.file})`, { snapshot: false });
+    const r = this.videoPlan.rung;
+    this.recorder.event("session", `video started (WebCodecs, ${r ? `${r.hardware ? "hardware" : "software"} ${describeCodec(r.codecId)}` : "no encoder known"}, ${VIDEO_FPS} fps, ${v.segment.width}x${v.segment.height}, ${v.segment.file})`, { snapshot: false });
   }
-  /** Hardware or software, decided once (R3b): a hardware encoder at VIDEO_SIZE when the browser has one,
-   * AV1, then VP9, then H.264; else the software fallback. */
+  /** The encoder, decided once per recording (R3b): the first rung of the ladder the browser supports,
+   * hardware at VIDEO_SIZE, software at the fallback's width. The worker confirms it (or the rungs below). */
   private async planVideo(): Promise<void> {
-    let hardware = false, chosen: string | null = null;
+    let chosen: EncoderRung | null = null;
     const probe = (globalThis as { VideoEncoder?: { isConfigSupported?(c: unknown): Promise<{ supported?: boolean }> } }).VideoEncoder?.isConfigSupported;
-    if (this.tryHardware && probe) {
-      for (const codec of HARDWARE_CODECS) {
-        try {
-          if ((await probe.call(VideoEncoder, { codec, ...VIDEO_SIZE, bitrate: VIDEO_BITS, framerate: VIDEO_FPS, latencyMode: "realtime", hardwareAcceleration: "prefer-hardware", ...encoderConfig(codec) })).supported) { hardware = true; chosen = codec; break; }
-        } catch { /* not this one */ }
-      }
+    for (const r of ladder(this.videoRungs)) {
+      const size = r.hardware ? VIDEO_SIZE : this.scaled(this.softwareWidth);
+      try { if (!probe || (await probe.call(VideoEncoder, encoderConfig(r, size.width, size.height, VIDEO_BITS, VIDEO_FPS))).supported) { chosen = r; break; } }
+      catch { /* not this rung */ }
     }
-    this.videoPlan = { hardware, codec: chosen, width: hardware ? VIDEO_SIZE.width : this.softwareWidth };
+    this.videoPlan = { rung: chosen, width: chosen?.hardware ? VIDEO_SIZE.width : this.softwareWidth };
     if (this.videoWanted && !this.stopped && !this.measurePaused) { this.videoWanted = false; this.setVideo(true); }
   }
   /** Measurement only (R3b, `?recmeasure=1`): paused, the recorder is off in place: its video segment
@@ -456,13 +455,17 @@ export class FlightCapture {
   /** A new segment file in the worker: a whole WebM, decodable alone, at the canvas's current aspect. */
   private newSegment(now: number): Video["segment"] {
     const s = this.spool!, index = this.segmentIndex++, size = this.scaled(this.videoWidth);
-    // H.264 goes in Matroska; VP9, VP8 and AV1 in WebM (the same writer, its doctype by extension).
-    const avc = this.videoPlan?.hardware ? this.videoPlan.codec?.startsWith("avc1") : this.videoCodecs[0] === "avc";
-    const file = `video/${String(index).padStart(3, "0")}.${avc ? "mkv" : "webm"}`;
+    // The chosen rung's container: H.264 in Matroska, VP9, VP8 and AV1 in WebM (the same writer, its doctype by extension).
+    const file = `video/${String(index).padStart(3, "0")}.${this.videoPlan?.rung?.container === "matroska" ? "mkv" : "webm"}`;
     this.segments.push({ file, start: null, end: null, ...size });
     this.stored.set(file, { session: this.session, file, kind: "video", bytes: 0 });
-    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, codecs: this.videoCodecs, hardware: this.videoPlan?.hardware === true, hardwareCodec: this.videoPlan?.codec ?? null });
+    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, rungs: this.rungsFromPlan() });
     return { file, index, start: null, began: now, ...size };
+  }
+  /** The rungs the worker may open: the planned one, then those below it (should the browser refuse it after all). */
+  private rungsFromPlan(): string[] {
+    const keys = ladder(this.videoRungs).map((r) => r.key), at = this.videoPlan?.rung ? keys.indexOf(this.videoPlan.rung.key) : 0;
+    return keys.slice(Math.max(0, at));
   }
   private videoHeader(): void {
     const v = this.video;

@@ -265,14 +265,14 @@ try {
   if (workers.length > 1) result.failed.push(`workers: ${workers.length} spool workers alive after four retirements`);
   if (!(result.workers.latestExportBytes > 0)) result.failed.push("workers: the latest completed recording did not export");
 
-  // --- R3b: H.264 in Matroska (software here: ?reccodec=avc), the same clock ---
+  // --- R3b: H.264 in Matroska (software here: ?reccodec=h264), the same clock ---
   const h264 = await phase("h264", () => c.page.evaluate(async ({ DRAW, zipOf }) => {
     document.getElementById("c").getContext("2d");
     const { FlightCapture } = await import("/modules/capture.js");
     const cap = window.capR3 = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
     const draws = await (0, eval)(DRAW)(cap, 5000);
     return { zip: await (0, eval)(zipOf)(cap), draws, header: cap.header, warnings: cap.recorder.events.since(0).items.filter((e) => e.kind === "warning").map((e) => e.text) };
-  }, { DRAW, zipOf }), `${origin}/?recsegment=2000&reccodec=avc`);
+  }, { DRAW, zipOf }), `${origin}/?recsegment=2000&reccodec=h264`);
   if (h264) {
     const dir = path.join(out, "h264");
     writeFileSync(path.join(out, "h264.zip"), Buffer.from(h264.zip, "base64"));
