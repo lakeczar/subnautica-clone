@@ -218,3 +218,95 @@ These are authored but inert today. LS-1 wires them as inspectable finds through
 - 10 caches made live.
 
 Every site earns its place by its set, approach and reward. None exists to fill time.
+
+## 3. Pacing
+
+**Timeline.** Bot times are the Creel route's milestones in the save library at `ac734b0d`; the carrier route runs about 1.3–1.8× longer from the Rift on. Human windows are **uncalibrated estimates**: they combine the bible's main-path minutes (525 min against the bot's 202, about ×2.6) with OP-1's 45–75 min opening. The owner's playtest calibrates them.
+
+| Human window (est.) | Bot (Creel) | Reach | Sites met | Beats |
+| --- | --- | --- | --- | --- |
+| 0–75 min | 0–10 | starter | (cold-store hatch seen) | OP-1's opening |
+| 45–120 | 10–26 (`systems` 26) | starter → early | Pump house (first decode); route slates (optional) | Arrival, decode, grotto lead; slate chain |
+| 90–180 | after the Dart | early | Gauge line → **return home: the hatch opens** | Gate 1 |
+| 120–220 | 14–35 (`canopy` 14) | early → reinforced | Basket | Bins, standard kit, rootways lead |
+| 150–260 | 20–41 (`creel` 21, `refits` 41) | reinforced | **Keeper's racks (main: first planter)**; chart room | Planter, then the map room's beacons |
+| 200–320 | — | reinforced | Root store (optional biome) | Lamp filter |
+| 220–340 | 35–58 | reinforced → service | Pump heads; ridge vault (**gate 2**) | Vault opens, advanced kit |
+| 300–400 | 58–79 (`rift` 58) | service | Borehole hut | Kiln tubers |
+| 380–480 | 79–100 (`divide` 79) | deep | Mixing line; seam panel (BIO-4) | Brine lanes |
+| 470–570 | 131–180 (`meridian` 131) | deep | Allotments | Wild crop, last reveals |
+
+**Reading the table:**
+- On the main path a lost-site beat (an arrival, a decode payoff or the lead it opens) falls about every 40–80 human minutes. The optional slates, root store and caches fill in between.
+- Lost sites are one source of GAME-DIRECTION's 15–20 minute "something new". They don't carry that cadence alone, and they must not cluster.
+- **Structural check:** in the playthrough timeline (SIM-1b), no two site beats on the main path fall within about 10 bot-minutes of each other, and no decode is ever the only thing running (see §5).
+- The two gates sit about 3 hours apart, as the owner asked ("a few, spaced out").
+
+**Decode times.** Base times are fragment 3, log 6, archive 10 and core 15 min of active play (`DECODE_MINUTES`, unchanged). The lattices are SIG-1's: ×1.5 from the Rift tier (thermal core) and ×2.25 from the deep tier (lattice).
+
+| Stage | Records | Base | Felt (likely lattice) |
+| --- | --- | --- | --- |
+| Early | slates, tide store, vault door tag | 3 | 3 |
+| Early–mid | pump house, gauge line, basket, racks, pump heads, allotments, borehole | 6 | 6 (borehole 4 with lattice 1; allotments 2.7 with lattice 2) |
+| Mid | chart room, root store, vault archive | 10 | 10. Each is decoded while the player restores the crown or explores a biome for longer than that. |
+| Late | mixing line (archive 10), seam panel (core 15) | 10–15 | 4.4–6.7 |
+
+**Rules:**
+- **Decodes run in the background, on power.** Out of range, a decode shows *Paused: out of range, needs a relay* and never ticks silently. The relay plan is on the workshop rack, which is on the main path.
+- **Idle waiting never counts as pacing.** The bot's current "wait at the bench" for the pump house becomes "start, do the next leg, collect". The timeline must show no idle segment caused by a decode on either route.
+- **The first decode is reachable in range.** OP-1's workshop cove is about 234 m from the pump house, inside the 250 m local range. OP-1 keeps the rack within range, or the brief notes the relay.
+
+## 4. Dependencies, ownership and stages
+
+**Who owns what:**
+
+| Stream | What LS-1 needs or gives | Rule until it lands |
+| --- | --- | --- |
+| **CW-1** (in review) | It owns the cave files (`content/regions/caves/*`, `caves.ts`, `rescue.ts`), `sim/step.ts`, `sim/world.ts`, `sim/fittings.ts`, `render/renderer.ts`, `farLayer.ts`, `runtime/app.ts` and `tests/content-proposals.test.ts`. | No LS-1 stage touches these before CW-1 merges. Stage 2 reads cave data only after the merge. |
+| **OP-1** | The island, the workshop records (`SYS2_TECH_RECORDS`), the opening playthrough legs. Contract: (a) the hatch reads `gateOpen("island.cold_store_hatch")`; (b) `bp_cultivation` leaves the workshop sheet in the same root merge that lands the racks' card, done by whichever stream merges second, so no build lacks a planter source; (c) the pump-house bot leg (`PUMPHOUSE_RUN` passes the island's centre) and the pump house floor are rechecked against the new shelf; (d) the rack stays within decoder range of the pump house; (e) a courtesy item: the capped intake pipe crosses the island's north shelf. | LS-1 stage 1 owns none of OP-1's files. |
+| **COL-1 stage B** | The unified collider for every built set (compromise verdict: "lost sites… geometry waits for COL-1 B"). | Stage 3 waits for it. |
+| **WK-1** | Stage 3 sets bake through its bake pipeline, never built at runtime. | Stage 3 uses whatever bake is on root. |
+| **BIO-1** (rootways), **BIO-2/3/4** (Isles, Basin vaults, seam) | Each places LS-1's in-biome row (tide store, root store, vault door and archive, seam panel) inside its biome, builds the set, and flips the row from deferred to placed. LS-1 owns the records, rewards and reveals. | Rows ship deferred with `blockedBy`; the test keeps them out of `WORLD_LOST_SITES`. |
+| **Chart and beacons** (SYS-2, `navigation.ts`) | Reveals gain a typed `target` (lost site, cave, stop, landmark, hint); `knownSites()` returns site IDs. Categories are unchanged. | Stage 1. |
+| **SIG-1** (merged) | The range tagger marks without capturing (`signatures.ts`). The listening array points at sites with a sound tell (`fittings.ts`, after CW-1). | Stage 1 and stage 2 respectively. |
+| **Save schema** | **No bump expected.** New decodable IDs are additive. Caches are finite world sources through the composed source table (as `c4Sources.ts` does). Read notes go in `knowledge.journals`. Gates are derived from decoded records. If the coordinator prefers an explicit `systems.opened` list, that's one additive field at integration. | Proposed here; the coordinator composes `src/save/*`. |
+
+**Stages** (each a reviewable outcome; file sets are disjoint from CW-1's until it lands):
+
+| Stage | Outcome | Files it owns | Needs |
+| --- | --- | --- | --- |
+| **1a: records** | Notes readable in the journal. Decoded maps lead to sites. The gates work in data. The main-path guarantee is proved on real content. Demo rows are gone. Seeing is separated from capturing. | `content/systems/lostSites.ts` (rewritten: plates, tells, path, reveal targets, deferred rows), `content/systems/decodes.ts`, new `content/systems/notes.ts` (CB-2 notes lifted out of proposals), `sim/systems/decoder.ts`, `sim/systems/journal.ts`, `sim/systemsLink.ts`, `sim/signatures.ts`, new `tests/lost-sites.test.ts`, `tests/systems-decoder.test.ts` with its demo fixtures moved to `tests/support/`, and the `no-optional` scenario's verify step. A proposed `src/save/validation.ts` delta goes to the coordinator. | Approval |
+| **1b: rewards** | The locker extension, ping lens (range half) and air-line reel work. Kiln tuber grows on thermal hosts. The racks' card and cuttings, the bins and pump spares, and the allotments' harvest are all live. | Rows in the existing upgrade registry (`content/upgrades/hosts.ts`, `sim/upgrades/hosts.ts`; no new mechanism), `sim/systems/survey.ts`, `sim/power/airline.ts`, `sim/systems/hosts.ts` (locker capacity), `content/systems/cultivation.ts` and its sim, LS-1 source rows composed through the source table, and a new `scripts/playthrough/lostSites.ts` hooked by one line | 1a; the OP-1 handshake for `bp_cultivation` |
+| **2: caves** | The three route slates, the ten caches live through one find runtime, ping-lens cave-mouth outlines, and the listening array on sound tells | New `content/systems/caveFinds.ts` (references cave and room IDs; edits no cave file), `sim/fittings.ts` (listening array), and tests | CW-1 merged |
+| **3: presence** | Every exterior site is a place: an authored set on the unified collider, plate, tell and lights; on-route sites join the far layer; the racks and chart room sit beside HUB-2's station. | New `content/lostSites/sets.ts`, new `render/lostSites/`, `render/farLayer.ts` entries, REC-1 views tagged `lost-sites`, and one-line registrations (coordinator, or LS-1 with approval) | COL-1 B; CW-1 merged |
+| **4: in-biome rows** | The tide store, root store with the lamp filter, vault door and archive, and seam panel are placed | LS-1: the records, plus the lamp filter row in `content/upgrades/catalogue.ts`. BIO streams: geometry and placement. | Each BIO stream; the story structure for the seam panel's target |
+
+1a and 1b can run as one builder in sequence. Stage 3 is the largest and the one the player feels most. If the coordinator wants presence sooner, stage 3 can split by region (Reef and Isles first).
+
+## 5. Tests and evidence per stage
+
+Each stage hands off one short page: SHA, `npm run gate` (fast, build, the six economy scripts, the playthrough queued `--machine any`), at most 3 questions, one adverse case and known limits. Images follow DIRECTION's tiers.
+
+| Stage | Questions (≤3) | Checks | Images | Adverse case |
+| --- | --- | --- | --- | --- |
+| 1a | 1. Does every reveal, gate and gated note resolve to something real, or stay withheld until it exists? 2. Is the decoder and kit-plan guarantee proved on the real main path, with `no-optional` finishing both routes without a single decode? 3. Is all LS-1 player text dated before the disaster and free of the lint list? | `tests/lost-sites.test.ts`: reference resolution, chain reachability (every *off* site is reachable by exploration or by at least one reveal), floor within 4 m for placed sites, notes before the disaster, the lint read from the appendix. Decoder tests on fixtures. Gate. | 0 | A save with a decode running at a host that becomes unpowered and then out of range: it shows paused, resumes, and nothing is lost on reload. |
+| 1b | 1. Is every new plan payable at its tier from exterior sources (`upgrade-economy.mjs`) and nothing cave-only? 2. Do the caches stay under the tier rule's taste limit, and does the campaign ledger stay unchanged without them? 3. Do both routes decode their on-route sites in the background with no idle decode wait in the timeline? | Gate; `check-progression-curve.mjs` with `bp_cultivation` moved; a timeline report on both routes | 0–2 (journal notebook, Decodes tab) | The planter plan's move lands with OP-1 in either merge order, and no build lacks a planter source. |
+| 2 | 1. Is every fragment and cache inside its cave's water and reachable on the cave's diver route? 2. Does the slate chain read without markers? 3. Do ping outlines touch only real mouths? | Gate; cave tests in the heavy tier (one queued job) | 2–4 (a slate under the lamp, the outline) | A cache taken, then the game reloaded inside the cave: it stays taken, with no duplicate. |
+| 3 | 1. Is each on-route site's tell visible from its route at the stated range? 2. Does collision match the art (COL-1 B oracle) without blocking a route, tether or carrier lane? 3. Is the densest site within the frame budget? | Gate; REC-1 fixed views tagged `lost-sites` compared with the baseline; one ordinary-control browser run that visits two sites and decodes one; a 3090 `--class exclusive` frame check at the densest site and a 4070 check (this touches rendering) | 2–4 per region batch; ≤10 at the stage exit | A Dart at full speed past a site: no streaming hitch over 33 ms, and the tell is present in the far layer. |
+| 4 | (In each BIO stream's handoff) Does the row resolve, the chain close and the gate open? | LS-1's resolution tests flip with placement | Per BIO stream | The biome isn't placed: the row stays withheld and its reveals stay hidden. |
+
+## 6. Spoilers
+
+The lore owner's rulings, dates, canon ties and the player-text lint list are in `docs/spoilers/LS-1-LORE.md`. This page stays at the owner-facing bible's level.
+
+## 7. Questions for the owner
+
+1. **The cold-store hatch.** When you've decoded the Splitspine logger, should the hatch open **by typing the code you read** (a small keypad: more of an "aha", a little more UI) or **by itself once the record is readable**? I lean towards the keypad.
+2. **Planter timing.** Putting your overgrown mid-game plot on the hub spur's second step means the first planter arrives about **2.5–4 hours in**, on the main path, instead of in the first hour from the workshop sheet as today. The opening island's hidden garden still gives a few seeds to carry before you can plant them. Is that the "mid-game" you meant?
+
+## Known limits and compromises
+
+- **Until stage 3, sites stay invisible points.** That's today's state, not a new compromise. The root fix is stage 3 on COL-1 B, at the cost of one large stage.
+- **Four in-biome sites wait for their biomes,** and the seam panel also waits for the story structure's placement. Their rows ship deferred and withheld.
+- **The current turbine** depends on GAME-DIRECTION's sandbox prototype. The mixing line's rewards stand without it.
+- **The human windows are estimates** until the owner's playtest calibrates the bot-to-human factor.
