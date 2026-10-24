@@ -1,5 +1,10 @@
 # SCHED-3: queue self-balancing
 
+> **Resume note (paused for the host reboot, 2026-10-24):**
+> - **Where:** R6 (`03764202`, review of `f0d41605`) asked for one P1. Alternate guard-path spellings (`./scripts/local-guard.mjs`, `scripts/./local-guard.mjs`, `scripts//local-guard.mjs`) skip the guard special-casing.
+> - **Next:** normalise every node step's repo-relative path and its realpath before the guard check. A step that resolves to `scripts/local-guard.mjs` must be the exact alias or `--require`, otherwise it runs here as submitted. Add the three variants as regressions, then the queued units, suites and fast tier.
+> - **To resubmit:** none (no tickets were queued or running). SCHED-4, 4b and 5 are planned after R6 and the install.
+
 Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-approved on 2026-10-24, after the 3090 had about 5 h of exclusive work queued while the 4070 sat idle: builders had tagged investigations `3090` (the default for most classes), and a queued job never moves. DIRECTION, "Balance the two GPUs": only acceptance numbers are `--class exclusive` on the 3090; everything else is `--machine any`, pinned only when the question needs a machine. It touches `scripts/heavy`, so it's checked with the full SCHED-1, SCHED-2 and SCHED-2b suites.
 
 ## The change
