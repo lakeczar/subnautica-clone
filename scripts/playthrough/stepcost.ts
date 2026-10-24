@@ -19,6 +19,8 @@
  * state (a checkpoint every 60 ticks and a journal, as StepGuard keeps): a step
  * that is fast again was not the game's work (a collection, the host, or a
  * first use), and one that is slow again is.
+ * `--alloc` (held runs) reports allocation by function per step: V8's sampling
+ * heap profiler, collected objects included, over every kind's held steps.
  * `--host` tags each slow step with the host's disturbance inside it
  * (`hostSampler.js`: each vCPU's steal, and a canary thread's late wake-ups),
  * so a step the hypervisor paused is told apart from the game's own work.
@@ -107,6 +109,7 @@ let buildsAtOpen = 0;
 const slow: Slow[] = [];
 const SLOW_KEEP = 2000;
 const pending: Promise<void>[] = [];
+const allocProfiles: unknown[] = [];
 
 /** `--capture`: the steps to profile, by run and tick (the tick the step makes). */
 const captures = new Set(value("--capture")?.split(",") ?? []);
@@ -204,6 +207,10 @@ await loadCampaign();
 const t0 = performance.now();
 const runs: { run: string; ticks: number; outcome: string }[] = [];
 const saves = value("--save");
+/** `--alloc`: the heap profiler's session over the held steps, and the steps it saw. */
+const alloc = args.includes("--alloc") ? new inspector.Session() : null;
+let allocSteps = 0;
+if (alloc) { alloc.connect(); await alloc.post("HeapProfiler.enable"); }
 if (saves) {
   const world = gameWorld(), minutes = Number(value("--minutes") ?? 10);
   for (const kind of saves.split(",")) {
@@ -211,6 +218,9 @@ if (saves) {
     console.log(picked.describe);
     const s = loadSnapshot(picked.text), guard = new StepGuard(), app = new AppWork(kind, s);
     const start = s.tick;
+    // Warm (60 steps), so first-use compilation isn't counted as allocation.
+    if (alloc) for (let t = 0; t < 60; t++) guard.step(s, [{ type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], world);
+    if (alloc) await alloc.post("HeapProfiler.startSampling", { samplingInterval: 4096, includeObjectsCollectedByMajorGC: true, includeObjectsCollectedByMinorGC: true });
     for (let t = 0; t < minutes * 3600; t++) {
       // Held travel: ahead, a slow turn, a gentle dive and rise (scripts/sim-bench.mjs).
       const controls: GameCommand[] = [{ type: "look", yawDelta: 0.004, pitchDelta: t % 240 < 120 ? 0.002 : -0.002 },
@@ -227,6 +237,7 @@ if (saves) {
       await captureAfter(controls);
     }
     runs.push({ run: kind, ticks: s.tick - start, outcome: "held" });
+    if (alloc) { allocSteps += minutes * 3600; allocProfiles.push((await alloc.post("HeapProfiler.stopSampling")).profile); }
   }
 } else {
   const ids = value("--scenario")?.split(",") ?? SCENARIOS.map((s) => s.id);
@@ -307,6 +318,19 @@ for (const w of snapshot.worst.slice(0, 16)) {
     `[${top}]${(w as { gc?: number }).gc ? ` gc ${(w as { gc?: number }).gc} ms` : ""}${ctx?.caveBuilds ? ` cave builds ${ctx.caveBuilds}` : ""}` +
     (ctx?.replay?.length ? ` replay ${ctx.replay.join("/")} ms` : "") +
     (ctx?.host ? ` host: steal ${JSON.stringify(ctx.host.steal)} on cpu ${ctx.host.cpu}, canary ${JSON.stringify(ctx.host.canary)}` : ""));
+}
+if (alloc) {
+  // Self bytes by function over every kind's held steps (each run's app work included).
+  type Node = { callFrame: { functionName: string; url: string; lineNumber: number }; selfSize: number; children: Node[] };
+  const self = new Map<string, number>(); let total = 0;
+  const walk = (n: Node): void => {
+    const f = n.callFrame, name = `${f.functionName || "(anon)"} ${path.basename(f.url)}:${f.lineNumber + 1}`;
+    total += n.selfSize; if (n.selfSize) self.set(name, (self.get(name) ?? 0) + n.selfSize);
+    for (const c of n.children) walk(c);
+  };
+  for (const p of allocProfiles) walk((p as unknown as { head: Node }).head);
+  console.log(`allocation: ${(total / allocSteps / 1024).toFixed(1)} KiB per step over ${allocSteps} held steps; by function:`);
+  for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(`  ${(v / allocSteps / 1024).toFixed(2).padStart(6)} KiB  ${k}`);
 }
 const json = value("--json");
 if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, timelineSize, snapshot, slow, gcs }, null, 1) + "\n");
