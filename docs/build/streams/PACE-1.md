@@ -6,7 +6,7 @@ This revision answers:
 - Sol's R1 (`review/pace-1-r1`, `0891ed9e`);
 - the owner's answers on the 90 s rule and carrier hold-course;
 - the owner's amendment that late-game needs are inferred from evidence;
-- the coordinator's rulings.
+- the coordinator's rulings, including the lore-owner rulings of 2026-10-24 on the F4 evidence, the pod record's lead, and the canon fit of F2 and F3.
 
 The dispositions are in *Review responses* at the end.
 
@@ -42,7 +42,9 @@ The dispositions are in *Review responses* at the end.
    - **Where the evidence sits:** each has physical evidence where it's found, before you leave.
    - **Fair in hindsight:** a player who misses a clue pays at most one measured return, never a dead end.
 5. **The carrier is a base, not a ferry.** WORLD-LAYOUT's research: relocate it for a group of sorties, don't shuttle home after each pickup. The bot shuttles nine times.
-6. **One purposeful return, never a forced one.** The pod record (C14) stays at the pod, and the ending never needs it. Where its lead sits is the coordinator's call as lore owner.
+6. **One purposeful return, never a forced one.** The pod record (C14) stays at the pod, and the ending never needs it.
+   - **The lead moves** (lore owner, 2026-10-24): it now points home only after the district's records, so going back to the pod is an optional beat before the ending (F10).
+   - **The plan moves with it.** Otherwise the recipe list itself would point home early.
 7. **Count what the player does.** Staging power and air, opening the gate, restoring the hall and the food bay, routing power and the ending are story beats. Today the recorder sees none of them.
 8. **No padding and no timer changes.** The 90 s equalize, craft speeds and recipe quantities all stay.
    - **The bot's total time falls** by roughly 70 (Creel) and 170 (carrier) bot-minutes of hauling and crossing.
@@ -102,7 +104,7 @@ How much a skilled player pays for that depends on their choices. These scenario
 | **B: crown return** (`crownBenchRecipe`; the carrier already restores it; R8 for the Creel) | <ul><li>Fabrication at the crown</li><li>Alloy and crust near it, glass 685 m off, membrane about 400 m off</li></ul> | none: the district↔crown legs (about 1.5–1.8 km each way) aren't in the run | **~25–30 min** |
 | **C: advance preparation** | The power plan is known at C07, so its 6 CU of stock can travel. The air, hall and food plans can't be known before the district, so their 30+ CU can't be prepared without a speculative surplus | – | Takes about 5 min off A or B |
 
-**Stage 1 measures B** (R8, and the carrier route's crown) and reports the real figure. Until then the best-play minimum stays unverified.
+**Stage 1 measures both A and B:** A on the Creel route's forced return to the workshop, B on the carrier route's forced return to the crown. It reports the real figures. Until then the best-play minimum stays unverified.
 
 All three scenarios are a haul-and-gather loop with two crafts in it. That's GAME-DIRECTION's "a chore just to fill time", and it breaks the owner's rule that purposeful backtracking is never empty-travel padding. OP-1's move of the workshop to the island cove adds about 200 m to scenario A.
 
@@ -179,12 +181,33 @@ All three scenarios are a haul-and-gather loop with two crafts in it. That's GAM
 | **F1 Works bench at the staging office** | The two assemblies are made in the district, at the office where the works were first staged. The bench pays from the diver hold and a craft moored at the office (no new locker). | <ul><li>`content/stops.ts`: `meridian_office.fabrication`</li><li>The office in the typed campaign fabrication-site authority (`FabricationSite` / `CampaignSiteId`)</li><li>`sim/progression.ts`: `REFIT_STOP_SITES` folded into one stop-recipe table with the assemblies at the office; payment through the existing `fabricationContainers` and SYS-1's `planSpend` / `applySpend`</li><li>`sim/story/reachability.ts`</li><li>The text in `content/proposals/progression.ts`</li></ul> | PACE-1 stage 2 | Removes the forced loop on the independent route (G1: −25 to −40 min). Creel's longest goes from 850 to about 610 s. | `sim/campaignEconomy.ts`'s works acts and failure cargo model the office bench. No cost change. |
 | **F2 District habitat sources** | Short sorties from the office, each found by a rule you learned at home:<ul><li>membrane from the filter colonies at the district's intakes (it regrows);</li><li>glass where the turbine outflow scours;</li><li>crust on the supply pylon's grounding fins clear of silt.</li></ul> | <ul><li>S2 rows in `content/regions/sites.ts`, lifted in `content/campaign/sources.ts`</li><li>One membrane renewal row, composed into `SOURCE_RENEWAL` by the fauna rows' one-line spread (coordinator)</li><li>Existing source assets (`render/expedition.ts`, no edit)</li></ul> | PACE-1 stage 2 | Gathering is local, within the research's 2.4–3.8 min sortie budget from the shelf. Finds break empty travel; they aren't counted as new. | The finale's need (glass about 10, membrane about 11, crust about 7) plus about half again. Glass and crust are finite with a reserve; nothing is cave-only. |
 | **F3 Hall and food from frontier materials** | The hall frame and the food bay use the district's own ceramic (the terrace cut, 290 m from the office) instead of Canopy resin. | `STORY_RECIPES` in `content/story/evidence.ts`: resin 2 becomes ceramic 2 in each | PACE-1 stage 2 (lore note) | Nothing to bring from home | <ul><li>Ceramic +4 against about 72 in the world (late demand is 30 or less); resin −4</li><li>Stock volume rises from 22 + 8 to **24 + 10 CU** (ceramic is 2 CU)</li><li>34 CU exceeds the Mantle's 32, so the two restorations take separate loads, as the moored-payment test does</li></ul> |
-| **F4 Evidence for what comes from behind** | <ul><li>**Lattice:** the works' sealed air hardware is on show at the Divide's upper service dock (where both routes read C07): a staging air housing with lilac lattice seal rings and two empty seal seats, under a weathered works tag. A cryptic tag or an optional decoded log can add to it; there is no shopping list.</li><li>**Core:** the Rift materials station's core cradles, two tagged for the works' staging power, stand empty.</li><li>Each is found before you leave its region.</li></ul> | <ul><li>Two scannable fixtures in the story host table (`content/story/placements.ts`), drawn through the existing placed-host renderer</li><li>A box-shaped housing and a rack collide exactly (no COL-1 debt)</li><li>Scan lines in the story content</li><li>The optional decoded line through LS-1's notes table, by agreement</li><li>Detail in the spoiler notes</li></ul> | PACE-1 stage 2 (the coordinator checks story fit) | **With the clue:** one district visit. **Missed:** one measured return, about 190 m to the Divide's east flank for lattice; a Divide-to-Rift side trip of about 800–900 m for core, made after C07 reveals the plan. | None (fixtures, not stock) |
+| **F4 Evidence for what comes from behind** | <ul><li>**Lattice:** the works' sealed air hardware is on show at the Divide's upper service dock (where both routes read C07): a staging air housing with lilac lattice seal rings and two empty seal seats, under a weathered works tag. A cryptic tag or an optional decoded log can add to it; there is no shopping list.</li><li>**Core:** the Rift materials station's core cradles, two tagged for the works' staging power, stand empty.</li><li>Each is found before you leave its region.</li></ul> | <ul><li>Two scannable fixtures in the story host table (`content/story/placements.ts`), drawn through the existing placed-host renderer</li><li>A box-shaped housing and a rack collide exactly (no COL-1 debt)</li><li>Scan lines in the story content</li><li>The optional decoded line: written and placed by LS-1 in its notes table. PACE-1 sends LS-1 the line and its constraints when stage 2 starts. It is dropped if LS-1's notes have no room; the physical evidence is enough.</li><li>Detail in the spoiler notes</li></ul> | PACE-1 stage 2. Story fit approved by the lore owner (2026-10-24); the stencil and tags pass LS-1's player-text lint. | **With the clue:** one district visit. **Missed:** one measured return, about 190 m to the Divide's east flank for lattice; a Divide-to-Rift side trip of about 800–900 m for core, made after C07 reveals the plan. | None (fixtures, not stock) |
 | **F5 Count the works beats (M2)** | None: it's measurement. | `sim/timeline/recorder.ts` diffs `story.works` and `story.resolution`, emitting `new` events with `what: "story"` (the fixtures are in section 5) | **REC-2** (coordinator, 2026-10-24). PACE-1 supplies the fixtures. | G1 and G2 lose 4–8 min; the trailing gap goes to 0. Reported apart from routing savings. | None |
 | **F6 Landmark passes (M1)** | None: it's measurement. | REC-2's lift of POI-1's noticeable marks into one content module, plus a "point of interest passed" event | REC-2 (routed) | Most late long stretches split | None |
 | **F7 Marks where a leg is genuinely dull** | Something worth seeing where a long leg is actually boring | POI-1's kit (`content/poi/sets.ts`, `content/poi/legs.ts`, `render/poi/dressing.ts`, `tests/poi.test.ts`) | PACE-1 stage 3, by judgement | No target number | None |
 | **F8 (optional) the outflow current** | The glass source sits in a turbine outflow you cross by reading the glimmers leaning into moving water | One authored flow volume, only if CY's volumes are composed on root at stage 2 | PACE-1 stage 2 | None | None |
 | **F9 Carrier fabrication** (coordinator, 2026-10-24) | Aboard the Hearthline, a powered fabricator module in a fabrication-bench socket runs S9's carrier list: the two assemblies, glow lures and startle ink. It pays from the diver hold and the carrier stores. | <ul><li>`sim/progression.ts`: the carrier joins the recipe-site table, valid aboard with a powered fabricator socketed</li><li>`sim/inventory.ts`: `fabricationContainers` for the carrier site</li><li>`sim/carrierStations.ts`: the bench interaction</li><li>`content/campaign/fleet.ts`: the services text reads from the one table, not a second list</li><li>`STORY_RECIPES.site` becomes true</li></ul> | PACE-1 stage 2 | Removes the forced loop on the carrier route (G2 and G5: −25 to −30 min). The carrier stays at the shelf. | Same costs; the ledger's carrier strategy fabricates aboard |
+
+**F10, the pod record's lead and plan move to the district** (lore owner, 2026-10-24). This row has the same parts as the table above.
+
+- **Player outcome:** after the district's records, the controller's record points you home. The cradle you saw at the Divide made sense in hindsight; now you fit its spare buffer at the pod and play C14, then go back down for the ending. The return is optional and roughly 27 min.
+- **Systems and files:**
+  - `content/story/leads.ts`: L14's `offeredBy` changes from C07 to `district_controller`.
+  - `content/story/evidence.ts`: `STORY_GRANTS` moves `bp_pod_buffer` from C07 to `district_controller`.
+  - `sim/story/reachability.ts` and `sim/campaignEconomy.ts`: the ledger's `STORY_TAIL` puts the pod buffer after the works.
+  - Neither story file overlaps LS-1's declared 1a or 1b files: LS-1 1a's diff touched no `content/story` or `sim/story` file. If that changes, it goes through the coordinator.
+- **Owner:** PACE-1 stage 2.
+- **Saves:**
+  - **Hints:** `story.hints` keyed `L14` stays valid. Validation checks only that the lead exists, not that it's open, and open leads are derived, never saved.
+  - **The plan:** strict validation derives the plan set from discoveries. A save that read C07 and holds `bp_pod_buffer` (or has fitted the buffer and read C14) before reading the controller would hold a plan the new rules don't derive.
+  - **The fix:** LS-1's narrow mechanism. One `LEGACY_GRANTS` row `{ blueprint: "bp_pod_buffer", record: "C07" }`, written by the next bridge only when the save holds the plan and C07 without `district_controller`. The coordinator composes it with that schema step.
+  - **Tests:** the earned-plan cases LS-1 used for the planter plan:
+    - a converted save with the buffer fitted and C14 read validates;
+    - one with the plan but no buffer can still fit it;
+    - a fresh game reading C07 gains neither the lead nor the plan;
+    - a legacy row whose record wasn't read is refused.
+- **Pacing effect:** the return is optional, with beats at both ends (the controller's record and C14, then the ending). The bot measures it.
+- **Economy effect:** order only.
 
 **F1 and F9 split the routes:**
 - the office bench serves the independent route;
@@ -215,17 +238,18 @@ Neither makes the other redundant: removing the office strands the independent r
 | R5 | **Interleave:** stage power and air, isolate, start equalizing → hall and food bay → open, route power → the ending. | the idle at the panel and the extra descent |
 | R6 | **Sort before travelling** when exposed stock is short and the source has a reserve. | the seam trip |
 | R7 | **Charge at the stop you're at.** | the 75–139 s shelf detours |
-| R8 | **Restore hubs you pass,** where the ledger allows. Here: the crown's first two stages on the Creel route's way to the Rift. It measures scenario B. | the Creel route skipping the crown |
+| R8 | **Restore hubs you pass,** where the ledger allows. Here: the crown's first two stages on the Creel route's way to the Rift. This is for realism; scenario B is measured on the carrier route's forced return. | the Creel route skipping the crown |
 | R9 | **Log every return with its reason,** derived from the game's own authority:<ul><li>`recipeSites` / `craftingBlock` for where a recipe can run;</li><li>`fabricationContainers` / `planSpend` and the source table for accessible stock.</li></ul>For example: `service_air_assembly: brine_lattice 0/2 accessible; nearest stock divide_lattice_flank_north`. There is no hand-written explanation table. | nothing |
 
 **The late sequence:**
 - **Stage 1** (today's game):
-  - **Creel:** the Rift (the crown, R8) → the Divide (lattice, C07, the dock, C12, the 800 m refits) → the district records → back, forced. It returns to the crown or the workshop for the assemblies and stock (lattice on the way, from the flank) and the pod record → then the district works and ending.
-  - **Carrier:** the Rift and the crown → the Hearthline → the Divide (lattice, C07) → the yard (refit, Mantle, 800 m suit, pod record, C11, batched stock) → the Divide (C12) → the shelf and the records → the crown, forced (the assemblies and hall stock) → the shelf → the works and ending.
-- **After stage 2:**
-  - **Creel:** the Divide → home (the pod record, C11, resupply) → the district (records, office, works, ending), with no return.
-  - **Carrier:** the yard visit → the Divide → the shelf, parked to the end, fabricating aboard.
-  - **Both:** the coordinator may move the pod record's lead. If it moves, the stage 2 bot reads the record between the works and the ending, as one optional return of about 27 min.
+  - **Creel:** the Rift (the crown, R8) → the Divide (lattice, C07, the dock, C12, the 800 m refits) → the district records → the workshop, forced. That return measures scenario A: the assemblies and stock (lattice from the flank on the way), plus the pod record and C11. Then the district works and ending.
+  - **Carrier:** the Rift and the crown → the Hearthline → the Divide (lattice, C07) → the yard (refit, Mantle, 800 m suit, the pod record, C11, batched stock) → the Divide (C12) → the shelf and the records → the crown, forced. That return measures scenario B: the assemblies and hall stock. Then the shelf, the works and the ending.
+  - **The pod record's lead is still at C07 in stage 1,** since no content changes there. The carrier bot therefore reads it on its yard visit, as a player following today's lead would.
+- **After stage 2** (F10's lead and plan at the controller):
+  - **Creel:** the Divide → the district (records, office, works) → home, optionally (the pod record, C11, resupply) → the district for the ending.
+  - **Carrier:** the yard visit (C11) → the Divide → the shelf, parked to the end, fabricating aboard. For the pod record, the Mantle goes home from the shelf (R4 keeps the carrier parked) and back for the ending.
+  - **The return:** the pod-record return is the only one on either route. It's about 27 min, with the controller's record before it and C14 and the ending after.
 - **Phase IDs are kept** (the library's milestones).
 
 **Files:**
@@ -241,7 +265,7 @@ Neither makes the other redundant: removing the office strands the independent r
 | Stage | Outcome | Files owned | Needs | Tests and evidence | Adverse case |
 | --- | --- | --- | --- | --- | --- |
 | **1: the bot plays like a sensible player** | <ul><li>R1–R9 on both routes</li><li>The ending lands in the same visit as the works</li><li>Every remaining return is logged with its reason</li><li>Scenario B is measured</li></ul> | `later.ts`, new `stock.ts`, the late rows of `pacing-debt.ts`; the branch moves through `scenarios.ts`'s owner | LS-1 1a merged (measured against that merged baseline, not the old ceilings) | <ul><li>Fast tier</li><li>Stock-plan and clue-table unit tests</li><li>A leg-log check that no later phase opens with a meal-only trip home</li><li>Queued playthrough `--machine any`: 9/9 with reloads matching, the acceptance figures, the R9 log, both branches proved</li><li>Save-library re-export</li><li>No images</li></ul> | A run whose lip reserve is already spent: R6 falls through to the seam, and R9 names the reason. |
-| **2: stage the works where the works are** | <ul><li>F1–F4 and F9 (F8 if CY allows)</li><li>Both routes finish the district with no forced return when the clues were read</li></ul> | <ul><li>`content/stops.ts`, the fabrication-site types</li><li>`sim/progression.ts`, `sim/inventory.ts`, `sim/carrierStations.ts`</li><li>`content/campaign/fleet.ts`</li><li>`content/story/evidence.ts` (two recipe rows)</li><li>`content/story/placements.ts` and the story content (two clue fixtures)</li><li>Rows in `content/regions/sites.ts` and `content/campaign/sources.ts`</li><li>The renewal row (coordinator)</li><li>`sim/campaignEconomy.ts` (works model, carrier fabrication, and the crown stages as a credible optional spend on both routes)</li><li>`sim/story/reachability.ts`</li><li>`render/fieldKit.ts` (an office host offset, if needed)</li><li>`later.ts`, `stock.ts`</li></ul> | Stage 1. No CW-1 file. | <ul><li>`npm run gate` with all six economy scripts</li><li>Tests:<ul><li>the assemblies are made at the office, and aboard with a powered module, and are refused elsewhere, without the module, or without power;</li><li>the new datums sit on the floor;</li><li>the clue fixtures are placed and scannable before you leave their region;</li><li>the hall and food bay are paid from a Mantle moored at the bay in separate loads;</li><li>the ledger with ceramic</li></ul></li><li>2–4 images: a habitat, the office bench, the Divide housing</li><li>One 4070 district check</li></ul> | <ul><li>**A1, clue read:** from `creel@divide` and the carrier's Divide milestone, stock is trimmed to exactly what known recipes and seen clues justify (no inherited surplus, no optional rewards). One district visit to the ending, and R9 logs zero returns.</li><li>**A2, lattice clue missed:** as A1 without visiting the housing. Exactly one return, logged and measured (time and distance; expected about 190 m to the east flank, route confirmed here).</li><li>**A3, core clue missed:** exactly one Divide-to-Rift side trip after C07, measured.</li><li>The office bench without the air plan refuses, naming it, with nothing consumed.</li></ul> |
+| **2: stage the works where the works are** | <ul><li>F1–F4 and F9 (F8 if CY allows)</li><li>Both routes finish the district with no forced return when the clues were read</li></ul> | <ul><li>`content/stops.ts`, the fabrication-site types</li><li>`sim/progression.ts`, `sim/inventory.ts`, `sim/carrierStations.ts`</li><li>`content/campaign/fleet.ts`</li><li>`content/story/evidence.ts` (two recipe rows, the pod-buffer grant)</li><li>`content/story/leads.ts` (L14)</li><li>`content/story/placements.ts` and the story content (two clue fixtures)</li><li>Rows in `content/regions/sites.ts` and `content/campaign/sources.ts`</li><li>The renewal row (coordinator)</li><li>`sim/campaignEconomy.ts` (works model, carrier fabrication, and the crown stages as a credible optional spend on both routes)</li><li>`sim/story/reachability.ts`</li><li>`render/fieldKit.ts` (an office host offset, if needed)</li><li>`later.ts`, `stock.ts`</li></ul> | Stage 1. No CW-1 file. | <ul><li>`npm run gate` with all six economy scripts</li><li>Tests:<ul><li>the assemblies are made at the office, and aboard with a powered module, and are refused elsewhere, without the module, or without power;</li><li>the new datums sit on the floor;</li><li>the clue fixtures are placed and scannable before you leave their region;</li><li>the hall and food bay are paid from a Mantle moored at the bay in separate loads;</li><li>the ledger with ceramic;</li><li>F10's earned-plan cases, and C07 alone offering neither the lead nor the plan</li></ul></li><li>2–4 images: a habitat, the office bench, the Divide housing</li><li>One 4070 district check</li></ul> | <ul><li>**A1, clue read:** from `creel@divide` and the carrier's Divide milestone, stock is trimmed to exactly what known recipes and seen clues justify (no inherited surplus, no optional rewards). One district visit to the ending, and R9 logs zero returns.</li><li>**A2, lattice clue missed:** as A1 without visiting the housing. Exactly one return, logged and measured (time and distance; expected about 190 m to the east flank, route confirmed here).</li><li>**A3, core clue missed:** exactly one Divide-to-Rift side trip after C07, measured.</li><li>The office bench without the air plan refuses, naming it, with nothing consumed.</li></ul> |
 | **3: judged legs** | <ul><li>F7 by judgement: every late leg still reported long after F6 is looked at, at its craft's real speed (Dart 8, Creel 5, Mantle 4, carrier 3 m/s)</li><li>A mark goes in only where the leg is genuinely dull, and each decision (mark or none) is recorded with its reason</li><li>The stage may add nothing</li></ul> | `content/poi/sets.ts`, `content/poi/legs.ts`, `render/poi/dressing.ts`, `tests/poi.test.ts` | REC-2's F6 | <ul><li>The judgement table</li><li>For any mark: REC-1 fixed views tagged `poi`, 2–4 images, a 3090 `--class exclusive` frame check at the mark and a 4070 check</li></ul> | A Dart at full speed past a new mark shows no streaming hitch over 33 ms. |
 
 **F5's fixtures for REC-2** (through the real commands and the real analyzer):
@@ -272,7 +296,7 @@ An entry is deleted when all four routes pass the hard gates.
 - **LS-1:**
   - stage 1b's planter move in `live.ts` doesn't reach `later.ts`;
   - its allotments feed the finale, and the new sources keep at least 40 m clear of them;
-  - the optional decoded line for F4 goes through its notes table by agreement.
+  - the optional decoded line for F4 is LS-1's to write and place; PACE-1 sends the line and its constraints at the start of stage 2, and it is dropped if the notes have no room.
 - **REC-2:** F5 (with the fixtures above), F6, M3, and the acceptance's report-not-fail change.
 - **OP-1:** the workshop relocation stays in the stage 1 and 2 measurements.
 - **SAVE-1 library:** late milestones change at stages 1 and 2. Consumers re-derive after `saves-export.sh`.
@@ -280,6 +304,7 @@ An entry is deleted when all four routes pass the hard gates.
   - New sources are additive rows (S7).
   - The office bench and carrier fabrication add no container.
   - The clue fixtures are scan records derived from saved scans.
+  - F10 needs one `LEGACY_GRANTS` row (`bp_pod_buffer` from C07), written by the next bridge. The coordinator composes it with that schema step.
 
 ## 6. Owner answers (2026-10-24) and follow-ups
 
@@ -290,7 +315,7 @@ An entry is deleted when all four routes pass the hard gates.
 **Follow-ups:**
 - **Hold-course stream:** a small stream of its own after stage 2.
 - **Late-game needs are inferred from evidence** (owner, 2026-10-24): this is F4.
-- **The pod record's lead:** the coordinator decides, as lore owner. The stage 2 bot follows that decision.
+- **The pod record's lead:** decided by the lore owner (2026-10-24). It moves to `district_controller`, with the plan (F10).
 
 No owner questions are open.
 
@@ -312,5 +337,6 @@ No owner questions are open.
 | **F3 [P3]** baseline summaries | **Fixed.** All four routes are shown: no-optional carrier 87.4 against 94.5, and its controller-to-power gap 24.1 against 26.5. The nine crossings take about 101.5 of 109.6 Hearthline minutes, the rest being 8.1 min of local Divide movement. | §1.1; §1.2; ratchet |
 | Notes: ceramic CU, typed fabrication site, R9 from authority, branch proof, OP-1 in measurements, isolate and equalize not beats, the merged baseline | **Adopted.** | F1, F3, R9, §4 files, stages, F5 fixtures |
 | Coordinator: carrier fabrication | **In stage 2 (F9),** with the office bench kept. Each serves one route. | F9 |
-| Coordinator: crown ledger; `scenarios.ts` after the LS-1 merge; F5 to REC-2; pod lead; shorter path | **Adopted.** | Stage 2; §4 files; F5; §6; known limits |
+| Coordinator: crown ledger; `scenarios.ts` after the LS-1 merge; F5 to REC-2; shorter path | **Adopted.** | Stage 2; §4 files; F5; known limits |
+| Lore owner (2026-10-24): the F4 evidence approved (expedition hardware, not left for the player); the stencil cryptic and linted; the optional line by LS-1 or dropped; L14 to `district_controller`; F2 and F3 canon fit approved | **Adopted.** The stencil, the cradle tag and the optional line pass LS-1's lint list, on whole words and substrings. The pod-buffer plan moves with the lead, with a narrow legacy row for saves that already earned it at C07. Open leads and hint keys are derived or ID-checked, so they need no rule. | F4; F10; §4 sequence; stage 2; spoiler notes |
 | Owner: the 90 s guide, the predator cue, hold-course | **Adopted.** Empty stretches are reported, not gated; stage 3 is judgement only; hold-course is a follow-up stream. | Ratchet; stage 3; §6 |

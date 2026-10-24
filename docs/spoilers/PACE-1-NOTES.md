@@ -25,17 +25,21 @@
 
 **Its role:** C14 resolves elapsed time and the memory loss, and "coordinates final preparations". Its critical fact, F18, is also supported by `district_controller` ("Day 2,678", "repair specialist dispatched", "regulator fault logged on ascent"). So C14 is a corroborating source, and the ending loses no critical fact without it.
 
-**When it can be read:**
-- **Already possible early:** its lead, L14, is offered at C07, so reading C14 before the district is possible today.
-- **What early reading costs:** C14's line "one repair specialist cleared to wake" pre-empts part of C13's reveal when read before C10 and C13.
-- **The canon accepts out-of-order reading:** "present a recovered record immediately even out of order"; "a player who guesses early should feel perceptive".
+**The problem today:** L14 is offered at C07, so C14 can be read before the district. Its line "one repair specialist cleared to wake" then pre-empts part of C13's reveal.
 
-**What the plan's bot does** (the bot route is a sensible player, not a prescription):
-- **Stage 1, Creel:** C14 on the forced return after the district records, so after C13.
-- **Carrier, both stages:** C14 on the yard visit after the Divide, so before the district.
-- **Stage 2, Creel:** C14 on the chosen home visit between the Divide and the district, so before the district.
+**Decision** (lore owner, 2026-10-24): **L14 moves from C07 to `district_controller`.** The canon's "feel perceptive" is meant for players who guess early, not for a corroborating record handed over early. Returning to the pod after the reveal is also a strong optional beat before the ending.
 
-**Decision:** the coordinator, as lore owner, decides after the review whether L14 stays at C07 or moves to a district record (C13 or `district_controller`) so the lead points home after the reveal. Pacing works either way. If it moves, the stage 2 bot reads C14 between the works and the ending, as one optional return of about 27 min with beats at both ends.
+**How PACE-1 stage 2 implements it (F10):**
+- **The lead:** L14's `offeredBy` becomes `district_controller`.
+- **The plan:** `bp_pod_buffer` moves from C07's grants to `district_controller`'s. Left at C07, the recipe list would still point home early.
+- **The lead's text still reads right:** "The cradle at the Divide was made for this pod. Its spare buffer should fit." The player saw the cradle at C07, so it's legible in hindsight.
+- **Saves:** hint keys and open leads need no rule. The plan needs one narrow `LEGACY_GRANTS` row (`bp_pod_buffer` from C07) for saves that earned it before the move. It uses the same mechanism and rules as LS-1's planter-plan row. The coordinator composes it with the next schema step.
+
+**The bot's read order:**
+- **Stage 1** (no content change yet, so the lead is still at C07):
+  - Creel: C14 on the forced return after the district records, so after C13.
+  - Carrier: C14 on the yard visit, so before the district, as today's lead allows.
+- **Stage 2, both routes:** C14 on the optional return between the works and the ending, so after C13 and the controller. The Creel goes home; the carrier sends the Mantle.
 
 ## F4: evidence for core and lattice (revision 1)
 
@@ -51,7 +55,10 @@ This follows the owner's rule that late-game needs are inferred from evidence, n
 - **Optional rare line.**
   - **What it is:** a decoded line, for example in LS-1's mixing-line crew notes ("the air couplings sit dry; the brine ate the old seals; we wait on lilac"). Only by agreement with LS-1 and the lore owner.
   - **What it can't do:** explain the gate's history.
-- **Story fit check:** the coordinator, as lore owner, checks it before stage 2 builds the fixtures.
+- **Story fit:** approved by the lore owner (2026-10-24). The housing is the expedition's own service hardware, not left for the player. The stencil stays cryptic. The optional line is LS-1's to write and place; it covers ecology and machinery only, never the gate's history, and is dropped if LS-1's notes have no room.
+- **Lint:** the stencil ("AIR STAGING · RESEAL BEFORE DESCENT"), the cradle tag ("works staging power") and the proposed optional line all pass `LS-1-LORE.md`'s lint list, checked case-insensitive on whole words and on substrings. Stage 2's player-text test reads the same list.
+
+F2's habitat sources and F3's ceramic liners: canon fit approved by the lore owner (2026-10-24).
 
 ## F3: the hall and food bay recipes
 
