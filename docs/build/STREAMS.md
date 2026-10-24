@@ -1115,3 +1115,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **New baseline:** Creel 50.6 min; carrier 94.2 min plus 50.8, 29.8 and 26.5 min gaps; 31 and 55 empty legs reported.
   - **Checks:** fast 168, heavy, economy, build, playthrough 9/9.
   - **Review:** short Sol R2 running (`siltwake-ls1-1a-review-r2-sol-dd02c0e`).
+- **STEW-2 R2** (Sol on `2136b023`, report on `review/stew-2-r2` `6190b8f0`): REQUEST CHANGES; 52/52 tests and 6/6 economy steps pass.
+  - **Findings:** P1 the SCHED-3 composition reintroduces npm (the wrapper is an opaque node step); P2 ticketless legacy admission trusts a `siltwake-heavy-*.scope` name pattern; P2 the gate batch ignores the guard's settings-based 3090 pinning.
+  - **Decisions:** F1 belongs to SCHED-3's composition alias (STEW-2 supplies explicit `--machine` and grammar-expressible `X:direct` bodies); legacy admission is tied to the exact granting scope, or refused; the gate uses `routeArgs`. STEW-2 still merges before SCHED-3.
