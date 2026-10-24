@@ -53,9 +53,9 @@ export const creelLoss: Phase = {
       interact(d, "rescue_staging");
       const id = creel().id;
       d.command({ type: "recover", vehicleId: id, method: "tow" });
-      d.waitFor("Bobbin at the collar", 240, (s) => s.recovery.operation?.phase === "ready");
+      d.waitFor("Bobbin at the collar", 240, (s) => s.recovery.operation?.phase === "ready", "recovery:bobbin");
       d.command({ type: "recover", vehicleId: id, method: "tow" });
-      d.waitFor("the tow to the bench", 300, (s) => !s.recovery.operation);
+      d.waitFor("the tow to the bench", 300, (s) => !s.recovery.operation, "recovery:tow");
       if (!d.state.feedback.startsWith("Creel moored")) throw new Blocked(`Tow ended: ${d.state.feedback}`, where(d.state));
     });
     d.run.checks.push({ name: "Bobbin tow home", ok: true, detail: `moored at the rescue bench, tick ${d.state.tick}` });

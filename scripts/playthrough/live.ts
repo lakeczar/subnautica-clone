@@ -411,7 +411,7 @@ function armLift(d: Driver, id: SourceId, times: number): number {
     const t = armTarget(d.state);
     if (!t || t.sourceId !== id || t.refusal) break;
     d.command({ type: "arm-lift" });
-    d.waitFor(`tool arms on ${id}`, 8, (s) => !s.world.action);
+    d.waitFor(`tool arms on ${id}`, 8, (s) => !s.world.action, "action:tool-arms");
     lifted++;
   }
   return lifted;

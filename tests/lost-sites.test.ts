@@ -13,11 +13,11 @@ import { CANOPY_CAVES } from "../src/content/regions/caves/canopy.js";
 import { BASIN_CAVES } from "../src/content/regions/caves/basin.js";
 import { DEEP_CAVE_SOURCES } from "../src/content/regions/caves/deep.js";
 import { SYS2_BLUEPRINTS } from "../src/content/systems/items.js";
-import { CODED_DOORS, DECODABLE_IDS, DECODABLES, DECODE_LOGS, LOST_SITES, placedReveals, revealPlaced, WORLD_LOST_SITES } from "../src/content/systems/decodes.js";
+import { CODED_DOORS, DECODABLE_IDS, DECODABLES, decodeLog, LOST_SITES, placedReveals, revealPlaced, WORLD_LOST_SITES } from "../src/content/systems/decodes.js";
 import { DEFERRED_LOST_SITES } from "../src/content/systems/lostSites.js";
 import type { RevealDefinition } from "../src/content/systems/lostSites.js";
 import { FOUND_NOTE_TEXTS } from "../src/content/systems/notes.js";
-import { doorCodes, discoverSite } from "../src/sim/systems/decoder.js";
+import { doorCodes, discoverSite, readableLog } from "../src/sim/systems/decoder.js";
 import { noteHostPosition, noteReadable, readableNotes } from "../src/sim/systems/notes.js";
 import { buildJournal } from "../src/sim/systems/journal.js";
 import { cellOf } from "../src/sim/systems/navigation.js";
@@ -108,20 +108,28 @@ test("found notes: every note resolves, is dated before the disaster, and reads 
   assert.deepEqual(notes.entries.map((e) => e.id).sort(), ["note:note_reef_season", "note:note_yard_galley"]);
 });
 
-test("door codes: each coded door's record is one placed decode's, and its code shows only once the door is placed", () => {
+test("door codes: each coded door's record is one placed decode's, its code line names the door, and nothing shows it until the door is placed", () => {
   for (const [id, door] of Object.entries(CODED_DOORS)) {
     const by = DECODABLE_IDS.filter((d) => (DECODABLES[d].gates as readonly string[]).includes(door.record));
     assert.equal(by.length, 1, `${id}: one decode holds its code`);
-    const dashed = door.code.split("").join("-");
-    assert.ok(DECODE_LOGS[by[0]!]!.some((l) => l.includes(dashed)), `${id}: the decoded log gives ${dashed}`);
+    const dashed = door.code.split("").join("-"), lines = decodeLog(by[0]!).filter((l) => l.text.includes(dashed));
+    assert.equal(lines.length, 1, `${id}: one decoded line gives ${dashed}`);
+    assert.equal(lines[0]!.door, id, `${id}: that line names its door, so placement withholds it`);
+    assert.ok(decodeLog(by[0]!).every((l) => l.door === id || !l.text.includes(dashed)));
   }
   const sys = createSystems();
   for (const d of ["isles_strain_gauge_log", "divide_mixing_log"] as const) { discoverSite(sys, DECODABLES[d].site); sys.decoded.push(d); }
   assert.deepEqual(doorCodes(sys), [], "neither door is in the world yet, so no code shows");
-  const placed = { "island.cold_store_hatch": { ...CODED_DOORS["island.cold_store_hatch"], placed: true } };
-  assert.deepEqual(doorCodes(sys, placed), [{ door: "island.cold_store_hatch", label: "Cold store hatch", code: "4417" }]);
-  const undecoded = createSystems();
-  assert.deepEqual(doorCodes(undecoded, placed), [], "no code before the decode");
+  assert.ok(!readableLog(sys, "isles_strain_gauge_log").some((l) => l.includes("4-4-1-7")), "nor does the log line");
+  const hatch = CODED_DOORS["island.cold_store_hatch"];
+  hatch.placed = true;
+  try {
+    assert.deepEqual(doorCodes(sys), [{ door: "island.cold_store_hatch", label: "Cold store hatch", code: "4417" }]);
+    assert.ok(readableLog(sys, "isles_strain_gauge_log").some((l) => l.includes("4-4-1-7")));
+    assert.ok(!readableLog(sys, "divide_mixing_log").some((l) => l.includes("2-0-9-3")), "the vault's line still waits for its door");
+    assert.deepEqual(doorCodes(createSystems()), [], "no code before the decode");
+    assert.deepEqual(readableLog(createSystems(), "isles_strain_gauge_log"), [], "no log before the decode");
+  } finally { hatch.placed = false; }
 });
 
 test("player text is clear of the lore owner's lint list", () => {
@@ -132,7 +140,7 @@ test("player text is clear of the lore owner's lint list", () => {
   assert.ok(words.length >= 10);
   const texts: [string, string][] = [
     ...WORLD_LOST_SITES.flatMap((id) => { const s = LOST_SITES[id]; return [s.label, s.see, s.plate, s.tell.kind === "sound" ? (s.tell as { sound?: string }).sound ?? "" : ""].map((t) => [id, t] as [string, string]); }),
-    ...DECODABLE_IDS.flatMap((d) => [DECODABLES[d].label, ...DECODE_LOGS[d]!, ...(DECODABLES[d].reveals as readonly RevealDefinition[]).map((r) => r.label)].map((t) => [d, t] as [string, string])),
+    ...DECODABLE_IDS.flatMap((d) => [DECODABLES[d].label, ...decodeLog(d).map((l) => l.text), ...(DECODABLES[d].reveals as readonly RevealDefinition[]).map((r) => r.label)].map((t) => [d, t] as [string, string])),
     ...Object.entries(CODED_DOORS).map(([id, door]) => [id, door.label] as [string, string]),
     ...Object.entries(DEFERRED_LOST_SITES).map(([id, row]) => [id, row.label] as [string, string]),
     ...FOUND_NOTE_TEXTS.flatMap((n) => [[n.id, n.label], [n.id, n.text]] as [string, string][]),

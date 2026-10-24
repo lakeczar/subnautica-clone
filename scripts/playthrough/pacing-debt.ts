@@ -1,34 +1,21 @@
-/** LS-1: recorded pacing debt. The first run of the pacing acceptance (LS-1 stage 1a,
- * root a38b951e plus LS-1) found the main path's late game already over the
- * GAME-DIRECTION limits on every judged route. That is campaign structure LS-1 did not
- * cause and cannot fix in its scope. This list holds today's measured figures per
- * route so the gate fails on anything new or worse, while the debt stays visible
- * with its root fix and owner. Decode waits have no allowance anywhere.
- *
- * The playthrough is deterministic: a figure moves only when content or the bot's
- * route changes. A worse figure fails; a better one is reported so this list is
- * tightened in the same merge. An entry is deleted when its root fix lands. */
-export interface PacingDebt {
-  /** Longest gap between counted new-content beats, play minutes (ceiling). */
-  gapMinutes: number;
-  /** Empty-travel stretches over the threshold (ceiling). */
-  emptyStretches: number;
-  /** Longest empty-travel stretch, seconds (ceiling). */
-  longestEmptySeconds: number;
-  /** Where it comes from, the root fix and its owner. */
-  why: string;
-}
+/** LS-1: recorded pacing debt, a ratchet both ways (coordinator ruling 2026-10-24).
+ * The first runs of the pacing acceptance found the main path's late game already over
+ * the GAME-DIRECTION limits on every judged route: campaign structure LS-1 did not cause.
+ * Each row is one identified violation, and its bounds are the measured values
+ * (largest first, compared one to one):
+ * - gaps between counted new-content beats, keyed `before → after`, in play minutes;
+ * - empty-travel legs over 90 s, keyed `hull in region`, in seconds.
+ * Anything new or worse fails; anything better also fails until the row is lowered
+ * (the failure prints the figures to write); a decode wait is never debt. A row is
+ * deleted when its root fix lands. Every row names its root-fix owner. */
+export interface DebtRow { readonly bounds: readonly number[]; readonly owner: string }
+export interface RouteDebt { readonly gaps: Readonly<Record<string, DebtRow>>; readonly legs: Readonly<Record<string, DebtRow>> }
 
-const LATE_GAME = "The works phase: after the service air assembly the bot hauls works materials between the district and the "
-  + "island workshop until the pod buffer, with nothing new on the way (51 min Creel, 87–95 min carrier; the carrier also has a "
-  + "51 min stretch from the Hearthline to the Divide). Root fix: the late-game logistics (a forward fabrication point or a "
-  + "shorter material path for the works) and the measure itself: the recorder does not yet count lit landmarks passed, so long "
-  + "deep legs read as empty where POI-1's measure finds them under 60 s. Owner: the coordinator assigns (late-game content; "
-  + "REC-2 for the measure).";
+/** Late-game logistics: the works phase's hauls and the carrier's Hearthline → Divide stretch. */
+export const PACE_1 = "PACE-1 (late-game logistics)";
+/** Long legs that read as empty partly because the recorder does not yet count lit
+ * landmarks passed (POI-1's measure); the remainder is logistics. */
+export const REC_2 = "REC-2 (landmark passes) with PACE-1 (logistics)";
 
-export const PACING_DEBT: Readonly<Record<string, PacingDebt>> = {
-  creel: { gapMinutes: 51, emptyStretches: 31, longestEmptySeconds: 850, why: LATE_GAME },
-  carrier: { gapMinutes: 95, emptyStretches: 55, longestEmptySeconds: 754, why: LATE_GAME },
-  "no-optional": { gapMinutes: 52, emptyStretches: 31, longestEmptySeconds: 850, why: LATE_GAME },
-  "no-optional-carrier": { gapMinutes: 88, emptyStretches: 55, longestEmptySeconds: 754, why: LATE_GAME },
+export const PACING_DEBT: Readonly<Record<string, RouteDebt>> = {
 };

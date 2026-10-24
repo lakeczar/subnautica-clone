@@ -98,12 +98,16 @@ const lost = (id: PlacedLostSiteId, label: string, category: RevealDefinition["c
 
 /** Coded doors: a decode makes the code readable; the keypad (stage 1b) opens the door.
  * Door IDs are stable facts: never renamed or deleted. `placed` is false until its
- * owner builds the door; an unplaced door shows no code. */
-export const CODED_DOORS = {
+ * owner builds the door; until then no code shows anywhere (the code-bearing log line
+ * names its door, and `readableLog` withholds it). */
+export type DoorId = "island.cold_store_hatch" | "basin.vault_door";
+export interface CodedDoor { label: string; code: string; record: string; owner: string; placed: boolean }
+export const CODED_DOORS: Record<DoorId, CodedDoor> = {
   "island.cold_store_hatch": { label: "Cold store hatch", code: "4417", record: "isles_gauge_logger", owner: "OP-1", placed: false },
   "basin.vault_door": { label: "Ridge vault door", code: "2093", record: "divide_mixing_logger", owner: "the Basin vault biome", placed: false },
-} as const satisfies Record<string, { label: string; code: string; record: string; owner: string; placed: boolean }>;
-export type DoorId = keyof typeof CODED_DOORS;
+};
+/** A decoded log line; one that carries a door's code names the door. */
+export type LogLine = string | { readonly text: string; readonly door: DoorId };
 
 export interface LostSiteDecodable {
   label: string;
@@ -115,7 +119,7 @@ export interface LostSiteDecodable {
   blueprints: readonly string[];
   reveals: readonly RevealDefinition[];
   story: false;
-  logs: readonly string[];
+  logs: readonly LogLine[];
 }
 
 export const CB_DECODABLES = {
@@ -143,7 +147,7 @@ export const CB_DECODABLES = {
       "Two years of strain readings, flat and then climbing.",
       "Recalibration notes that call the climb instrument drift.",
       "A last technician's entry asking for a slope review, with no reply attached.",
-      "A stores note: spare gauges and the slope sheets are in the west island station's cold store. Door code 4-4-1-7.",
+      { text: "A stores note: spare gauges and the slope sheets are in the west island station's cold store. Door code 4-4-1-7.", door: "island.cold_store_hatch" },
     ],
   },
   canopy_basket_log: {
@@ -196,7 +200,7 @@ export const CB_DECODABLES = {
       "Brine profiles along the mixing line, with dense-water spikes flagged in red.",
       "Maintenance tickets replacing the 'faulty' sensors that kept reporting them.",
       "A diver's aside: the sails moved lanes that month.",
-      "A return slip for the replaced sensors, sent to the ridge vault for calibration. Vault door code 2-0-9-3.",
+      { text: "A return slip for the replaced sensors, sent to the ridge vault for calibration. Vault door code 2-0-9-3.", door: "basin.vault_door" },
     ],
   },
   meridian_allotment_log: {

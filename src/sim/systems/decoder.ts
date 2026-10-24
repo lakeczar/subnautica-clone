@@ -1,7 +1,7 @@
 /** The decoder and lost-site framework. Sites are found by visiting them; their
  * data then decodes in the background on a powered decoder module. Without a
  * relay a decoder works only while the player is near its host. */
-import { CODED_DOORS, DECODABLE_IDS, DECODABLES, DECODE_MINUTES, DECODER_LOCAL_RANGE, placedReveals } from "../../content/systems/decodes.js";
+import { CODED_DOORS, DECODABLE_IDS, DECODABLES, decodeLog, DECODE_MINUTES, DECODER_LOCAL_RANGE, DOOR_IDS, doorPlaced, placedReveals } from "../../content/systems/decodes.js";
 import type { DecodableDefinition, DecodableId, LostSiteId, RevealDefinition } from "../../content/systems/decodes.js";
 import { LOST_SITES } from "../../content/systems/decodes.js";
 import { moduleOfItem } from "../../content/systems/hosts.js";
@@ -50,11 +50,17 @@ export function markedSites(sys: SystemsState): LostSiteId[] {
   });
   return [...new Set([...marked, ...knownSites(sys)])].filter((id) => !captured.has(id));
 }
-/** Codes the player can read, for placed coded doors only (LS-1; the keypad is stage 1b). */
-export function doorCodes(sys: SystemsState, doors: Readonly<Record<string, { label: string; code: string; record: string; placed: boolean }>> = CODED_DOORS):
-  { door: string; label: string; code: string }[] {
-  return Object.keys(doors).filter((d) => doors[d]!.placed && recordReadableAfterDecode(sys, doors[d]!.record))
-    .map((d) => ({ door: d, label: doors[d]!.label, code: doors[d]!.code }));
+/** The one authority for decoded text the player may read (LS-1): nothing before the
+ * decode; after it, every line except one carrying the code of a door not in the
+ * world yet. Site inspection, notices and the journal all read this. */
+export function readableLog(sys: SystemsState, id: DecodableId): string[] {
+  if (!sys.decoded.includes(id)) return [];
+  return decodeLog(id).filter((l) => l.door === null || doorPlaced(l.door)).map((l) => l.text);
+}
+/** Codes the player can read: placed coded doors whose record is decoded (the keypad is stage 1b). */
+export function doorCodes(sys: SystemsState): { door: string; label: string; code: string }[] {
+  return DOOR_IDS.filter((d) => doorPlaced(d) && recordReadableAfterDecode(sys, CODED_DOORS[d].record))
+    .map((d) => ({ door: d, label: CODED_DOORS[d].label, code: CODED_DOORS[d].code }));
 }
 /** A record a decode gates, and that decode is done (a record no decode gates is not a code). */
 const recordReadableAfterDecode = (sys: SystemsState, record: string): boolean =>

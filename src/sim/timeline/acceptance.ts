@@ -16,6 +16,8 @@ export interface PacingVerdict {
   longestGapMinutes: number;
   emptyStretches: number;
   decodeWaitSeconds: number;
+  /** Idle spans with a decode as their declared cause, however short (a one-tick wait counts). */
+  decodeWaitSpans: number;
 }
 /** A declared wait cause that is a decode (`decode` or `decode:<id>`). */
 export const isDecodeCause = (cause: string): boolean => cause === "decode" || cause.startsWith("decode:");
@@ -30,7 +32,8 @@ export function pacingAcceptance(a: TimelineAnalysis, thresholds: ReportThreshol
     failures.push(`${empty.length} empty-travel stretch${empty.length === 1 ? "" : "es"} over ${thresholds.emptyTravelSeconds} s (longest ${empty[0]!.seconds.toFixed(0)} s by ${empty[0]!.hull})`);
   const decodeWaits = Object.entries(a.idle.byCause).filter(([cause]) => isDecodeCause(cause));
   const decodeWaitSeconds = decodeWaits.reduce((n, [, c]) => n + c.seconds, 0);
+  const decodeWaitSpans = decodeWaits.reduce((n, [, c]) => n + c.count, 0);
   if (decodeWaits.length)
     failures.push(`idle waiting on a decode: ${decodeWaits.map(([cause, c]) => `${cause} ${c.count}× ${c.seconds.toFixed(0)} s`).join(", ")}`);
-  return { ok: failures.length === 0, failures, longestGapMinutes: gap.minutes, emptyStretches: empty.length, decodeWaitSeconds };
+  return { ok: failures.length === 0, failures, longestGapMinutes: gap.minutes, emptyStretches: empty.length, decodeWaitSeconds, decodeWaitSpans };
 }

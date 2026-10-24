@@ -9,7 +9,7 @@ import { SYS2_BLUEPRINTS } from "../../content/systems/items.js";
 import { storyNotebook } from "../storyLink.js";
 import type { NotebookView } from "../story/notebook.js";
 import type { GameState } from "../types.js";
-import { decodeViews, doorCodes, markedSites } from "./decoder.js";
+import { decodeViews, doorCodes, markedSites, readableLog } from "./decoder.js";
 import { readableNotes } from "./notes.js";
 import type { DecoderContext, DecodeStatus } from "./decoder.js";
 import { cropViews } from "./cultivation.js";
@@ -26,6 +26,8 @@ export interface JournalEntry {
   /** Filter chips: regions, roles, statuses. */
   tags: string[];
   status?: "known" | "unknown" | "active" | "locked" | "done";
+  /** Decoded record text, as the player may read it (`readableLog`). */
+  logs?: string[];
 }
 export interface JournalSection { id: string; title: string; entries: JournalEntry[] }
 export interface JournalTab { id: JournalTabId; label: string; count: number; sections: JournalSection[]; empty: string }
@@ -179,7 +181,7 @@ function decodesTab(s: GameState, sys: SystemsState, ctx: DecoderContext): Journ
       id: `decoded:${d}`, title: def.label, subtitle: "Decoded",
       lines: [...placedReveals(d).map((r) => `Revealed ${r.label}`), ...def.blueprints.map((bp) => `Plans: ${blueprintLabel(bp)}`),
         ...(def.gates.length ? [`${def.gates.length} record${def.gates.length === 1 ? "" : "s"} now readable`] : [])],
-      tags: [region(def.region)], status: "done",
+      tags: [region(def.region)], status: "done", logs: readableLog(sys, d),
     };
   });
   // Seeing is not capturing: marked from afar or by a decoded map, logger not reached yet.

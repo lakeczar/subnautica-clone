@@ -8,9 +8,9 @@ import { SITES } from "../regions/sites.js";
 import { CAVE_SOURCES } from "../regions/caves.js";
 import { SOURCES } from "../registry.js";
 import { CB_DECODABLES, CB_LOST_SITES, CODED_DOORS } from "./lostSites.js";
-import type { DoorId, LostSiteDefinition, RevealDefinition, RevealTarget } from "./lostSites.js";
+import type { DoorId, LogLine, LostSiteDefinition, RevealDefinition, RevealTarget } from "./lostSites.js";
 
-export type { DoorId, RevealDefinition, RevealTarget } from "./lostSites.js";
+export type { CodedDoor, DoorId, LogLine, RevealDefinition, RevealTarget } from "./lostSites.js";
 export type DecodeSize = "fragment" | "log" | "archive" | "core";
 /** Play minutes at base decoder speed: about 3–15 minutes by size. */
 export const DECODE_MINUTES: Readonly<Record<DecodeSize, number>> = { fragment: 3, log: 6, archive: 10, core: 15 };
@@ -48,9 +48,11 @@ export const MAIN_PATH_PLANS = ["bp_decoder", "bp_field_outpost", "bp_outpost_st
 
 /** Lost sites standing in the world. */
 export const WORLD_LOST_SITES = Object.keys(CB_LOST_SITES) as LostSiteId[];
-/** Decoded log lines, by decodable (display text, never saved). */
-export const DECODE_LOGS: Readonly<Record<string, readonly string[]>> =
-  Object.fromEntries(Object.entries(CB_DECODABLES).map(([id, d]) => [id, d.logs]));
+/** A decodable's log lines as authored (display text, never saved), each with the door
+ * whose code it carries. What a player may read is `readableLog` (sim): this is the
+ * raw data, for the decoder and for tests. */
+export const decodeLog = (id: DecodableId): readonly { text: string; door: DoorId | null }[] =>
+  (CB_DECODABLES[id].logs as readonly LogLine[]).map((l) => typeof l === "string" ? { text: l, door: null } : { text: l.text, door: l.door });
 
 const CAVE_IDS = new Set(CAVE_SOURCES.map((c) => c.id));
 const SITE_IDS = new Set(SITES.map((s) => s.id));
@@ -69,6 +71,8 @@ export const placedReveals = (id: DecodableId): readonly RevealDefinition[] =>
   (DECODABLES[id].reveals as readonly RevealDefinition[]).filter((r) => revealPlaced(r.target));
 
 export const DOOR_IDS = Object.keys(CODED_DOORS) as DoorId[];
+/** The one placement authority for coded doors: an unplaced door shows no code. */
+export const doorPlaced = (id: DoorId): boolean => CODED_DOORS[id].placed;
 /** The door whose code a gated record holds, if any. */
 export const doorForRecord = (record: string): DoorId | null =>
   DOOR_IDS.find((d) => CODED_DOORS[d].record === record) ?? null;

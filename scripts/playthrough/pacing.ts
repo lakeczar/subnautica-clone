@@ -16,7 +16,7 @@ import type { GameCommand, GameEvent } from "../../src/sim/types.js";
 import type { Driver, DriverObserver } from "./driver.js";
 import type { RunRecord } from "./timeline.js";
 import { PACING_DEBT } from "./pacing-debt.js";
-import type { PacingDebt } from "./pacing-debt.js";
+import type { DebtRow, RouteDebt } from "./pacing-debt.js";
 
 const OPTIONS = { regionAt: regionAtPoint };
 /** Fixed, so two runs of the same build give the same timeline. */
@@ -84,22 +84,59 @@ export class PacingTimelines {
   }
 }
 
+/** Bounds are compared at this precision (the playthrough replays exactly). */
+const round = (x: number): number => Math.round(x * 1000) / 1000;
+/** A route's violations, identified: gaps by the beats either side, empty legs by hull
+ * and region; each identity's measured values, largest first. */
+export function measuredDebt(a: TimelineAnalysis): { gaps: Record<string, number[]>; legs: Record<string, number[]> } {
+  const gaps: Record<string, number[]> = {}, legs: Record<string, number[]> = {};
+  for (const g of a.gaps.filter((x) => x.flagged)) (gaps[`${g.before} → ${g.after}`] ??= []).push(round(g.minutes));
+  for (const t of a.travel.emptyStretches.filter((x) => x.flagged)) (legs[`${t.hull} in ${t.region ?? "open water"}`] ??= []).push(round(t.seconds));
+  for (const x of [...Object.values(gaps), ...Object.values(legs)]) x.sort((p, q) => q - p);
+  return { gaps, legs };
+}
+/** One kind's comparison: an identity not recorded, more of one, or a larger value is
+ * worse; fewer, smaller or gone is better. Matching is conservative: each identity's
+ * values are compared largest to largest, so nothing new hides under an old maximum. */
+function compare(kind: string, unit: string, measured: Record<string, number[]>, debt: Readonly<Record<string, DebtRow>>): { worse: string[]; better: string[] } {
+  const worse: string[] = [], better: string[] = [];
+  for (const [id, values] of Object.entries(measured)) {
+    const row = debt[id];
+    if (!row) { worse.push(`new ${kind} ${id}: ${values.join(", ")} ${unit}`); continue; }
+    if (values.length > row.bounds.length) worse.push(`${kind} ${id}: ${values.length} over the limit, ${row.bounds.length} recorded`);
+    values.forEach((x, n) => {
+      const b = row.bounds[n];
+      if (b !== undefined && x > b) worse.push(`${kind} ${id} #${n + 1}: ${x} ${unit} > recorded ${b}`);
+      else if (b !== undefined && x < b) better.push(`${kind} ${id} #${n + 1}: ${x} < ${b}`);
+    });
+    if (values.length < row.bounds.length) better.push(`${kind} ${id}: ${values.length} left of ${row.bounds.length}`);
+  }
+  for (const id of Object.keys(debt)) if (!measured[id]) better.push(`${kind} ${id}: gone`);
+  return { worse, better };
+}
+
 /** The acceptance verdict for one route, judged against its recorded debt
- * (`pacing-debt.ts`): decode waits never pass; other figures pass while no worse
- * than recorded. A route with no entry is judged strictly. */
-export function judgePacing(scenario: string, a: TimelineAnalysis, debts: Readonly<Record<string, PacingDebt>> = PACING_DEBT): { ok: boolean; detail: string } {
+ * (`pacing-debt.ts`), a ratchet both ways: a decode-caused idle span fails first,
+ * whatever its length; a new or worse gap or leg fails; a better one also fails until
+ * the entry is lowered, and the failure prints the figures to write. A route with no
+ * entry is judged strictly. */
+export function judgePacing(scenario: string, a: TimelineAnalysis, debts: Readonly<Record<string, RouteDebt>> = PACING_DEBT): { ok: boolean; detail: string } {
   const v = pacingAcceptance(a);
   const longest = a.travel.emptyStretches[0]?.seconds ?? 0;
-  const figures = `longest gap ${v.longestGapMinutes.toFixed(1)} min, ${v.emptyStretches} empty stretches over 90 s (longest ${longest.toFixed(0)} s), ${v.decodeWaitSeconds.toFixed(0)} s waiting on decodes`;
-  if (v.ok) return { ok: true, detail: figures };
-  const debt = debts[scenario];
-  if (!debt || v.decodeWaitSeconds > 0) return { ok: false, detail: `${v.failures.join("; ")} (${figures})` };
-  const worse = [
-    ...(v.longestGapMinutes > debt.gapMinutes ? [`gap ${v.longestGapMinutes.toFixed(1)} > recorded ${debt.gapMinutes} min`] : []),
-    ...(v.emptyStretches > debt.emptyStretches ? [`${v.emptyStretches} empty stretches > recorded ${debt.emptyStretches}`] : []),
-    ...(longest > debt.longestEmptySeconds ? [`longest empty ${longest.toFixed(0)} s > recorded ${debt.longestEmptySeconds} s`] : []),
-  ];
+  const figures = `longest gap ${v.longestGapMinutes.toFixed(1)} min, ${v.emptyStretches} empty stretches over 90 s (longest ${longest.toFixed(0)} s), ${v.decodeWaitSpans} decode waits`;
+  if (v.decodeWaitSpans > 0) return { ok: false, detail: `decode waits are never debt: ${v.failures.join("; ")} (${figures})` };
+  const debt = debts[scenario], m = measuredDebt(a);
+  if (!debt) return v.ok ? { ok: true, detail: figures } : { ok: false, detail: `${v.failures.join("; ")} (${figures}); measured: ${debtFigures(a)}` };
+  const g = compare("gap", "min", m.gaps, debt.gaps), l = compare("leg", "s", m.legs, debt.legs);
+  const worse = [...g.worse, ...l.worse], better = [...g.better, ...l.better];
   if (worse.length) return { ok: false, detail: `worse than the recorded pacing debt: ${worse.join("; ")} (${figures})` };
-  const better = v.longestGapMinutes < debt.gapMinutes - 1 || v.emptyStretches < debt.emptyStretches || longest < debt.longestEmptySeconds - 1;
-  return { ok: true, detail: `within the recorded pacing debt (pacing-debt.ts)${better ? "; better than recorded: tighten the entry" : ""}: ${figures}` };
+  if (better.length) {
+    const write = (measured: Record<string, number[]>, rows: Readonly<Record<string, DebtRow>>) =>
+      Object.fromEntries(Object.entries(measured).map(([id, bounds]) => [id, { bounds, owner: rows[id]!.owner }]));
+    return { ok: false, detail: `better than the recorded pacing debt (${better.join("; ")}): lower pacing-debt.ts["${scenario}"] to ` +
+      JSON.stringify({ gaps: write(m.gaps, debt.gaps), legs: write(m.legs, debt.legs) }) };
+  }
+  return { ok: true, detail: `exactly the recorded pacing debt (pacing-debt.ts): ${figures}` };
 }
+/** The figures a route would record as debt, for a first entry. */
+export const debtFigures = (a: TimelineAnalysis): string => JSON.stringify(measuredDebt(a));

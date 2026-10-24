@@ -8,7 +8,7 @@ export type { HostKind, HostPower, SocketHost, SocketSlot } from "./hosts.js";
 export { conservedTotals, deployOutpost, deployPreview, outpostLimit, packOutpost, packPreview, renameOutpost, siteProblem, sitePower,
   upgradeOutpost, upgradePreview } from "./outposts.js";
 export type { DeployPreview, Ground, OutpostRules, OutpostSiteQuery, PackPreview, SiteSample, UpgradePreview } from "./outposts.js";
-export { advanceDecodes, decodedReveals, decodeStatus, decodeViews, discoverSite, doorCodes, knownSites, markedSites, recordReadable, startDecode } from "./decoder.js";
+export { advanceDecodes, decodedReveals, decodeStatus, decodeViews, discoverSite, doorCodes, knownSites, markedSites, readableLog, recordReadable, startDecode } from "./decoder.js";
 export { noteHostPosition, noteReadable, readableNotes } from "./notes.js";
 export type { DecodeCompletion, DecoderContext, DecodeView } from "./decoder.js";
 export { advanceGrowth, cropViews, harvest, harvestPreview, plant } from "./cultivation.js";
