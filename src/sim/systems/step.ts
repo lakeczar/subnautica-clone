@@ -6,19 +6,24 @@ import { advanceGrowth, growthRate } from "./cultivation.js";
 import { advanceDecodes } from "./decoder.js";
 import type { DecodeCompletion, DecoderContext } from "./decoder.js";
 import { visitChart } from "./navigation.js";
+import { openSiteCaches } from "./siteCaches.js";
 import type { SystemsState } from "./state.js";
 import type { SeedKind } from "../../content/systems/cultivation.js";
+import type { LostSiteCacheId } from "../../content/systems/lostSites.js";
 
 export type SystemsEvent =
   | { type: "decoded"; completion: DecodeCompletion }
   | { type: "crop-ready"; seed: SeedKind }
-  | { type: "chart-explored"; cells: string[] };
+  | { type: "chart-explored"; cells: string[] }
+  /** LS-1: a lost site's cache, found on first reach; its container opens. */
+  | { type: "cache-found"; cache: LostSiteCacheId };
 
 export function advanceSystems(s: GameState, sys: SystemsState, ctx: DecoderContext = {}, seconds = FIXED_SECONDS): SystemsEvent[] {
   if (s.scenario !== "expedition" || s.opening.phase < 4) return [];
   const events: SystemsEvent[] = [];
   const cells = visitChart(sys, s.player.pose.position);
   if (cells.length) events.push({ type: "chart-explored", cells });
+  for (const cache of openSiteCaches(s)) events.push({ type: "cache-found", cache });
   for (const completion of advanceDecodes(s, sys, seconds, ctx)) events.push({ type: "decoded", completion });
   for (const seed of advanceGrowth(sys, seconds, (p) => growthRate(s, sys, p, ctx.power))) events.push({ type: "crop-ready", seed });
   return events;

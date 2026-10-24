@@ -6,7 +6,6 @@ import { BERTH_LOCAL, carrierCompartmentContainers, emptySockets, localToWorld }
 import { ITEMS } from "../content/registry.js";
 import { usedCapacity } from "../sim/inventory.js";
 import { record } from "./validation.js";
-import { siteCacheOf } from "../sim/systems/siteCaches.js";
 
 /** Content-roster entries every schema 5 save contains: New Game's rosters when
  * schema 5 was cut. A schema 5 save may lack only content added after this, which
@@ -68,13 +67,7 @@ export function addNewContent(state: GameState): { ok: true; value: GameState } 
     next[name] = out;
   }
   const world = record(state.world) ? { ...state.world, ...pick(next, ["resources", "renewal", "facilities"]) } : state.world;
-  // LS-1: a lost site's cache added since the save was written arrives full. Its container
-  // is absent, so it cannot have been opened; its authored items (fixed IDs) come with it.
-  const savedIds = new Set(Array.isArray(state.inventory?.containers) ? (state.inventory.containers as unknown[]).flatMap((c) => record(c) && typeof c.id === "string" ? [c.id] : []) : []);
-  const newCaches = new Set(template.inventory.containers.filter((c) => siteCacheOf(c.id) && !savedIds.has(c.id)).map((c) => c.id));
-  const cacheItems = newCaches.size && Array.isArray(state.inventory?.items)
-    ? { items: [...state.inventory.items, ...template.inventory.items.filter((i) => newCaches.has(i.containerId)).map((i) => structuredClone(i))] } : {};
-  const inventory = record(state.inventory) && next.containers ? { ...state.inventory, containers: next.containers, ...cacheItems } : state.inventory;
+  const inventory = record(state.inventory) && next.containers ? { ...state.inventory, containers: next.containers } : state.inventory;
   const fields = addNewFields({ ...state, world, inventory } as GameState, template);
   return fields.ok ? { ok: true, value: fields.value } : fields;
 }

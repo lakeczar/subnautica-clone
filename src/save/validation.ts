@@ -53,7 +53,8 @@ import { moduleOfItem, MODULES as SYS2_MODULES, OUTPOST_TIERS } from "../content
 import { hostUpgrade } from "../content/upgrades/hosts.js";
 import { DECODABLES } from "../content/systems/decodes.js";
 import { LEGACY_GRANTS, legacyRow, legacySourceHeld } from "./legacyGrants.js";
-import { siteCacheOf } from "../sim/systems/siteCaches.js";
+import { SITE_CACHE_IDS, siteCacheContainer, siteCacheContentsValid } from "../sim/systems/siteCaches.js";
+import { siteCacheContainerId } from "../content/systems/lostSites.js";
 import { lockerModuleCapacity } from "../sim/upgrades/hosts.js";
 import type { LegacyGrant } from "../sim/types.js";
 const TICK = 2147483647;
@@ -653,6 +654,11 @@ function semantic(s: GameState, fresh: GameState): boolean {
     ...[...items.filter((i) => i.kind === "mod_locker").map((i) => i.id), ...s.systems.sockets.filter((e) => e.kind === "mod_locker").map((e) => e.itemId)]
       // LS-1: a locker extension's capacity, through the one authority.
       .map((itemId) => [`${itemId}_locker`, "locker", lockerModuleCapacity(s.systems.moduleUpgrades, itemId, SYS2_MODULES.locker.lockerCu), itemId]),
+    // LS-1: each found lost-site cache keeps its container, at its authored capacity.
+    ...SITE_CACHE_IDS.filter((id) => containers.some((c) => c.id === siteCacheContainerId(id))).map((id) => {
+      const c = siteCacheContainer(id);
+      return [c.id, c.kind, c.capacity, c.ownerId];
+    }),
     // SIG-1: each Creel cargo pod owns its container, fitted, carried or dropped.
     ...items.filter((i) => i.kind === "creel_drop_pod").map((i) => [podContainerId(i.id), "locker", DROP_POD.cu, i.id]),
   ];
@@ -670,6 +676,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
   )
     return false;
   if (containers.some((c) => usedCapacity(s, c.id) > c.capacity)) return false;
+  // LS-1: a site cache is take-only: it holds its authored kinds, never more than authored.
+  if (SITE_CACHE_IDS.some((id) => !siteCacheContentsValid(s, id))) return false;
   if (items.some((i) => carrierCompartment(s, i.containerId) && !containerAccepts(s, i.containerId, i.kind))) return false;
   const fit = {
     tools: "essential_tools",
@@ -840,8 +848,7 @@ function semantic(s: GameState, fresh: GameState): boolean {
   }
   if (
     s.opening.phase < 4 &&
-    // LS-1: a lost site's cache holds world stock from New Game, not the diver's items.
-    (k.evidence.length || k.crafted.length || items.some((i) => !siteCacheOf(i.containerId)) || f.vehicles.length)
+    (k.evidence.length || k.crafted.length || items.length || f.vehicles.length)
   )
     return false;
   // Campaign fleets: at most one earned hull of each kind; a docking interface

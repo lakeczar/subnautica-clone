@@ -1,6 +1,6 @@
 {
   "format": "siltwake.save",
-  "schemaVersion": 8,
+  "schemaVersion": 7,
   "contentVersion": "expedition.7",
   "meta": {
     "sessionId": "diagnostic-reef-older-depleted",
@@ -155,51 +155,6 @@
           "fitted": null,
           "charge": null,
           "provenance": "public"
-        },
-        {
-          "id": "site_cache_canopy_basket_bins_buoyant_resin",
-          "kind": "buoyant_resin",
-          "quantity": 6,
-          "containerId": "site_cache_canopy_basket_bins",
-          "fitted": null,
-          "charge": null,
-          "provenance": "public"
-        },
-        {
-          "id": "site_cache_canopy_basket_bins_conductive_crust",
-          "kind": "conductive_crust",
-          "quantity": 4,
-          "containerId": "site_cache_canopy_basket_bins",
-          "fitted": null,
-          "charge": null,
-          "provenance": "public"
-        },
-        {
-          "id": "site_cache_basin_pump_spares_structural_alloy",
-          "kind": "structural_alloy",
-          "quantity": 3,
-          "containerId": "site_cache_basin_pump_spares",
-          "fitted": null,
-          "charge": null,
-          "provenance": "public"
-        },
-        {
-          "id": "site_cache_basin_pump_spares_flex_membrane",
-          "kind": "flex_membrane",
-          "quantity": 2,
-          "containerId": "site_cache_basin_pump_spares",
-          "fitted": null,
-          "charge": null,
-          "provenance": "public"
-        },
-        {
-          "id": "site_cache_meridian_wild_crop_meal",
-          "kind": "meal",
-          "quantity": 4,
-          "containerId": "site_cache_meridian_wild_crop",
-          "fitted": null,
-          "charge": null,
-          "provenance": "public"
         }
       ],
       "containers": [
@@ -274,24 +229,6 @@
           "kind": "locker",
           "capacity": 48,
           "ownerId": "crown_station"
-        },
-        {
-          "id": "site_cache_canopy_basket_bins",
-          "kind": "cache",
-          "capacity": 10,
-          "ownerId": "lost_canopy_basket_site"
-        },
-        {
-          "id": "site_cache_basin_pump_spares",
-          "kind": "cache",
-          "capacity": 8,
-          "ownerId": "lost_basin_pump_heads_site"
-        },
-        {
-          "id": "site_cache_meridian_wild_crop",
-          "kind": "cache",
-          "capacity": 4,
-          "ownerId": "lost_meridian_allotments_site"
         },
         {
           "id": "dart_17_hold",
@@ -389,8 +326,7 @@
         "suit_350"
       ],
       "hintLevel": 0,
-      "cycles": [],
-      "legacyGrants": []
+      "cycles": []
     },
     "world": {
       "resources": [
@@ -697,26 +633,6 @@
         {
           "id": "basin_pale_spores",
           "stock": 2,
-          "reserve": 0
-        },
-        {
-          "id": "hub_racks_cups",
-          "stock": 3,
-          "reserve": 0
-        },
-        {
-          "id": "hub_racks_fans",
-          "stock": 3,
-          "reserve": 0
-        },
-        {
-          "id": "hub_racks_fronds",
-          "stock": 3,
-          "reserve": 0
-        },
-        {
-          "id": "rift_kiln_tubers",
-          "stock": 3,
           "reserve": 0
         },
         {
@@ -1148,8 +1064,7 @@
       "beaconsOff": [],
       "categoriesOff": [],
       "chart": [],
-      "moduleUpgrades": {},
-      "opened": []
+      "moduleUpgrades": {}
     },
     "story": {
       "discoveries": [],

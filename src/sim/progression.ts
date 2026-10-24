@@ -163,9 +163,9 @@ export function interactions(s: GameState): Interaction[] {
     targets.push({ id: `outpost:${o.id}`, label: o.name, position: { ...o.position, y: o.position.y + 1 }, kind: "service" });
   for (const b of s.systems.beacons.filter((x) => x.source === "player"))
     targets.push({ id: `beacon:${b.id}`, label: `Beacon · ${b.name}`, position: b.position, kind: "service" });
-  // LS-1: a lost site's finite cache, while anything is left in it.
+  // LS-1: a lost site's finite cache, until found and then while anything is left in it.
   for (const id of SITE_CACHE_IDS)
-    if (s.inventory.items.some((i) => i.containerId === siteCacheContainerId(id)))
+    if (!siteCacheFound(s, id) || s.inventory.items.some((i) => i.containerId === siteCacheContainerId(id)))
       targets.push({ id: siteCacheContainerId(id), label: LOST_SITE_CACHES[id].label, position: LOST_SITE_CACHES[id].position, kind: "cache" });
   for (const c of s.recovery.caches)
     if (s.inventory.items.some((i) => i.containerId === c.containerId))

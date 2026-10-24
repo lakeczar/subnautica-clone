@@ -316,8 +316,6 @@ export class PanelView {
     if (id === "workshop_locker") return nearWorkshop(state) || facility(state, "island_workshop") || state.knowledge.markers.includes("island_workshop");
     if (id === "buoy_hold") return state.inventory.buoy.deployed;
     if (id === "canopy_stop_locker") return nearCanopyStop(state) || facility(state, "canopy_stop") || state.knowledge.markers.includes("canopy_stop");
-    // LS-1: a lost site's cache is a place, not a holding: it lists only within reach.
-    if (siteCacheOf(id)) return false;
     return true;
   }
 
@@ -331,7 +329,8 @@ export class PanelView {
       let actions = "";
       const buoy = i.kind === "salvage_buoy" ? button(state.inventory.buoy.deployed ? "Pack empty buoy" : "Deploy carried buoy", { type: "buoy" }) : "";
       if (!i.fitted && !installed)
-        for (const d of bins.filter((d) => d.id !== containerId)) {
+        // LS-1: a lost site's cache is take-only, never a destination.
+        for (const d of bins.filter((d) => d.id !== containerId && !siteCacheOf(d.id))) {
           const label = d.id === "diver" ? "Take to diver" : `To ${containerLabel(state, d.id)}`;
           const room = hasRoom(state, d.id, itemCu(i));
           actions += button(`${label} · all (${i.quantity})`, { type: "transfer", itemId: i.id, to: d.id, quantity: i.quantity }, !room, room ? undefined : `Needs ${itemCu(i)} CU free in ${containerLabel(state, d.id)}.`);

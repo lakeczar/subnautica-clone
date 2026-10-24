@@ -14,9 +14,9 @@ import { enterCode } from "../src/sim/systems/doors.js";
 import { installModule } from "../src/sim/systems/hosts.js";
 import { deployOutpost, packOutpost } from "../src/sim/systems/outposts.js";
 import { handheldPing } from "../src/sim/systems/survey.js";
-import { SITE_CACHE_IDS } from "../src/sim/systems/siteCaches.js";
+import { SITE_CACHE_IDS, siteCacheOf } from "../src/sim/systems/siteCaches.js";
+import { interactions } from "../src/sim/progression.js";
 import { stepSystems } from "../src/sim/systemsLink.js";
-import { createGame } from "../src/sim/state.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameEvent, GameState } from "../src/sim/types.js";
 import { KeypadPanel, keypadKey, keypadModel, renderKeypad } from "../src/ui/keypad.js";
@@ -108,35 +108,55 @@ test("ping lens: the handheld ping reaches 60 m once crafted", () => {
   assert.equal(handheldPing(s).range, 60);
 });
 
-test("site caches: full from New Game, never a reserve cell; taken stays taken across reload; an older save gains a new cache full", () => {
-  const s = createGame();
+test("site caches: found on first reach, full, never a reserve cell; take-only; taken stays taken across reload; nothing refills", () => {
+  const { s } = opened();
+  assert.ok(!s.inventory.containers.some((c) => siteCacheOf(c.id)), "New Game holds no cache, so every item is the player's");
+  assert.ok(interactions(s).some((x) => x.id === siteCacheContainerId("canopy_basket_bins")), "an unfound cache is still a place to go");
   for (const id of SITE_CACHE_IDS) {
+    swimTo(s, LOST_SITE_CACHES[id].position);
+    const events: GameEvent[] = [];
+    stepSystems(s, events);
+    assert.ok(events.some((e) => e.type === "systems" && e.event.type === "cache-found" && e.event.cache === id), `${id}: found on reach`);
+    assert.ok(events.some((e) => e.type === "notice" && e.message.startsWith(`Found · ${LOST_SITE_CACHES[id].label}`)), `${id}: a notice says so`);
     const inside = s.inventory.items.filter((i) => i.containerId === siteCacheContainerId(id));
     for (const [kind, n] of Object.entries(LOST_SITE_CACHES[id].contents))
       assert.equal(inside.filter((i) => i.kind === kind).reduce((t, i) => t + i.quantity, 0), n, `${id}: ${kind}`);
     assert.ok(!inside.some((i) => (i.kind as string) === "reserve_cell"), `${id} never holds a reserve cell`);
     assert.ok(!inside.some((i) => ["pressure_ceramic", "thermal_core", "brine_lattice", "tagged_frame"].includes(i.kind)), `${id}: no frontier material`);
+    const again: GameEvent[] = [];
+    stepSystems(s, again);
+    assert.ok(!again.some((e) => e.type === "systems" && e.event.type === "cache-found"), `${id}: found once`);
   }
   const fresh = reload(s);
   assert.ok(fresh.ok, fresh.ok ? "" : fresh.error);
-  // Take the basket bins' resin at the site.
+  // Take the basket bins' resin at the site; nothing goes back in.
   const bins = siteCacheContainerId("canopy_basket_bins"), resin = s.inventory.items.find((i) => i.containerId === bins && i.kind === "buoyant_resin")!;
   swimTo(s, LOST_SITE_CACHES.canopy_basket_bins.position);
   const moved = executeCommand(s, { type: "transfer", itemId: resin.id, to: "diver", quantity: resin.quantity }, world);
   assert.ok(!moved.events.some((e) => e.type === "notice" && e.error), JSON.stringify(moved.events));
+  const back = executeCommand(moved.state, { type: "transfer", itemId: resin.id, to: bins, quantity: 1 }, world);
+  assert.ok(back.events.some((e) => e.type === "notice" && e.error && /only gives/.test(e.message)), "take-only");
   const after = reload(moved.state);
   assert.ok(after.ok, after.ok ? "" : after.error);
   const left = after.value.state.inventory.items.filter((i) => i.containerId === bins);
   assert.ok(!left.some((i) => i.kind === "buoyant_resin"), "taken stays taken");
   assert.equal(after.value.state.inventory.items.filter((i) => i.kind === "buoyant_resin").reduce((t, i) => t + i.quantity, 0), 6, "no duplicate");
-  // An older save written before a cache existed: its container and items are absent.
-  const older = structuredClone(moved.state), spares = siteCacheContainerId("basin_pump_spares");
-  older.inventory.containers = older.inventory.containers.filter((c) => c.id !== spares);
-  older.inventory.items = older.inventory.items.filter((i) => i.containerId !== spares);
-  const gained = reload(older);
-  assert.ok(gained.ok, gained.ok ? "" : gained.error);
-  assert.deepEqual(gained.value.state.inventory.items.filter((i) => i.containerId === spares).map((i) => [i.kind, i.quantity]),
-    [["structural_alloy", 3], ["flex_membrane", 2]], "it arrives full");
+  // Emptied, the cache stays found: its container remains and nothing refills on reach.
+  const crust = after.value.state.inventory.items.find((i) => i.containerId === bins)!;
+  const emptied = executeCommand(after.value.state, { type: "transfer", itemId: crust.id, to: "diver", quantity: crust.quantity }, world).state;
+  assert.ok(emptied.inventory.containers.some((c) => c.id === bins) && !emptied.inventory.items.some((i) => i.containerId === bins));
+  const later: GameEvent[] = [];
+  stepSystems(emptied, later);
+  assert.ok(!emptied.inventory.items.some((i) => i.containerId === bins), "nothing refills");
+  assert.ok(!interactions(emptied).some((x) => x.id === bins), "an emptied cache is no longer a target");
+  assert.ok(reload(emptied).ok);
+  // Strict validation: a found cache keeps its authored capacity and never holds more, or other kinds, than authored.
+  const swollen = structuredClone(moved.state);
+  swollen.inventory.items.find((i) => i.containerId === bins && i.kind === "conductive_crust")!.quantity = 5;
+  assert.equal(reload(swollen).ok, false, "never more than authored");
+  const resized = structuredClone(moved.state);
+  resized.inventory.containers.find((c) => c.id === bins)!.capacity += 1;
+  assert.equal(reload(resized).ok, false, "its authored capacity");
 });
 
 test("coded doors: an unplaced door takes no code; a wrong code costs nothing; the right one opens it for good", () => {

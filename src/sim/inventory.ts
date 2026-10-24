@@ -18,6 +18,8 @@ import { FIXED_HOSTS, HOST_REACH, moduleOfItem } from "../content/systems/hosts.
 import { stackable } from "../content/systems/items.js";
 import { LOST_SITE_CACHES } from "../content/systems/lostSites.js";
 import { SITE_CACHE_REACH, siteCacheOf } from "./systems/siteCaches.js";
+/** LS-1: the refusal for anything put into a lost site's cache. */
+const SITE_CACHE_TAKE_ONLY = "A lost site's cache only gives: take what it holds. Nothing moved.";
 /** A beached Spindle's ramp reaches this far up the shore (C4). */
 export const SHORE_RAMP_REACH = 10;
 export const distance = (a: Vec3, b: Vec3): number =>
@@ -37,6 +39,8 @@ export function carrierCompartment(s: GameState, id: string): { host: VehicleSta
 }
 /** Pantry: meals. Fabrication: materials and tagged frames. Every other container takes anything. */
 export function containerAccepts(s: GameState, id: string, kind: string): boolean {
+  // LS-1: a lost site's cache is take-only.
+  if (siteCacheOf(id)) return false;
   const c = carrierCompartment(s, id);
   return !c || (c.accepts === "food" ? kind === "meal" : Object.hasOwn(MATERIALS, kind) || kind === "tagged_frame");
 }
@@ -342,7 +346,7 @@ export function materialStoragePreview(s: GameState, from: string, to: string): 
     : !items.length
       ? "No public material stacks in the source. Meals, cells, tools and modules stay with their container."
       : !containerAccepts(s, to, items[0]!.kind)
-        ? `${containerLabel(s, to)} holds meals only.`
+        ? siteCacheOf(to) ? SITE_CACHE_TAKE_ONLY : `${containerLabel(s, to)} holds meals only.`
       : !hasRoom(s, to, totalCu)
         ? `The destination needs ${totalCu} CU for all these materials. Nothing moved.`
         : null;
@@ -382,7 +386,7 @@ export function transfer(
   )
     return "Both containers must be present and accessible.";
   if (!containerAccepts(s, to, i.kind))
-    return `${containerLabel(s, to)} does not take ${ITEMS[i.kind].label.toLowerCase()}.`;
+    return siteCacheOf(to) ? SITE_CACHE_TAKE_ONLY : `${containerLabel(s, to)} does not take ${ITEMS[i.kind].label.toLowerCase()}.`;
   if (!hasRoom(s, to, ITEMS[i.kind].cu * quantity))
     return "The destination is full. Nothing moved.";
   if (quantity === i.quantity) i.containerId = to;

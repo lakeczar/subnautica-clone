@@ -14,6 +14,7 @@
 import { enterCode } from "./systems/doors.js";
 import { DECODABLES, decodeLog, DECODER_LOCAL_RANGE, LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import type { DecodableId } from "../content/systems/decodes.js";
+import { LOST_SITE_CACHES } from "../content/systems/lostSites.js";
 import { isSeed } from "../content/systems/cultivation.js";
 import { FIXED_HOSTS, MODULES, OUTPOST_SITING } from "../content/systems/hosts.js";
 import { BEACON_CATEGORIES } from "../content/systems/navigation.js";
@@ -310,6 +311,7 @@ function systemsNotice(e: SystemsEvent): GameEvent[] {
     return [{ type: "notice", channel: "action", message: `Decode complete · ${d.label}${extra.length ? ` · ${extra.join(", ")}` : ""}.` }, { type: "sound", cue: "scan" }];
   }
   if (e.type === "crop-ready") return [{ type: "notice", channel: "action", message: "A planter crop is ready to harvest." }];
+  if (e.type === "cache-found") return [{ type: "notice", channel: "action", message: `Found · ${LOST_SITE_CACHES[e.cache].label}. Open Cargo within 4 m to take what it holds.` }];
   return [];
 }
 /** Inspecting a lost site: finds it if new, then says what it holds and

@@ -8,6 +8,7 @@
  * full; an older one rotates into a summary that keeps its feedback notes, new
  * things, deaths and recoveries verbatim (SIM-05: no note is ever dropped). */
 import { SOURCES, techRecord } from "../../content/registry.js";
+import { siteCacheContainerId } from "../../content/systems/lostSites.js";
 import type { GameState } from "../types.js";
 import type { SystemsEvent } from "../systems/step.js";
 import { serializeTimeline, summarizeChunk, TIMELINE_FORMAT, TIMELINE_VERSION, validSaveRef } from "./report.js";
@@ -395,7 +396,7 @@ function settleRecoveries(rec: TimelineRecorder, s: GameState, contents: NonNull
   }
 }
 
-/** SYS-2 background results: a decode is a new thing; a ripe crop is a point of interest. */
+/** SYS-2 background results: a decode or a found cache is a new thing; a ripe crop is a point of interest. */
 export function recordSystemsEvents(rec: TimelineRecorder, s: GameState, events: readonly SystemsEvent[]): void {
   for (const e of events)
     if (e.type === "decoded") {
@@ -405,6 +406,8 @@ export function recordSystemsEvents(rec: TimelineRecorder, s: GameState, events:
       recordEvent(rec, s, { kind: "new", what: "decode", id: c.decodable, yields });
     }
     else if (e.type === "crop-ready") recordEvent(rec, s, { kind: "system", what: "crop-ready", id: e.seed });
+    // LS-1: a lost site's cache found is new content, like the site it lies at.
+    else if (e.type === "cache-found") recordEvent(rec, s, { kind: "new", what: "site", id: siteCacheContainerId(e.cache) });
 }
 
 /** A detached export with any open travel or idle span closed as of now. */
