@@ -1,5 +1,10 @@
 # PACE-1: late-game pacing (design plan, stage 0, revision 1)
 
+> **Resume note (paused for the host reboot, 2026-10-24).**
+> **Where:** stage 1 completion on `t3/pace-1-stage-1`, merged with root `3c90df9f`. B4, the core-pre-budget deletion, the branch moves and the tour's own core are wired. The last full run (`261024-234452-74fc`) completed 7/9: every Creel scenario, tour and over-geared. The two carrier scenarios then blocked in works: the Mantle runs flat at the shelf (`261024-235111-ed52`).
+> **Next:** top up the Mantle (and the carrier) before the works trips after the long forced return; rerun all nine; rewrite `pacing-debt.ts` rows against the merged baseline; rerun the fast tier, heavy tier, economy and playthrough at the final SHA; update the stage 1 handoff below. No tickets are outstanding to resubmit.
+
+
 Opus 5.5 high, design authority for the stream. Branch `t3/pace-1-late-game`, with root `3ed91bc0` merged. **Docs only: no code stage starts until the coordinator approves this plan.** Spoiler-safe. Canon notes for the lore owner are in `docs/spoilers/PACE-1-NOTES.md`.
 
 This revision answers:
