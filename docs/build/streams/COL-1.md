@@ -142,15 +142,15 @@ Two survive:
 - **Collision and light don't use shells.** CW-1's collision pack and light fields are built from the volume (above).
 - **Shells reach the game only inside terrain chunks.** `npm run build` runs `bake-terrain.mjs` (terrain, cave collision, light) before `vite build`. The browser's `s2.terrain` decodes the baked chunk, fetch and decode sliced by `due()`.
 - **The store refuses a bake from any other source.** It's provenance-bound (STR-13). (R8 correction: with a bake that loads, no shell is built in play; a missing, failed or refused file falls back to a live build in production too. See *R8 response*.)
-- **The live path** (`liveTerrain`, which calls `caveShellOf` for each cave a chunk touches) runs only when there's no bake or a stale one: the dev fallback. There it is unsliced on the main thread. Each shell is one synchronous build between `due()` yields.
+- **The live path** (`liveTerrain`, which calls `caveShellOf` for each cave a chunk touches) runs only when there's no usable baked file (none, a failed fetch, or a refused bake): a fallback in production too (R8). There it is unsliced on the main thread. Each shell is one synchronous build between `due()` yields.
 - **The cost:** uncached shell build, local and indicative, R6 → R7:
   - crown shaft fine 1.23 → 1.80 s;
   - Glimmer fine 0.71 → 0.91 s;
   - culvert fine 0.27 → 0.36 s;
   - escarp pocket fine 0.11 → 0.17 s.
 
-  That's about 1.2–1.6× in all, coarse alike. It falls on bake time (`npm run build`, tests through the build cache) and on that dev fallback only.
-- **Root fix:** WK-1's offline pack pipeline, with shells baked and loaded as packs, and the live builder sliced or in a worker for the dev fallback (conventions 4 and 5). **S–M.**
+  That's about 1.2–1.6× in all, coarse alike. It falls on bake time (`npm run build`, tests through the build cache) and on that fallback, which R8 counts and records as a production compromise.
+- **Root fix:** WK-1's offline pack pipeline, with shells baked and loaded as packs, and the live builder sliced or in a worker for the fallback (conventions 4 and 5). **S–M.**
 - **Measured confirmation: pending.** Two of CW-1's traversal segments are queued on the 3090 (exclusive, tickets `261024-130411-46ed` and `261024-130411-ccc2`). They run CW-1's harness at `6ca73311`, with per-vCPU steal and host/mixed/clean frame classes, on a production build of CW-1 + this branch that counts every shell build in the page.
   - **The segments:** deep segment 12 (meridian_culvert_north) and main-tour segment 1 (the hub caves).
   - **What should show:** zero shell builds during travel. Any long frame in a cave stream is judged by its remainder after steal.
