@@ -43,6 +43,19 @@ import { createHubArt } from "./hub.js";
 import { createFarLayer } from "./farLayer.js";
 
 export type Quality = "rich" | "light";
+/** The renderer's on-demand snapshot (`__siltwake.scene()` once REC-1's hook lands). */
+export interface RendererStats {
+  meshes: number;
+  cave: string | null;
+  /** The active cave's light: "resident", or "pending" while it draws as open water (CW-1 R2); null with no cave. */
+  caveLight: "resident" | "pending" | null;
+  settling: boolean;
+  /** CW-1's cave streaming counters; `sync` counts unsliced builds. */
+  caveStream: { sync: number; built: number; evicted: number; boxes: number; missing: number; uploads: number; pendingFrames: number;
+    maxAllocMs: number; maxWriteMs: number; restarts: number };
+  /** Scene lights: known meshes, lights sent, meshes waiting for a scan; `settled` once every known mesh is scanned and placed. */
+  lights: { known: number; sent: number; pending: number; placed: number; settled: boolean };
+}
 export interface GameRenderer {
   present(state: GameState | null, overlay?: { target: InteractionHost | null; preview?: InteractionHost | null; look?: HeadLook }): void;
   /** Idle-time construction of one nearby region into retention. Callers use
@@ -56,6 +69,9 @@ export interface GameRenderer {
   /** The cave the camera is in (or next to) draws as open water: its light
    * field has not landed (CW-1 R1). The load waits on it, bounded. */
   readonly caveLightPending: boolean;
+  /** Pulled diagnostics (convention 6: never pushed per frame), in REC-1's
+   * `RendererStats` shape, plus cave light readiness and light settling. */
+  stats(): RendererStats;
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
@@ -358,6 +374,16 @@ export function createRenderer(
     return {
       get settling() { return settleSince >= 0; },
       get caveLightPending() { return caveView.lightPending; },
+      stats(): RendererStats {
+        const ks = caveWorld.kitCaves.stats, cv = caveView.stats, ls = lights.stats;
+        return {
+          meshes: scene.meshes.length, cave: caveView.active, caveLight: caveView.active ? (caveView.lightPending ? "pending" : "resident") : null,
+          settling: settleSince >= 0,
+          caveStream: { sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes, missing: cv.missing, uploads: cv.uploads,
+            pendingFrames: cv.pendingFrames, maxAllocMs: cv.maxAllocMs, maxWriteMs: cv.maxWriteMs, restarts: cv.restarts },
+          lights: { known: ls.known, sent: ls.sent, pending: ls.pending, placed: ls.placed, settled: ls.settled },
+        };
+      },
       present(state, overlay) {
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
@@ -451,8 +477,7 @@ export function createRenderer(
         const tCaves = timed ? performance.now() : 0;
         // Sub-parts of the cave work, for measurement: the streamer's step, the
         // light texture upload, field retention, and the view's activation.
-        let caveStepMs = 0, caveUploadMs = 0, caveRetainMs = 0;
-        const uploadsBefore = caveView.stats.uploads, bytesBefore = caveView.stats.textureBytes;
+        let caveStepMs = 0, caveStreamMs = 0, caveRetainMs = 0;
         if (!caves || caves.settled) {
           const t0 = timed ? performance.now() : 0;
           streamFrame = streamer.update(camera.position, velocity);
@@ -461,7 +486,7 @@ export function createRenderer(
           caveView.stream(streamFrame.light, streamFrame.upload);
           const t2 = timed ? performance.now() : 0;
           caves?.retainLight(streamFrame.light);
-          if (timed) { caveStepMs = t1 - t0; caveUploadMs = t2 - t1; caveRetainMs = performance.now() - t2; }
+          if (timed) { caveStepMs = t1 - t0; caveStreamMs = t2 - t1; caveRetainMs = performance.now() - t2; }
         }
         if (++streamFrames % 30 === 0) terrainStore()?.prefetch(camera.position.add(velocity.scale(streamer.options.lookAhead)), 520);
         const tView = timed ? performance.now() : 0;
@@ -469,15 +494,15 @@ export function createRenderer(
           !!state && state.opening.phase >= 4 && lampOn(state) && underwater === 1);
         const caveViewMs = timed ? performance.now() - tView : 0;
         const caveMs = timed ? performance.now() - tCaves : 0;
-        const caveUpload = caveView.stats.uploads > uploadsBefore ? { ms: +caveUploadMs.toFixed(1), bytes: caveView.stats.textureBytes - bytesBefore } : null;
+        // This frame's texture upload work, wherever it ran (prefetch or activation).
+        const caveUpload = caveView.stats.frameUploadBytes > 0 ? { ms: +caveView.stats.frameUploadMs.toFixed(2), bytes: caveView.stats.frameUploadBytes } : null;
         canvas.dataset.cave = caveView.active ?? "";
-        canvas.dataset.caveLight = caveView.active ? (caveView.lightPending ? "pending" : "resident") : "";
-        canvas.dataset.lightsSettled = String(lights.stats.settled);
         const ks = caveWorld.kitCaves.stats;
         canvas.dataset.caveStream = JSON.stringify({ sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
           stepMs: +ks.maxStepMs.toFixed(2), buildMs: +worstCaveBuildMs.toFixed(2), pending: streamFrame?.pending ?? -1,
           missing: caveView.stats.missing, uploads: caveView.stats.uploads, lightBytes: caves?.stats.lightBytes ?? 0,
-          textureBytes: caveView.stats.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0 });
+          textureBytes: caveView.stats.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0,
+          lightPendingFrames: caveView.stats.pendingFrames, maxAllocMs: +caveView.stats.maxAllocMs.toFixed(2), maxWriteMs: +caveView.stats.maxWriteMs.toFixed(2) });
         streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
         canvas.dataset.currentStreaks = String(streaks.shown);
         const tActors = timedParts ? performance.now() : 0;
@@ -506,7 +531,7 @@ export function createRenderer(
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump, stepUnit: world?.maxStepUnit ?? null,
-          caveStep: +caveStepMs.toFixed(2), cavePasses: streamFrame?.passMs ?? null, caveUploadMs: +caveUploadMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered,
+          caveStep: +caveStepMs.toFixed(2), cavePasses: streamFrame?.passMs ?? null, caveStream: +caveStreamMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered,
           lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
         };
         canvas.dataset.meshes = String(scene.meshes.length);

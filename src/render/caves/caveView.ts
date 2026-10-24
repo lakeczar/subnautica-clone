@@ -3,7 +3,8 @@ import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import { caveDef, CAVE_SOURCES, type CaveSource } from "../../content/regions/caves.js";
 import { worldFloor } from "../../content/regions/worldFloor.js";
-import { CaveLighting } from "./caveMaterial.js";
+import type { RawTexture3D } from "@babylonjs/core/Materials/Textures/rawTexture3D.js";
+import { CaveLighting, type CaveTexturePort } from "./caveMaterial.js";
 import { caveLightField, type CaveLightField } from "./lightField.js";
 
 /** Within this many metres of a footprint, a cave's light field is active. */
@@ -46,15 +47,25 @@ export interface CaveView {
    * and the load wait on it. */
   readonly lightPending: boolean;
   /** Active frames whose field was not ready yet (drawn as open water). */
-  readonly stats: { readonly missing: number; readonly uploads: number; readonly textureBytes: number };
+  readonly stats: { readonly missing: number; readonly uploads: number; readonly textureBytes: number;
+    /** Frames an active cave drew as open water (its light not yet bound). */
+    readonly pendingFrames: number;
+    /** Longest empty-texture allocation and slab write, ms; fills restarted by a context restore. */
+    readonly maxAllocMs: number; readonly maxWriteMs: number; readonly restarts: number;
+    /** This frame's upload work (allocation and slab writes, prefetch and activation), ms and bytes. */
+    readonly frameUploadMs: number; readonly frameUploadBytes: number };
   dispose(): void;
 }
 
-export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[], source: CaveFieldSource = liveCaveFields): CaveView {
-  const lighting = new CaveLighting(scene, materials);
+export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[], source: CaveFieldSource = liveCaveFields,
+  port?: CaveTexturePort<RawTexture3D>): CaveView {
+  const lighting = new CaveLighting(scene, materials, undefined, undefined, port);
+  // One upload budget per frame for prefetch (`stream`) and activation
+  // (`update`); `update` ends a frame and opens the next one's.
+  lighting.beginFrame();
   const live = source === liveCaveFields;
   const built = new Map<string, CaveLightField>();
-  let active: string | null = null, missing = 0, near: readonly string[] = [], lightPending = false;
+  let active: string | null = null, missing = 0, near: readonly string[] = [], lightPending = false, pendingFrames = 0;
   const field = (id: string): CaveLightField | null => {
     let f = built.get(id) ?? null;
     if (!f) { f = source.field(id); if (f && live) built.set(id, f); }
@@ -67,7 +78,9 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
   return {
     get active() { return active; },
     get lightPending() { return lightPending; },
-    get stats() { return { missing, uploads: lighting.stats.uploads, textureBytes: lighting.stats.bytes }; },
+    get stats() { const l = lighting.stats; return { missing, uploads: l.uploads, textureBytes: l.bytes, pendingFrames,
+      maxAllocMs: l.maxAllocMs, maxWriteMs: l.maxWriteMs, restarts: l.restarts,
+      frameUploadMs: lighting.lastFrame.ms, frameUploadBytes: lighting.lastFrame.bytes }; },
     prepare() {
       // Live fields only: the nearest the streamer named that is not built.
       if (!live) return false;
@@ -98,8 +111,13 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
       active = best?.id ?? null;
       const f = best ? field(best.id) : null;
       if (best && !f) missing++;
+      // The active field continues filling within this frame's budget; it is
+      // bound only once complete (never a synchronous upload).
+      if (f && !lighting.has(f)) lighting.prepare(f);
       lighting.setField(f);
-      lightPending = !!best && !(f && lighting.has(f));
+      lightPending = !!best && (!f || lighting.bound !== f);
+      if (lightPending) pendingFrames++;
+      lighting.beginFrame();
       lighting.apply({ on: lamp, position: camera, direction: forward.lengthSquared() > 0 ? forward.normalizeToNew() : new Vector3(0, 0, -1) });
     },
     dispose() { lighting.dispose(); },
