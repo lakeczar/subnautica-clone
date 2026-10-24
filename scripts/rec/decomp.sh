@@ -17,7 +17,7 @@ save=$(node -e 'const p=require(require("path").resolve(process.argv[1]));consol
 echo "save: $kind $(node -e 'const p=require(require("path").resolve(process.argv[1]));console.log(p.commit ?? "", p.path ?? p.file)' "$out/save.json")"
 run() { local name="$1"; shift
   node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack \
-    --rec playtest --hold "$secs" --alternate 10 --out "$out/$name" "$@" 2>&1 | grep --line-buffered -E 'probe|window|Error|refused' | cut -c1-200
+    --rec playtest --hold "$secs" --alternate 10 --out "$out/$name" "$@" 2>&1 | grep --line-buffered -E 'probe|window|Error|refused'
   echo "$name: $(node -e 'const r=require(require("path").resolve(process.argv[1])).probe.alternation;console.log(JSON.stringify({pairs:r.pairs,mean:r.mean,lo:r.lo,hi:r.hi}))' "$out/$name/run.json" 2>/dev/null || echo failed)"
 }
 # VARIANTS (env): which to run, space-separated; default all of the first decomposition.

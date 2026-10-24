@@ -20,7 +20,7 @@
 // GPU: run inside `scripts/heavy-check.sh --class gpu` (functional) or
 // `--class exclusive` (frame-time numbers). The browser session is the soak's
 // (scripts/soak/browser.mjs), which finds alickers' own Chrome wrapper itself.
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { mkdirSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
@@ -41,7 +41,9 @@ const mode = arg("rec", "on"), videoOn = mode === "on" && arg("video", "on") ===
 const plan = arg("plan") ? JSON.parse(readFileSync(arg("plan"), "utf8")) : null;
 const segment = Number(arg("segment", 0)), points = plan ? plan.segments?.[segment] ?? plan.points : [];
 mkdirSync(out, { recursive: true });
-const started = Date.now(), log = (...a) => console.log(`[${((Date.now() - started) / 1000).toFixed(0)}s] ${a.join(" ")}`);
+// Every line also touches heavy-check's heartbeat, so a long hold is never taken for a stall whatever pipes its output.
+const beat = () => { if (process.env.SILTWAKE_JOB_HEARTBEAT) { try { const t = new Date(); utimesSync(process.env.SILTWAKE_JOB_HEARTBEAT, t, t); } catch { try { writeFileSync(process.env.SILTWAKE_JOB_HEARTBEAT, ""); } catch { /* best effort */ } } } };
+const started = Date.now(), log = (...a) => { beat(); console.log(`[${((Date.now() - started) / 1000).toFixed(0)}s] ${a.join(" ")}`); };
 const commit = (() => { try { return readFileSync(path.join(dist, "COMMIT"), "utf8").trim(); } catch { return spawnSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).stdout.trim() || null; } })();
 // Frame times are evidence only from an isolated run: an exclusive grant (SCHED-1), or a host running it alone.
 const judged = (() => {
