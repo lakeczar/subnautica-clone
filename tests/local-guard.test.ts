@@ -53,12 +53,32 @@ test("admitted: inside the ticket's own cgroup (exact, or below), by its recorde
   assert.equal(G.admission({ env: inJob, cgroup: `${scope}/x`, job: { cgroup: null, unit: job.unit }, ...factory }).admitted, true, "no recorded path: by unit");
   for (const cgroup of [`${scope}-escaped.scope/job`, "/user.slice/app.slice/agent.scope", null]) {
     const a = G.admission({ env: inJob, cgroup, job, ...factory });
-    assert.equal(a.admitted, false, String(cgroup));
+    assert.deepEqual([a.admitted, a.refuse], [false, true], String(cgroup));
     assert.match(a.why, /SILTWAKE_JOB_TICKET=261024-000000-abcd is set, but this process isn't in that job's cgroup/);
   }
   assert.equal(G.admission({ env: inJob, cgroup: scope, job: null, ...factory }).admitted, false, "no grant and no cgroup record: no proof");
-  assert.equal(G.admission({ env: { SILTWAKE_HEAVY_LOCK_HELD: "1" }, cgroup: "/user.slice/siltwake-heavy-wt-42.scope/x", ...factory }).admitted, true, "v1's lock");
-  assert.equal(G.admission({ env: { SILTWAKE_HEAVY_LOCK_HELD: "1" }, cgroup: "/user.slice/app.slice/agent.scope", ...factory }).admitted, false);
+});
+
+test("under v1's lock only the exact scope the lock created admits; a claim without proof refuses rather than requeueing (R2-F2)", () => {
+  const v1 = (scope: string | undefined, cgroup: string) => G.admission({ env: { SILTWAKE_HEAVY_LOCK_HELD: "1", ...(scope ? { SILTWAKE_HEAVY_SCOPE: scope } : {}) }, cgroup, ...factory });
+  assert.deepEqual(v1("siltwake-heavy-wt-x-42", "/user.slice/siltwake-heavy-wt-x-42.scope"), { admitted: true, why: "inside v1 heavy-check scope siltwake-heavy-wt-x-42" });
+  assert.equal(v1("siltwake-heavy-wt-x-42", "/user.slice/siltwake-heavy-wt-x-42.scope/tt1-file-0").admitted, true, "below it");
+  for (const [scope, cgroup, what] of [
+    ["siltwake-heavy-wt-x-42", "/user.slice/siltwake-heavy-wt-x-42.scope-escaped.scope/job", "Sol's escaped sibling"],
+    [undefined, "/user.slice/siltwake-heavy-wt-x-42.scope-escaped.scope/job", "the sibling, no scope named"],
+    [undefined, "/user.slice/siltwake-heavy-wt-x-42.scope", "a real-looking scope, but none named"],
+    ["siltwake-heavy-wt-x-42", "/user.slice/siltwake-heavy-other-7.scope", "another v1 job's scope"],
+    ["siltwake-heavy-wt-x-42.scope-escaped", "/user.slice/siltwake-heavy-wt-x-42.scope-escaped.scope", "a name that embeds .scope"],
+    ["agent", "/user.slice/agent.scope", "not a heavy-check unit"],
+  ] as const) {
+    const a = v1(scope, cgroup);
+    assert.deepEqual([a.admitted, a.refuse], [false, true], what);
+    assert.match(a.why, /a heavy-check job is claimed but not proven/, what);
+  }
+  assert.equal(G.admission({ env: { SILTWAKE_HEAVY_LOCK_HELD: "1" }, cgroup: "/x.scope", host: G.SANDBOX.host, sandboxTool: true, queueState: false }).admitted, true,
+    "alickers' lane sets the flag without a scope: the sandbox admits it");
+  const shim = fs.readFileSync("scripts/heavy-check.sh", "utf8");
+  assert.match(shim, /SILTWAKE_HEAVY_SCOPE="\$unit" .*systemd-run --user --scope --quiet --unit="\$unit"/, "the shim names the scope it creates");
 });
 
 test("admitted on alickers only by positive identity; never because something is missing", () => {
@@ -114,9 +134,9 @@ const W = ["node", "scripts/local-guard.mjs"];
 test("each entry point runs the same command again through the queue, in the foreground, with its exit code", () => {
   const cases: [string[], string[]][] = [
     [["npm", "run", "build"], ["--class", "standard", "--machine", "3090", "--", ...W, "--class", "standard", "--machine", "3090", "--", "npm", "run", "build:direct", "--"]],
-    [["npm", "test"], ["--class", "standard", "--machine", "any", "--", ...W, "--class", "standard", "--", "npm", "run", "test:fast:direct", "--"]],
-    [["npm", "run", "typecheck"], ["--class", "quick", "--machine", "any", "--", ...W, "--class", "quick", "--", "npm", "run", "typecheck:direct", "--"]],
-    [["npm", "run", "playthrough", "--", "--scenario", "creel"], ["--class", "playthrough", "--machine", "any", "--", ...W, "--class", "playthrough", "--", "npm", "run", "playthrough:direct", "--", "--scenario", "creel"]],
+    [["npm", "test"], ["--class", "standard", "--machine", "any", "--", ...W, "--class", "standard", "--machine", "any", "--", "npm", "run", "test:fast:direct", "--"]],
+    [["npm", "run", "typecheck"], ["--class", "quick", "--machine", "any", "--", ...W, "--class", "quick", "--machine", "any", "--", "npm", "run", "typecheck:direct", "--"]],
+    [["npm", "run", "playthrough", "--", "--scenario", "creel"], ["--class", "playthrough", "--machine", "any", "--", ...W, "--class", "playthrough", "--machine", "any", "--", "npm", "run", "playthrough:direct", "--", "--scenario", "creel"]],
     [["node", "scripts/test-build.mjs", "--typecheck"], ["--class", "standard", "--machine", "3090", "--", "node", "scripts/test-build.mjs", "--typecheck"]],
     [["node", "scripts/test-build.mjs"], ["--class", "quick", "--machine", "3090", "--", "node", "scripts/test-build.mjs"]],
     [["node", "scripts/test-tier.mjs", "fast"], ["--class", "standard", "--machine", "any", "--", "sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs fast"]],
@@ -186,7 +206,7 @@ test("if the queue client can't be run, it refuses (75) with the reason; it neve
   }
 });
 
-test("inside a real job it runs directly: its recorded cgroup or one above it admits; a string prefix of it doesn't", () => {
+test("inside a real job it runs directly: its recorded cgroup or one above it admits; a string prefix of it refuses", () => {
   const own = fs.readFileSync("/proc/self/cgroup", "utf8").split("\n").find((l) => l.startsWith("0::"))!.slice(3);
   assert.ok(own.split("/").length > 2, own);
   const parent = own.slice(0, own.lastIndexOf("/"));
@@ -195,8 +215,8 @@ test("inside a real job it runs directly: its recorded cgroup or one above it ad
     fs.mkdirSync(join(sched, "jobs", "261024-000000-test"), { recursive: true });
     fs.writeFileSync(join(sched, "jobs", "261024-000000-test", "cgroup"), `/sys/fs/cgroup${recorded}\n`);
     const r = run([...W, "--", "node", "-e", "process.exit(3)"], agentEnv({ SILTWAKE_HEAVY_CHECK: queue, SILTWAKE_SCHED_DIR: sched, SILTWAKE_JOB_TICKET: "261024-000000-test" }));
-    assert.equal(r.status, direct ? 3 : 7, `${recorded}: ${r.stderr}`);
-    assert.equal(calls().length, direct ? 0 : 1);
+    assert.equal(r.status, direct ? 3 : G.REFUSED_EXIT, `${recorded}: ${r.stderr}`);
+    assert.equal(calls().length, 0, "admitted, or refused: never queued again");
   }
 });
 
@@ -219,4 +239,41 @@ test("the override runs it here, logs who, what and why once per command tree, a
 test("--status says what happens here", () => {
   const r = run([...W, "--status", "--json"], agentEnv());
   assert.deepEqual(JSON.parse(r.stdout), { admitted: false, why: "not inside a heavy-check job" });
+});
+
+test("an unproven job claim ends at once, even when the queue client would run it inline (v1's nested branch)", () => {
+  for (const argv of [["npm", "run", "build"], ["node", "scripts/test-build.mjs"], ["bash", "scripts/saves-build-at.sh", "HEAD", "/work/tmp/never-made"]]) {
+    const r = spawnSync(argv[0]!, argv.slice(1), { encoding: "utf8", timeout: 30_000,
+      env: agentEnv({ SILTWAKE_HEAVY_CHECK: resolve("scripts/heavy-check.sh"), SILTWAKE_SCHED_V1: "1", SILTWAKE_HEAVY_LOCK_HELD: "1" }) });
+    assert.equal(r.status, G.REFUSED_EXIT, `${argv.join(" ")}: ${r.error?.message ?? ""}${r.stderr}`);
+    assert.match(r.stderr, /a heavy-check job is claimed but not proven \(SILTWAKE_HEAVY_LOCK_HELD is set without SILTWAKE_HEAVY_SCOPE/);
+  }
+});
+
+test("the package scripts have one literal shape each: the wrapper SCHED's runner aliases, and a direct body in its closed grammar", () => {
+  const scripts = (JSON.parse(fs.readFileSync("package.json", "utf8")) as { scripts: Record<string, string> }).scripts;
+  const TSC = "node node_modules/typescript/bin/tsc";
+  assert.deepEqual({ build: scripts.build, typecheck: scripts.typecheck, "test:fast": scripts["test:fast"], playthrough: scripts.playthrough }, {
+    build: "node scripts/local-guard.mjs --class standard --machine 3090 -- npm run build:direct --",
+    typecheck: "node scripts/local-guard.mjs --class quick --machine any -- npm run typecheck:direct --",
+    "test:fast": "node scripts/local-guard.mjs --class standard --machine any -- npm run test:fast:direct --",
+    playthrough: "node scripts/local-guard.mjs --class playthrough --machine any -- npm run playthrough:direct --",
+  });
+  assert.deepEqual({ b: scripts["build:direct"], t: scripts["typecheck:direct"], f: scripts["test:fast:direct"], p: scripts["playthrough:direct"] }, {
+    b: `node scripts/local-guard.mjs --require npm run build && ${TSC} --noEmit && ${TSC} -p tsconfig.headless.json && node scripts/bake-terrain.mjs && node node_modules/vite/bin/vite.js build`,
+    t: `node scripts/local-guard.mjs --require npm run typecheck && ${TSC} --noEmit && ${TSC} -p tsconfig.headless.json`,
+    f: "node scripts/local-guard.mjs --require npm run test:fast && node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
+    p: `node scripts/local-guard.mjs --require npm run playthrough && ${TSC} -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js`,
+  });
+  // The closed grammar (SCHED-3's portable runner): node steps on repo-relative paths, plain words, joined by " && ".
+  for (const name of ["build:direct", "typecheck:direct", "test:fast:direct", "playthrough:direct"])
+    for (const step of scripts[name]!.split(" && ")) {
+      const w = step.split(" ");
+      assert.equal(w[0], "node", `${name}: ${step}`);
+      assert.ok(/^[A-Za-z0-9_@%+=:,./-]+$/.test(w[1]!) && !w[1]!.startsWith("/") && !w[1]!.startsWith("-") && !w[1]!.split("/").includes(".."), `${name}: ${step}`);
+      assert.ok(w.every((x) => /^[A-Za-z0-9_@%+=:,./-]+$/.test(x)), `${name}: plain words only: ${step}`);
+      assert.ok(w[1] === "scripts/local-guard.mjs" || fs.existsSync(w[1]!) || w[1]!.startsWith(".test-build/"), `${name}: ${w[1]} exists`);
+    }
+  assert.equal(scripts.test, "npm run test:fast");
+  assert.equal(scripts.check, "npm run test:fast && npm run test:heavy && npm run build");
 });

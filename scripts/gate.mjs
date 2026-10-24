@@ -29,7 +29,7 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { admission, localFacts } from "./local-guard.mjs";
+import { admission, localFacts, machineFor } from "./local-guard.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const H = process.env.SILTWAKE_HEAVY_CHECK ?? "/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh";
@@ -64,12 +64,19 @@ export const POST_MERGE = [
 export const BATCH_QUEUE = ["--class", "standard", "--machine", "any"];
 const BATCH_LINE = "gate-batch: ";
 
-/** `--machine` replaces a queued job's own machine tag. */
-export function queueOptions(queue, machineOverride = null) {
-  if (!machineOverride) return queue;
+/**
+ * A queued job's options: `--machine` (the caller's explicit choice) replaces its
+ * tag; otherwise an `any` job follows the local-run guard's machine policy
+ * (machineFor), so a caller's settings pin it to the 3090 as they would a guarded
+ * command (R2-F3).
+ */
+export function queueOptions(queue, machineOverride = null, env = process.env) {
+  const i = queue.indexOf("--machine");
+  const machine = machineOverride ?? (i >= 0 ? machineFor(queue[i + 1], env).machine : null);
+  if (!machine || (i >= 0 && machine === queue[i + 1] && !machineOverride)) return queue;
   const out = [];
-  for (let i = 0; i < queue.length; i++) { if (queue[i] === "--machine") { i++; continue; } out.push(queue[i]); }
-  return [...out, "--machine", machineOverride];
+  for (let j = 0; j < queue.length; j++) { if (queue[j] === "--machine") { j++; continue; } out.push(queue[j]); }
+  return [...out, "--machine", machine];
 }
 let machineOverride = null;
 const command = (s) => s.queue ? [H, "submit", ...queueOptions(s.queue, machineOverride), "--review", "--", ...s.run] : s.run;

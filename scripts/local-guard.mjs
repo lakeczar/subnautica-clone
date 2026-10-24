@@ -9,14 +9,18 @@
 //
 // A command runs directly only when it is admitted:
 // - inside a heavy-check job: SILTWAKE_JOB_TICKET, and this process in that
-//   ticket's own cgroup (scripts/cgroup-scope.mjs: whole path components);
+//   ticket's own cgroup (scripts/cgroup-scope.mjs: whole path components); or,
+//   under v1's lock (scripts/heavy-check.sh's fallback), SILTWAKE_HEAVY_SCOPE, the
+//   exact unit that lock created, as a whole component of this process's cgroup;
 // - on the alickers sandbox, positively identified: its hostname and its
 //   siltwake-job tool, and no queue state there;
 // - with SILTWAKE_LOCAL_OVERRIDE="<why>": run here anyway, logged (who, what, why,
 //   when) to /work/tmp/siltwake-sched/local-overrides.jsonl. If the log can't be
 //   written, it is refused.
-// Anything else is routed. If heavy-check can't be run, the command is refused
-// (exit 75) with the reason: the guard never fails open. It reads no queue state;
+// Anything else is routed. A job claim that isn't proven (a ticket or v1's lock flag
+// without its scope) is refused (75), not queued again: a nested call under v1's
+// lock runs inline, so requeueing it would never end. If heavy-check can't be run,
+// the command is refused (75) with the reason: the guard never fails open. It reads no queue state;
 // the queue decides when the job starts.
 //
 // Not covered, by convention only: bare `npx tsc`, `npx vite build`, `vite dev`,
@@ -38,7 +42,7 @@ import { accessSync, appendFileSync, constants, existsSync, readFileSync } from 
 import { hostname, userInfo } from "node:os";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { hasComponentMatching, hasScopeComponent, ownCgroupPath, withinCgroup } from "./cgroup-scope.mjs";
+import { hasScopeComponent, ownCgroupPath, withinCgroup } from "./cgroup-scope.mjs";
 
 export const PRODUCTION_SCHED_DIR = "/work/tmp/siltwake-sched";
 export const PRODUCTION_QUEUE = "/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh";
@@ -49,14 +53,15 @@ const LOGGED = "SILTWAKE_LOCAL_OVERRIDE_LOGGED";
 /** Not settings: the guard's own variables, and those every heavy-check job sets afresh. */
 const ROUTING_ENV = new Set(["SILTWAKE_HEAVY_CHECK", "SILTWAKE_GUARD_STRICT", "SILTWAKE_LOCAL_OVERRIDE", LOGGED, "SILTWAKE_LANE_TICKET", "SILTWAKE_GPU_LEASE",
   "SILTWAKE_SOAK_MACHINE", "SILTWAKE_SCHED_DIR"]);
-const JOB_ENV = /^SILTWAKE_(JOB_|HEAVY_(LOCK_HELD|CGROUP|CONCURRENCY|POOL_MIB)$)/;
+const JOB_ENV = /^SILTWAKE_(JOB_|HEAVY_(LOCK_HELD|SCOPE|CGROUP|CONCURRENCY|POOL_MIB)$)/;
 
 /**
  * Whether a command may run directly here, from plain facts (testable):
  *   env; cgroup: this process's cgroup path; job: { cgroup, unit } of
  *   SILTWAKE_JOB_TICKET's ticket (null if unknown); host; sandboxTool: the
  *   sandbox's siltwake-job exists; queueState: the production queue directory exists.
- * Returns { admitted, why, override? }.
+ * Returns { admitted, why, override?, refuse? }: refuse when the environment claims a
+ * job this process can't be shown to be in.
  */
 export function admission({ env, cgroup, job = null, host = "", sandboxTool = false, queueState = true }) {
   const ticket = env.SILTWAKE_JOB_TICKET;
@@ -66,14 +71,18 @@ export function admission({ env, cgroup, job = null, host = "", sandboxTool = fa
     if (inside) return { admitted: true, why: `inside heavy-check job ${ticket}` };
     note = ` (SILTWAKE_JOB_TICKET=${ticket} is set, but this process isn't in that job's cgroup)`;
   } else if (env.SILTWAKE_HEAVY_LOCK_HELD) {
-    // v1's lock runs its jobs in siltwake-heavy-*.scope units too.
-    if (hasComponentMatching(cgroup, /^siltwake-heavy-.+\.scope$/)) return { admitted: true, why: "inside a v1 heavy-check scope" };
-    note = " (SILTWAKE_HEAVY_LOCK_HELD is set, but this process isn't in a heavy-check scope)";
+    // v1's lock names the exact scope it created; a name pattern is no proof (R2-F2).
+    const unit = env.SILTWAKE_HEAVY_SCOPE ?? "";
+    if (/^siltwake-heavy-.+-\d+$/.test(unit) && !unit.includes(".scope") && hasScopeComponent(cgroup, unit))
+      return { admitted: true, why: `inside v1 heavy-check scope ${unit}` };
+    note = unit ? ` (SILTWAKE_HEAVY_LOCK_HELD is set, but this process isn't in its scope ${unit})`
+      : " (SILTWAKE_HEAVY_LOCK_HELD is set without SILTWAKE_HEAVY_SCOPE, so its scope can't be checked)";
   }
   if (host === SANDBOX.host && sandboxTool && !queueState && !env.SILTWAKE_GUARD_STRICT) return { admitted: true, why: "on the alickers sandbox" };
   const reason = String(env.SILTWAKE_LOCAL_OVERRIDE ?? "").trim();
   if (reason) return { admitted: true, why: `override: ${reason}`, override: reason };
-  return { admitted: false, why: `not inside a heavy-check job${note}` };
+  if (note) return { admitted: false, refuse: true, why: `a heavy-check job is claimed but not proven${note}` };
+  return { admitted: false, why: "not inside a heavy-check job" };
 }
 
 function readText(path) {
@@ -102,10 +111,19 @@ export const shellWord = (w) => (/^[\w@%+=:,./-]+$/.test(w) ? w : `'${String(w).
  * (SILTWAKE_*, NODE_OPTIONS) that only a job here would see.
  */
 export function routeArgs(argv, { cls = "standard", machine = "any", env = process.env } = {}) {
-  // Settings a routed command keeps only here: the queue sends alickers the command line alone.
+  const m = machineFor(machine, env);
+  return { args: ["run", "--class", cls, "--machine", m.machine, "--", ...argv], note: m.note };
+}
+
+/**
+ * The one machine policy for a job sent on the caller's behalf (this guard's
+ * routing, the gate's batch): `any` becomes `3090` when the caller's environment
+ * carries settings (SILTWAKE_*, NODE_OPTIONS) that only a job here would see,
+ * since the queue sends alickers the command line alone. Returns { machine, note }.
+ */
+export function machineFor(machine, env = process.env) {
   const carried = Object.keys(env).filter((k) => (k.startsWith("SILTWAKE_") && !ROUTING_ENV.has(k) && !JOB_ENV.test(k)) || k === "NODE_OPTIONS");
-  const m = machine === "any" && carried.length ? "3090" : machine;
-  return { args: ["run", "--class", cls, "--machine", m, "--", ...argv], note: m !== machine ? `on factory-worker, so it keeps ${carried.join(", ")}` : "" };
+  return machine === "any" && carried.length ? { machine: "3090", note: `on factory-worker, so it keeps ${carried.join(", ")}` } : { machine, note: "" };
 }
 
 function refuse(what, reason) {
@@ -153,6 +171,7 @@ export function guardLocalRun(spec = {}, env = process.env) {
   const what = argv.join(" ");
   const a = admission(localFacts(env));
   if (a.admitted) { if (a.override) logOverride(what, a.override, env); return a; }
+  if (a.refuse) refuse(what, a.why);
   const command = spec.before ? ["sh", "-c", `${spec.before} && ${argv.map(shellWord).join(" ")}`] : argv;
   routeAndExit(what, command, spec, env);
 }
@@ -162,7 +181,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const a = admission(localFacts(env));
   if (args[0] === "--status") {
     if (args.includes("--json")) console.log(JSON.stringify(a));
-    else console.log(`local CPU work here: ${a.admitted ? "runs directly" : "goes through the queue"} (${a.why})`);
+    else console.log(`local CPU work here: ${a.admitted ? "runs directly" : a.refuse ? "refused" : "goes through the queue"} (${a.why})`);
     process.exit(0);
   }
   if (args[0] === "--require") {
@@ -176,6 +195,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   const command = dash >= 0 ? args.slice(dash + 1) : [];
   if (!command.length) { console.error("usage: local-guard.mjs [--class C] [--machine any|3090] -- COMMAND... | --require [--quiet] HINT | --status [--json]"); process.exit(2); }
   const what = command.join(" ");
+  if (a.refuse) refuse(what, a.why);
   if (!a.admitted) routeAndExit(what, ["node", relative(process.cwd(), join(root, "scripts", "local-guard.mjs")), ...args], { cls: option("--class", "standard"), machine: option("--machine", "any") }, env);
   if (a.override) logOverride(what, a.override, env);
   const r = spawnSync(command[0], command.slice(1), { stdio: "inherit", env });

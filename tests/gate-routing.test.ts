@@ -90,8 +90,9 @@ process.exit(receipt.code);
 function gate(queue: string, jobs: object, args: string[], extra: Record<string, string> = {}) {
   const sched = fs.mkdtempSync(join(tmpdir(), "siltwake-gate-sched-"));
   dirs.push(sched);
-  const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_HEAVY_CHECK: queue, SILTWAKE_SCHED_DIR: sched, SILTWAKE_GUARD_STRICT: "1", GATE_JOBS: JSON.stringify(jobs), ...extra };
-  for (const k of ["SILTWAKE_JOB_TICKET", "SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_LOCAL_OVERRIDE", "SILTWAKE_LOCAL_OVERRIDE_LOGGED", "NODE_TEST_CONTEXT"]) if (!(k in extra)) delete env[k];
+  const base: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of Object.keys(base)) if (k.startsWith("SILTWAKE_") || k === "NODE_OPTIONS" || k === "NODE_TEST_CONTEXT") delete base[k];
+  const env: NodeJS.ProcessEnv = { ...base, SILTWAKE_HEAVY_CHECK: queue, SILTWAKE_SCHED_DIR: sched, SILTWAKE_GUARD_STRICT: "1", GATE_JOBS: JSON.stringify(jobs), ...extra };
   return { ...spawnSync(process.execPath, ["scripts/gate.mjs", ...args], { encoding: "utf8", env }), sched };
 }
 
@@ -142,4 +143,24 @@ test("a batch job that prints no per-step results fails every batched step; --ba
   const bad = spawnSync(process.execPath, ["scripts/gate.mjs", "--batch", "build,bake"], { encoding: "utf8" });
   assert.equal(bad.status, 2);
   assert.match(bad.stderr, /--batch takes local steps only: bake/);
+});
+
+test("the batch and the any-machine steps follow the guard's machine policy: a caller's settings pin them to the 3090 (R2-F3)", () => {
+  const machineOf = (argv: string[]) => argv[argv.indexOf("--machine") + 1];
+  const ok = { batch: { lines: [`gate-batch: ${JSON.stringify([{ id: "fast", problems: [], s: 1 }])}`], receipt: good() }, playthrough: { receipt: good() } };
+  const cases: [Record<string, string>, string[], string, string][] = [
+    [{}, [], "any", "an agent's ordinary environment"],
+    [{ SILTWAKE_FAST_FILE_BUDGET_S: "1" }, [], "3090", "a SILTWAKE_ setting"],
+    [{ NODE_OPTIONS: "--max-old-space-size=1024" }, [], "3090", "NODE_OPTIONS"],
+    [{ SILTWAKE_FAST_FILE_BUDGET_S: "1" }, ["--machine", "4070"], "4070", "the caller's explicit --machine wins"],
+  ];
+  for (const [extra, more, machine, what] of cases) {
+    const { queue, submitted } = standIn();
+    const r = gate(queue, ok, ["--only", "fast,playthrough", ...more], extra);
+    const [batch, playthrough] = submitted();
+    assert.ok(batch!.includes("--batch"), r.stdout + r.stderr);
+    assert.equal(machineOf(batch!), machine, `${what}: the batch`);
+    assert.equal(machineOf(playthrough!), machine, `${what}: the playthrough`);
+    assert.equal(batch!.filter((w) => w === "--machine").length, 1, `${what}: one machine tag`);
+  }
 });

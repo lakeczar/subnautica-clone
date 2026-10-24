@@ -30,8 +30,3 @@ export function hasScopeComponent(path, unit) {
   if (!path || !unit) return false;
   return String(path).split("/").includes(`${unit}.scope`);
 }
-
-/** Whether some complete component of `path` matches `re` (anchored by the caller, e.g. /^siltwake-heavy-.+\.scope$/). */
-export function hasComponentMatching(path, re) {
-  return Boolean(path) && String(path).split("/").some((c) => re.test(c));
-}
