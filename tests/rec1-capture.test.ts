@@ -307,9 +307,10 @@ test("R3-3: pictures the encoder refused are kept as a timestamped gap, survive 
   const header = JSON.parse(worker.exports.at(-1)!.get("header.json")!);
   const gaps = header.retention.videoGaps.filter((g: { kind: string }) => g.kind === "lost");
   assert.equal(gaps.length, 1, JSON.stringify(header.retention.videoGaps));
-  assert.ok(gaps[0].from > 1000 && gaps[0].to < 2000 && gaps[0].pictures >= 10, JSON.stringify(gaps[0]));
+  // The software path captures 6 fps: about six pictures in that second.
+  assert.ok(gaps[0].from > 1000 && gaps[0].to < 2000 && gaps[0].pictures >= 5, JSON.stringify(gaps[0]));
   assert.ok(gaps[0].heldFrom < gaps[0].from, "it names the picture the video holds");
-  assert.ok(header.retention.videoDrops.refused >= 10, "the count survives Off");
+  assert.ok(header.retention.videoDrops.refused >= 5, "the count survives Off");
   const { integrityOf, videoCoverage } = await import(pathToFileURL(path.resolve("scripts/rec/analyse.mjs")).href);
   const integrity = integrityOf({ header, events: [], snapshots: [], rec: tmpdir() }, []);
   assert.ok(integrity.problems.some((p: string) => /video pictures not captured/.test(p)), integrity.problems.join("; "));
@@ -399,7 +400,9 @@ test("R3b: a hardware encoder is preferred at 1280x720 (AV1, VP9, then H.264 in 
   await play(c, 0, 6);
   assert.deepEqual(opens(worker).map((m) => [m.width, m.height, m.hardware]), [[960, 540, false]]);
   const { videoSource } = await import(pathToFileURL(path.resolve("scripts/rec/analyse.mjs")).href);
-  assert.match(videoSource(c.header), /^in-game software VP9 960x540 12 fps$/);
+  assert.match(videoSource(c.header), /^in-game software VP9 960x540 6 fps \(test-machine fallback; the owner's hardware path is 12 fps\)$/);
+  assert.equal((c.header.video as { fps: number }).fps, 6, "the software rung records 6 fps (R3b decision)");
+  assert.match((c.header.video as { fpsNote?: string }).fpsNote ?? "", /Linux test machines only.*12 fps/);
 });
 
 test("R3b: the measurement pause is off in place: the segment ends and its encoder closes, nothing is spooled; resuming starts a new segment", async () => {

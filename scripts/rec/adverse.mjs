@@ -72,7 +72,7 @@ function judgeClock(raw, rec, failed, label = "clock") {
       // Picture 0 is the canvas before the first barcode: dated before the first draw, it is right.
       const d = ids[i] === 0 ? { t: -Infinity, next: draws[0]?.t ?? Infinity } : byId.get(ids[i]), T = seg.start + pt * 1000;
       // In a pause: the last picture drawn, or the one before it if that last one came after the last capture (≤ one interval).
-      const last = lastDrawBefore(T), staleOk = inPause(T) && last && last.id === ids[i] + 1 && last.t - d?.t <= 1000 / 12 + 2;
+      const last = lastDrawBefore(T), staleOk = inPause(T) && last && last.id === ids[i] + 1 && last.t - d?.t <= 1000 / (header.video?.fps ?? 12) + 2;
       return { pt, id: ids[i], T: +T.toFixed(1), drawn: d?.t ?? null, ok: !!d && T >= d.t - 2 && (T <= d.next + 2 || !!staleOk) };
     });
     const bad = frames.filter((f) => !f.ok);
@@ -82,8 +82,8 @@ function judgeClock(raw, rec, failed, label = "clock") {
   const lastT = Math.max(...segments.map((s) => s.lastT ?? -Infinity));
   if (!segments.length) failed.push(`${label}: no video segments`);
   for (const s of segments) if (s.error || s.misdated || !s.frames || s.frames !== s.barcodes) failed.push(`${label}: ${s.file} ${s.error ?? `${s.misdated} of ${s.frames} frames misdated (${s.barcodes} barcodes)`}`);
-  if (!(lastT >= cutoff - 1000 / 12 - 2)) failed.push(`${label}: the video ends at ${lastT}, before the export cutoff ${cutoff}`);
-  return { decoder: ff, segments, cutoff, lastT, reachesCutoff: lastT >= cutoff - 1000 / 12 - 2 };
+  if (!(lastT >= cutoff - 1000 / (header.video?.fps ?? 12) - 2)) failed.push(`${label}: the video ends at ${lastT}, before the export cutoff ${cutoff}`);
+  return { decoder: ff, segments, cutoff, lastT, reachesCutoff: lastT >= cutoff - 1000 / (header.video?.fps ?? 12) - 2 };
 }
 
 if (arg("decode")) {

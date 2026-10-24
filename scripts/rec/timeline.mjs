@@ -7,7 +7,7 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { SERIES, INK, PACE } from "./charts.mjs";
-import { videoSegments } from "./analyse.mjs";
+import { videoFps, videoSegments } from "./analyse.mjs";
 
 const INLINE_VIDEO = 32 * 1024 * 1024;
 /** Points the page carries at most: a ten-hour campaign stays a few MB and draws at once (R2-4). */
@@ -50,7 +50,7 @@ export function timelineHtml(r, a) {
     start: (x.start - t0) / 1000, end: x.end != null ? (x.end - t0) / 1000 : null }));
   const hasVideo = videos.length > 0;
   // Stretches without a fresh picture (R3-3): marked on the chart, and named over the video when the cursor is in one.
-  const gaps = (h.retention?.videoGaps ?? []).map((g) => [s(g.from), s(g.to + 1000 / 12), g.kind, g.heldFrom != null ? s(g.heldFrom) : null]);
+  const gaps = (h.retention?.videoGaps ?? []).map((g) => [s(g.from), s(g.to + 1000 / videoFps(h)), g.kind, g.heldFrom != null ? s(g.heldFrom) : null]);
   const data = { fr, mem, events, spans, videos, gaps, end: +a.durationS.toFixed(1), colors: SERIES, pace: PACE, ink: INK };
   const title = `${h.machine?.label ?? ""} · ${h.gpuDevice?.name ?? h.gpu?.renderer ?? ""} · ${(h.commit ?? h.build?.commit ?? "").slice(0, 10)} · ${a.verdict.status}`;
   return `<!doctype html><html lang=en><meta charset=utf-8><title>Siltwake run timeline · ${esc(title)}</title>

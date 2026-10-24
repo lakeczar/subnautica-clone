@@ -177,7 +177,7 @@ export function analyse(r, t = THRESHOLDS, facts = {}) {
   check("recording complete", integrity.problems.length ? "partial" : integrity.known ? "pass" : "missing",
     integrity.problems.length ? integrity.problems.join("; ") : integrity.known ? integrity.note : "no record of what was drained or spooled");
   const segs = videoSegments(header), v = header.video;
-  const video = videoCoverage(segs, facts.videoSeconds, t0, t0 + durationS * 1000, header.retention?.videoGaps ?? []);
+  const video = videoCoverage(segs, facts.videoSeconds, t0, t0 + durationS * 1000, header.retention?.videoGaps ?? [], videoFps(header));
   check("video", v?.missing || v?.error ? "missing" : !segs.length ? (v ? "missing" : "absent") : video.status, v?.missing ?? v?.error
     ?? (!segs.length ? (v ? "the header names no video with a start" : "off (an exclusive performance run keeps snapshots only)") : `${video.note} (${videoSource(header)})`));
   check("frame times judged", judged ? "pass" : "unproven", judged ? "exclusive run" : "shared run: frame times are recorded, not performance evidence");
@@ -242,7 +242,7 @@ export function integrityOf(r, events) {
   // Pictures drawn but never captured (R3-3): the video holds an older picture through them.
   const lostGaps = (ledger?.videoGaps ?? []).filter((g) => g.kind === "lost");
   if (lostGaps.length) {
-    const pictures = lostGaps.reduce((n, g) => n + g.pictures, 0), seconds = lostGaps.reduce((n, g) => n + (g.to - g.from) / 1000 + 1 / 12, 0);
+    const pictures = lostGaps.reduce((n, g) => n + g.pictures, 0), seconds = lostGaps.reduce((n, g) => n + (g.to - g.from) / 1000 + 1 / videoFps(h), 0);
     const why = [...new Set(lostGaps.map((g) => g.why))].slice(0, 3).join("; ");
     problems.push(`${pictures} video pictures not captured in ${lostGaps.length} stretch${lostGaps.length === 1 ? "" : "es"} (${seconds.toFixed(1)} s: ${why}); the video holds an older picture there`);
   }
@@ -265,7 +265,7 @@ export function integrityOf(r, events) {
 }
 
 /** How much of the measured window the video files cover (R1-F4): from their real durations, never the header alone. */
-export function videoCoverage(segs, seconds, from, to, gaps = []) {
+export function videoCoverage(segs, seconds, from, to, gaps = [], fps = 12) {
   if (!segs.length) return { status: "absent", note: "no video", covered: 0 };
   if (!seconds) return { status: "unproven", note: `${segs.length} video file(s) named; their durations were not read`, covered: null };
   let covered = 0;
@@ -278,7 +278,7 @@ export function videoCoverage(segs, seconds, from, to, gaps = []) {
   }
   // A file's span is not all fresh pictures (R3-3): stretches the recorder could not capture are subtracted.
   let unpictured = 0;
-  for (const g of gaps.filter((x) => x.kind === "lost")) { const a = Math.max(from, g.from), b = Math.min(to, g.to + 1000 / 12); if (b > a) unpictured += b - a; }
+  for (const g of gaps.filter((x) => x.kind === "lost")) { const a = Math.max(from, g.from), b = Math.min(to, g.to + 1000 / fps); if (b > a) unpictured += b - a; }
   covered = Math.max(0, covered - unpictured);
   const share = to > from ? covered / (to - from) : 0;
   if (missing.length) return { status: "missing", note: `${missing.length} of ${segs.length} video files absent or unreadable (${missing.slice(0, 2).join(", ")})`, covered: share };
@@ -335,6 +335,9 @@ export function pacing(r, rel) {
   return { share: Object.fromEntries(Object.entries(share).map(([k, v]) => [k, { s: Math.round(v), pct: Math.round((v / total) * 100) }])), playSeconds: Math.round(play), milestones, between, regions, spans };
 }
 
+/** The recording's pictures per second (R3b: the hardware path records 12, the Linux software fallback 6). */
+export const videoFps = (header) => header.video?.fps ?? 12;
+
 /** How the video was captured, from the header, in a few words (R3b: a pack states its own capture quality). */
 export function videoSource(header) {
   const v = header.video;
@@ -343,7 +346,7 @@ export function videoSource(header) {
   const sizes = [...new Set((v.segments ?? []).map((x) => (x.width ? `${x.width}x${x.height}` : null)).filter(Boolean))];
   const size = sizes.length ? sizes.join(", ") : v.size ? `${v.size.width}x${v.size.height}` : "";
   const codec = { V_VP9: "VP9", V_VP8: "VP8", V_AV1: "AV1", "V_MPEG4/ISO/AVC": "H.264" }[v.codec] ?? v.codec ?? "?";
-  return `in-game ${v.hardware ? "hardware" : "software"} ${codec} ${size} ${v.fps} fps`.replace(/\s+/g, " ").trim();
+  return `in-game ${v.hardware ? "hardware" : "software"} ${codec} ${size} ${v.fps} fps${v.hardware ? "" : " (test-machine fallback; the owner's hardware path is 12 fps)"}`.replace(/\s+/g, " ").trim();
 }
 
 /** Tier 0: the one-glance verdict, under 1 KB. */

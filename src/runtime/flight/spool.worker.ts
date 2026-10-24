@@ -117,8 +117,8 @@ async function exportZip(dir: string, out: string): Promise<number> {
 
 /** Encoder input waiting beyond this is dropped at the source: under load the video loses frames, never its clock. */
 const ENCODE_QUEUE_MAX = 2;
-/** A key frame this often (frames), and at every segment's start: seeking stays cheap. */
-const KEY_EVERY = 24;
+/** A key frame every 2 s (in frames at the segment's rate), and at every segment's start: seeking stays cheap. */
+let keyEvery = 24;
 type Segment = { dir: string; file: string; h: SyncHandle; clusters: WebmClusters; origin: number | null; frames: number; broken: boolean; headWritten: boolean };
 let encoder: VideoEncoder | null = null, encoderSize = "", codec: WebmCodec = "V_VP9", lastPicture: ImageBitmap | VideoFrame | null = null, lastT = -Infinity;
 /** Measurement only (`?recencode=0`, R3b's decomposition): pictures arrive and are released, nothing is encoded. */
@@ -181,6 +181,7 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
 async function videoOpen(m: Extract<Message, { op: "video-open" }>): Promise<void> {
   try {
     encodeOff = m.encode === false;
+    keyEvery = Math.max(1, Math.round(m.fps * 2));
     if (!encodeOff) await openEncoder(m.width, m.height, m.fps, m.bitrate, m.rungs, m.file.endsWith(".mkv") ? "matroska" : "webm");
     const h = await handle(m.dir, m.file);
     h.truncate(0);
@@ -211,7 +212,7 @@ function videoFrame(m: Extract<Message, { op: "video-frame" }>): void {
   // The segment's origin is its first encoded picture's page time: the main thread dates the file by it.
   if (seg.origin === null) { seg.origin = m.t; scope.postMessage({ videoOrigin: seg.file, t: m.t }); }
   const frame = new VideoFrame(picture!, { timestamp: Math.round(m.t * 1000) });
-  try { encoder.encode(frame, { keyFrame: seg.frames % KEY_EVERY === 0 }); } finally { frame.close(); }
+  try { encoder.encode(frame, { keyFrame: seg.frames % keyEvery === 0 }); } finally { frame.close(); }
   seg.frames++;
   scope.postMessage({ videoFrame: 1, kept: true, t: m.t });
 }

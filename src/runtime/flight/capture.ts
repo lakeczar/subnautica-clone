@@ -33,6 +33,7 @@ export function flightMode(settings: FlightSettings, search = globalThis.locatio
   return { mode, video: mode === "playtest" && (video === null ? settings.video : video === "1") };
 }
 
+/** The hardware cadence; a recording's own is its encoder rung's (encoders.ts: software records 6 fps). */
 export const VIDEO_FPS = 12;
 export const VIDEO_SIZE = { width: 1280, height: 720 } as const;
 /** The software encoder's picture width (R3b: its CPU contends with the game's frame; the owner decides the fallback's size). */
@@ -158,6 +159,8 @@ export class FlightCapture {
   private videoPlan: { rung: EncoderRung | null; width: number } | null = null;
   private videoWanted = false;
   private get videoWidth(): number { return this.videoPlan?.width ?? this.softwareWidth; }
+  /** Pictures per second: the chosen rung's (hardware 12, software 6: encoders.ts). */
+  private get videoFps(): number { return this.videoPlan?.rung?.fps ?? VIDEO_FPS; }
   private minVideo = MIN_VIDEO_BUDGET_BYTES;
   private readonly restoreConsole: (() => void) | null = null;
   private readonly encoder = new TextEncoder();
@@ -260,7 +263,7 @@ export class FlightCapture {
       // buffer) and handed to the worker's encoder with this frame's time.
       // Under load the video skips frames, never the game.
       if (now >= v.next) {
-        v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
+        v.next = Math.max(v.next + 1000 / this.videoFps, now - 1000 / this.videoFps);
         if (v.inflight + v.capturing >= VIDEO_INFLIGHT_MAX) { v.skipped++; this.ledger.videoDrops.skipped++; this.videoGap(now, "lost", "the video was behind on the main thread", v.lastKept ?? v.lastSent); }
         else if (this.captureMode === "stream") {
           // `?reccapture=stream` (R3b probe): the page only asks for a frame; the browser copies the canvas in its
@@ -302,7 +305,7 @@ export class FlightCapture {
     const start = performance.now();
     const v = this.video;
     if (v && !v.paused && v.frames > 0 && v.capturing === 0 && now >= v.next) {
-      v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
+      v.next = Math.max(v.next + 1000 / this.videoFps, now - 1000 / this.videoFps);
       if (v.inflight >= VIDEO_INFLIGHT_MAX) { v.skipped++; this.ledger.videoDrops.skipped++; this.videoGap(now, "lost", "the video was behind on the main thread", v.lastKept ?? v.lastSent); }
       else this.sendFrame(v, now);
     }
@@ -318,7 +321,7 @@ export class FlightCapture {
     const s = this.spool;
     if (!s || t <= v.lastSent) { bitmap?.close(); return; }
     // No frame drawn at all for a while (a stall, or the tab hidden): the screen held too; the file holds its last picture (R3-3).
-    if (Number.isFinite(v.lastSent) && t - v.lastSent > STILL_GAP_MS) this.videoGap(v.lastSent + 1000 / VIDEO_FPS, "still", "no frame was drawn (a stall, or the tab hidden)", v.lastSent, t);
+    if (Number.isFinite(v.lastSent) && t - v.lastSent > STILL_GAP_MS) this.videoGap(v.lastSent + 1000 / this.videoFps, "still", "no frame was drawn (a stall, or the tab hidden)", v.lastSent, t);
     v.lastSent = t;
     v.inflight++;
     v.frames++;
@@ -328,7 +331,7 @@ export class FlightCapture {
   /** A stretch without a fresh picture, merged with the last one of its kind when they touch (R3-3). */
   private videoGap(t: number, kind: "lost" | "still", why: string, heldFrom: number, to = t): void {
     const gaps = this.ledger.videoGaps, last = gaps.at(-1);
-    if (last && last.kind === kind && last.why === why && t - last.to <= 2 * (1000 / VIDEO_FPS)) { last.to = Math.round(to); last.pictures += kind === "lost" ? 1 : 0; }
+    if (last && last.kind === kind && last.why === why && t - last.to <= 2 * (1000 / this.videoFps)) { last.to = Math.round(to); last.pictures += kind === "lost" ? 1 : 0; }
     else if (gaps.length < VIDEO_GAPS_MAX) gaps.push({ from: Math.round(t), to: Math.round(to), kind, why, pictures: kind === "lost" ? 1 : 0, heldFrom: Number.isFinite(heldFrom) ? Math.round(heldFrom) : null });
     this.ledgerChanged = true;
   }
@@ -479,7 +482,7 @@ export class FlightCapture {
     const v: Video = { segment: this.newSegment(performance.now()), next: 0, frames: 0, inflight: 0, capturing: 0, skipped: 0, lastSent: -Infinity, paused: false };
     this.video = v;
     const r = this.videoPlan.rung;
-    this.recorder.event("session", `video started (WebCodecs, ${r ? `${r.hardware ? "hardware" : "software"} ${describeCodec(r.codecId)}` : "no encoder known"}, ${VIDEO_FPS} fps, ${v.segment.width}x${v.segment.height}, ${v.segment.file})`, { snapshot: false });
+    this.recorder.event("session", `video started (WebCodecs, ${r ? `${r.hardware ? "hardware" : "software"} ${describeCodec(r.codecId)}` : "no encoder known"}, ${this.videoFps} fps, ${v.segment.width}x${v.segment.height}, ${v.segment.file})`, { snapshot: false });
   }
   /** The encoder, decided once per recording (R3b): the first rung of the ladder the browser supports,
    * hardware at VIDEO_SIZE, software at the fallback's width. The worker confirms it (or the rungs below). */
@@ -488,7 +491,7 @@ export class FlightCapture {
     const probe = (globalThis as { VideoEncoder?: { isConfigSupported?(c: unknown): Promise<{ supported?: boolean }> } }).VideoEncoder?.isConfigSupported;
     for (const r of ladder(this.videoRungs, true, this.software)) {
       const size = r.hardware ? VIDEO_SIZE : this.scaled(this.softwareWidth);
-      if (!probe || (await supportedConfig(r, size.width, size.height, VIDEO_BITS, VIDEO_FPS, (c) => probe.call(VideoEncoder, c)))) { chosen = r; break; }
+      if (!probe || (await supportedConfig(r, size.width, size.height, VIDEO_BITS, r.fps, (c) => probe.call(VideoEncoder, c)))) { chosen = r; break; }
     }
     this.videoPlan = { rung: chosen, width: chosen?.hardware ? VIDEO_SIZE.width : this.softwareWidth };
     if (!chosen) {
@@ -523,7 +526,7 @@ export class FlightCapture {
     const file = `video/${String(index).padStart(3, "0")}.${this.videoPlan?.rung?.container === "matroska" ? "mkv" : "webm"}`;
     this.segments.push({ file, start: null, end: null, ...size });
     this.stored.set(file, { session: this.session, file, kind: "video", bytes: 0 });
-    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, rungs: this.rungsFromPlan(), encode: this.encodeVideo });
+    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: this.videoFps, bitrate: VIDEO_BITS, rungs: this.rungsFromPlan(), encode: this.encodeVideo });
     return { file, index, start: null, began: now, ...size };
   }
   /** The rungs the worker may open: the planned one, then those below it (should the browser refuse it after all). */
@@ -533,7 +536,8 @@ export class FlightCapture {
   }
   private videoHeader(): void {
     const v = this.video;
-    this.header.video = { source: "game", encoder: "webcodecs", codec: this.codec, hardware: this.hardware, fps: VIDEO_FPS, size: v ? { width: v.segment.width, height: v.segment.height } : VIDEO_SIZE,
+    this.header.video = { source: "game", encoder: "webcodecs", codec: this.codec, hardware: this.hardware, fps: this.videoFps,
+      ...(this.videoPlan?.rung && !this.videoPlan.rung.hardware ? { fpsNote: "software encoding, Linux test machines only: 6 fps by decision (R3b); the owner's hardware path records 12 fps" } : {}), size: v ? { width: v.segment.width, height: v.segment.height } : VIDEO_SIZE,
       bitsPerSecond: VIDEO_BITS, segments: this.segments.filter((x) => x.start !== null),
       ...(this.segments[0]?.start != null ? { file: this.segments[0].file, start: this.segments[0].start } : {}) };
     this.putHeader();

@@ -14,7 +14,7 @@
 //         recording/          the raw recording, video.webm included
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, renameSync } from "node:fs";
 import path from "node:path";
-import { analyse, loadRecording, summaryJson, THRESHOLDS, HOLDING, videoSegments } from "./analyse.mjs";
+import { analyse, loadRecording, summaryJson, THRESHOLDS, HOLDING, videoFps, videoSegments } from "./analyse.mjs";
 import { composeStrip, composer, extractFrames, remuxSegment, renderHtml, ensureDir, videoSeconds as videoSeconds_ } from "./imaging.mjs";
 import { frameTimeSvg, memorySvg, pacingSvg, fmtTime } from "./charts.mjs";
 import { unzip } from "./unzip.mjs";
@@ -30,7 +30,7 @@ export function grid(n, width = STRIP.width) {
 }
 
 /** Builds one strip around page time `center` (or across [from, to] at `fps`). */
-export async function strip(r, a, page, { title, out, center = null, from, to, fps = STRIP.fps }) {
+export async function strip(r, a, page, { title, out, center = null, from, to, fps = Math.min(STRIP.fps, videoFps(r.header)) }) {
   const segs = videoSegments(r.header).filter((x) => existsSync(path.join(r.rec, x.file)));
   const label = (pt) => {
     const s = a.sampleAt(pt), f = nearestFrame(r.frames, pt);
@@ -67,7 +67,7 @@ export async function strip(r, a, page, { title, out, center = null, from, to, f
 }
 /** A tile inside a stretch the recorder could not picture (R3-3): it shows the last capture, and says so. */
 export function heldNote(header, pt, t0) {
-  const gap = (header.retention?.videoGaps ?? []).find((g) => pt >= g.from - 1 && pt < g.to + 1000 / 12);
+  const gap = (header.retention?.videoGaps ?? []).find((g) => pt >= g.from - 1 && pt < g.to + 1000 / videoFps(header));
   if (!gap) return null;
   const from = gap.heldFrom != null ? ` · held from ${((gap.heldFrom - t0) / 1000).toFixed(2)}s` : "";
   return `${gap.kind === "lost" ? "NO PICTURE (not captured)" : "NOTHING DRAWN"}${from}`;

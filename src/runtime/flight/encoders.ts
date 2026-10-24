@@ -24,20 +24,26 @@ export interface EncoderRung {
   container: Container;
   /** Further VideoEncoderConfig fields (H.264's bitstream format). */
   extra?: Record<string, unknown>;
+  /** Pictures per second this rung captures and encodes. */
+  fps: number;
 }
 
 const AVC = { avc: { format: "avc" } }, HEVC = { hevc: { format: "hevc" } };
+/** Hardware: 12 fps, the owner's evidence cadence. Software (Linux test machines only): 6 fps, decided
+ * 2026-10-24 (R3b): there capturing pictures, not encoding them, held the page over its 1% budget, and
+ * agents combing bot and test footage do not need 12 fps. The owner's footage is never software. */
+export const HARDWARE_FPS = 12, SOFTWARE_FPS = 6;
 export const ENCODER_LADDER: readonly EncoderRung[] = [
   // Hardware, in the research's order for an RTX 40 laptop (BROWSER-HW-VIDEO-ENCODE-SOL §7): AV1, H.264, HEVC; then VP9 (Intel).
-  { key: "av1-hw", codec: "av01.0.05M.08", hardware: true, codecId: "V_AV1", container: "webm" },
+  { key: "av1-hw", codec: "av01.0.05M.08", hardware: true, codecId: "V_AV1", container: "webm", fps: HARDWARE_FPS },
   // Nearly every GPU's encoder, integrated ones included: as Matroska (WebM carries no H.264 or HEVC).
-  { key: "h264-hw", codec: "avc1.42001f", hardware: true, codecId: "V_MPEG4/ISO/AVC", container: "matroska", extra: AVC },
-  { key: "hevc-hw", codec: "hvc1.1.6.L93.B0", hardware: true, codecId: "V_MPEGH/ISO/HEVC", container: "matroska", extra: HEVC },
-  { key: "vp9-hw", codec: "vp09.00.31.08", hardware: true, codecId: "V_VP9", container: "webm" },
+  { key: "h264-hw", codec: "avc1.42001f", hardware: true, codecId: "V_MPEG4/ISO/AVC", container: "matroska", extra: AVC, fps: HARDWARE_FPS },
+  { key: "hevc-hw", codec: "hvc1.1.6.L93.B0", hardware: true, codecId: "V_MPEGH/ISO/HEVC", container: "matroska", extra: HEVC, fps: HARDWARE_FPS },
+  { key: "vp9-hw", codec: "vp09.00.31.08", hardware: true, codecId: "V_VP9", container: "webm", fps: HARDWARE_FPS },
   // Software: Linux test machines only (owner policy), at the fallback's width.
-  { key: "vp9", codec: "vp09.00.31.08", hardware: false, codecId: "V_VP9", container: "webm" },
-  { key: "vp8", codec: "vp8", hardware: false, codecId: "V_VP8", container: "webm" },
-  { key: "h264", codec: "avc1.42001f", hardware: false, codecId: "V_MPEG4/ISO/AVC", container: "matroska", extra: AVC },
+  { key: "vp9", codec: "vp09.00.31.08", hardware: false, codecId: "V_VP9", container: "webm", fps: SOFTWARE_FPS },
+  { key: "vp8", codec: "vp8", hardware: false, codecId: "V_VP8", container: "webm", fps: SOFTWARE_FPS },
+  { key: "h264", codec: "avc1.42001f", hardware: false, codecId: "V_MPEG4/ISO/AVC", container: "matroska", extra: AVC, fps: SOFTWARE_FPS },
 ];
 /** The default ladder: every hardware rung, then software (used only where software is allowed). */
 export const DEFAULT_RUNGS = ["av1-hw", "h264-hw", "hevc-hw", "vp9-hw", "vp9", "vp8"];
