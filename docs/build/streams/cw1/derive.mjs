@@ -33,6 +33,8 @@ const world = gameWorld(), DART = HULL_COLLIDERS[HULL], DEEPEST = Number(process
 // must sweep the hull against them (mouths, terraces, overhangs), not only the floor.
 world.kitCaves.step(world.kitCaves.clusters.map(c => c.index), Infinity, () => performance.now());
 console.log(`kit caves resident for planning: ${world.kitCaves.resident.length} clusters, ${world.kitCaves.stats.residentBoxes} boxes`);
+/** The keel's margin over the floor under the hull's footprint, metres. */
+const KEEL = 1;
 const clamp = (y, x, z) => Math.min(-2, Math.max(DEEPEST, worldFloor(x, z) + 3, y));
 // The library save every segment starts from, and its craft.
 const picked = execFileSync(process.execPath, [path.join(B, "scripts/playthrough/saves.js"), "pick", SAVE], { cwd: repo, encoding: "utf8" }).trim().split("\n");
@@ -71,8 +73,6 @@ const SITES = [...STOP_IDS.map(id => ({ id, at: WORKING_STOPS[id].mooring, radiu
   return [];
 });
 console.log(`service sites on this save: ${SITES.map(s => s.id).join(", ")}`);
-/** The keel's margin over the floor under the hull's footprint, metres. */
-const KEEL = 1;
 /** A clear pose near `p`: step outward along `n`, then up, until it fits. */
 function clearNear(p, n) {
   for (let out = 0; out <= 24; out += 2) for (const up of [0, 2, 4, 7, 10]) {
