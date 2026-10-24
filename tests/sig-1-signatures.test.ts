@@ -5,7 +5,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { ITEMS, MATERIALS, RECIPES, SOURCES } from "../src/content/registry.js";
-import type { HullId, ItemKind, SourceId } from "../src/content/registry.js";
+import type { HullId, SourceId } from "../src/content/registry.js";
 import { UPGRADES } from "../src/content/upgrades/catalogue.js";
 import type { UpgradeId } from "../src/content/upgrades/catalogue.js";
 import { LOST_SITES, DECODABLES } from "../src/content/systems/decodes.js";
@@ -13,8 +13,6 @@ import { addItem, containerAccessible, podContainerId } from "../src/sim/invento
 import { makeVehicle } from "../src/sim/state.js";
 import { executeCommand, stepGameInPlace } from "../src/sim/step.js";
 import { gameWorld } from "../src/sim/world.js";
-import { vehicleHoldCapacity } from "../src/sim/fittings.js";
-import { slotOf } from "../src/sim/upgrades/fitting.js";
 import { armTarget } from "../src/sim/fleet.js";
 import { CAVE_FEATURES, craftActions, lineHolds, liftJob, signatureLoudness, stepSignatures } from "../src/sim/signatures.js";
 import { CUTTING_ARM, GRAPPLE, hostKind, WIDE_SONAR } from "../src/sim/upgrades/tools.js";
@@ -23,25 +21,12 @@ import { createWorldQueries } from "../src/sim/world.js";
 import { playerView } from "../src/render/camera.js";
 import type { GameCommand, GameEvent, GameState, Vec3, VehicleState, WorldQueries } from "../src/sim/types.js";
 import { at, creelFirst, fund, saveable } from "./b1-support.js";
+import { stagedHull } from "./sig-1-support.js";
 
 const world = gameWorld();
-/** A hull of `hull` at `p` with `kinds` fitted, optionally piloted, facing `yaw`. */
-function withHull(s: GameState, hull: HullId, p: Vec3, kinds: readonly UpgradeId[], pilot = true, yaw = 0): VehicleState {
-  const v = makeVehicle(`${hull}_sig`, hull, { ...p }, `${hull}_sig_hold`);
-  v.pose.yaw = yaw;
-  s.fleet.vehicles.push(v);
-  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", capacity: 0, ownerId: v.id });
-  for (const k of kinds) {
-    const item = addItem(s, k as ItemKind, 1, v.cargoId, slotOf(hull, k) === "socket" ? null : "mount");
-    v.modules.push(item.id);
-  }
-  s.inventory.containers.find((c) => c.id === v.cargoId)!.capacity = vehicleHoldCapacity(s, v);
-  if (pilot) {
-    s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.interiorId = null; s.player.interiorPose = null;
-    s.player.pose = { ...structuredClone(v.pose) };
-  }
-  return v;
-}
+/** A paid, staged hull of `hull` at `p` with `kinds` fitted (tests/sig-1-support.ts). */
+const withHull = (s: GameState, hull: Exclude<HullId, "hearthline">, p: Vec3, kinds: readonly UpgradeId[], pilot = true, yaw = 0): VehicleState =>
+  stagedHull(s, hull, p, kinds, pilot, yaw);
 const act = (s: GameState, action: Extract<GameCommand, { type: "upgrade" }>["action"], w: WorldQueries = world) =>
   executeCommand(s, { type: "upgrade", action }, w);
 const hullIn = (s: GameState, v: VehicleState): VehicleState => s.fleet.vehicles.find((x) => x.id === v.id)!;
@@ -151,7 +136,7 @@ test("Creel grapple: the line holds the hull at its length, reels it in, and rel
 
 test("Creel grapple hooks a frame within 30 m and reels it aboard", () => {
   const id = (Object.keys(SOURCES) as SourceId[]).find((k) => SOURCES[k].item === "tagged_frame")!;
-  const f = SOURCES[id].position, p = { x: f.x, y: f.y + 15, z: f.z };
+  const f = SOURCES[id].position, p = { x: f.x + 10, y: f.y + 10, z: f.z };
   const s = creelFirst(), v = withHull(s, "creel", p, ["creel_grapple"]);
   aim(s, p, f);
   const water = createWorldQueries([], () => -2000);
@@ -230,12 +215,14 @@ test("Mantle scout drone: it flies on the pilot's input while the Mantle holds, 
   assert.ok(Math.hypot(h.pose.position.x - p.x, h.pose.position.z - p.z) < 0.6, "the Mantle held station");
   const view = playerView(out, null, null, { x: 0, y: 0, z: 0 });
   assert.deepEqual(view.eye, d, "the view is the drone's");
-  const src = (Object.keys(SOURCES) as SourceId[]).find((k) => !out.knowledge.scans.includes(k))!;
-  h.upgrades = { ...h.upgrades, drone: { ...h.upgrades.drone!, position: { ...SOURCES[src].position, y: SOURCES[src].position.y + 2 } } };
+  const src = (Object.keys(SOURCES) as SourceId[]).find((k) => !out.knowledge.scans.includes(k))!, sp = SOURCES[src].position;
+  // The Mantle holds 20 m off the source; its drone flies within 12 m of it.
+  h.pose.position = { x: sp.x + 20, y: sp.y + 2, z: sp.z };
+  h.upgrades = { ...h.upgrades, drone: { ...h.upgrades.drone!, position: { ...sp, y: sp.y + 2 } } };
   const found: GameEvent[] = [];
   stepSignatures(out, world, found);
   assert.ok(out.knowledge.scans.includes(src), "a source within 12 m is scanned");
-  h.upgrades = { ...h.upgrades, drone: { ...h.upgrades.drone!, position: { x: p.x + 70, y: p.y, z: p.z } } };
+  h.upgrades = { ...h.upgrades, drone: { ...h.upgrades.drone!, position: { x: h.pose.position.x + 70, y: h.pose.position.y, z: h.pose.position.z } } };
   const home: GameEvent[] = [];
   stepSignatures(out, world, home);
   assert.equal(h.upgrades.drone, null, "beyond its tether it is recalled");

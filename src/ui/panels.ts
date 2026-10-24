@@ -155,11 +155,10 @@ export class PanelView {
     return true;
   }
   showJournalTab(id: JournalTabId): void { this.journalTab = id; }
-  /** Cargo filter chips are panel-local too: true when `action` was one. */
-  selectCargoFilter(action: string): boolean {
-    const id = action.startsWith("cargo-filter:") ? action.slice(13) as CargoFilter : null;
-    if (!id || !(CARGO_FILTERS as readonly string[]).includes(id)) return false;
-    this.cargoFilter = id;
+  /** The Cargo filter is panel-local: true when `value` named one. */
+  selectCargoFilter(value: string): boolean {
+    if (!(CARGO_FILTERS as readonly string[]).includes(value)) return false;
+    this.cargoFilter = value as CargoFilter;
     return true;
   }
 
@@ -339,15 +338,15 @@ export class PanelView {
     }).join("") + (hidden ? `<p class="filtered-out">${hidden} other item${hidden === 1 ? "" : "s"} hidden by the filter</p>` : "") ||
       '<p class="empty-hold">Empty</p>';
   }
-  /** UI-01: one row of kind chips, with how many reachable stacks each shows. */
+  /** UI-01: the kind filter, with how many reachable stacks each kind shows. */
   private cargoFilterBar(state: GameState): string {
     const reach = new Set(state.inventory.containers.filter((c) => c.kind !== "equipment" && containerAccessible(state, c.id)).map((c) => c.id));
     const stacks = state.inventory.items.filter((i) => reach.has(i.containerId));
-    const chip = (id: CargoFilter): string => {
+    const option = (id: CargoFilter): string => {
       const n = id === "all" ? stacks.length : stacks.filter((i) => cargoKind(i.kind) === id).length;
-      return `<button data-action="cargo-filter:${id}" aria-pressed="${this.cargoFilter === id}">${CARGO_FILTER_LABELS[id]} <small>${n}</small></button>`;
+      return `<option value="${id}"${this.cargoFilter === id ? " selected" : ""}>${CARGO_FILTER_LABELS[id]} · ${n}</option>`;
     };
-    return `<nav class="cargo-filter" aria-label="Show in Cargo">${CARGO_FILTERS.map(chip).join("")}</nav>`;
+    return `<label class="cargo-filter">Show<select id="cargo-filter" data-focus-key="cargo-filter">${CARGO_FILTERS.map(option).join("")}</select></label>`;
   }
 
   private hold(state: GameState, button: CommandButton): string {

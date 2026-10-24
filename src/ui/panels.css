@@ -192,7 +192,5 @@
 .developer-tools { margin-top: 16px; opacity: .85; }
 
 /* UI-01: Cargo's kind filter. */
-.cargo-filter { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 10px; }
-.cargo-filter button[aria-pressed="true"] { border-color: #ffca89; color: #ffe1b2; }
-.cargo-filter small { opacity: 0.75; }
+.cargo-filter { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
 .filtered-out { font-size: 12px; opacity: 0.7; }

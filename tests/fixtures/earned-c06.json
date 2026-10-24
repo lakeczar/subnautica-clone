@@ -1,6 +1,6 @@
 {
   "format": "siltwake.save",
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "contentVersion": "expedition.7",
   "meta": {
     "sessionId": "338a55b0-2d9c-4db0-835f-dca9aefe50fb",
@@ -1039,7 +1039,12 @@
             },
             "grapple": null,
             "pod": null,
-            "anchored": false
+            "anchored": false,
+            "sonar": null,
+            "tag": null,
+            "drone": null,
+            "lift": null,
+            "tow": null
           },
           "bioFeed": null
         }
@@ -1058,7 +1063,8 @@
       "beacons": [],
       "beaconsOff": [],
       "categoriesOff": [],
-      "chart": []
+      "chart": [],
+      "moduleUpgrades": {}
     },
     "story": {
       "discoveries": [],

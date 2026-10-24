@@ -219,16 +219,18 @@ function grapple(s: GameState, v: VehicleState, p: CraftProfile, world: WorldQue
   const frame = nearestInCone(origin, aim, FRAME_HOSTS.filter((f) => (s.world.resources.find((r) => r.id === f.id)?.stock ?? 0) > 0),
     GRAPPLE.range, GRAPPLE_CONE_DEG);
   if (frame && world.lineOfSight(origin, frame.position, [v.id])) {
-    const hold = { anchor: { ...frame.position }, length: Math.max(GRAPPLE.minLength, distance(origin, frame.position)), reeling: true, load: frame.id };
+    const hold = { anchor: { ...frame.position }, length: Math.max(GRAPPLE.minLength, distance(v.pose.position, frame.position)), reeling: true, load: frame.id };
     v.upgrades = { ...v.upgrades, grapple: hold };
     return ok({ kind: "grapple", vehicleId: v.id, phase: "fired", anchor: hold.anchor, load: frame.id },
       `Grapple hooked ${SOURCES[frame.id as SourceId].label} · reeling it in. Keep the line clear.`, "Frame hooked");
   }
   const fired = fireGrapple(p, origin, aim, world);
   if ("refusal" in fired) return no("no-target", fired.refusal);
-  v.upgrades = { ...v.upgrades, grapple: { ...fired.line, reeling: false, load: null } };
+  // The line is fired from the bow, but held (`grappleStep`) at the hull's centre: measure it there.
+  const length = Math.max(GRAPPLE.minLength, distance(v.pose.position, fired.line.anchor));
+  v.upgrades = { ...v.upgrades, grapple: { anchor: fired.line.anchor, length, reeling: false, load: null } };
   return ok({ kind: "grapple", vehicleId: v.id, phase: "fired", anchor: fired.line.anchor, load: null },
-    `Grapple set · ${Math.round(fired.line.length)} m line. It holds the hull against currents; reel to haul in.`, "Line set");
+    `Grapple set · ${Math.round(length)} m line. It holds the hull against currents; reel to haul in.`, "Line set");
 }
 /** Frame hosts the grapple can hook, and how true its aim must be. */
 const FRAME_HOSTS: readonly SensedFeature[] = (Object.keys(SOURCES) as SourceId[]).filter((id) => SOURCES[id].item === "tagged_frame")

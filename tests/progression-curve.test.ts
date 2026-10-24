@@ -84,10 +84,13 @@ test("each clue unlocks a bounded, exact plan set; every one of the 120 clue ord
     // C4: each clue's plans also carry the SYS-1 upgrades drawn on them.
     C01: [], C02: ["salvage_buoy", "bobbin_kit", "glow_lures", "startle_ink", "bobbin_deep_tether", "flare_launcher", "emergency_ballast", "hand_net"],
     C03: ["restore_workshop", "dart_base", "hearthline_base", "galley_planter", "plating_alloy", "cell_bank_1", "drive_tuning_1",
-      "floodlights_1", "dart_overdrive", "hearthline_system_bay", "hearthline_mooring_anchor", "outpost_network_1"],
+      "floodlights_1", "dart_overdrive", "hearthline_system_bay", "hearthline_mooring_anchor", "hearthline_berth_extension", "outpost_network_1"],
     // HUB-2: each crown stage unlocks with the plan it uses.
-    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop", "trim_vanes", "restore_crown_dock", "silent_running", "chart_live_position"],
-    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "hearthline_keel", "restore_crown_power", "creel_service_head"],
+    // SIG-1: the signatures drawn on the same plans (the tagger, the Creel's tools, the berth extension).
+    C04: ["dart_acoustic_trim", "suit_350", "restore_canopy_stop", "trim_vanes", "restore_crown_dock", "silent_running", "dart_range_tagger",
+      "chart_live_position"],
+    C05: ["creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "hearthline_keel", "restore_crown_power", "creel_service_head",
+      "creel_cutting_arm", "creel_grapple", "creel_drop_pod"],
     C06: ["creel_350", "suit_450", "creel_450", "restore_rift_station", "hearthline_550", "heat_shroud", "hull_heat_lining",
       "restore_crown_survey", "plating_ceramic", "cell_bank_2", "drive_tuning_2", "thermal_exchanger", "floodlights_2", "hush_450", "dart_450"],
   });
@@ -97,7 +100,7 @@ test("each clue unlocks a bounded, exact plan set; every one of the 120 clue ord
   for (const bp of ["bp_carrier_basin", "bp_rift_pressure"] as const) assert.ok(Object.hasOwn(FUTURE_BLUEPRINTS, bp), bp);
   // S9: carrier construction is registered, done at the stack-yard berth C3 places.
   assert.deepEqual(ids.filter((r) => (RECIPES[r].bp as string) === "bp_carrier_workshop"),
-    ["hearthline_base", "galley_planter", "hearthline_system_bay", "hearthline_mooring_anchor"]);
+    ["hearthline_base", "galley_planter", "hearthline_system_bay", "hearthline_mooring_anchor", "hearthline_berth_extension"]);
   const finals = new Set<string>();
   for (const order of permutations(["C02", "C03", "C04", "C05", "C06"] as const)) {
     const s = opened();
