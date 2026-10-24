@@ -442,4 +442,4 @@ Code at **`43645268`** on `t3/pace-1-stage-1`, stacked on LS-1's head `4593705d`
 
 **Known limits:**
 - The Creel's longest stretch, 850 s (the forced haul home → gate), stays until stage 2.
-- Food on the long carrier legs is 6 meals in the stores. Nothing starved, and the lowest food reading was 28.
+- **Food runs lower on the carrier route.** The lowest reading is 13.7, in carrier-deep on both carrier routes, against 28 at LS-1's head. There is no incapacity or starvation recovery. Carrier-deep no longer goes home for the seam trip in the middle of the phase, so the bot eats only from the 3 meals it carries. The forward legs after it carry 6 meals in the stores. Root fix, if a playtest finds it tight: the carrier's galley crop (an optional purchase already in the ledger).
