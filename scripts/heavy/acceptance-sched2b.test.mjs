@@ -1126,3 +1126,30 @@ test("B42 (SCHED-3 R4-F1): a registered command whose script falls outside the r
     assert.deepEqual([argv.join(" "), result(c, id).remote, result(c, id).argv, result(c, id).goal.portable], [argv.join(" "), undefined, argv, undefined]);
   }
 });
+
+// SCHED-3 R5 ------------------------------------------------------------------
+
+test("B43 (SCHED-3 R5-F1, Sol's symlink probe): a committed node step that links to a program outside the repository (npm itself) runs here as submitted, never through the runner; a link into the repository's node_modules stays portable", async () => {
+  const c = await lane("symlink-npm");
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\nnode_modules\n", "scripts/case.mjs": "console.log('CASE-RAN');\n",
+    "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "node scripts/npm-alias.mjs run inner", inner: "node scripts/case.mjs", "test:fast": "node scripts/tool.mjs" } }) + "\n" });
+  symlinkSync("/usr/lib/node_modules/npm/bin/npm-cli.js", join(c.repoDir, "scripts", "npm-alias.mjs"));
+  // A dependency, as installed: node_modules is a link to a shared store, and a committed script links into it.
+  const store = join(c.dir, "store");
+  mkdirSync(join(store, "tool"), { recursive: true });
+  writeFileSync(join(store, "tool", "cli.mjs"), "console.log('TOOL-RAN');\n");
+  symlinkSync(store, join(c.repoDir, "node_modules"));
+  symlinkSync("../node_modules/tool/cli.mjs", join(c.repoDir, "scripts", "tool.mjs"));
+  git(c.repoDir, "add", "scripts/npm-alias.mjs", "scripts/tool.mjs");
+  git(c.repoDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "links");
+  const s = hc(c, ["submit", "--class", "standard", "--", "npm", "test"], { cwd: c.repoDir });
+  assert.equal(s.code, 0, s.err);
+  assert.match(s.err, /runs here \(factory-worker\), not on alickers: scripts\/npm-alias\.mjs resolves outside the repository and its node_modules \(\/usr\/lib\/node_modules\/npm\/bin\/npm-cli\.js\); pass --machine any to declare it portable/);
+  await done(c, s.out.trim(), 60000);
+  assert.deepEqual([result(c, s.out.trim()).remote, result(c, s.out.trim()).argv, result(c, s.out.trim()).goal.portable], [undefined, ["npm", "test"], undefined]);
+  const t = hc(c, ["submit", "--class", "standard", "--", "npm", "run", "test:fast"], { cwd: c.repoDir });
+  assert.equal(t.code, 0, t.err);
+  assert.doesNotMatch(t.err, /runs here/);
+  await done(c, t.out.trim(), 60000);
+  assert.deepEqual([ticketOf(c, t.out.trim()).goal.portable.name, ticketOf(c, t.out.trim()).argv[1]], ["the fast tier", "scripts/heavy/portable-run.mjs"]);
+});

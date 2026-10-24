@@ -15,10 +15,17 @@
 //   portable-run.mjs --script NAME [ARGS...]   a package.json script; ARGS appended as npm does
 //
 // It runs at the package root, as npm runs scripts, each step after the one
-// before succeeded (&&), and exits with the first failing step's code.
+// before succeeded (&&), and exits with the first failing step's code (128 +
+// the signal's own number for one a signal ended, as sh reports it). A stop
+// it receives (TERM, INT, HUP) is passed to the step running and always ends
+// the run with that signal's code, even if the step then exits 0.
+// Before each step it checks the step's file stays inside the repository or
+// its own node_modules (stepBoundary), so a committed symlink can't run a
+// program from elsewhere on the machine.
 import { spawn } from "node:child_process";
-import { readFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
+import { constants } from "node:os";
+import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { QUEUE_OWNED } from "./policy.mjs";
 
@@ -35,6 +42,31 @@ export function portableEnv(env, root) {
 // The grammar's words: plain, never quoted, expanded or an option of node's own.
 const PLAIN = /^[A-Za-z0-9_@%+=:,./-]+$/;
 const repoPath = (w) => PLAIN.test(w) && !w.startsWith("/") && !w.startsWith("-") && !w.split("/").includes("..");
+
+/** `p`'s real path, every symlink followed, a dangling one too (its target may exist on the
+ * other machine); components that don't exist yet (a build output) are kept as written. */
+function realpathLoose(p, depth = 0) {
+  try { return realpathSync(p); } catch { /* not all there */ }
+  const up = dirname(p);
+  if (up === p || depth > 40) return p;
+  const here = join(realpathLoose(up, depth + 1), basename(p));
+  try { if (lstatSync(here).isSymbolicLink()) return realpathLoose(resolve(dirname(here), readlinkSync(here)), depth + 1); } catch { /* absent */ }
+  return here;
+}
+const inside = (p, dir) => { const r = relative(dir, p); return r === "" || (r !== ".." && !r.startsWith("../") && !isAbsolute(r)); };
+
+/**
+ * Whether a node step's file, followed through every symlink, stays inside the
+ * repository at `root` or the repository's own node_modules (wherever that
+ * links: a worktree's or a snapshot's shared install), R5-F1. Returns null,
+ * or the reason it doesn't. No list of programs: the boundary is the rule.
+ */
+export function stepBoundary(root, path) {
+  const realRoot = realpathLoose(root), real = realpathLoose(join(root, path));
+  const modules = join(root, "node_modules"), realModules = existsSync(modules) ? realpathLoose(modules) : null;
+  if (inside(real, realRoot) || (realModules && inside(real, realModules))) return null;
+  return `${path} resolves outside the repository and its node_modules (${real})`;
+}
 
 /**
  * A package.json script in a closed grammar (R4-F1). The script is steps
@@ -75,15 +107,18 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   if (mode !== "--script" || !name) { console.error("usage: portable-run.mjs --script NAME [ARGS...]"); process.exit(2); }
   const r = resolveScript(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts, name, rest);
   if (r.error) { console.error(`portable-run: ${r.error}`); process.exit(2); }
+  const outside = r.steps.map(([, path]) => stepBoundary(root, path)).find(Boolean);
+  if (outside) { console.error(`portable-run: ${outside}`); process.exit(2); }
   console.error(`portable-run: ${r.command}`);
   const env = portableEnv(process.env, root);
-  const SIG = { SIGHUP: 1, SIGINT: 2, SIGKILL: 9, SIGTERM: 15 };
+  const code = (signal) => 128 + (constants.signals[signal] ?? 0); // the platform's number, as sh reports it
   let child = null, stopped = null;
-  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => { stopped = sig; child?.kill(sig); });
+  for (const sig of ["SIGTERM", "SIGINT", "SIGHUP"]) process.on(sig, () => { stopped ??= sig; child?.kill(sig); });
   for (const [cmd, ...argv] of r.steps) {
-    if (stopped) process.exit(128 + SIG[stopped]);
+    if (stopped) break;
     child = spawn(cmd, argv, { cwd: root, env, stdio: "inherit" });
-    const code = await new Promise((done) => child.on("exit", (c, signal) => done(c ?? 128 + (SIG[signal] ?? 1))));
-    if (code !== 0) process.exit(code);
+    const rc = await new Promise((done) => child.on("exit", (c, signal) => done(c ?? code(signal))));
+    if (rc !== 0) process.exit(stopped ? code(stopped) : rc);
   }
+  process.exit(stopped ? code(stopped) : 0); // a stop received is never a success
 }

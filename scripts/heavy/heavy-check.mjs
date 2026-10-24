@@ -28,7 +28,7 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, intentEnv, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
-import { resolveScript } from "./portable-run.mjs";
+import { resolveScript, stepBoundary } from "./portable-run.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
 import { buildOnly, builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
@@ -147,6 +147,8 @@ async function submit(opts, command, { quiet = false } = {}) {
     if (!r.error) {
       try { r = resolveScript(JSON.parse(show("package.json").stdout).scripts, portable.run[1], portable.run.slice(2)); } catch { r = { error: "its package.json can't be read" }; }
     }
+    // Every step's file, through its symlinks, inside the repository or its node_modules (R5-F1); the tree is clean, so this is the commit.
+    if (!r.error) { const outside = r.steps.map(([, path]) => stepBoundary(worktree, path)).find(Boolean); if (outside) r = { error: outside }; }
     if (r.error) Object.assign(routed, { machine: "3090", routed: { from: "any", reason: `${r.error}; pass --machine any to declare it portable` } });
     else { run = ["node", relative(cwd, join(worktree, "scripts", "heavy", "portable-run.mjs")), ...portable.run]; req.goal.portable = { name: portable.name, command }; }
   }
@@ -274,8 +276,10 @@ async function follow(id, { stream, maxS = null, json = false }) {
     const line = positionLine(id);
     if (line == null) { if (++missing > 4) fail(`ticket ${id} is not queued or running and has no result`); }
     else missing = 0;
-    if (line && (line !== lastLine || Date.now() - lastPrinted > 300000) && !(stream && line.startsWith("running"))) {
-      say(`${id} ${line}`); lastLine = line; lastPrinted = Date.now();
+    // Printed when the position or blocker changes (not the clock), and every 5 minutes (SCHED-3 R5).
+    const key = line?.replace(/(, waited| for) \S+$/, "");
+    if (line && (key !== lastLine || Date.now() - lastPrinted > 300000) && !(stream && line.startsWith("running"))) {
+      say(`${id} ${line}`); lastLine = key; lastPrinted = Date.now();
     }
     if (maxS != null && Date.now() - started >= maxS * 1000) {
       say(`${id} still pending (${line ?? "unknown"}); call wait again`);

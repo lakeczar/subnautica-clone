@@ -35,6 +35,29 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
 
+## R5 review responses (part 1: F1–F3 and follow-ups, before composing with STEW-2)
+
+Review `36018341` on `review/sched-3-r5`, by Sol on `7aa88a3d`: REQUEST CHANGES. The R4 cases pass. The coordinator's decisions:
+- **F1 (P1), symlinks escaped the boundary** (a committed `node scripts/x.mjs` linked to npm-cli.js ran real npm). `portable-run.mjs` `stepBoundary(root, path)` follows the step's file through every symlink, a dangling one too, since its target may exist on the other machine. Components not built yet, such as `.test-build/…`, are kept as written.
+  - **Portability requires** the real file to be inside the repository, or inside the repository's own `node_modules` wherever that links: a worktree's shared install, or a snapshot's link.
+  - **Where it's checked:** `heavy-check` checks every step at submit (the tree is clean, so this is the commit), and runs the job here as submitted with `<path> resolves outside the repository and its node_modules (<target>)`. The runner checks again before running anything (exit 2).
+  - There's no list of programs anywhere.
+- **F2 (P2), signals:**
+  - A step a signal ended gives 128 + the platform's number for it (`os.constants.signals`), as `sh` reports, instead of a four-entry table.
+  - A stop the runner receives is passed to the running step, and the run always ends with that stop's code, even if the step then exits 0.
+- **F3 (P2), the v1 fallback:** `scripts/heavy-check.sh`'s v1 parser accepts and ignores `--machine` and `--artifact`. v1 runs everything here, its outputs where it wrote them. So package.json's `test:heavy` runs under v1 too.
+- **Follow-ups:**
+  - **`heavy-check run`/`wait`:** they print the queued line only when the position or blocker changes (the clock no longer counts), and every 5 minutes.
+  - **STEW-2's `scripts/cgroup-scope.mjs`** isn't on root yet, and the installed scheduler copies only `scripts/heavy`, so adopting it for the nested and GPU checks comes with the composition (part 2).
+- **Tests:**
+  - **`tests/heavy-portable-run.test.ts`, new:**
+    - the boundary: a link into a shared `node_modules`, a link inside the repository and a not-yet-built output pass; a link to npm-cli.js, a linked directory outside, and a dangling link to an outside path don't;
+    - the runner refusing before running anything;
+    - SIGUSR2 giving 140, the same as `sh`, with the later step not run;
+    - TERM to the runner during a last step that exits 0 on TERM giving 143;
+    - the v1 shim inline with `--machine any --artifact out`.
+  - **B43 (Sol's symlink probe):** the npm link runs here as submitted with the boundary reason. A committed link into a linked `node_modules` stays portable.
+
 ## R4 review responses
 
 Review `f8378439` on `review/sched-3-r4`, by Sol on `194dcdc8`: REQUEST CHANGES. The R3 probes and the focused checks pass. The findings:
