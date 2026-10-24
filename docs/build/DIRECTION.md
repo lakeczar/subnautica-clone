@@ -164,5 +164,10 @@ From the [steward verdict](https://github.com/lakeczar/subnautica-clone/blob/res
    - never keep a `GameState` or hull reference across frames or yields; snapshot explicitly, as the corridor search does;
    - memoize derived data only for a measured hot consumer, and only under an explicit revision, never under object identity.
 8. **Every cache has an owner, a byte bound, an eviction rule and a ledger registration.** `geometryCache.ts` is the model. A `WeakMap` hung off a long-lived root is not a budget.
-9. **Perf claims come from `--class exclusive` on the 3090, plus a 4070 check.** A hot-path change reports µs per call and allocations per call on a SAVE-1 save, bound to its SHA. Shared-host numbers are labelled indicative.
+9. **Only acceptance numbers need an exclusive quiet run** (owner, 2026-10-24; replaces "perf claims come from exclusive on the 3090").
+   - **Exclusive:** frame-time gates ("60 fps on a GPU") and budget confirmations run `--class exclusive` on a quiet test GPU.
+   - **Hot-path microbenchmarks:** report **thread CPU time and allocations per call** on a SAVE-1 save, bound to its SHA, on an ordinary `quick` or `standard` seat on any machine.
+   - **Before/after comparisons run as one duet job:** both arms in the same job, interleaved, with a fixed run count, a margin declared in advance and an "inconclusive" outcome.
+   - **Exclusive windows never compile:** the build is ready before the run starts.
+   - Wall-clock numbers from a shared host are labelled indicative.
 10. **A preview reuses the authority, it doesn't copy the rule.** A UI answer either calls a pure plan shared with execution (`planSpend`/`applySpend`, `servicePreview`) or dry-runs the real command on a clone. It never re-derives the rule in UI code. A dry run on a clone is fine on a click, but not every frame.

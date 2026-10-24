@@ -1201,3 +1201,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Bake-off and proof:** a three-tier bake-off; first proof an ENV-1 room kit.
   - **Owner asks:** one install (`x11vnc novnc websockify xauth`); no paid tools or AI generation.
   - **Round 2 cross-critique** dispatched to both sides; the coordinator decides after it.
+- **Owner decisions (2026-10-24):**
+  - **Reader request:** the owner sends it to fleet; it now includes per-process GPU-engine counters (approved).
+  - **Convention 9 amended:** only acceptance numbers are exclusive; microbenchmarks use CPU time and allocations on normal seats; duet A/Bs; no compiling in exclusive windows.
+  - **SCHED-5 approved:** instrument the drain and backfill waste first, build only if it pays; after SCHED-4/4b.
+  - **The full heavy tier goes into the root gate** (`--machine any`), later affected-only plus a nightly run; this is **STEW-3**, together with stored per-file heavy results and the `test-tier` "override is not budget evidence" label.
