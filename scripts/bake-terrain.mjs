@@ -133,9 +133,15 @@ if (stored?.fingerprint === storeKey && stored.sourceHash === sourceHash) {
 const { bakeTargets, bakeCaveTargets, packKitCaves } = await import(pathToFileURL(bundle).href);
 const ids = bakeTargets().map(c => c.id), caveIds = bakeCaveTargets();
 const n = Math.max(1, Math.min(Number(process.env.BAKE_WORKERS ?? 4), availableParallelism()));
+// Each worker bakes one contiguous block of the grid (columns in order), not every n-th chunk: a cave's
+// shells are memoised per worker, so round-robin chunks built nearly every shell in every worker (CW-1
+// after COL-1: about 380 MiB a worker, 2.2 GiB at four). In blocks a cave's shells are built once, or
+// twice at a block edge. The bytes are the same either way (`--verify`).
+const gridOrder = [...ids].sort((a, b) => { const [, ax, az] = a.split(":").map(Number), [, bx, bz] = b.split(":").map(Number); return ax - bx || az - bz; });
+const blocks = Array.from({ length: n }, (_, w) => gridOrder.slice(Math.round(w * gridOrder.length / n), Math.round((w + 1) * gridOrder.length / n)));
 const started = Date.now(), baked = new Map(), caves = new Map();
 await Promise.all(Array.from({ length: n }, (_, w) => new Promise((done, fail) => {
-  const mine = ids.filter((_, i) => i % n === w), myCaves = caveIds.filter((_, i) => i % n === w);
+  const mine = blocks[w], myCaves = caveIds.filter((_, i) => i % n === w);
   const worker = new Worker(fileURLToPath(import.meta.url), { workerData: { bundle, ids: mine, caveIds: myCaves } });
   worker.on("message", m => (m.kind === "chunk" ? baked : caves).set(m.id, m));
   worker.on("error", fail);
