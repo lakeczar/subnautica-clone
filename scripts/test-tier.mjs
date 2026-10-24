@@ -59,8 +59,9 @@ if (tier !== "fast" && tier !== "heavy") {
   console.error("usage: node scripts/test-tier.mjs fast|heavy [compiled test files...]");
   process.exit(2);
 }
-// Not while a 3090 exclusive run is running or queued, outside the queue (STEW-2).
-guardLocalRun();
+// On factory-worker, only inside a heavy-check job (STEW-2). Routed, the job compiles
+// first: on alickers there is no .test-build until it does.
+guardLocalRun({ cls: tier === "heavy" ? "heavy-suite" : "standard", before: "node scripts/test-build.mjs" });
 if (!existsSync(testDir)) {
   console.error(`test-tier: ${relative(root, testDir)} is missing; run \`node scripts/test-build.mjs\` first`);
   process.exit(2);
@@ -196,16 +197,34 @@ const budgetMiB = (file) => Number(process.env.SILTWAKE_HEAVY_BUDGET_MIB) ||
 // Files whose tests assert elapsed time (`exclusive` in heavy-budgets.json) run in a
 // phase of their own after every other file, one at a time (STEW-2). A heavy file
 // that reads a clock must say which kind it is, listed under `exclusive` or under
-// `clockWithoutBound` (it only reports a time), so a new timing bound can't run
-// beside other files unnoticed. Only the test file itself is scanned, not helpers.
+// `clockWithoutBound` (it only reports a time, or polls with a timeout), so a new
+// timing bound can't run beside other files unnoticed. The scan covers the file and
+// the test helpers it imports from its own directory, and these clock reads, aliased
+// or imported forms included: Date.now, Date(), new Date with no argument,
+// performance (perf_hooks), hrtime, CPU-usage clocks and console.time.
 const tsName = (file) => basename(file).replace(/\.js$/, ".ts");
 const timingFiles = new Set(budgets.exclusive ?? []), clockOnly = new Set(budgets.clockWithoutBound ?? []);
 const isTiming = (file) => timingFiles.has(tsName(file));
-const CLOCK_RE = /\bperformance\.now\s*\(|\bprocess\.hrtime\b|\bthreadCpuUsage\s*\(|\bprocess\.cpuUsage\s*\(/;
-const unclassified = files.filter((f) => !isTiming(f) && !clockOnly.has(tsName(f)) && CLOCK_RE.test(readFileSync(f, "utf8")));
+const CLOCK_RE = new RegExp([
+  String.raw`\bDate\s*\.\s*now\b`, String.raw`\bDate\s*\[`, String.raw`\bnew\s+Date\b(?!\s*\(\s*[^\s)])`, String.raw`(?<![\w.])Date\s*\(\s*\)`,
+  String.raw`[=:(,]\s*Date\s*[;,)}]`, String.raw`\bperformance\s*[.\[]`, String.raw`\}\s*=\s*performance\b`, String.raw`=\s*performance\s*[;,]`,
+  String.raw`\bperf_hooks\b`, String.raw`\bhrtime\b`, String.raw`\b(?:thread)?[cC]puUsage\b`, String.raw`\bresourceUsage\b`, String.raw`\bconsole\s*\.\s*time(?:End|Log)?\s*\(`,
+].join("|"));
+/** Whether `file`, or a helper it imports from its own directory (transitively), reads a clock. */
+function readsClock(file, seen = new Set()) {
+  if (seen.has(file)) return false;
+  seen.add(file);
+  let text;
+  try { text = readFileSync(file, "utf8"); } catch { return false; }
+  if (CLOCK_RE.test(text)) return true;
+  for (const m of text.matchAll(/(?:\bfrom\s*|\bimport\s*\(?\s*)["'](\.\/[^"'/]+\.js)["']/g))
+    if (readsClock(join(dirname(file), m[1]), seen)) return true;
+  return false;
+}
+const unclassified = files.filter((f) => !isTiming(f) && !clockOnly.has(tsName(f)) && readsClock(f));
 if (unclassified.length) {
-  console.error(`test-tier: ${unclassified.map(tsName).join(", ")} read a clock. In tests/heavy-budgets.json, list each under ` +
-    "`exclusive` if it asserts elapsed time (it then runs in the timing phase, alone), or under `clockWithoutBound` if it only reports one.");
+  console.error(`test-tier: ${unclassified.map(tsName).join(", ")} read a clock (itself or through a helper). In tests/heavy-budgets.json, list each under ` +
+    "`exclusive` if it asserts elapsed time (it then runs in the timing phase, alone), or under `clockWithoutBound` if it only reports one or polls with a timeout.");
   process.exit(2);
 }
 const containment = heavyContainment();

@@ -22,8 +22,8 @@ import { fileURLToPath } from "node:url";
 import { heavyJobGuard, keepHeavyJobMarker } from "./heavy/build-guard.mjs";
 import { guardLocalRun } from "./local-guard.mjs";
 
-// Not while a 3090 exclusive run is running or queued, outside the queue (STEW-2).
-guardLocalRun();
+// On factory-worker, only inside a heavy-check job (STEW-2); here, because .test-build is its product.
+guardLocalRun({ cls: process.argv.includes("--typecheck") ? "standard" : "quick", machine: "3090" });
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The build directory sits at the worktree root, like .test-build, so compiled
 // tests that find the root at ../../ still do.

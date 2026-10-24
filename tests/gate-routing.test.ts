@@ -1,4 +1,4 @@
-// test-tier: allow-escape spawns scripts/gate.mjs against a stand-in queue (a small node script) and a private queue state root; nothing runs locally and nothing loads Babylon.
+// test-tier: allow-escape spawns scripts/gate.mjs against a stand-in queue (a small node script); routed, nothing runs locally, and nothing loads Babylon.
 import test, { after } from "node:test";
 import assert from "node:assert/strict";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -7,26 +7,12 @@ import { tmpdir } from "node:os";
 import { join, resolve } from "node:path";
 import { pathToFileURL } from "node:url";
 
-// The gate's local steps (STEW-2): while a 3090 exclusive run is running or queued,
-// the gate runs no local step here. Every remaining local step goes to the queue as
-// one `--machine any` job (`gate.mjs --batch`), after the queued steps they follow,
-// and each is reported from that job's per-step results and judged on its receipt.
-interface Step { id: string; queue?: string[]; run: string[] }
-interface Receipt { code: number; stopReason?: string | null; label?: string | null; pending?: boolean;
-  context?: { disturbed?: boolean } | null; evidence?: { commit: string | null; bound: boolean; why?: string | null } }
-interface Result { id: string; problems: string[]; s: number }
-interface Gate {
-  GATE: Step[];
-  BATCH_QUEUE: string[];
-  routeSteps(steps: Step[], batched: boolean): ({ step: Step } | { batch: Step[] })[];
-  batchResults(ids: string[], inner: Result[] | null, receipt: Receipt | null, commit: string): Result[];
-  parseBatch(lines: string[]): Result[] | null;
-}
-const G = await import(pathToFileURL(resolve("scripts/gate.mjs")).href) as Gate;
-const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
-const good = (over: Partial<Receipt> = {}): Receipt => ({ code: 0, stopReason: null, label: null, context: null, evidence: { commit: head, bound: true, why: null }, ...over });
-const ids = (only: string[]) => G.GATE.filter((s) => only.includes(s.id));
-const shape = (units: ReturnType<Gate["routeSteps"]>) => units.map((u) => "step" in u ? u.step.id : `[${u.batch.map((s) => s.id).join(",")}]`);
+// The gate's local steps (STEW-2): on factory-worker (anywhere the local-run guard
+// doesn't admit local CPU work) the gate runs no local step here. Every local step
+// goes to the queue as one `--machine any` job (`gate.mjs --batch`), after the
+// queued steps they follow, and each is reported from that job's per-step results
+// and judged on its receipt. Where it is admitted (a job, alickers, the override)
+// they run directly.
 
 test("routing: the batch follows the queued steps a batched step comes after; the rest keep their order", () => {
   const economy = G.GATE.filter((s) => s.id.startsWith("economy:")).map((s) => s.id);
@@ -84,51 +70,57 @@ process.exit(receipt.code);
     .map((f) => JSON.parse(fs.readFileSync(join(dir, f), "utf8")) as string[]);
   return { queue, submitted };
 }
-function schedRoot(tickets: Record<string, unknown>): string {
-  const dir = fs.mkdtempSync(join(tmpdir(), "siltwake-gate-sched-"));
-  dirs.push(dir);
-  fs.writeFileSync(join(dir, "state.json"), JSON.stringify({ protocol: 1, seq: 1, tickets }));
-  return dir;
+/** The gate as an agent on factory-worker starts it: not in a job, not on the sandbox (strict), no override unless given. */
+function gate(queue: string, jobs: object, args: string[], extra: Record<string, string> = {}) {
+  const sched = fs.mkdtempSync(join(tmpdir(), "siltwake-gate-sched-"));
+  dirs.push(sched);
+  const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_HEAVY_CHECK: queue, SILTWAKE_SCHED_DIR: sched, SILTWAKE_GUARD_STRICT: "1", GATE_JOBS: JSON.stringify(jobs), ...extra };
+  for (const k of ["SILTWAKE_JOB_TICKET", "SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_LOCAL_OVERRIDE", "SILTWAKE_LOCAL_OVERRIDE_LOGGED", "NODE_TEST_CONTEXT"]) if (!(k in extra)) delete env[k];
+  return { ...spawnSync(process.execPath, ["scripts/gate.mjs", ...args], { encoding: "utf8", env }), sched };
 }
-function gate(queue: string, sched: string, jobs: object, ...args: string[]) {
-  const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_HEAVY_CHECK: queue, SILTWAKE_SCHED_DIR: sched, GATE_JOBS: JSON.stringify(jobs) };
-  for (const k of ["SILTWAKE_JOB_TICKET", "SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_LOCAL_OVERRIDE", "NODE_TEST_CONTEXT"]) delete env[k];
-  return spawnSync(process.execPath, ["scripts/gate.mjs", ...args], { encoding: "utf8", env });
-}
-const runningExclusive = { "261024-161316-84bc": { state: "running", req: { class: "exclusive" } } };
 
-test("with a 3090 exclusive running, the local steps run as one queued job after the bake, reported step by step", () => {
+test("on factory-worker the local steps run as one queued job after the bake, reported step by step", () => {
   const { queue, submitted } = standIn();
   const inner = [{ id: "build", problems: [], s: 41 }, { id: "economy:m1", problems: ["exit 1"], s: 2 }];
-  const r = gate(queue, schedRoot(runningExclusive), {
+  const r = gate(queue, {
     bake: { receipt: good() },
     batch: { lines: ["…", `gate-batch: ${JSON.stringify(inner)}`, "alickers-job: tested x exit 1"], receipt: good({ code: 1 }) },
-  }, "--only", "build,bake,economy:m1", "--allow-dirty");
+  }, ["--only", "build,bake,economy:m1", "--allow-dirty"]);
   const [bake, batch] = submitted();
   assert.deepEqual(bake!.slice(0, 2), ["--class", "bake"], "the bake first: the build expects it current");
   assert.deepEqual(batch, ["--class", "standard", "--machine", "any", "--review", "--", "node", "scripts/gate.mjs", "--batch", "build,economy:m1", "--allow-dirty"]);
   assert.equal(submitted().length, 2, "nothing else, and nothing ran here");
-  assert.match(r.stdout, /local steps, as one queued job: 3090 exclusive 261024-161316-84bc is running/);
+  assert.match(r.stdout, /local steps, as one queued job \(not inside a heavy-check job\)/);
   const table = r.stdout.slice(r.stdout.lastIndexOf("\ngate at "));
   assert.match(table, /pass {2}bake[\s\S]*pass {2}build {16}\s+41 s\n {2}FAIL {2}economy:m1 +2 s {2}exit 1\n/, table);
   assert.match(r.stdout, /gate FAILED: economy:m1/);
   assert.equal(r.status, 1);
 });
 
-test("--queued routes the local steps even when the machine is free, and --machine moves the batch too", () => {
+test("--machine moves the batch too; --list shows it", () => {
   const { queue, submitted } = standIn();
-  const r = gate(queue, schedRoot({}), { batch: { lines: [`gate-batch: ${JSON.stringify([{ id: "economy:m2-a", problems: [], s: 1 }])}`], receipt: good() } },
-    "--only", "economy:m2-a", "--queued", "--machine", "4070");
+  const r = gate(queue, { batch: { lines: [`gate-batch: ${JSON.stringify([{ id: "economy:m2-a", problems: [], s: 1 }])}`], receipt: good() } },
+    ["--only", "economy:m2-a", "--machine", "4070"]);
   assert.deepEqual(submitted()[0]!.slice(0, 5), ["--class", "standard", "--machine", "4070", "--review"]);
   assert.match(r.stdout, /^ {2}pass {2}economy:m2-a /m, r.stdout + r.stderr);
   assert.equal(r.status, 0, r.stdout);
   const list = spawnSync(process.execPath, ["scripts/gate.mjs", "--list"], { encoding: "utf8" }).stdout;
-  assert.match(list, /local steps, while a 3090 exclusive run is running or queued \(or with --queued\), all in one job:\n.*submit --class standard --machine any --review -- node scripts\/gate\.mjs --batch/);
+  assert.match(list, /local steps, on factory-worker \(anywhere the local-run guard doesn't admit them\), all in one job:\n.*submit --class standard --machine any --review -- node scripts\/gate\.mjs --batch/);
+});
+
+test("admitted (here, the logged override) the local steps run directly, and nothing is queued", () => {
+  const { queue, submitted } = standIn();
+  const r = gate(queue, {}, ["--only", "economy:m2-a"], { SILTWAKE_LOCAL_OVERRIDE: "gate-routing test: one economy step" });
+  assert.equal(r.status, 0, r.stdout + r.stderr);
+  assert.equal(submitted().length, 0);
+  assert.match(r.stdout, /── gate: economy:m2-a · .* \(directly: override: gate-routing test: one economy step\)/);
+  assert.match(r.stdout, /^ {2}pass {2}economy:m2-a /m);
+  assert.equal(fs.readFileSync(join(r.sched, "local-overrides.jsonl"), "utf8").trim().split("\n").length, 1, "logged once");
 });
 
 test("a batch job that prints no per-step results fails every batched step; --batch takes local steps only", () => {
   const { queue } = standIn();
-  const r = gate(queue, schedRoot(runningExclusive), { batch: { lines: ["crashed early"], receipt: good({ code: 2 }) } }, "--only", "fast,economy:m1");
+  const r = gate(queue, { batch: { lines: ["crashed early"], receipt: good({ code: 2 }) } }, ["--only", "fast,economy:m1"]);
   assert.match(r.stdout, /FAIL {2}fast .*the queued job reported no per-step results; exit 2/);
   assert.match(r.stdout, /FAIL {2}economy:m1 .*the queued job reported no per-step results/);
   const bad = spawnSync(process.execPath, ["scripts/gate.mjs", "--batch", "build,bake"], { encoding: "utf8" });

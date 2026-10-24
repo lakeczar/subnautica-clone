@@ -10,8 +10,6 @@
 //   npm run gate -- --allow-dirty      run on uncommitted changes (never a pass)
 //   npm run gate -- --machine 4070     send every queued step to that machine (for example
 //                                      while the 3090 is booked; receipts must still bind)
-//   npm run gate -- --queued           run the local steps as one queued job even when
-//                                      factory-worker is free for local work
 //
 // The gate pins the commit it starts on. Steps run one after another and the gate
 // reports every one, so a failure early doesn't hide the rest. A queued step (heavy
@@ -21,17 +19,17 @@
 // tree must not change while the gate runs. After the gate, POST_MERGE lists what the
 // coordinator runs once the merge is pushed.
 //
-// Local steps (fast, build, economy) run here only while the local-run guard
-// (scripts/local-guard.mjs, STEW-2) allows local work. Before each local step the
-// gate asks it; when a 3090 exclusive run is running or queued, every remaining
-// local step goes to the queue as one `--machine any` job (`gate.mjs --batch`, so
-// the economy scripts read that job's own .test-build), and each step is reported
-// from that job's per-step results and judged on its receipt like any queued step.
-// Queued steps that a batched step follows (the bake before the build) run first.
+// Local steps (fast, build, economy) run directly only where the local-run guard
+// (scripts/local-guard.mjs, STEW-2) admits CPU work: inside a heavy-check job, on
+// alickers, or with its logged override. On factory-worker they go to the queue as
+// one `--machine any` job (`gate.mjs --batch`, so the economy scripts read that
+// job's own .test-build), and each step is reported from that job's per-step results
+// and judged on its receipt like any queued step. Queued steps that a batched step
+// follows (the bake before the build) run first.
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { localRunCheck } from "./local-guard.mjs";
+import { admission, localFacts } from "./local-guard.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const H = process.env.SILTWAKE_HEAVY_CHECK ?? "/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh";
@@ -62,7 +60,7 @@ export const GATE = [
 export const POST_MERGE = [
   { id: "saves-export", what: "export the shared save library at the merged commit (SAVE-1)", run: ["scripts/saves-export.sh"] },
 ];
-/** The queued job that runs local steps when factory-worker isn't free for local work. */
+/** The queued job that runs the local steps where they aren't admitted (factory-worker). */
 export const BATCH_QUEUE = ["--class", "standard", "--machine", "any"];
 const BATCH_LINE = "gate-batch: ";
 
@@ -191,7 +189,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   if (machineOverride && !["any", "3090", "4070", "soak"].includes(machineOverride)) { console.error(`gate: --machine ${machineOverride}: one of any, 3090, 4070`); process.exit(2); }
   if (args.includes("--list")) {
     for (const s of GATE) console.log(`${s.id.padEnd(20)} ${s.what}\n${"".padEnd(20)} $ ${command(s).join(" ")}`);
-    console.log(`\nlocal steps, while a 3090 exclusive run is running or queued (or with --queued), all in one job:\n${"".padEnd(20)} $ ${batchCommand(["ID", "…"]).join(" ")}`);
+    console.log(`\nlocal steps, on factory-worker (anywhere the local-run guard doesn't admit them), all in one job:\n${"".padEnd(20)} $ ${batchCommand(["ID", "…"]).join(" ")}`);
     console.log("\nafter the merge is pushed:");
     for (const s of POST_MERGE) console.log(`${s.id.padEnd(20)} ${s.what}\n${"".padEnd(20)} $ ${s.run.join(" ")}`);
     process.exit(0);
@@ -215,30 +213,24 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const t0 = Date.now(), r = submitAndWait(command(step), step.id);
     record(step.id, r.failure ?? [...r.waiter, ...receiptProblems(r.receipt, head)], Math.round((Date.now() - t0) / 1000));
   };
-  for (let i = 0; i < steps.length;) {
-    const step = steps[i];
-    if (step.queue) { queuedStep(step); i++; continue; }
-    const check = args.includes("--queued") ? { verdict: "refuse", why: "--queued" } : localRunCheck();
-    if (check.verdict !== "refuse") {
-      console.log(`\n── gate: ${step.id} · ${step.what}\n$ ${step.run.join(" ")}`);
+  // Admission doesn't change while the gate runs: decided once.
+  const here = admission(localFacts());
+  for (const unit of routeSteps(steps, !here.admitted)) {
+    if (unit.step?.queue) { queuedStep(unit.step); continue; }
+    if (unit.step) {
+      const step = unit.step;
+      console.log(`\n── gate: ${step.id} · ${step.what} (directly: ${here.why})\n$ ${step.run.join(" ")}`);
       const t0 = Date.now();
       record(step.id, local(step), Math.round((Date.now() - t0) / 1000));
-      i++;
       continue;
     }
-    // Not here: the remaining local steps go to the queue as one job.
-    const rest = steps.slice(i), units = routeSteps(rest, true);
-    for (const unit of units) {
-      if (unit.step) { queuedStep(unit.step); continue; }
-      const ids = unit.batch.map((s) => s.id), argv = batchCommand(ids, args.includes("--allow-dirty") ? ["--allow-dirty"] : []);
-      console.log(`\n── gate: ${ids.join(", ")} · local steps, as one queued job: ${check.why}\n$ ${argv.join(" ")}`);
-      const t0 = Date.now(), r = submitAndWait(argv, ids.join(","));
-      const s = Math.round((Date.now() - t0) / 1000);
-      const each = r.failure ? ids.map((id) => ({ id, problems: r.failure, s: 0 })) : batchResults(ids, parseBatch(r.lines), r.receipt, head)
-        .map((x) => ({ ...x, problems: [...r.waiter, ...x.problems] }));
-      for (const x of each) record(x.id, x.problems, x.s || (ids.length === 1 ? s : 0));
-    }
-    break;
+    const ids = unit.batch.map((s) => s.id), argv = batchCommand(ids, args.includes("--allow-dirty") ? ["--allow-dirty"] : []);
+    console.log(`\n── gate: ${ids.join(", ")} · local steps, as one queued job (${here.why})\n$ ${argv.join(" ")}`);
+    const t0 = Date.now(), r = submitAndWait(argv, ids.join(","));
+    const s = Math.round((Date.now() - t0) / 1000);
+    const each = r.failure ? ids.map((id) => ({ id, problems: r.failure, s: 0 })) : batchResults(ids, parseBatch(r.lines), r.receipt, head)
+      .map((x) => ({ ...x, problems: [...r.waiter, ...x.problems] }));
+    for (const x of each) record(x.id, x.problems, x.s || (ids.length === 1 ? s : 0));
   }
   results.sort((a, b) => GATE.findIndex((s) => s.id === a.id) - GATE.findIndex((s) => s.id === b.id));
   console.log(`\ngate at ${head.slice(0, 12)}${dirty ? " (dirty: not evidence)" : ""}:`);

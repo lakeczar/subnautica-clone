@@ -85,23 +85,22 @@ for (const mode of modes) {
   });
 }
 
-// The probes' clock call, built at run time: the tier scans each heavy file's text for
-// clock reads, and this file only writes them into probes.
-const NOW = ["performance", "now"].join(".");
 for (const mode of modes) {
   const tag = mode.replace(" ", "-");
   test(`${mode}: files asserting elapsed time run last, one at a time, and report the CPU wait they saw`, () => {
     const log = join(probes, `timing-${tag}.log`);
     /** A probe that records when it ran: "<name> start|end <ms>". */
     const span = (name: string, ms: number, clock = false) => write(name, `test("${name}", async () => {
-  ${clock ? `const t0 = ${NOW}();` : ""}
+  ${clock ? "const t0 = performance.now();" : ""}
   writeFileSync(${JSON.stringify(log)}, "${name} start " + Date.now() + "\\n", { flag: "a" });
   await new Promise((done) => setTimeout(done, ${ms}));
   writeFileSync(${JSON.stringify(log)}, "${name} end " + Date.now() + "\\n", { flag: "a" });
-  ${clock ? `assert.ok(${NOW}() - t0 < 60000);` : ""}
+  ${clock ? "assert.ok(performance.now() - t0 < 60000);" : ""}
 });`);
     const files = [span(`timed-a-${tag}`, 300, true), span(`pooled-b-${tag}`, 1500), span(`timed-c-${tag}`, 300, true), span(`pooled-d-${tag}`, 1500)];
-    const { out, row } = tier(files, mode, 256, { exclusive: [`timed-a-${tag}.heavy.test.ts`, `timed-c-${tag}.heavy.test.ts`] });
+    // The pooled probes log with Date.now(): reporting only.
+    const { out, row } = tier(files, mode, 256, { exclusive: [`timed-a-${tag}.heavy.test.ts`, `timed-c-${tag}.heavy.test.ts`],
+      clockWithoutBound: [`pooled-b-${tag}.heavy.test.ts`, `pooled-d-${tag}.heavy.test.ts`] });
     assert.equal(out.status, 0, out.stdout + out.stderr);
     assert.match(out.stdout, /=== timing phase: 2 file\(s\)/);
     const at = new Map(readFileSync(log, "utf8").trim().split("\n").map((l) => { const [n, e, t] = l.split(" "); return [`${n} ${e}`, Number(t)]; }));
@@ -116,13 +115,28 @@ for (const mode of modes) {
     assert.match(row(`pooled-b-${tag}`), /\bok$/, "a pooled file's row is unchanged");
   });
 
-  test(`${mode}: a heavy file that reads a clock but is in neither list is refused before anything runs`, () => {
-    const file = write(`unlisted-clock-${tag}`, `test("times something", () => { assert.ok(${NOW}() >= 0); });`);
-    const out = runTier([file], mode, 256, { exclusive: [] });
-    assert.equal(out.status, 2, out.stdout + out.stderr);
-    assert.match(out.stderr, new RegExp(`unlisted-clock-${tag}\\.heavy\\.test\\.ts read a clock.*clockWithoutBound`));
-    assert.doesNotMatch(out.stdout, /test:heavy summary/);
-    const listed = tier([file], mode, 256, { clockWithoutBound: [`unlisted-clock-${tag}.heavy.test.ts`] });
+  test(`${mode}: a heavy file that reads a clock in any common form, itself or through a helper, is refused unless classified`, () => {
+    writeFileSync(join(probes, `clock-helper-${tag}.js`), "export const elapsed = (t0) => Date.now() - t0;\n");
+    const forms: [string, string][] = [
+      ["date-now", "const t0 = Date.now(); assert.ok(Date.now() - t0 < 1000);"],
+      ["date-alias", "const { now } = Date; const t0 = now(); assert.ok(now() - t0 < 1000);"],
+      ["date-object", "const t0 = new Date().getTime(); assert.ok(+new Date - t0 < 1000);"],
+      ["perf-import", "const { performance: clock } = await import(\"node:perf_hooks\"); const t0 = clock.now(); assert.ok(clock.now() - t0 < 1000);"],
+      ["hrtime", "const t0 = process.hrtime.bigint(); assert.ok(process.hrtime.bigint() - t0 < 10n ** 9n);"],
+    ];
+    const files = forms.map(([form, body]) => write(`unlisted-${form}-${tag}`, `test("times something", async () => { ${body} });`));
+    files.push(write(`unlisted-helper-${tag}`, `import { elapsed } from "./clock-helper-${tag}.js";\ntest("times through a helper", () => { assert.ok(elapsed(0) > 0); });`));
+    for (const file of files) {
+      const name = file.split("/").pop()!.replace(/\.js$/, ".ts");
+      const out = runTier([file], mode, 256, { exclusive: [] });
+      assert.equal(out.status, 2, `${name}: ${out.stdout}${out.stderr}`);
+      assert.match(out.stderr, new RegExp(`${name.replace(/\./g, "\\.")} read a clock.*clockWithoutBound`));
+      assert.doesNotMatch(out.stdout, /test:heavy summary/);
+    }
+    const listed = tier([files[0]!], mode, 256, { clockWithoutBound: [`unlisted-date-now-${tag}.heavy.test.ts`] });
     assert.equal(listed.out.status, 0, listed.out.stdout + listed.out.stderr);
+    // Fixed dates aren't clock reads.
+    const fixed = write(`fixed-date-${tag}`, `test("a fixed date", () => { assert.equal(new Date(0).getTime(), 0); });`);
+    assert.equal(tier([fixed], mode, 256, { exclusive: [] }).out.status, 0);
   });
 }

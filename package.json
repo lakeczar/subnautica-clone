@@ -6,17 +6,21 @@
   "engines": { "node": ">=22.18.0" },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "node scripts/local-guard.mjs --lease-parent npm run build && tsc --noEmit && tsc -p tsconfig.headless.json && node scripts/bake-terrain.mjs && vite build",
+    "build": "node scripts/local-guard.mjs --class standard --machine 3090 -- npm run build:direct --",
+    "build:direct": "node scripts/local-guard.mjs --require 'npm run build' && tsc --noEmit && tsc -p tsconfig.headless.json && node scripts/bake-terrain.mjs && vite build",
     "bake:terrain": "node scripts/bake-terrain.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "node scripts/local-guard.mjs --lease-parent npm run typecheck && tsc --noEmit && tsc -p tsconfig.headless.json",
+    "typecheck": "node scripts/local-guard.mjs --class quick -- npm run typecheck:direct --",
+    "typecheck:direct": "node scripts/local-guard.mjs --require 'npm run typecheck' && tsc --noEmit && tsc -p tsconfig.headless.json",
     "test:build": "node scripts/test-build.mjs",
-    "test:fast": "node scripts/local-guard.mjs --lease-parent npm run test:fast && node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
+    "test:fast": "node scripts/local-guard.mjs --class standard -- npm run test:fast:direct --",
+    "test:fast:direct": "node scripts/local-guard.mjs --require 'npm run test:fast' && node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
     "test:heavy": "scripts/heavy-check.sh --class heavy-suite -- sh -c 'node scripts/test-build.mjs && node scripts/test-tier.mjs heavy'",
     "test": "npm run test:fast",
-    "check": "npm run test:fast && npm run test:heavy && node scripts/local-guard.mjs --lease-parent npm run check && node scripts/bake-terrain.mjs && vite build",
+    "check": "npm run test:fast && npm run test:heavy && npm run build",
     "gate": "node scripts/gate.mjs",
-    "playthrough": "node scripts/local-guard.mjs --lease-parent npm run playthrough && tsc -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js"
+    "playthrough": "node scripts/local-guard.mjs --class playthrough -- npm run playthrough:direct --",
+    "playthrough:direct": "node scripts/local-guard.mjs --require 'npm run playthrough' && tsc -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js"
   },
   "dependencies": { "@babylonjs/core": "9.31.0" },
   "devDependencies": {

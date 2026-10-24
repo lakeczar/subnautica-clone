@@ -6,22 +6,26 @@
 //   3. runtime commands for the executable tiers: real collection at the late deposits
 //      (positions staged, as in B1's script) and the real suit/Creel refits 450 → 800.
 // Optional: --out <result.json>
-import "./local-guard-now.mjs"; // first: before the compiled modules load (STEW-2)
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { CONTENT_VERSION, MATERIALS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCES } from "../.test-build/src/content/registry.js";
-import { CAMPAIGN_SOURCE_SITES } from "../.test-build/src/content/campaign/index.js";
-import { FIRST_WORKABLE } from "../.test-build/src/content/c4Sources.js";
-import { audit, planRegistryCampaign } from "../.test-build/src/sim/storyCampaign.js";
-import { finiteStock, runScenario, solvency } from "../.test-build/src/sim/campaignEconomy.js";
-import { createGame } from "../.test-build/src/sim/state.js";
-import { collectWithOutcome, completeOpening, craft, discover } from "../.test-build/src/sim/progression.js";
-import { recordStory } from "../.test-build/src/sim/storyLink.js";
-import { addItem, transfer } from "../.test-build/src/sim/inventory.js";
-import { personalLimit } from "../.test-build/src/sim/capabilities.js";
-import { createWorldQueries } from "../.test-build/src/sim/world.js";
-import { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } from "../.test-build/src/save/codec.js";
-import { validState } from "../.test-build/src/save/validation.js";
+import { guardLocalRun } from "./local-guard.mjs";
+
+// On factory-worker, only inside a heavy-check job (STEW-2), and admitted before the
+// compiled modules load. Routed, the job compiles them first.
+guardLocalRun({ cls: "quick", before: "node scripts/test-build.mjs" });
+const { CONTENT_VERSION, MATERIALS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCES } = await import("../.test-build/src/content/registry.js");
+const { CAMPAIGN_SOURCE_SITES } = await import("../.test-build/src/content/campaign/index.js");
+const { FIRST_WORKABLE } = await import("../.test-build/src/content/c4Sources.js");
+const { audit, planRegistryCampaign } = await import("../.test-build/src/sim/storyCampaign.js");
+const { finiteStock, runScenario, solvency } = await import("../.test-build/src/sim/campaignEconomy.js");
+const { createGame } = await import("../.test-build/src/sim/state.js");
+const { collectWithOutcome, completeOpening, craft, discover } = await import("../.test-build/src/sim/progression.js");
+const { recordStory } = await import("../.test-build/src/sim/storyLink.js");
+const { addItem, transfer } = await import("../.test-build/src/sim/inventory.js");
+const { personalLimit } = await import("../.test-build/src/sim/capabilities.js");
+const { createWorldQueries } = await import("../.test-build/src/sim/world.js");
+const { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } = await import("../.test-build/src/save/codec.js");
+const { validState } = await import("../.test-build/src/save/validation.js");
 
 const args = process.argv.slice(2), out = args[args.indexOf("--out") + 1];
 assert.ok(args.length === 0 || (args.length === 2 && args[0] === "--out"), "only --out is supported");
