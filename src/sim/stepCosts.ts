@@ -55,8 +55,9 @@ export interface StepCostSnapshot {
   slowMs: number;
   /** Whole steps: quantiles from the histogram (bucket upper bounds) and the exact maximum, ms. */
   step: { mean: number; p50: number; p99: number; p999: number; max: number };
-  /** Each phase that ran: mean, p99 and maximum ms per step, and mean heap growth per step when read (bytes, over steps without a collection). */
-  phases: Partial<Record<StepPhase | "other", { mean: number; p99: number; max: number; heap?: number }>>;
+  /** Each phase that ran: mean, p99 and maximum ms per step, how many steps it took over 1 and over 4 ms (by
+   * histogram bucket, within 9%), and mean heap growth per step when read (bytes, over steps without a collection). */
+  phases: Partial<Record<StepPhase | "other", { mean: number; p99: number; max: number; over1: number; over4: number; heap?: number }>>;
   /** The slowest steps, slowest first. */
   worst: StepRecord[];
 }
@@ -212,10 +213,16 @@ export class StepCosts implements StepMeter {
       }
       return max;
     };
+    const over = (offset: number, ms: number): number => {
+      let n = 0;
+      for (let b = bucketOf(ms) + 1; b < BUCKETS; b++) n += this.hist[offset + b]!;
+      return n;
+    };
     const phases: StepCostSnapshot["phases"] = {};
     for (let p = 0; p < COLUMNS; p++) {
       if (this.sum[p] === 0 && this.max[p] === 0) continue;
       phases[name(p)] = { mean: this.sum[p]! / this.steps, p99: quantile(this.hist, p * BUCKETS, 0.99, this.max[p]!), max: this.max[p]!,
+        over1: over(p * BUCKETS, 1), over4: over(p * BUCKETS, 4),
         ...(this.heap ? { heap: this.heapSum[p]! / Math.max(1, this.heapSteps) } : {}) };
     }
     const order = [...Array(this.worstCount).keys()].sort((a, b) => this.worstMs[b]! - this.worstMs[a]!);

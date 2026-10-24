@@ -12,11 +12,16 @@
  * each library save (SAVE-1) with held controls for M minutes of game time
  * (default 10). `--heap` also reads the heap at every phase mark (allocation by
  * phase; it adds about 10 µs a step, so time a run without it).
+ * `--capture RUN:TICK[,RUN:TICK]` CPU-profiles that one step in context and
+ * writes the save before it, its controls and the profile to `--out DIR`
+ * (default /work/tmp/simperf1/captures), for `stepreplay.js`.
  * Timings count only from `heavy-check.sh --class exclusive`. */
 import fs from "node:fs";
+import inspector from "node:inspector/promises";
+import path from "node:path";
 import v8 from "node:v8";
 import { PerformanceObserver } from "node:perf_hooks";
-import { createEnvelope } from "../../src/save/codec.js";
+import { createEnvelope, encodeSave } from "../../src/save/codec.js";
 import { SaveRepository } from "../../src/save/repository.js";
 import type { WriterLockPort } from "../../src/save/writer-lock.js";
 import { PHASE, SLOW_STEP_MS, StepCosts, stepMeter } from "../../src/sim/stepCosts.js";
@@ -58,6 +63,36 @@ const caveBuilds = (world: WorldQueries): number => (world as { kitCaves?: { sta
 let buildsAtOpen = 0;
 const slow: Slow[] = [];
 const SLOW_KEEP = 2000;
+const pending: Promise<void>[] = [];
+
+/** `--capture`: the steps to profile, by run and tick (the tick the step makes). */
+const captures = new Set(value("--capture")?.split(",") ?? []);
+const captureDir = value("--out") ?? "/work/tmp/simperf1/captures";
+const profiler = captures.size ? new inspector.Session() : null;
+if (profiler) { profiler.connect(); await profiler.post("Profiler.enable"); await profiler.post("Profiler.setSamplingInterval", { interval: 50 }); }
+let capturing: { name: string; save: string } | null = null;
+/** Before a step: start the profiler if this is a captured one (the save is the state it starts from). */
+function captureBefore(run: string, s: GameState): void {
+  const name = `${run}:${s.tick + 1}`;
+  if (!captures.has(name)) return;
+  const encoded = encodeSave(createEnvelope(structuredClone(s), { sessionId: "stepcost-capture", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:00.000Z" }));
+  if (!encoded.ok) throw new Error(`capture ${name}: ${encoded.error}`);
+  capturing = { name, save: encoded.value };
+  void profiler!.post("Profiler.start");
+}
+/** After it: its controls, the profile and the step's own phases. */
+async function captureAfter(controls: readonly GameCommand[]): Promise<void> {
+  if (!capturing) return;
+  const name = capturing.name, save = capturing.save, ms = costs.lastMs;
+  capturing = null;
+  const { profile } = await profiler!.post("Profiler.stop");
+  const file = path.join(captureDir, name.replace(/[^a-z0-9-]/gi, "_"));
+  fs.mkdirSync(captureDir, { recursive: true });
+  fs.writeFileSync(`${file}.save.json`, save);
+  fs.writeFileSync(`${file}.controls.json`, JSON.stringify(controls));
+  fs.writeFileSync(`${file}.cpuprofile`, JSON.stringify(profile));
+  console.log(`captured ${name}: ${ms.toFixed(2)} ms → ${file}.*`);
+}
 
 /** The app's per-step work around the guard's step (`SiltwakeApp.frame`). */
 class AppWork {
@@ -125,12 +160,14 @@ if (saves) {
       // Held travel: ahead, a slow turn, a gentle dive and rise (scripts/sim-bench.mjs).
       const controls: GameCommand[] = [{ type: "look", yawDelta: 0.004, pitchDelta: t % 240 < 120 ? 0.002 : -0.002 },
         { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }];
+      captureBefore(kind, s);
       costs.open();
       buildsAtOpen = caveBuilds(world);
       costs.mark(PHASE.input);
       const events = guard.step(s, controls, world);
       app.after(s, controls, events);
       close(kind, "held", s, world);
+      await captureAfter(controls);
     }
     runs.push({ run: kind, ticks: s.tick - start, outcome: "held" });
   }
@@ -149,6 +186,7 @@ if (saves) {
       before() {
         // A milestone reload hands the driver a new state: the app's session starts over too.
         if (d.state !== seen) { seen = d.state; app = new AppWork(d.run.scenario, d.state); }
+        captureBefore(d.run.scenario, d.state);
         costs.open();
         buildsAtOpen = caveBuilds(d.world);
         costs.mark(PHASE.input);
@@ -157,12 +195,14 @@ if (saves) {
         costs.skip(); // the driver's own bookkeeping
         app.after(d.state, controls, events);
         close(d.run.scenario, d.phase, d.state, d.world);
+        if (capturing) pending.push(captureAfter(controls));
       },
       command() { app.commanded(); },
     };
   };
   for (const r of await playScenarios(ids, args.includes("--verbose"), library ? { fromLibrary: library } : {}))
     runs.push({ run: r.scenario, ticks: r.ticks, outcome: r.outcome });
+  await Promise.all(pending);
 }
 await new Promise((resolve) => setTimeout(resolve, 50));
 gcObserver.disconnect();
@@ -182,6 +222,7 @@ console.log(`steps ${snapshot.steps}; mean ${r2(snapshot.step.mean)} ms, p50 ${r
   `p99.9 ${r2(snapshot.step.p999)}, max ${r2(snapshot.step.max)}; over ${SLOW_STEP_MS} ms: ${snapshot.slow}; GC over 1 ms: ${gcs.length} (max ${r2(Math.max(0, ...gcs.map((g) => g.ms)))} ms)`);
 for (const [name, p] of Object.entries(snapshot.phases).sort((a, b) => b[1].max - a[1].max))
   console.log(`  ${name.padEnd(13)} mean ${(p.mean * 1000).toFixed(1).padStart(7)} µs  p99 ${(p.p99 * 1000).toFixed(0).padStart(6)} µs  max ${p.max.toFixed(2).padStart(7)} ms` +
+    `  >1 ms ${String(p.over1).padStart(5)}  >4 ms ${String(p.over4).padStart(4)}` +
     (p.heap !== undefined ? `  heap ${(p.heap / 1024).toFixed(2)} KiB/step` : ""));
 console.log("worst steps:");
 for (const w of snapshot.worst.slice(0, 16)) {
