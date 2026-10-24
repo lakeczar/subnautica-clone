@@ -102,3 +102,28 @@ test("R2-5: the scanned-cluster cache is owned by live meshes: repeated geometry
   assert.equal(w.lights.stats.cache.geometries, 0, "dispose clears the cache");
   w.dispose();
 });
+
+test("CW-1: moving meshes share one frame budget for their lights: a frame moves at most 2,048 plus 32 per moving mesh, and every light is still sent", async () => {
+  const engine = new NullEngine(), scene = new Scene(engine), cel = createCaveCelMaterial(scene);
+  const lights = createSceneLights(scene, cel, [{ setArray4() {}, setFloat() {} } as never]);
+  // 60 moving (unfrozen) meshes of 100 emissive vertices each, one cluster per vertex: 6,000 moving lights.
+  const MESHES = 60, PER = 100, meshes: Mesh[] = [];
+  for (let m = 0; m < MESHES; m++) {
+    const mesh = new Mesh(`mover-${m}`, scene), pos: number[] = [], col: number[] = [], idx: number[] = [];
+    for (let v = 0; v < PER; v++) { pos.push(m * 4, -20, v * 8); col.push(0.4, 0.6, 1, -1); idx.push(v, v, v); }
+    mesh.material = cel; mesh.setVerticesData("position", pos); mesh.setVerticesData("color", col); mesh.setIndices(idx);
+    meshes.push(mesh);
+  }
+  await announced();
+  const eye = new Vector3(120, -20, 400);
+  let made = 0;
+  for (let f = 0; f < 40; f++) {
+    for (const m of meshes) m.position.x = f * 0.1; // they move every frame
+    lights.update(null, eye, 1, 0);
+    const p = lights.stats.placing;
+    assert.ok(p.moved <= 2048 + 32 * p.moving, `frame ${f}: ${p.moved} lights moved for ${p.moving} moving meshes`);
+    made = lights.stats.considered;
+  }
+  assert.equal(made, MESHES * PER, "every moving light is made and sent within a few frames");
+  lights.dispose(); scene.dispose(); engine.dispose();
+});

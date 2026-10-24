@@ -140,6 +140,12 @@ export interface ResidencyStats {
   readonly uploads: number;
   readonly uploadedBytes: number;
   readonly uploadOverrunBytes: number;
+  /** Released art waiting to be disposed (hidden already; its bytes still
+   * count in `cpuBytes`/`gpuBytes`), and the longest single disposal this frame. */
+  readonly disposing: number;
+  readonly maxDisposeMs: number;
+  /** This frame's time per phase, ms (CW-1: every phase is measured). */
+  readonly phaseMs: { readonly plan: number; readonly drop: number; readonly display: number; readonly evict: number; readonly dispose: number };
   /** Desired units not yet shown at their desired LOD. */
   readonly pending: number;
   readonly totals: { readonly built: number; readonly uploaded: number; readonly cancelled: number;
@@ -151,6 +157,11 @@ export interface ResidencyStats {
 const PRIORITY_METRES = 64;
 /** Hidden units released per frame when only the retained count is over. */
 const MAX_TRIMS_PER_FRAME = 1;
+/** Disposing released art (Babylon meshes, one per upload part) is spread
+ * over frames within this budget, at least one a frame (CW-1: an eviction
+ * over the byte budget disposed several chunks' meshes in a 38-72 ms frame).
+ * The decision and the accounting stay immediate; the bytes count until freed. */
+const DISPOSE_MS_PER_FRAME = 2;
 
 interface Bytes { cpu: number; gpu: number }
 interface Unit {
@@ -185,7 +196,9 @@ const other = (lod: LodLevel): LodLevel => (lod === "fine" ? "coarse" : "fine");
  * 5. shows each wanted chunk at its LOD, keeping the previous LOD visible
  *    until the new one is ready;
  * 6. evicts hidden units least recently used first, over the byte budget or
- *    the retained count, and as a last resort drops the farthest shown units.
+ *    the retained count, and as a last resort drops the farthest shown units;
+ * 7. disposes released art within `DISPOSE_MS_PER_FRAME` (at least one a
+ *    frame); until then it is hidden and its bytes still count.
  * At the end of every update, accounted bytes are within budget unless
  * `overBudget` says otherwise. Presentation only: never touches simulation. */
 export function createResidency(options: {
@@ -272,22 +285,50 @@ export function createResidency(options: {
   };
   const fits = (b: Bytes, extra: Bytes = { cpu: 0, gpu: 0 }): boolean =>
     b.cpu + extra.cpu <= budget.cpuBytes && b.gpu + extra.gpu <= budget.gpuBytes;
-  const release = (u: Unit, counter: keyof typeof totals): void => {
+  /** Released art not yet disposed, oldest first, and its bytes. */
+  const disposing: ResidentArt[] = [];
+  const disposingBytes: Bytes = { cpu: 0, gpu: 0 };
+  let maxDisposeMs = 0;
+  /** Release a unit now (gone from `units` and from decisions); its art is
+   * hidden at once and disposed by `drain`, or at once when `immediate`. */
+  const release = (u: Unit, counter: keyof typeof totals, immediate = false): void => {
     if (u.build) { u.build.return(undefined as never); u.build = null; }
     if (u.job) { u.job.cancel(); u.job = null; }
     if (u.prepared) { u.prepared.discard(); u.prepared = null; }
-    if (u.art) { u.art.dispose(); u.art = null; }
+    if (u.art) {
+      if (immediate) u.art.dispose();
+      else { u.art.setVisible(false); disposing.push(u.art); disposingBytes.cpu += u.art.cpuBytes; disposingBytes.gpu += u.art.gpuBytes; }
+      u.art = null;
+    }
     units.delete(u.key);
     totals[counter]++;
   };
+  /** Dispose queued art within `ms`, at least one; all with Infinity. */
+  const drain = (ms: number): void => {
+    const start = now();
+    for (let first = true; disposing.length && (first || now() - start < ms); first = false) {
+      const art = disposing.shift()!, t0 = now();
+      art.dispose();
+      maxDisposeMs = Math.max(maxDisposeMs, now() - t0);
+      disposingBytes.cpu -= art.cpuBytes; disposingBytes.gpu -= art.gpuBytes;
+    }
+  };
+  /** Release `u`, taking its cost off the running total `acc` (one pass over
+   * the units per eviction pass, not one per evicted unit). */
+  const evictFrom = (acc: Bytes, u: Unit, counter: keyof typeof totals): void => {
+    const c = cost(u);
+    release(u, counter);
+    acc.cpu -= c.cpu; acc.gpu -= c.gpu;
+  };
   /** Evict hidden, unprotected units (LRU) until `need` more bytes fit. */
   const makeRoom = (need: Bytes, protectedKeys: ReadonlySet<string>): boolean => {
-    if (fits(accounted(), need)) return true;
+    const acc = accounted();
+    if (fits(acc, need)) return true;
     const hidden = [...units.values()].filter(u => u.state === "hidden" && !protectedKeys.has(u.key))
       .sort((a, b) => a.lastUsed - b.lastUsed || b.rank - a.rank);
     for (const u of hidden) {
-      release(u, "evicted");
-      if (fits(accounted(), need)) return true;
+      evictFrom(acc, u, "evicted");
+      if (fits(acc, need)) return true;
     }
     return false;
   };
@@ -316,6 +357,8 @@ export function createResidency(options: {
     update(viewer: Readonly<Vec3>): ResidencyStats {
       if (disposed) throw new Error("Residency is disposed.");
       frame++;
+      maxDisposeMs = 0;
+      const t0 = now();
       const all = wants(viewer);
       const swapping = new Set<string>();
       const reserveFor = new Map<string, Bytes>();
@@ -400,6 +443,7 @@ export function createResidency(options: {
         else { cut++; full = true; }
       }
       lastTargets = targets;
+      const tPlan = now();
       const desiredChunks = new Set([...desired.values()].map(w => w.chunk.id));
       // Protected this frame: admitted units and the outgoing LODs whose
       // swap headroom was paid for. A replaced outgoing LOD is not protected.
@@ -416,7 +460,7 @@ export function createResidency(options: {
       }
       // 3. Builds, nearest first, within the time slice. A new build starts
       //    only when its reservation fits; a finished one is re-checked.
-      const start = now();
+      const start = now(), dropMs = start - tPlan;
       let steps = 0, maxStepMs = 0, deferred = 0, maxStepUnit: string | null = null;
       const queue = [...desired.values()].filter(w => {
         const u = units.get(key(w.chunk.id, w.lod));
@@ -489,6 +533,7 @@ export function createResidency(options: {
       const uploadMs = now() - uploadStart;
       // 5. Display: the desired LOD once it exists; until then keep whatever
       //    this chunk already shows, or bring back a hidden other LOD.
+      const tDisplay = now();
       let pending = 0;
       for (const w of desired.values()) {
         const target = units.get(key(w.chunk.id, w.lod));
@@ -506,36 +551,43 @@ export function createResidency(options: {
       }
       // 6. Evict hidden units (LRU) over the budget or retained count. Units
       //    shown or hidden this frame wait one frame unless bytes force it.
+      const tEvict = now();
       const hidden = [...units.values()].filter(u => u.state === "hidden")
         .sort((a, b) => a.lastUsed - b.lastUsed || b.rank - a.rank);
       let kept = hidden.length, trimmed = 0;
+      const acc = accounted();
       for (const u of hidden) {
-        const overBytes = !fits(accounted());
+        const overBytes = !fits(acc);
         if (!overBytes && (kept <= budget.retainedUnits || u.lastUsed >= frame)) break;
         if (!overBytes && protectedKeys.has(u.key)) continue;
         // Trimming retention past the count is spread over frames (CW-1: a
         // fast traversal dropped several chunks' meshes in one 100 ms frame);
         // bytes over budget still evict at once.
         if (!overBytes && trimmed >= MAX_TRIMS_PER_FRAME) break;
-        release(u, "evicted"); kept--;
+        evictFrom(acc, u, "evicted"); kept--;
         if (!overBytes) trimmed++;
       }
       // Last resort (art larger than its recipe said): drop the farthest
       // shown and in-progress units until the budget holds again.
-      if (!fits(accounted())) {
+      if (!fits(acc)) {
         const far = [...units.values()].filter(u => u.state !== "hidden").sort((a, b) => b.rank - a.rank);
         for (const u of far) {
-          if (fits(accounted())) break;
-          release(u, "overBudgetDiscards");
+          if (fits(acc)) break;
+          evictFrom(acc, u, "overBudgetDiscards");
         }
       }
-      const bytes = accounted();
+      // 7. Dispose released art within the frame's budget (at least one).
+      const tDispose = now();
+      drain(DISPOSE_MS_PER_FRAME);
+      const tEnd = now();
+      // Held bytes: live units plus art released but not yet disposed.
+      const live = accounted(), bytes = { cpu: live.cpu + disposingBytes.cpu, gpu: live.gpu + disposingBytes.gpu };
       // Hidden units over the retained count that waited this frame are
       // evicted next frame: until then the state is still changing.
       let evictable = 0;
       for (const u of units.values()) if (u.state === "hidden" && !protectedKeys.has(u.key)) evictable++;
       let building = 0, prepared = 0, uploading = 0, shown = 0, hiddenCount = 0;
-      let gpuAllocatedBytes = 0, shownGpuBytes = 0, hiddenGpuBytes = 0;
+      let gpuAllocatedBytes = disposingBytes.gpu, shownGpuBytes = 0, hiddenGpuBytes = 0;
       for (const u of units.values()) {
         if (u.state === "building") building++;
         else if (u.state === "prepared") prepared++;
@@ -553,9 +605,11 @@ export function createResidency(options: {
         overBudget: !fits(bytes), demoted, held, cut, refused, deferred,
         // Nothing in flight and nothing learned this frame: a build that
         // completed may still reveal room for chunks cut this frame.
-        settled: fits(bytes) && building + prepared + uploading === 0 && pending === 0 && steps === 0 && uploads === 0 &&
+        settled: fits(bytes) && disposing.length === 0 && building + prepared + uploading === 0 && pending === 0 && steps === 0 && uploads === 0 &&
           totals.overBudgetDiscards === discardsBefore && evictable <= budget.retainedUnits,
         buildMs, buildSteps: steps, maxStepMs, maxStepUnit, uploadMs, uploads, uploadedBytes, uploadOverrunBytes, pending,
+        disposing: disposing.length, maxDisposeMs,
+        phaseMs: { plan: tPlan - t0, drop: dropMs, display: tEvict - tDisplay, evict: tDispose - tEvict, dispose: tEnd - tDispose },
         totals: { ...totals },
       };
       return last;
@@ -579,12 +633,14 @@ export function createResidency(options: {
     },
     /** After a context loss, hidden buffers are not worth restoring. */
     discardHidden(): void {
-      for (const u of [...units.values()]) if (u.state === "hidden") release(u, "evicted");
+      for (const u of [...units.values()]) if (u.state === "hidden") release(u, "evicted", true);
+      drain(Infinity);
     },
     dispose(): void {
       if (disposed) return;
       disposed = true;
-      for (const u of [...units.values()]) release(u, u.state === "building" ? "cancelled" : "discarded");
+      for (const u of [...units.values()]) release(u, u.state === "building" ? "cancelled" : "discarded", true);
+      drain(Infinity);
     },
   };
 }

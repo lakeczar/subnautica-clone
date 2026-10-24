@@ -12,7 +12,7 @@ const STEPS: Record<LodLevel, number> = { fine: 12, coarse: 3 };
 const STEP_MS = 0.5;
 
 /** A loader with a fake clock and a ledger of everything it allocated. */
-function harness(budget: Partial<ResidencyBudget>) {
+function harness(budget: Partial<ResidencyBudget>, disposeMs = 0) {
   let clock = 0;
   const live = { partial: 0, prepared: 0, resident: 0, visible: 0 };
   const counts = { started: 0, cancelled: 0, built: 0 };
@@ -40,7 +40,7 @@ function harness(budget: Partial<ResidencyBudget>) {
           return {
             cpuBytes: bytes, gpuBytes: bytes,
             setVisible(v: boolean) { if (v !== visible) { live.visible += v ? 1 : -1; visible = v; } },
-            dispose() { if (visible) live.visible--; live.resident--; },
+            dispose() { clock += disposeMs; if (visible) live.visible--; live.resident--; },
           };
         },
       };
@@ -54,7 +54,7 @@ function harness(budget: Partial<ResidencyBudget>) {
     const count = (s: string) => units.filter(u => u.state === s).length;
     assert.equal(live.partial, count("building"), "partial builds");
     assert.equal(live.prepared, count("prepared"), "prepared recipes");
-    assert.equal(live.resident, count("shown") + count("hidden"), "resident art");
+    assert.equal(live.resident, count("shown") + count("hidden") + (residency.stats?.disposing ?? 0), "resident art (queued for disposal included)");
     assert.equal(live.visible, count("shown"), "visible art");
     const shownChunks = units.filter(u => u.state === "shown").map(u => u.chunk);
     assert.equal(new Set(shownChunks).size, shownChunks.length, "one LOD visible per chunk");
@@ -188,4 +188,46 @@ test("REVIEW S1-06: settled waits for the retention eviction scheduled for the n
   const next = r.update({ x: 500, y: 0, z: 0 });
   assert.deepEqual([next.hidden, next.cpuBytes, next.settled], [0, 0, true]);
   r.dispose();
+});
+
+test("CW-1: an eviction over the byte budget decides at once but disposes within a frame budget, bytes counted until freed", () => {
+  // Each disposal takes 5 ms (Babylon meshes): above the 2 ms frame budget.
+  const h = harness(budget, 5);
+  for (let f = 0; f < 400 && !h.residency.isReady(); f++) h.frame(pod);
+  const before = h.residency.stats!;
+  assert.ok(before.shown > 4, `${before.shown} shown`);
+  // The budget shrinks: most chunks must go at once.
+  h.residency.setExternalBytes({ cpu: 88 * MiB, gpu: 88 * MiB });
+  let s = h.frame(pod);
+  const queued = s.disposing;
+  assert.ok(queued >= 2, `${queued} released units queued for disposal`);
+  assert.ok(s.phaseMs.dispose <= 5 + 1e-9, `one disposal this frame (${s.phaseMs.dispose} ms)`);
+  assert.equal(s.overBudget, true, "their bytes still count until freed: the frame says so");
+  assert.equal(s.settled, false);
+  let frames = 1;
+  for (; s.disposing > 0 && frames < 50; frames++) {
+    const left = s.disposing;
+    s = h.frame(pod);
+    assert.ok(s.disposing <= left - 1 || s.disposing === 0, "at least one disposal a frame");
+    assert.ok(s.phaseMs.dispose <= 5 + 1e-9, "no frame disposes past its budget plus one");
+  }
+  assert.equal(s.disposing, 0, `drained in ${frames} frames`);
+  for (let f = 0; f < 50 && !s.settled; f++) s = h.frame(pod);
+  assert.ok(!s.overBudget && s.gpuBytes <= 8 * MiB, `within the shrunk share: ${s.gpuBytes}`);
+  h.residency.dispose();
+  assert.equal(h.live.resident, 0, "dispose frees everything at once");
+});
+
+test("CW-1: the residency phases account for the whole update (no untimed work)", () => {
+  const h = harness(budget, 3);
+  let away = { x: pod.x + 700, y: pod.y, z: pod.z };
+  for (let f = 0; f < 120; f++) {
+    // Back and forth, so builds, uploads, hides, evictions and disposals all happen.
+    if (f % 40 === 0) away = { x: pod.x + (f % 80 ? 0 : 700), y: pod.y, z: pod.z };
+    const before = h.clock + 16;
+    const s = h.frame(away);
+    const p = s.phaseMs, sum = p.plan + p.drop + s.buildMs + s.uploadMs + p.display + p.evict + p.dispose;
+    assert.ok(Math.abs(sum - (h.clock - before)) < 1e-6, `frame ${f}: phases ${sum} ms of ${h.clock - before} ms`);
+  }
+  h.residency.dispose();
 });

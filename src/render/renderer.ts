@@ -85,6 +85,9 @@ export const WORLD_BUDGET: Partial<ResidencyBudget> = {
 /** Chunks this close to the viewer are drawn before a frame after a load or
  * a jump: the first playable frame always has ground under the player. */
 export const NEAR_WORLD = 32;
+/** One frame's chunk residency work over every `update` it ran (catch-up and
+ * extra construction run several; a single update's stats show only itself), ms. */
+export interface ChunkFrameWork { updates: number; build: number; upload: number; plan: number; drop: number; display: number; evict: number; dispose: number; maxDispose: number }
 const JUMP = 64;
 /** Cap on synchronous catch-up per frame; extra build time per frame while
  * nothing is interactive (title, load, the opening), and in play while the
@@ -116,7 +119,7 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
   /** Advance chunk residency for `viewer`. `nearRadius`: first build (within
    * a bounded time) until every wanted chunk that close is drawn. `extraMs`:
    * spend up to this much more on construction this frame. */
-  stream(viewer: Readonly<Vec3>, options?: { nearRadius?: number; extraMs?: number }): ResidencyStats | null;
+  stream(viewer: Readonly<Vec3>, options?: { nearRadius?: number; extraMs?: number }): (ResidencyStats & { readonly frameWork: ChunkFrameWork }) | null;
   readonly residency: Residency;
   /** Bytes held by the legacy region owners (live and retained). */
   readonly regionBytes: number;
@@ -207,13 +210,19 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
         arbiter.release(owner); arbiter.reserve(owner, bytes, true);
       }
       residency.setExternalBytes(arbiter.externalFor("world"));
-      let stats = residency.update(viewer);
+      const work: ChunkFrameWork = { updates: 0, build: 0, upload: 0, plan: 0, drop: 0, display: 0, evict: 0, dispose: 0, maxDispose: 0 };
+      const step = (): ResidencyStats => {
+        const s = residency.update(viewer), p = s.phaseMs;
+        work.updates++; work.build += s.buildMs; work.upload += s.uploadMs; work.plan += p.plan; work.drop += p.drop;
+        work.display += p.display; work.evict += p.evict; work.dispose += p.dispose; work.maxDispose = Math.max(work.maxDispose, s.maxDisposeMs);
+        return s;
+      };
+      let stats = step();
       const near = streaming.nearRadius;
-      while (near !== undefined && !stats.settled && !residency.isReady(near) && now() - start < CATCH_UP_MS)
-        stats = residency.update(viewer);
+      while (near !== undefined && !stats.settled && !residency.isReady(near) && now() - start < CATCH_UP_MS) stats = step();
       const extra = streaming.extraMs ?? 0;
-      while (extra > 0 && !stats.settled && now() - start < extra) stats = residency.update(viewer);
-      return stats;
+      while (extra > 0 && !stats.settled && now() - start < extra) stats = step();
+      return { ...stats, frameWork: work };
     },
     setQuality(quality) { regions.setQuality?.(quality); },
     dispose() {
@@ -537,8 +546,11 @@ export function createRenderer(
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump, stepUnit: world?.maxStepUnit ?? null,
+          // Chunk residency over the frame's updates, by phase, and art waiting to be disposed (CW-1).
+          chunkWork: world ? Object.fromEntries(Object.entries(world.frameWork).map(([k, v]) => [k, +v.toFixed(2)])) : null, chunkDisposing: world?.disposing ?? 0,
           caveStep: +caveStepMs.toFixed(2), // The streamer reuses its pass timings: a copy per frame (wanted list, eviction, light lists).
           cavePasses: streamFrame ? { score: +streamFrame.passMs.score.toFixed(2), evict: +streamFrame.passMs.evict.toFixed(2), light: +streamFrame.passMs.light.toFixed(2) } : null, caveStream: +caveStreamMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered, lightsWalked: lights.stats.walked,
+          lightKinds: (({ cachedMs, movingMs, placingMs, moved, moving }) => ({ cached: +cachedMs.toFixed(2), moving: +movingMs.toFixed(2), placing: +placingMs.toFixed(2), moved, movingMeshes: moving }))(lights.stats.placing),
           lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
         };
         canvas.dataset.meshes = String(scene.meshes.length);

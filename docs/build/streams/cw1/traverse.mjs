@@ -385,7 +385,10 @@ try {
   // the texture upload, the view, and the lights' scan, placement and selection.
   const PARTS = { chunks: p => p.chunks, regions: p => p.regions, caves: p => p.caves, caveWanted: p => p.cavePasses?.score, caveBuild: p => p.caveBuildMs,
     caveEvict: p => p.cavePasses?.evict, caveLightList: p => p.cavePasses?.light, caveTexture: p => p.caveStream, caveUpload: p => p.caveUpload?.ms, caveView: p => p.caveView,
-    lights: p => p.lights, optics: p => p.optics, lightScan: p => p.lightScan, lightPlace: p => p.lightPlace, lightSelect: p => p.lightSelect, render: p => p.render };
+    chunkUpdates: p => p.chunkWork?.updates, chunkPlan: p => p.chunkWork?.plan, chunkDrop: p => p.chunkWork?.drop, chunkBuild: p => p.chunkWork?.build, chunkUpload: p => p.chunkWork?.upload,
+    chunkDisplay: p => p.chunkWork?.display, chunkEvict: p => p.chunkWork?.evict, chunkDispose: p => p.chunkWork?.dispose, chunkDisposeMax: p => p.chunkWork?.maxDispose,
+    lights: p => p.lights, optics: p => p.optics, lightScan: p => p.lightScan,
+    lightCached: p => p.lightKinds?.cached, lightMoving: p => p.lightKinds?.moving, lightPlacing: p => p.lightKinds?.placing, lightPlace: p => p.lightPlace, lightSelect: p => p.lightSelect, render: p => p.render };
   result.parts = {};
   for (const [name, of] of Object.entries(PARTS)) {
     const v = data.perf.map(e => e.parts ? of(e.parts) ?? 0 : 0).sort((a, b) => a - b);

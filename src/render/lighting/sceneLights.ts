@@ -27,6 +27,8 @@ export interface SceneLights {
     readonly considered: number;
     /** Entries the placement walked this frame (measurement: a long placement with few is not our work). */
     readonly walked: number;
+    /** Placement by kind this frame: cached copy, moving refresh, frozen placement (ms), lights moved, moving meshes. */
+    readonly placing: { readonly cachedMs: number; readonly movingMs: number; readonly placingMs: number; readonly moved: number; readonly moving: number };
     /** Every known mesh is scanned and its lights placed: the candidate set
      * is complete, so selection from here depends only on the pose. */
     readonly settled: boolean;
@@ -183,25 +185,35 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     return true;
   };
   const scratch = new Matrix(), p = new Vector3();
-  /** Lights a moving mesh refreshes per frame; a larger one refreshes a
-   * round-robin window (every light stays sent; positions catch up within a
-   * few frames), so one unit is bounded without cutting its art. */
-  const MOVING_PER_FRAME = 2048;
+  /** Moving lights made or refreshed per frame across every moving mesh
+   * (CW-1: a per-mesh cap let many moving meshes add up to 24-31 ms). Each
+   * moving mesh gets an equal share, at least MOVING_MIN, and refreshes a
+   * round-robin window of its lights; every light stays sent and positions
+   * catch up within a few frames, so no unit is unbounded and no art is cut. */
+  const MOVING_PER_FRAME = 2048, MOVING_MIN = 32;
+  /** This frame's share per moving mesh (from last frame's count), and lights moved. */
+  let movingShare = MOVING_PER_FRAME, moved = 0, movingNow = 0;
   const moveLights = (e: Entry, world: Matrix, instances: readonly (Matrix | null)[], params: readonly Omit<PointLight, "x" | "y" | "z">[]): PointLight[] => {
     const clusters = e.clusters, total = instances.length * clusters.length;
     if (!e.moving || e.moving.lights.length > total) e.moving = { lights: [], next: 0 };
     const lights = e.moving.lights;
+    movingNow++;
+    // Its share, never more than the frame has left (at least MOVING_MIN): a
+    // frame moves at most MOVING_PER_FRAME + MOVING_MIN per moving mesh.
+    const allowance = Math.max(MOVING_MIN, Math.min(movingShare, MOVING_PER_FRAME - moved));
     if (lights.length < total) {
       // Made a bounded number a frame (only lights made so far are sent).
-      for (let made = 0; made < MOVING_PER_FRAME && lights.length < total; made++) {
+      for (let made = 0; made < allowance && lights.length < total; made++) {
         const i = lights.length;
         lights.push({ x: 0, y: 0, z: 0, ...params[i % clusters.length]! });
         moveOne(e, i, world, instances);
+        moved++;
       }
       return lights as PointLight[];
     }
-    const count = Math.min(total, MOVING_PER_FRAME);
+    const count = Math.min(total, allowance);
     for (let k = 0; k < count; k++) { moveOne(e, e.moving.next, world, instances); e.moving.next = (e.moving.next + 1) % total; }
+    moved += count;
     return e.moving.lights as PointLight[];
   };
   const moveOne = (e: Entry, i: number, world: Matrix, instances: readonly (Matrix | null)[]): void => {
@@ -262,6 +274,8 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   };
   let unplaced = 0;
   let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0, considered = 0, walked = 0;
+  /** Placement by kind this frame, ms: cached lights copied in, moving meshes refreshed, frozen meshes placed. */
+  let cachedMs = 0, movingMs = 0, placingMs = 0;
   /** The frame's slowest entry to place (measurement: which mesh a long placement was). */
   let slowest: { name: string; ms: number; instances: number; clusters: number; frozen: boolean } | null = null;
   const send = (u: ReturnType<typeof lightUniforms>, halo: number): void => {
@@ -274,7 +288,8 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   };
   send(lightUniforms([]), 0);
   return {
-    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, walked, slowest, settled: pending.size === 0 && unplaced === 0,
+    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, walked, slowest,
+      placing: { cachedMs, movingMs, placingMs, moved, moving: movingNow }, settled: pending.size === 0 && unplaced === 0,
       cache: { geometries: byGeometry.size, bytes: cacheBytes } }; },
     update(state, eye, daylight, time) {
       // Scan new meshes in a bounded slice per frame, resuming a large one.
@@ -299,7 +314,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       // for some scatter) are placed once and cached; place a bounded number
       // per frame (CW-1), so a new chunk's lights join over a few frames.
       const placeUntil = performance.now() + 2;
-      slowest = null; unplaced = 0; walked = list.length;
+      slowest = null; unplaced = 0; walked = list.length; moved = 0; movingNow = 0; cachedMs = 0; movingMs = 0; placingMs = 0;
       for (let k = 0; k < list.length; k++) {
         const e = list[k]!;
         if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
@@ -313,16 +328,23 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
           if (!e.instances && outOfRange(e.mesh, eye)) continue;
           // Placed and cached: copied in, untimed (most entries, most frames).
           const cached = frozen ? e.world : null;
-          if (cached) { for (let i = 0; i < cached.length; i++) lights[n++] = cached[i]!; continue; }
+          if (cached) {
+            const tc = performance.now();
+            for (let i = 0; i < cached.length; i++) lights[n++] = cached[i]!;
+            cachedMs += performance.now() - tc;
+            continue;
+          }
           const t0 = performance.now();
           const placedLights = toWorld(e, placeUntil);
           if (!placedLights) unplaced++;
           if (placedLights) for (let i = 0; i < placedLights.length; i++) lights[n++] = placedLights[i]!;
           const ms = performance.now() - t0;
+          if (frozen) placingMs += ms; else movingMs += ms;
           if (ms > (slowest?.ms ?? 0)) slowest = { name: e.mesh.name, ms, instances: e.instances?.length ?? 1, clusters: e.clusters.length, frozen };
         }
       }
       placeMs = performance.now() - placeStart; placed = n;
+      movingShare = Math.max(MOVING_MIN, Math.floor(MOVING_PER_FRAME / Math.max(1, movingNow)));
       for (let i = 0; i < vents.length; i++) lights[n++] = vents[i]!;
       // Parked craft: a blinking marker light, always sent, nearest two.
       const blinkOn = (time % BLINK) < BLINK * BLINK_ON;
