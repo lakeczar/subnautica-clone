@@ -102,7 +102,7 @@ const repo = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..")
 const www = path.join(out, "www"), mods = path.join(www, "modules");
 mkdirSync(mods, { recursive: true });
 const ts = createRequire(path.join(repo, "package.json"))("typescript");
-for (const n of ["capture", "recorder", "retention", "zip", "webm", "spool.worker"]) {
+for (const n of ["capture", "recorder", "retention", "zip", "webm", "encoders", "spool.worker"]) {
   const src = readFileSync(path.join(repo, "src/runtime/flight", `${n}.ts`), "utf8");
   writeFileSync(path.join(mods, `${n}.js`), ts.transpileModule(src, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } })
     .outputText.replace("./spool.worker.ts", "./spool.worker.js"));
