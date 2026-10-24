@@ -264,6 +264,7 @@ try {
   await c.page.goto(`${origin}/?r3=throw`);
   const thrown = await phase("encoder throws", () => c.page.evaluate(async ({ DRAW, zipOf }) => {
     const { FlightCapture } = await import("/modules-throw/capture.js");
+    document.getElementById("c").getContext("2d"); // before the capture asks it for WebGL2: the harness draws in 2D
     const cap = window.capR3 = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
     await (0, eval)(DRAW)(cap, 3000);
     cap.recorder.event("action", "after the failure", { snapshot: false });
@@ -333,6 +334,7 @@ try {
   await c.page.goto(`${origin}/?r3=behind`);
   const behind = await phase("backpressure", () => c.page.evaluate(async ({ DRAW, zipOf }) => {
     const { FlightCapture } = await import("/modules-behind/capture.js");
+    document.getElementById("c").getContext("2d"); // before the capture asks it for WebGL2: the harness draws in 2D
     const cap = window.capR3 = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
     const draws = await (0, eval)(DRAW)(cap, 6000);
     return { zip: await (0, eval)(zipOf)(cap), draws, drawErrors: window.drawErrors ?? [] };
