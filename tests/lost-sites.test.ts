@@ -112,10 +112,19 @@ test("door codes: each coded door's record is one placed decode's, its code line
   for (const [id, door] of Object.entries(CODED_DOORS)) {
     const by = DECODABLE_IDS.filter((d) => (DECODABLES[d].gates as readonly string[]).includes(door.record));
     assert.equal(by.length, 1, `${id}: one decode holds its code`);
-    const dashed = door.code.split("").join("-"), lines = decodeLog(by[0]!).filter((l) => l.text.includes(dashed));
-    assert.equal(lines.length, 1, `${id}: one decoded line gives ${dashed}`);
-    assert.equal(lines[0]!.door, id, `${id}: that line names its door, so placement withholds it`);
-    assert.ok(decodeLog(by[0]!).every((l) => l.door === id || !l.text.includes(dashed)));
+    const log = decodeLog(by[0]!), mine = log.filter((l) => l.door === id);
+    assert.equal(mine.length, 1, `${id}: one decoded line carries its code, and names the door`);
+    if (!door.atDoor) {
+      assert.ok(mine[0]!.text.includes(door.code.split("").join("-")), `${id}: a straight door's line gives the code`);
+    } else {
+      // Deduction: the door shows part, the line gives the rest; together they are the code.
+      const hidden = [...door.atDoor].flatMap((c, i) => c === "·" ? [door.code[i]!] : []);
+      const shown = [...door.atDoor].flatMap((c, i) => c === "·" ? [] : [c === door.code[i] ? c : "✗"]);
+      assert.ok(hidden.length > 0 && !shown.includes("✗"), `${id}: the door's part matches the code`);
+      assert.ok(mine[0]!.text.includes(hidden.join("-")) && door.clue!.includes(hidden.join("-")), `${id}: the line and the clue give the hidden digits`);
+      for (const text of [...log.map((l) => l.text), door.clue!])
+        assert.ok(!text.includes(door.code) && !text.includes(door.code.split("").join("-")), `${id}: the full code is never written out`);
+    }
   }
   const sys = createSystems();
   for (const d of ["isles_strain_gauge_log", "divide_mixing_log"] as const) { discoverSite(sys, DECODABLES[d].site); sys.decoded.push(d); }
@@ -124,9 +133,9 @@ test("door codes: each coded door's record is one placed decode's, its code line
   const hatch = CODED_DOORS["island.cold_store_hatch"];
   hatch.placed = true;
   try {
-    assert.deepEqual(doorCodes(sys), [{ door: "island.cold_store_hatch", label: "Cold store hatch", code: "4417" }]);
+    assert.deepEqual(doorCodes(sys), [{ door: "island.cold_store_hatch", label: "Cold store hatch", code: "4417", clue: null }]);
     assert.ok(readableLog(sys, "isles_strain_gauge_log").some((l) => l.includes("4-4-1-7")));
-    assert.ok(!readableLog(sys, "divide_mixing_log").some((l) => l.includes("2-0-9-3")), "the vault's line still waits for its door");
+    assert.ok(!readableLog(sys, "divide_mixing_log").some((l) => l.includes("9-3")), "the vault's line still waits for its door");
     assert.deepEqual(doorCodes(createSystems()), [], "no code before the decode");
     assert.deepEqual(readableLog(createSystems(), "isles_strain_gauge_log"), [], "no log before the decode");
   } finally { hatch.placed = false; }

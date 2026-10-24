@@ -1,13 +1,16 @@
-/** LS-1: recorded pacing debt, a ratchet both ways (coordinator ruling 2026-10-24).
+/** LS-1: recorded pacing debt (coordinator rulings and owner direction, 2026-10-24).
  * The first runs of the pacing acceptance found the main path's late game already over
  * the GAME-DIRECTION limits on every judged route: campaign structure LS-1 did not cause.
- * Each row is one identified violation, and its bounds are the measured values
- * (largest first, compared one to one):
- * - gaps between counted new-content beats, keyed `before → after`, in play minutes;
- * - empty-travel legs over 90 s, keyed `hull in region`, in seconds.
- * Anything new or worse fails; anything better also fails until the row is lowered
- * (the failure prints the figures to write); a decode wait is never debt. A row is
- * deleted when its root fix lands. Every row names its root-fix owner. */
+ * Each row is one identified figure, and its bounds are the measured values (largest
+ * first, compared one to one). Every row names its root-fix owner.
+ * - `gaps` between counted new-content beats, keyed `before → after`, in play minutes:
+ *   a ratchet both ways. New or worse fails; better also fails until the row is
+ *   lowered (the failure prints the figures to write). A row goes when its fix lands.
+ * - `legs`, empty travel over 90 s, keyed `hull in region`, in seconds: the record PACE-1
+ *   and the playtests judge. The 90 s rule is a spacing guide that grows with
+ *   progression and journey length, so a leg is never failed; any difference from this
+ *   record is reported with the figures now.
+ * A decode wait is never debt. */
 export interface DebtRow { readonly bounds: readonly number[]; readonly owner: string }
 export interface RouteDebt { readonly gaps: Readonly<Record<string, DebtRow>>; readonly legs: Readonly<Record<string, DebtRow>> }
 

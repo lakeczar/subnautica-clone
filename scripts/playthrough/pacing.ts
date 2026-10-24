@@ -116,27 +116,29 @@ function compare(kind: string, unit: string, measured: Record<string, number[]>,
 }
 
 /** The acceptance verdict for one route, judged against its recorded debt
- * (`pacing-debt.ts`), a ratchet both ways: a decode-caused idle span fails first,
- * whatever its length; a new or worse gap or leg fails; a better one also fails until
- * the entry is lowered, and the failure prints the figures to write. A route with no
- * entry is judged strictly. */
+ * (`pacing-debt.ts`). Gaps are a ratchet both ways: a decode-caused idle span fails
+ * first, whatever its length; a new or worse gap fails; a better one also fails until
+ * the entry is lowered, and the failure prints the figures to write. Empty-travel legs
+ * are reported for judgement, never failed (owner, 2026-10-24): any difference from the
+ * recorded legs is listed with the figures now. A route with no entry is judged
+ * strictly on gaps. */
 export function judgePacing(scenario: string, a: TimelineAnalysis, debts: Readonly<Record<string, RouteDebt>> = PACING_DEBT): { ok: boolean; detail: string } {
   const v = pacingAcceptance(a);
   const longest = a.travel.emptyStretches[0]?.seconds ?? 0;
-  const figures = `longest gap ${v.longestGapMinutes.toFixed(1)} min, ${v.emptyStretches} empty stretches over 90 s (longest ${longest.toFixed(0)} s), ${v.decodeWaitSpans} decode waits`;
+  const figures = `longest gap ${v.longestGapMinutes.toFixed(1)} min, ${v.decodeWaitSpans} decode waits; reported: ${v.emptyStretches} empty legs over 90 s (longest ${longest.toFixed(0)} s)`;
   if (v.decodeWaitSpans > 0) return { ok: false, detail: `decode waits are never debt: ${v.failures.join("; ")} (${figures})` };
   const debt = debts[scenario], m = measuredDebt(a);
   if (!debt) return v.ok ? { ok: true, detail: figures } : { ok: false, detail: `${v.failures.join("; ")} (${figures}); measured: ${debtFigures(a)}` };
   const g = compare("gap", "min", m.gaps, debt.gaps), l = compare("leg", "s", m.legs, debt.legs);
-  const worse = [...g.worse, ...l.worse], better = [...g.better, ...l.better];
-  if (worse.length) return { ok: false, detail: `worse than the recorded pacing debt: ${worse.join("; ")} (${figures})` };
-  if (better.length) {
-    const write = (measured: Record<string, number[]>, rows: Readonly<Record<string, DebtRow>>) =>
-      Object.fromEntries(Object.entries(measured).map(([id, bounds]) => [id, { bounds, owner: rows[id]!.owner }]));
-    return { ok: false, detail: `better than the recorded pacing debt (${better.join("; ")}): lower pacing-debt.ts["${scenario}"] to ` +
-      JSON.stringify({ gaps: write(m.gaps, debt.gaps), legs: write(m.legs, debt.legs) }) };
-  }
-  return { ok: true, detail: `exactly the recorded pacing debt (pacing-debt.ts): ${figures}` };
+  const legs = [...l.worse, ...l.better].length
+    ? `; legs differ from the record, for judgement (${[...l.worse, ...l.better].join("; ")}): legs now ${JSON.stringify(rowsOf(m.legs, debt.legs))}` : "";
+  if (g.worse.length) return { ok: false, detail: `worse than the recorded pacing debt: ${g.worse.join("; ")} (${figures})${legs}` };
+  if (g.better.length)
+    return { ok: false, detail: `better than the recorded pacing debt (${g.better.join("; ")}): lower pacing-debt.ts["${scenario}"].gaps to ${JSON.stringify(rowsOf(m.gaps, debt.gaps))} (${figures})${legs}` };
+  return { ok: true, detail: `gaps exactly the recorded pacing debt (pacing-debt.ts): ${figures}${legs}` };
 }
+/** Measured values as debt rows, keeping each recorded owner (a new identity has none yet). */
+const rowsOf = (measured: Record<string, number[]>, rows: Readonly<Record<string, DebtRow>>) =>
+  Object.fromEntries(Object.entries(measured).map(([id, bounds]) => [id, { bounds, owner: rows[id]?.owner ?? "unassigned" }]));
 /** The figures a route would record as debt, for a first entry. */
 export const debtFigures = (a: TimelineAnalysis): string => JSON.stringify(measuredDebt(a));

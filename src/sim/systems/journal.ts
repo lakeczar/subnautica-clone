@@ -144,7 +144,8 @@ function notebookTab(view: NotebookView, sys: SystemsState): JournalTab {
     id: `note:${n.id}`, title: n.label, subtitle: `${n.author} · ${n.dated}`, lines: [n.text], tags: ["note", region(n.area === "hub_spur" ? "silt_basin" : n.area)], status: "known",
   }));
   const codes = doorCodes(sys).map((c): JournalEntry => ({
-    id: `code:${c.door}`, title: c.label, subtitle: `Code ${c.code.split("").join("-")}`, lines: [], tags: ["code"], status: "known",
+    id: `code:${c.door}`, title: c.label, subtitle: c.code ? `Code ${c.code.split("").join("-")}` : "Part of the code is at the door",
+    lines: c.clue ? [c.clue] : [], tags: ["code"], status: "known",
   }));
   return {
     id: "notebook", label: "Notebook", count: questions.length + entries.length + journals.length + notes.length + codes.length,

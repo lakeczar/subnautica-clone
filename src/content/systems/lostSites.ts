@@ -101,10 +101,22 @@ const lost = (id: PlacedLostSiteId, label: string, category: RevealDefinition["c
  * owner builds the door; until then no code shows anywhere (the code-bearing log line
  * names its door, and `readableLog` withholds it). */
 export type DoorId = "island.cold_store_hatch" | "basin.vault_door";
-export interface CodedDoor { label: string; code: string; record: string; owner: string; placed: boolean }
+/** Most coded doors ask for a little deduction (owner, 2026-10-24): part of the code is
+ * at the door (`atDoor`, its stencil or plate) and the decoded record gives the rest. The
+ * first door, the cold-store hatch, teaches the keypad with a straight code. Nothing is
+ * memorised: the door's part is in front of you at the keypad, the record's part stays
+ * in the journal. The main path never needs a door. */
+export interface CodedDoor {
+  label: string; code: string; record: string; owner: string; placed: boolean;
+  /** Deduction doors: the code's characters shown at the door, `·` for the ones the record gives. */
+  atDoor?: string;
+  /** Deduction doors: the journal's line for what the record gives. */
+  clue?: string;
+}
 export const CODED_DOORS: Record<DoorId, CodedDoor> = {
   "island.cold_store_hatch": { label: "Cold store hatch", code: "4417", record: "isles_gauge_logger", owner: "OP-1", placed: false },
-  "basin.vault_door": { label: "Ridge vault door", code: "2093", record: "divide_mixing_logger", owner: "the Basin vault biome", placed: false },
+  "basin.vault_door": { label: "Ridge vault door", code: "2093", record: "divide_mixing_logger", owner: "the Basin vault biome", placed: false,
+    atDoor: "20··", clue: "The return slip gives the code's last two digits, 9-3; the first two are stencilled on the vault door." },
 };
 /** A decoded log line; one that carries a door's code names the door. */
 export type LogLine = string | { readonly text: string; readonly door: DoorId };
@@ -200,7 +212,7 @@ export const CB_DECODABLES = {
       "Brine profiles along the mixing line, with dense-water spikes flagged in red.",
       "Maintenance tickets replacing the 'faulty' sensors that kept reporting them.",
       "A diver's aside: the sails moved lanes that month.",
-      { text: "A return slip for the replaced sensors, sent to the ridge vault for calibration. Vault door code 2-0-9-3.", door: "basin.vault_door" },
+      { text: "A return slip for the replaced sensors, sent to the ridge vault for calibration, signed off with the vault's code: '…9-3, the rest's on the door'.", door: "basin.vault_door" },
     ],
   },
   meridian_allotment_log: {

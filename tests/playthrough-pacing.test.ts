@@ -44,24 +44,27 @@ test("a new gap shorter than the old maximum fails", () => {
   assert.match(v.detail, /new gap discovery: a → discovery: d: 30 min/);
 });
 
-test("a worsened secondary leg fails, though the count and the maximum are unchanged", () => {
+test("a worsened secondary leg is reported for judgement, never failed (owner, 2026-10-24)", () => {
   const v = judge(route({ legs: [[31, 850], [50, 500]] }), debtOf(route()));
-  assert.equal(v.ok, false);
-  assert.match(v.detail, /leg creel in deep_district #2: 500 s > recorded 100/);
+  assert.ok(v.ok, v.detail);
+  assert.match(v.detail, /legs differ from the record, for judgement \(leg creel in deep_district #2: 500 s > recorded 100\)/);
+  assert.match(v.detail, /legs now \{"creel in deep_district":\{"bounds":\[850,500\]/, "with the figures now");
+  assert.ok(judge(route({ legs: [[31, 850]] }), debtOf(route())).ok, "a leg gone is reported too");
 });
 
-test("an improvement fails until the debt is lowered, printing the figures; then a regression fails", () => {
-  const better = route({ legs: [[31, 700], [50, 100]] });
+test("a gap improvement fails until the debt is lowered, printing the figures; then a regression fails", () => {
+  // The same drought, ten minutes shorter: its identity (d → e) is kept.
+  const better = route();
+  better.events = better.events.map((e) => e.id === "e" ? beat(70, "e") : e).sort((x, y) => x.tick - y.tick);
   const v = judge(better, debtOf(route()));
   assert.equal(v.ok, false);
-  assert.match(v.detail, /better than the recorded pacing debt .*lower pacing-debt\.ts\["creel"\] to \{/);
-  assert.match(v.detail, /"bounds":\[700,100\],"owner":"PACE-1"/, "the figures to write keep the owner");
+  assert.match(v.detail, /better than the recorded pacing debt .*lower pacing-debt\.ts\["creel"\]\.gaps to \{/);
+  assert.match(v.detail, /"owner":"PACE-1"/, "the figures to write keep the owner");
   const lowered = debtOf(better);
-  assert.ok(judge(better, lowered).ok);
+  assert.ok(judge(better, lowered).ok, judge(better, lowered).detail);
   const back = judge(route(), lowered);
-  assert.equal(back.ok, false);
-  assert.match(back.detail, /850 s > recorded 700/);
-  assert.equal(judge(route({ legs: [[31, 850]] }), debtOf(route())).ok, false, "a leg gone is better too: lower the entry");
+  assert.equal(back.ok, false, "back to the old drought after lowering");
+  assert.match(back.detail, /worse than the recorded pacing debt/);
 });
 
 test("a one-tick decode wait fails before any debt is considered", () => {

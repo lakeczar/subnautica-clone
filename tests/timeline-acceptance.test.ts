@@ -31,6 +31,14 @@ test("a 30-minute empty leg fails", () => {
   assert.ok(verdict(timeline(steady(), 60 * MIN)).ok, "the steady baseline passes");
 });
 
+test("a long empty-travel leg is reported for judgement, never failed (owner, 2026-10-24)", () => {
+  const leg: TimelineEvent = { kind: "travel", tick: 12 * MIN * 60, play: 12 * MIN, seconds: 120, stationary: 0, hull: "creel" };
+  const v = verdict(timeline([...steady(), leg], 60 * MIN));
+  assert.ok(v.ok, v.failures.join("; "));
+  assert.equal(v.emptyStretches, 1);
+  assert.match(v.reported.join(), /1 empty-travel stretch over 90 s, for judgement \(longest 120 s by creel\)/);
+});
+
 test("a 20 s decode wait fails; a growth wait does not", () => {
   const v = verdict(timeline([...steady(), idle(25 * MIN, 20, { cause: "decode:reef_pumphouse_log" })], 60 * MIN));
   assert.equal(v.ok, false);

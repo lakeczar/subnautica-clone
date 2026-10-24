@@ -57,10 +57,14 @@ export function readableLog(sys: SystemsState, id: DecodableId): string[] {
   if (!sys.decoded.includes(id)) return [];
   return decodeLog(id).filter((l) => l.door === null || doorPlaced(l.door)).map((l) => l.text);
 }
-/** Codes the player can read: placed coded doors whose record is decoded (the keypad is stage 1b). */
-export function doorCodes(sys: SystemsState): { door: string; label: string; code: string }[] {
-  return DOOR_IDS.filter((d) => doorPlaced(d) && recordReadableAfterDecode(sys, CODED_DOORS[d].record))
-    .map((d) => ({ door: d, label: CODED_DOORS[d].label, code: CODED_DOORS[d].code }));
+/** What the journal keeps for each placed coded door whose record is decoded (the keypad
+ * is stage 1b): a straight door's code, or a deduction door's clue (the record's part;
+ * the rest is at the door). A deduction door's full code is never written out. */
+export function doorCodes(sys: SystemsState): { door: string; label: string; code: string | null; clue: string | null }[] {
+  return DOOR_IDS.filter((d) => doorPlaced(d) && recordReadableAfterDecode(sys, CODED_DOORS[d].record)).map((d) => {
+    const door = CODED_DOORS[d];
+    return { door: d, label: door.label, code: door.atDoor ? null : door.code, clue: door.atDoor ? door.clue ?? null : null };
+  });
 }
 /** A record a decode gates, and that decode is done (a record no decode gates is not a code). */
 const recordReadableAfterDecode = (sys: SystemsState, record: string): boolean =>

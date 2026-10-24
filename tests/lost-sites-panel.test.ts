@@ -73,3 +73,16 @@ test("a door's code shows nowhere until the door is placed: journal and site ins
     assert.ok(readLostSite(s, "isles_strain_gauges").includes("4-4-1-7"));
   } finally { hatch.placed = false; }
 });
+
+test("a deduction door: the journal keeps the record's part and says the rest is at the door; the full code is never written", (t) => {
+  const render = panels(t), s = opened(), vault = CODED_DOORS["basin.vault_door"];
+  s.systems.found.push("divide_mixing_log"); s.systems.decoded.push("divide_mixing_log");
+  assert.ok(!render(s, "notebook").includes("9-3"), "the door is not in the world yet");
+  vault.placed = true;
+  try {
+    const notebook = render(s, "notebook");
+    assert.ok(notebook.includes("Ridge vault door") && notebook.includes("Part of the code is at the door") && notebook.includes("9-3"));
+    for (const html of [notebook, render(s, "decodes"), readLostSite(s, "divide_mixing_site")])
+      assert.ok(!html.includes("2-0-9-3") && !html.includes("2093"), "the full code is deduced, not given");
+  } finally { vault.placed = false; }
+});
