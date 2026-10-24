@@ -35,11 +35,12 @@ src=$(cd "$(dirname "$0")" && pwd)
 home="${SILTWAKE_SCHED_HOME:-$HOME/.local/share/siltwake-sched}"
 dir="${SILTWAKE_SCHED_DIR:-/work/tmp/siltwake-sched}"
 slice_name="${SILTWAKE_SCHED_SLICE:-siltwake-heavy.slice}"
-# The exclusive slice: production writes the real unit to the user's unit
-# directory; a private state directory (tests) only one its environment names,
-# as a runtime unit (gone at reboot).
+# The exclusive slice: production (the shared loader decides, by directory
+# identity) writes the real unit to the user's unit directory; a private state
+# directory (tests) only one its environment names, as a runtime unit (gone at
+# reboot).
 if [[ -n "${SILTWAKE_SCHED_EXCLUSIVE_SLICE:-}" ]]; then excl="$SILTWAKE_SCHED_EXCLUSIVE_SLICE" excl_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/systemd/user"
-elif [[ "$dir" == /work/tmp/siltwake-sched ]]; then excl=siltwake_exclusive.slice excl_dir="$HOME/.config/systemd/user"
+elif [[ $(SILTWAKE_SCHED_DIR="$dir" node --input-type=module -e 'const { loadConfig } = await import(process.argv[1]); console.log(loadConfig().production ? 1 : 0)' "$src/state.mjs") == 1 ]]; then excl=siltwake_exclusive.slice excl_dir="$HOME/.config/systemd/user"
 else excl="" excl_dir=""; fi
 pw="${SILTWAKE_PLAYWRIGHT_DIR:-$HOME/.cache/ms-playwright}"
 mode="" slice=0 uninstall=0 guard="" remove_excl=0
@@ -54,6 +55,17 @@ while [[ $# -gt 0 ]]; do
     *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--uninstall] [--remove-exclusive-slice]" >&2; exit 2 ;;
   esac
 done
+
+# One installer at a time (TST-16b): every change below, from the exclusive
+# slice's unit through publication (the immutable version, `current`, mode,
+# slice and guard), runs under <state>/install.lock, held on fd 9 by this
+# script and the processes it starts, so a second install.sh waits for the
+# whole run. exclusive-unit.mjs checks it holds this lock and takes no other.
+# It is not the admission lock (state.lock): admission never waits for systemd.
+mkdir -p "$dir"
+exec 9>>"$dir/install.lock"
+flock -w 600 9 || { echo "another install.sh is still running after 10 minutes; nothing changed" >&2; exit 3; }
+export SILTWAKE_INSTALL_LOCK_FD=9
 
 # Playwright's Chrome binaries (full and headless shell), real ELF files or
 # ones already wrapped.
