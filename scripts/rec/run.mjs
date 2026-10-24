@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp9,vp8,h264,…] [--video-width W] [--alternate W] [--paused] [--encode off] [--capture frame] [--no-sample] [--bench-sample] [--profile-windows]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp9,vp8,h264,…] [--video-width W] [--alternate W] [--paused] [--encode off] [--capture frame|stream] [--no-sample] [--bench-sample] [--profile-windows]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -78,7 +78,7 @@ function probeScript() {
 }
 
 const gpu0 = gpuInfo();
-const query = (mode === "off" ? "?rec=off" : mode === "playtest" ? `?rec=playtest${arg("video") === "off" ? "&recvideo=0" : ""}` : "?rec=driver") + (flag("no-timing") ? "&rectiming=0" : "") + (arg("alternate") || flag("paused") ? "&recmeasure=1" : "") + (arg("codec") ? `&reccodec=${arg("codec")}` : "") + (arg("encode") === "off" ? "&recencode=0" : "") + (arg("capture") === "frame" ? "&reccapture=frame" : "") + (flag("no-sample") ? "&recsample=0" : "") + (arg("video-width") ? `&recvideowidth=${arg("video-width")}` : "");
+const query = (mode === "off" ? "?rec=off" : mode === "playtest" ? `?rec=playtest${arg("video") === "off" ? "&recvideo=0" : ""}` : "?rec=driver") + (flag("no-timing") ? "&rectiming=0" : "") + (arg("alternate") || flag("paused") ? "&recmeasure=1" : "") + (arg("codec") ? `&reccodec=${arg("codec")}` : "") + (arg("encode") === "off" ? "&recencode=0" : "") + (arg("capture") ? `&reccapture=${arg("capture")}` : "") + (flag("no-sample") ? "&recsample=0" : "") + (arg("video-width") ? `&recvideowidth=${arg("video-width")}` : "");
 const result = { mode, video: videoOn, machine, commit, segment, errors: [], reached: [], skipped: [] };
 let exit = 0, g = null;
 try {

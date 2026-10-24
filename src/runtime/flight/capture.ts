@@ -126,7 +126,31 @@ export class FlightCapture {
   private softwareWidth: number = SOFTWARE_VIDEO_WIDTH;
   /** The ladder's rungs this recording may use (encoders.ts); measurements narrow it. */
   private videoRungs: string[] = [...DEFAULT_RUNGS];
-  private captureFrame = false;
+  private captureMode: "bitmap" | "frame" | "stream" = "bitmap";
+  private streamCapture: { track: CanvasCaptureMediaStreamTrack; pending: number[] } | null = null;
+  /** The stream capture path (measurement): a canvas track, its processor read in a loop, each frame matched to the oldest request. */
+  private openStreamCapture(v: Video): { track: CanvasCaptureMediaStreamTrack; pending: number[] } | null {
+    const Processor = (globalThis as { MediaStreamTrackProcessor?: new (o: { track: MediaStreamTrack }) => { readable: ReadableStream<VideoFrame> } }).MediaStreamTrackProcessor;
+    if (!Processor) return null;
+    const track = this.canvas.captureStream(0).getVideoTracks()[0] as CanvasCaptureMediaStreamTrack | undefined;
+    if (!track) return null;
+    const cs = { track, pending: [] as number[] };
+    this.streamCapture = cs;
+    const reader = new Processor({ track }).readable.getReader();
+    void (async () => {
+      for (;;) {
+        const { value, done } = await reader.read();
+        if (done || !value) return;
+        const t = cs.pending.shift(), vv = this.video;
+        if (vv) vv.capturing = Math.max(0, vv.capturing - 1);
+        if (t === undefined || !vv || vv !== v || vv.paused || this.stopped) { value.close(); continue; }
+        const frame = new VideoFrame(value, { timestamp: Math.round(t * 1000) });
+        value.close();
+        this.sendFrame(vv, t, frame);
+      }
+    })();
+    return cs;
+  }
   private encodeVideo = true;
   /** Software encoding allowed here (owner policy: Linux test machines only). */
   private software = false;
@@ -160,7 +184,7 @@ export class FlightCapture {
     if (q.get("reccodec")) this.videoRungs = q.get("reccodec")!.split(",");
     if (q.get("rechw") === "0") this.videoRungs = ladder(this.videoRungs, false).map((r) => r.key);
     // Measurement overrides: the capture path (`?reccapture=frame`), capture without encoding (`?recencode=0`), software where it is otherwise not allowed (`?recsoftware=1`).
-    this.captureFrame = q.get("reccapture") === "frame";
+    this.captureMode = q.get("reccapture") === "frame" ? "frame" : q.get("reccapture") === "stream" ? "stream" : "bitmap";
     this.encodeVideo = q.get("recencode") !== "0";
     this.software = softwareAllowed((navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform) || q.get("recsoftware") === "1";
     const gl = canvas.getContext("webgl2");
@@ -238,7 +262,12 @@ export class FlightCapture {
       if (now >= v.next) {
         v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
         if (v.inflight + v.capturing >= VIDEO_INFLIGHT_MAX) { v.skipped++; this.ledger.videoDrops.skipped++; this.videoGap(now, "lost", "the video was behind on the main thread", v.lastKept ?? v.lastSent); }
-        else if (this.captureFrame) {
+        else if (this.captureMode === "stream") {
+          // `?reccapture=stream` (R3b probe): the page only asks for a frame; the browser copies the canvas in its
+          // capture path and the track processor hands the VideoFrame back, dated with this request's page time.
+          const cs = this.streamCapture ?? this.openStreamCapture(v);
+          if (cs) { cs.pending.push(now); v.capturing++; cs.track.requestFrame(); }
+        } else if (this.captureMode === "frame") {
           // `?reccapture=frame` (R3b, the research's §4): the canvas wrapped as a VideoFrame now, in the frame that drew
           // it (a GPU shared image where the browser can), transferred whole; the encoder scales it.
           let frame: VideoFrame | null = null;

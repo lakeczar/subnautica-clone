@@ -33,6 +33,10 @@ for v in ${VARIANTS:-telemetry capture-bitmap capture-frame vp9-bitmap vp8-bitma
     telemetry-bare) run "$v" --video off --no-timing --no-sample ;;
     capture-bitmap) run "$v" --encode off ;;
     capture-frame) run "$v" --encode off --capture frame ;;
+    capture-stream) run "$v" --encode off --capture stream ;;
+    capture-bitmap-profile) run "$v" --encode off --profile-windows ;;
+    capture-stream-profile) run "$v" --encode off --capture stream --profile-windows ;;
+    vp9-stream) run "$v" --codec vp9 --capture stream ;;
     vp9-bitmap) run "$v" --codec vp9 ;;
     vp8-bitmap) run "$v" --codec vp8 ;;
     h264-bitmap) run "$v" --codec h264 ;;
