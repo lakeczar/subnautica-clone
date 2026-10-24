@@ -1047,3 +1047,35 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Why not LS-1:** POI-1's noticeable-mark list lives in `tests/poi.test.ts`, and the landmark lights derive from render geometry the sim can't import. A proper reuse means lifting the list into one Babylon-free content module (light points precomputed from content or the bake), then adding a recorder "point of interest passed" event with a spatial index and throttled line of sight.
   - **REC-2 brief:** lift, event, then re-measure, so the ratchet lowers.
   - **LS-1's R1 fixes:** the debt ratchet fails when a route is better than recorded, and each row names its owner (PACE-1 logistics, REC-2 landmarks).
+- **REC-1: e706 lost to a stall kill** (a `cut` block-buffering the log), about 31 min of 3090 exclusive time lost today across f0df, e7fc and e706. Root fix `29df729f`: `run.mjs` touches `$SILTWAKE_JOB_HEARTBEAT` on every log line, proved on the 4070 first (a 300 s hold under a 200 s stall window). Resubmitted `8bf5`, `0ea8` and `9e9e`.
+  - **Rule for briefs:** rehearse any exclusive command on the 4070 with a shortened `--stall` before spending 3090 time.
+- **STEW-2 R1** (Sol on `e8764aa`, report on `review/stew-2-r1` `bfa2cc92`): REQUEST CHANGES.
+  - **Findings:** P1 local-run leases aren't mutual exclusion (read-then-publish race, children outlive the PID, 20-minute expiry releases live work); P1 fail-open on unknown or unreadable state; P2 economy modules load before the guard; P2 cgroup prefix matching; P2 unclassified `Date.now` timing.
+  - **Decision (root fix):** drop leases. On factory-worker, guarded entry points re-exec themselves through `heavy-check run --machine any`, so the queue sees all sanctioned CPU work. Refuse if the queue is unavailable; alickers identified positively; a guarded launcher; exact cgroup path components (a shared helper for SCHED-3 to adopt); full clock coverage. Bare tools stay a documented convention.
+- **CW-1 done at `a431d253`** (game `64bf2565`, harness `da1c83b0`):
+  - **Fixes:** R3-1/2/3 fixed with tests (the provable gate with SIM-PERF-1's classifier; one upload scheduler; readiness bound to the presented pose).
+  - **r13 under the strict rule:** tours 3, 4 and 7 and the surf hop pass with nothing excused. Deep 2 fails (light selection at 63.7 and 102.4 ms, mixed; a quiet replay measures 0.17 ms max). Tour 1 fails (one unsampled 95.2 ms region-activation frame); its R3 re-entry checks pass (12/12 caves, light bound about 0.4 s after re-entry).
+  - **Overall:** 7 of 9 judged segments pass.
+  - **R4 proposal:** a co-located vCPU-following canary.
+  - **Review:** Sol R4 running (`siltwake-cw1-review-r4-sol-a431d25`).
+- **SCHED-3 R4** (Sol on `194dcdc8`, report on `review/sched-3-r4` `f8378439`): REQUEST CHANGES.
+  - **Findings:** P1 the resolver accepts non-literal npm heads (`VAR=1 npm`, `env npm`, `/usr/bin/npm`, `npx`), newline collapse and npm options; P2 a spoofable `npm_lifecycle_event` exception.
+  - **Decisions:** a closed runner grammar (`node <path> args` and recursively expanded `npm test`/`npm run X`, joined by `&&`; anything else runs here); delete the lifecycle exception; `test:heavy` balances via an explicit `--machine any` in `package.json`. R5 is the install decision.
+- **LS-1 stage 1a R1** (Sol on `5288deb5`, report on `review/ls-1-1a-r1` `9de5917e`): REQUEST CHANGES.
+  - **Verified:** 9/9 routes, 139 matching saves, identical timelines, relay solvency, the scout drone's 12 m capture accepted.
+  - **Findings:** P1 the new records never reach the rendered journal; P2 aggregate debt hides new regressions (now per-gap identified debt, ratcheting down, with owners); P2 most `waitFor` calls lack causes (now required at the API, with the baseline recomputed); P2 decoded text bypasses door-code withholding (now one placement-aware authority).
+- **PACE-1 plan done at `671b0ecb`** (from LS-1's run outputs):
+  - **Diagnosis:** most debt is bot ordering (the carrier used as a 9-crossing ferry, the pod buffer last, one-recipe gathering, eating trips, a 16-min ceramic trip). The real structure: the ending's needs can only be met at home (assemblies made only at the workshop or crown; 4 common materials with no source past the Basin), so a 41-min loop remains with best play. The measure also misses landmarks and works and ending beats.
+  - **Fixes (no timer, speed or quantity changes):** a district bench for the two assemblies; three district sources; resin→ceramic recipe swaps; the Rift ledger grants the power-assembly plan; works and ending steps count as beats.
+  - **Stages:** 1 the bot plays sensibly (`later.ts` plus a stock planner); 2 a self-sufficient district finale; 3 marks on still-empty legs.
+  - **Projection:** the Creel's longest gap 51→15 min or less, the carrier's 95→15 or less.
+  - **Cost:** the main path gets about 1 h shorter, so the 10 h floor rests on content (no padding).
+  - **Review:** Sol plan R1 running (`siltwake-pace1-plan-review-r1-sol-671b0ec`).
+- **Owner decisions (2026-10-24):**
+  - **Door puzzles: more puzzles.** Most coded doors involve deduction, the main path is always solvable from logs, and the first door is a straight code (coordinator call). Recorded in OPENING-DESIGN.
+  - **90 s empty travel is a spacing guide, not law.** The limit scales with progression, and long legs are reported, not auto-failed; the 15–20 min gap and zero decode-only waits stay hard gates; a predator counts while its cue plays.
+  - **Carrier hold-course on sailed lanes** for long, slow journeys, otherwise steer (a small stream after PACE-1 stage 2). Recorded in GAME-DIRECTION.
+  - Sent to LS-1 and PACE-1. PACE-1 stage 2 also wires carrier fabrication.
+- **PACE-1 plan R1** (Sol on `671b0ecb`, report on `review/pace-1-r1` `0891ed9e`): REQUEST CHANGES; all four failures reproduced.
+  - **Findings:** P2 the air assembly's 2 lattice is only knowable in the district (the bot hides it by pre-budgeting 14); P2 the 41-min "best play" figure isn't a lower bound; P3 baseline summaries.
+  - **Decisions:** make the lattice need knowable before leaving the Divide (legibility, not a new source unless story-justified); delete the bot's secret pre-budget; add an adverse case starting from known-recipe stock only; scope the 41 min as an estimate. Recorder works and ending beats go to REC-2.
