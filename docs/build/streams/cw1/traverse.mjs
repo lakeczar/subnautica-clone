@@ -249,7 +249,7 @@ try {
   if (await page.locator("#confirmation").isVisible().catch(() => false)) await page.locator("#confirm-accept").click();
   await page.waitForFunction(() => !document.querySelector("#hud")?.hidden && document.querySelector("#ocean").dataset.ready === "true", null, { timeout: 120000 });
   const playable = Date.now() - t0;
-  const records = await page.evaluate(() => JSON.parse(document.querySelector("#ocean").dataset.caveStream ?? "{}"));
+  const records = await page.evaluate(() => (document.querySelector("#ocean").siltwakeCaveStream?.() ?? {}));
   result.coldStart = { titleMs: title, playableMs: playable, collisionPackMs: records.recordsMs, records: records.records };
   note("cold start", JSON.stringify(result.coldStart));
   await page.locator("#ocean").click();
@@ -332,7 +332,7 @@ try {
     result.gcTraceAligned = !!mark;
     result.gcTraceNames = [...new Set(events.filter(e => /GC/.test(e.name ?? "")).map(e => e.name))].slice(0, 40);
   }
-  const data = await page.evaluate(() => ({ origin: performance.timeOrigin, gaps: window.__gaps, perf: window.__siltwakePerf, stream: JSON.parse(document.querySelector("#ocean").dataset.caveStream ?? "{}"),
+  const data = await page.evaluate(() => ({ origin: performance.timeOrigin, gaps: window.__gaps, perf: window.__siltwakePerf, stream: (document.querySelector("#ocean").siltwakeCaveStream?.() ?? {}),
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
     regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
     heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));

@@ -371,6 +371,17 @@ export function createRenderer(
       };
       scene.executeWhenReady(whenReady);
     });
+    // CW-1's streaming diagnostics for evidence drivers, read on demand
+    // (`#ocean.siltwakeCaveStream()`), never written per frame; REC-1's
+    // `__siltwake` hook can take this over when it lands.
+    Object.defineProperty(canvas, "siltwakeCaveStream", { configurable: true, value: () => {
+      const ks = caveWorld.kitCaves.stats, cv = caveView.stats;
+      return { sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
+        stepMs: +ks.maxStepMs.toFixed(2), buildMs: +worstCaveBuildMs.toFixed(2), pending: streamFrame?.pending ?? -1,
+        missing: cv.missing, uploads: cv.uploads, lightBytes: caves?.stats.lightBytes ?? 0,
+        textureBytes: cv.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0,
+        lightPendingFrames: cv.pendingFrames, maxAllocMs: +cv.maxAllocMs.toFixed(2), maxWriteMs: +cv.maxWriteMs.toFixed(2), restarts: cv.restarts };
+    } });
     return {
       get settling() { return settleSince >= 0; },
       get caveLightPending() { return caveView.lightPending; },
@@ -497,12 +508,6 @@ export function createRenderer(
         // This frame's texture upload work, wherever it ran (prefetch or activation).
         const caveUpload = caveView.stats.frameUploadBytes > 0 ? { ms: +caveView.stats.frameUploadMs.toFixed(2), bytes: caveView.stats.frameUploadBytes } : null;
         canvas.dataset.cave = caveView.active ?? "";
-        const ks = caveWorld.kitCaves.stats;
-        canvas.dataset.caveStream = JSON.stringify({ sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
-          stepMs: +ks.maxStepMs.toFixed(2), buildMs: +worstCaveBuildMs.toFixed(2), pending: streamFrame?.pending ?? -1,
-          missing: caveView.stats.missing, uploads: caveView.stats.uploads, lightBytes: caves?.stats.lightBytes ?? 0,
-          textureBytes: caveView.stats.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0,
-          lightPendingFrames: caveView.stats.pendingFrames, maxAllocMs: +caveView.stats.maxAllocMs.toFixed(2), maxWriteMs: +caveView.stats.maxWriteMs.toFixed(2) });
         streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
         canvas.dataset.currentStreaks = String(streaks.shown);
         const tActors = timedParts ? performance.now() : 0;
