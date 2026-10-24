@@ -12,19 +12,40 @@ Every simulation step over 8 ms in ordinary play now has a named cause. The game
   - `--host` tags each slow step with per-vCPU steal and a canary thread's late wake-ups.
   - `--capture RUN:TICK` CPU-profiles one step in context and saves its pre-step save and controls.
   - `--heap` (allocation by phase) and `--alloc` (allocation by function, with callers).
-- **The browser** (probe only, not for merge): CW-1's traversal (`traverse.mjs`) on a probe of this branch merged with CW-1, pulling the meter's snapshot and matching worst steps to long frames, with optional CPU profiling.
+- **The browser** (probe only, not for merge: `probe/sim-perf-1-cw1`, this branch merged with CW-1 `3779f59c`): CW-1's traversal over its `saves-t6` plan, pulling the meter's snapshot and matching worst steps to long frames. Two opt-ins, for the coordinator's decisive host test: `SIMPERF_HOST=1` runs a worker (`simperf-host-worker.mjs`) with a 1 ms `CLOCK_MONOTONIC` canary, every vCPU's steal and the vCPU the renderer's main thread is on (every 10 ms), and that thread's state and syscall (every 2 ms; `wchan` is hidden on this kernel); `SIMPERF_TRACE=1` adds the `toplevel`, `gpu` and `ipc` trace categories, for short runs only (a whole segment's trace would pass V8's string limit).
 
 ## Attribution (causes, ranked)
-PENDING the decisive host test (coordinator, R1): see *Missing evidence*.
+Every slow step was re-executed from its own pre-step state (`--verify`), or its whole scenario replayed in a fresh process to the same tick (`--capture`), which also reproduces any first-use cost. A step that is slow again is the game's; one that isn't was a collection, the host, or (in the browser) the thread waiting.
+
+1. **The 30–136 ms steps (CW-1's six, REC-1's 68.8 ms, and this stream's own) are not the game's work.** Headless on factory-worker, the 33.9, 38.8, 45.8 and 8.8 ms steps took about 1 ms when replayed to the same tick in a fresh process. In the browser (3090, profiled, `gpu` class), the one long simulation frame was a 61.7 ms step, all in movement, during which Chrome's 0.5 ms CPU sampler caught no movement code. On the 4070 (control), 87,845 browser steps over two segments had none over 8 ms. **What paused the 3090's thread is PENDING** the exclusive host test (*Missing evidence*): the 4070 run proved the instrument reads a blocked thread (`S futex`, canary clear, no steal) apart from a paused VM.
+2. **Collections.** Node's major collections land 7–15 ms in whatever step allocates (up to 75 ms on CW-1's tree headless, where unstreamed cluster builds allocate about 18 MiB each). The step allocated 118 KiB a tick on root (124 on CW-1's tree); now FINAL-ALLOC.
+3. **Autosave (every 1,800 ticks): 4–7 ms in a step, 10–17 ms on the first after a load.** Each commit decoded the record it had just written up to four times.
+4. **Hunter encounters: over 1 ms on every encounter step, up to about 8 ms.** Each sweep slice (0.2 m, up to about 15 escape directions a step) re-validated all 11,415 world solids.
+5. **First use after a load:** the first steps' compilation (5–8 ms), each hull's contact mesh at its first hunter contact (about 3 ms), the first autosave (above).
+6. **Steady costs, not spikes:** terrain sampling (the largest per-step CPU and allocation: about 1 ms of a heavy 1.1 ms Divide step, 24 KiB a step), the systems host views (rebuilt every step), cycle sight lines near cycle fields (p99 0.4–0.6 ms), the HUD's per-step presentation (browser mean 90 µs, max 5.7 ms).
+7. **The play-timeline save** grows with the session (13–21 ms at a full window): SIM-1b's, below.
 
 ## What changed (each with identical answers)
-PENDING
+- **The roster check** (`sim/world.ts`): a separated sweep validates the immutable solids roster once per world, not on every call. Threat p99 1,117 → 21 µs and step p99 1.22 → 0.28 ms in held runs from `hull-damaged` and `carrier-fitout`.
+- **The save commit** (`save/repository.ts`): the repository remembers the record it read or wrote, decoded, so a commit never parses or validates its own record again (decoding is a pure function of the text; slot envelopes are never mutated, the session clones). `repository.commit` 3.4 → 1.2 ms on a late save. Byte limits encode only when the length can't tell (`utf8Over`, `save/codec.ts`). It still validates what it writes.
+- **Craft profiles** (`sim/upgrades/effects.ts`): memoized by their inputs (`hull|rating|fitted`), at most 128 entries, oldest first, frozen. They were the step's largest allocation (about 17 KiB).
+- **Hazard sampling** (`sim/ecology/hazards.ts`, `sim/fittings.ts`): each field's centre is resolved once; `sampleHazards` keeps scalars, not a record and a vector per field; `hazardsAt` reads heat and brine in one pass (it read each heat field's level twice and ran a second whole `sampleHazards` for brine). `tests/hazard-sampling.test.ts` keeps the earlier algorithm as the exact reference.
+- **The host power drain** (`sim/systemsLink.ts`, `listHosts(…, { occupied: true })`): views only hosts with something in a socket (every carrier, whose seeded fittings occupy sockets without an entry). The coordinator's suggested revision counter was not small: it would be a persisted field that every systems, facility, fleet and docking writer must bump.
+- **Terrain polylines** (`content/regions/noise.ts` `nearestOnPolyline`): indexed instead of destructured; destructuring ran the iterator protocol for every segment of every sample (about 9 KiB a step). Same arithmetic. (World stream's module; a two-line allocation fix.)
+- **Entry warm-up** (`sim/warmup.ts`, `save/repository.ts` `warmCommit`, `SiltwakeApp.warm`): when an expedition is entered, behind the pause, a copy of the state is stepped one second, every hull contact mesh is built (`hullContactPose`'s whole range) and a whole commit runs twice on a throwaway in-memory slot. The first autosave after a load: 9.1 → 1.6 ms and 10.1 → 1.3 ms (alickers). `tests/warmup.test.ts`: the state is untouched and play after warming equals play without it.
+- **The step meter and harness** (above), and the driver's optional `DriverObserver.before`.
 
 ## Evidence
 PENDING
 
 ## Contracts and merge notes
-PENDING
+- **New per-step work** marks its phase: add a `STEP_PHASES` entry and `meter?.mark(PHASE.x)` after it, or it is counted in the next phase.
+- **`__siltwakeStepCosts()`** is `FORK(step-costs-global)` (CORE-HELPERS): whichever of REC-1 and SIM-PERF-1 merges second makes it `__siltwake.steps()`.
+- **CW-1 merge (resolved once in `probe/sim-perf-1-cw1`; whichever merges second):**
+  - `app.ts`: CW-1 splits the frame into `step(now)` and `present(now)`; the meter wraps `this.step(now)` beside CW-1's `__siltwakePerf` timing, and `this.warm()` sits beside CW-1's `warmRegions()` in `entered()`.
+  - `world.ts`: CW-1's `nearInto`/`dataInBox` replaces `near`; keep `rosterInvalid` (no index shortcut: CW-1 hands cave composites a prebuilt index).
+  - **A silent semantic conflict:** CW-1's deep-cave loop in `sampleHazards` writes the `out` record this stream removed. Merged, it must update the scalars (`heat`, `brine`, `sediment`, `darkness`), and `hazardsAt` must take cave brine pools into `brine` (it used `sampleHazards(p).brine`) beside CW-1's cave heat. Extend `tests/hazard-sampling.test.ts`' reference with `DEEP_CAVE_HAZARDS` in the same merge.
+- **Determinism:** no saved field, outcome or ledger changes (below).
 
 ## Compromises and follow-ups
 - **The play timeline's save (SIM-1b's motivating number).** Every 600 ticks the app serialises the whole timeline export and writes it to localStorage. At the full rotation window (20 sealed chunks, about 20k events, 2.7 M characters) the serialisation alone is **13–21 ms in Node** on factory-worker, before the browser's write of about 5 MB; a chunk seal or rotation costs up to 3.8 ms. It grows linearly with the session (1.7 ms at 2k events, 5.8 ms at 10k). The bot's timelines never reach it (212 events in 3.2 h of play), so only a human session shows it. Root fix: SIM-1b's incremental journal (assigned to its builder; no interim here, by the coordinator's decision).
