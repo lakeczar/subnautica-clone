@@ -101,7 +101,7 @@ interface Entry {
   /** A moving mesh's lights, one mutable light per cluster and instance,
    * made once and moved in place each frame (R2-4), and where the
    * round-robin refresh of a large one resumes. */
-  moving: { lights: { x: number; y: number; z: number; stamp: number }[]; next: number } | null;
+  moving: { lights: (PointLight & { stamp: number })[]; next: number } | null;
   active: boolean;
   /** Where the entry sits in the dense per-frame list. */
   index: number;
@@ -215,12 +215,12 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
         moveOne(e, i, world, instances);
         moved++;
       }
-      return lights as PointLight[];
+      return lights;
     }
     const count = Math.min(total, allowance);
     for (let k = 0; k < count; k++) { moveOne(e, e.moving.next, world, instances); e.moving.next = (e.moving.next + 1) % total; }
     moved += count;
-    return e.moving.lights as PointLight[];
+    return e.moving.lights;
   };
   /** Frames since this moving mesh's oldest light was moved (0: all current).
    * Round-robin keeps the oldest next in line; while lights are still being
