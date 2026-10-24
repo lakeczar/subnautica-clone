@@ -363,12 +363,34 @@ test("lane eligibility: local paths outside the tree and uncommitted build outpu
   assert.deepEqual(R.builtOutputs(["npm", "run", "playthrough", "--", "--jobs", "3"]), []);
 });
 
-test("machine tags: defaults by class; exclusive is the 3090's; unknown tags refused", () => {
+test("machine tags (SCHED-3): any by default, except quick, bake and exclusive (here) and soak; an explicit tag wins; unknown tags refused", () => {
   const m = (cls: string, extra = {}) => P.resolveRequest({ class: cls, ...extra }, { T: 4, M: 6144 }).goal?.machine;
-  assert.deepEqual([m("playthrough"), m("heavy-suite"), m("soak"), m("gpu"), m("quick"), m("exclusive")], ["any", "any", "soak", "3090", "3090", "3090"]);
+  const classes = ["standard", "gpu", "playthrough", "heavy-suite", "quick", "bake", "exclusive", "soak"];
+  assert.deepEqual(classes.map((c) => m(c)), ["any", "any", "any", "any", "3090", "3090", "3090", "soak"]);
+  assert.deepEqual(classes.map((c) => P.defaultMachine(c)), classes.map((c) => m(c)), "the request uses the table");
   assert.equal(m("gpu", { machine: "4070" }), "4070");
+  assert.equal(m("standard", { machine: "3090" }), "3090", "explicit --machine 3090 wins");
+  assert.equal(m("quick", { machine: "any" }), "any", "explicit --machine any wins for a local class");
   assert.match(P.resolveRequest({ class: "exclusive", machine: "4070" }, { T: 4, M: 6144 }).error, /exclusive measures the RTX 3090/);
   assert.match(P.resolveRequest({ class: "quick", machine: "mars" }, { T: 4, M: 6144 }).error, /unknown machine/);
+});
+
+test("routing (SCHED-3): an any request that can't run on alickers goes to the 3090 with the reason; 4070 is refused; 3090 and soak stand", () => {
+  const why = "uncommitted changes (alickers runs a commit)";
+  assert.deepEqual(P.resolveMachine("any", null), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("any", why), { machine: "3090", routed: { from: "any", reason: why } });
+  assert.deepEqual(P.resolveMachine("3090", why), { machine: "3090" }, "no routing record for a job that asked for here");
+  assert.deepEqual(P.resolveMachine("soak", why), { machine: "soak" }, "soak keeps its own rule");
+  assert.match(P.resolveMachine("4070", why).error, /--machine 4070 runs on alickers, but uncommitted changes/);
+  assert.deepEqual(P.resolveMachine("4070", null), { machine: "4070" });
+});
+
+test("build-only commands stay here (their output is the point); a build followed by its use can go", async () => {
+  const R = await import(pathToFileURL(resolve("scripts/heavy/remote.mjs")).href);
+  for (const argv of [["npm", "run", "build"], ["sh", "-c", "npm run build"], ["npx", "vite", "build", "--mode", "production"], ["node", "scripts/test-build.mjs", "--typecheck"]])
+    assert.ok(R.buildOnly(argv), argv.join(" "));
+  for (const argv of [["npm", "test"], ["sh", "-c", "npm run build && node scripts/check-dist.mjs"], ["sh", "-c", "node scripts/test-build.mjs; node scripts/test-tier.mjs heavy"], ["npm", "run", "build:terrain"], ["npm", "run", "playthrough"]])
+    assert.equal(R.buildOnly(argv), null, argv.join(" "));
 });
 
 const remote = (state: string) => idle({ remote: { state } });

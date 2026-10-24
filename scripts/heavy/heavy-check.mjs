@@ -28,9 +28,9 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
+import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
-import { builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
+import { buildOnly, builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
   alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
   reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
@@ -123,15 +123,21 @@ async function submit(opts, command, { quiet = false } = {}) {
   if (opts.snapshot && !tree.head) fail("--snapshot needs a git worktree");
   // The second worker runs a commit (SCHED-2b): only a clean tree can go, and
   // only a command that names nothing outside it but its declared --artifact
-  // outputs. An `any` or `soak` job that can't go runs here; a `4070` job is refused.
-  const machine = req.goal.machine, lane = remoteConfig(cfg);
-  const external = externalPaths(command, worktree, opts.artifacts ?? []), built = builtOutputs(command);
+  // outputs. An `any` job that can't go is routed to the 3090 with the reason
+  // (SCHED-3; a --snapshot is a clean tree's commit, so it needs no rule of its
+  // own); a `soak` job runs here; a `4070` job is refused.
+  const lane = remoteConfig(cfg);
+  const external = externalPaths(command, worktree, opts.artifacts ?? []), built = builtOutputs(command), builds = buildOnly(command);
   const why = !lane.enabled ? `the remote lane is off (${readHealth(cfg).detail})` : !tree.head ? "not a git tree"
     : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)`
-    : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …` : null;
+    : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …`
+    : builds ? `it only builds (${builds}), and its output is wanted here` : null;
+  const routed = resolveMachine(req.goal.machine, why);
+  if (routed.error) fail(`refused: ${routed.error}`);
+  const machine = req.goal.machine = routed.machine;
+  if (routed.routed) req.goal.routed = routed.routed;
   req.goal.remoteOk = machine !== "3090" && !why;
-  if (machine === "4070" && why) fail(`refused: --machine 4070 runs on alickers, but ${why}`);
-  if (why && machine !== "3090" && !(machine === "any" && !opts.machine)) say(`runs here (factory-worker), not on alickers: ${why}`);
+  if (why && (routed.routed || machine === "soak")) say(`runs here (factory-worker), not on alickers: ${why}`);
   for (const a of opts.artifacts ?? []) if (machine === "3090" || !req.goal.remoteOk) { if (!a.startsWith("/")) fail(`--artifact ${a}: a job running here needs an absolute path`); }
   const id = newTicket();
   const key = coalesceKey({ worktree, cwd, argv: command, class: cls, cpus: opts.cpus, memMiB: opts.memMiB, review: opts.review, head: tree.head, dirty: tree.dirty, snapshot: opts.snapshot, gpu: opts.gpu, machine: opts.machine, artifacts: opts.artifacts });
@@ -297,7 +303,7 @@ function finalLine(e) {
       ? `WARNING tree changed: submitted ${tr(e.head, e.dirty)}, tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`
       : `tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`);
   }
-  parts.push(`on ${e.machine ?? MACHINE_LABELS.local}`);
+  parts.push(`on ${e.machine ?? MACHINE_LABELS.local}${e.goal?.routed ? ` (any, routed here: ${e.goal.routed.reason})` : ""}`);
   if (e.artifacts?.length) parts.push(`artifacts: ${e.artifacts.map((a) => a.local ?? `${a.remote ?? a.path} (${a.error ?? "here"})`).join(", ")}`);
   if (e.gpuShared) parts.push(`GPU shared outside the lease with pid ${e.gpuShared.map((u) => u.pid).join(", ")}`);
   if (e.context?.v === 2) {
@@ -346,7 +352,8 @@ function statusCmd(args) {
   const unleased = gpuUsers(cfg, state).filter((u) => !u.leased);
   if (unleased.length) process.stdout.write(`GPU in use outside the lease: ${unleased.map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}\n`);
   const rows = [["TICKET", "WORKTREE", "CLASS", "MACHINE", "STATE", "TIME", "BLOCKED-BY", "COMMAND"]];
-  const mach = (t) => (t.state === "running" ? (t.remote ? "alickers" : "here") : t.goal?.machine ?? "3090") + (t.fellBack ? "*" : "");
+  // `^`: an `any` job routed to the 3090 at submit (SCHED-3), with why below.
+  const mach = (t) => (t.state === "running" ? (t.remote ? "alickers" : "here") : t.goal?.machine ?? "3090") + (t.fellBack ? "*" : "") + (t.goal?.routed ? "^" : "");
   for (const t of running) rows.push([t.id, wt(t), cls(t), mach(t), t.express ? "running*" : "running", dur(now - t.admittedAt), "", cmd(t)]);
   for (const id of p.order) {
     const t = state.tickets[id];
@@ -355,6 +362,8 @@ function statusCmd(args) {
   const widths = rows[0].map((_, c) => Math.max(...rows.map((r) => r[c].length)));
   for (const r of rows) process.stdout.write(`${r.map((v, c) => (c === r.length - 1 ? v : v.padEnd(widths[c]))).join("  ")}\n`);
   if (running.some((t) => t.express)) process.stdout.write("* express slot\n");
+  for (const t of [...running, ...p.order.map((id) => state.tickets[id])].filter((x) => x.goal?.routed))
+    process.stdout.write(`^ ${t.id}: any, routed here: ${t.goal.routed.reason}\n`);
   return 0;
 }
 const wt = (t) => t.worktree.split("/").at(-1);

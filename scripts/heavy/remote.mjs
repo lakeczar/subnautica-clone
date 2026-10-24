@@ -333,6 +333,15 @@ export function builtOutputs(argv) {
   return [...new Set(argv.flatMap((t) => [...String(t).matchAll(/(?:^|[\s=:'"(/])(\.test-build[^\s/'";)]*|dist)(?=\/|$|[\s'";)])/g)].map((m) => m[1])))];
 }
 
+/** A command that only builds (`npm run build`, `vite build`, `node
+ * scripts/test-build.mjs`, nothing after it): its output in this worktree is
+ * the point, and a commit run on alickers would bring none back. A build
+ * followed by the work that reads it (`npm run build && …`) can go. */
+export function buildOnly(argv) {
+  const text = argv.join(" ").replace(/^(?:ba)?sh -c\s+/, "").trim();
+  return /^(?:npm run build|npx vite build|vite build|node scripts\/test-build\.mjs)(?:\s+[^;&|]*)?$/.test(text) ? text.split(/\s+/).slice(0, 3).join(" ") : null;
+}
+
 /**
  * Absolute paths a command names outside its worktree (/work, /home, /tmp,
  * /mnt). The sandbox has only the commit, so such a command can't run there:

@@ -723,3 +723,71 @@ test("B27 (R3): release-remote frees a ticket held by a sandbox that's gone: rec
       spawnSync("systemctl", ["--user", "kill", "--signal=SIGKILL", u], { stdio: "ignore" });
   }
 });
+
+// SCHED-3 ---------------------------------------------------------------------
+
+test("B28 (SCHED-3): standard and gpu jobs go to alickers by default; one that can't (dirty, local paths, build output, build-only, lane off) is routed here with its reason at submit, on the ticket, in status and in the result; explicit tags win; quick stays here", async () => {
+  const c = await lane("balance");
+  // The default: a clean standard and a clean gpu job run on the 4070, tagged any.
+  for (const cls of ["standard", "gpu"]) {
+    const s = hc(c, ["submit", "--class", cls, "--", "sh", "-c", "echo balanced"], { cwd: c.repoDir });
+    assert.equal(s.code, 0, s.err);
+    assert.doesNotMatch(s.err, /runs here/);
+    const id = s.out.trim();
+    assert.equal(waitFor(c, id).code, 0);
+    const r = result(c, id);
+    assert.deepEqual([cls, r.remote, r.machine, r.machineTag, r.goal.routed], [cls, true, REMOTE, "any", undefined]);
+  }
+  // quick keeps the express slot here; an explicit 3090 stays here unrouted.
+  for (const args of [["--class", "quick"], ["--class", "standard", "--machine", "3090"]]) {
+    const s = hc(c, ["submit", ...args, "--", "true"], { cwd: c.repoDir });
+    assert.doesNotMatch(s.err, /runs here/);
+    assert.equal(waitFor(c, s.out.trim()).code, 0);
+    const r = result(c, s.out.trim());
+    assert.deepEqual([args.join(" "), r.remote, r.machineTag, r.goal.routed], [args.join(" "), undefined, "3090", undefined]);
+  }
+  // Each reason a job can't go: routed to the 3090, printed once at submit, recorded.
+  const hold = submit(c, c.repoDir, "--class", "quick", "--machine", "3090", "--", "sleep", "15"); // holds the worktree, so the next one stays queued
+  await running(c, hold);
+  writeFileSync(join(c.repoDir, "file.txt"), "dirty\n");
+  const d = hc(c, ["submit", "--class", "standard", "--", "true"], { cwd: c.repoDir });
+  assert.equal(d.code, 0, d.err);
+  const dirty = d.out.trim();
+  assert.equal(d.err.match(/runs here \(factory-worker\), not on alickers: uncommitted changes \(alickers runs a commit\)\n/g)?.length, 1);
+  const tk = JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets[dirty];
+  assert.deepEqual([tk.goal.machine, tk.goal.remoteOk, tk.goal.routed], ["3090", false, { from: "any", reason: "uncommitted changes (alickers runs a commit)" }]);
+  const st = hc(c, ["status"]).out;
+  assert.match(st, new RegExp(`${dirty}\\s+\\S+\\s+standard\\s+3090\\^\\s+queued`), st);
+  assert.match(st, new RegExp(`^\\^ ${dirty}: any, routed here: uncommitted changes \\(alickers runs a commit\\)$`, "m"));
+  const w = waitFor(c, dirty);
+  assert.equal(w.code, 0, w.err);
+  assert.match(w.err, /on RTX 3090 \(factory-worker\) \(any, routed here: uncommitted changes/);
+  assert.deepEqual([result(c, dirty).remote, result(c, dirty).goal.routed.reason], [undefined, "uncommitted changes (alickers runs a commit)"]);
+  // An explicit 4070 is refused for the same reason, never routed.
+  const g = hc(c, ["submit", "--class", "gpu", "--machine", "4070", "--", "true"], { cwd: c.repoDir });
+  assert.equal(g.code, 2);
+  assert.match(g.err, /refused: --machine 4070 runs on alickers, but uncommitted changes/);
+  git(c.repoDir, "checkout", "-q", "--", "file.txt");
+  for (const [argv, reason] of [
+    [["node", "/work/tmp/some-local-input.mjs"], /it names local paths alickers lacks: \/work\/tmp\/some-local-input\.mjs/],
+    [["node", ".test-build/x.js"], /it reads build output a commit lacks \(\.test-build\)/],
+    [["sh", "-c", "npm run build"], /it only builds \(npm run build\), and its output is wanted here/],
+  ]) {
+    const s = hc(c, ["submit", "--class", "gpu", "--queue-timeout", "1", "--", ...argv], { cwd: c.repoDir });
+    assert.equal(s.code, 0, s.err);
+    assert.match(s.err, new RegExp(`runs here \\(factory-worker\\), not on alickers: ${reason.source}`));
+    const id = s.out.trim(), t = JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets[id] ?? result(c, id);
+    assert.equal(t.goal.machine, "3090");
+    assert.match(t.goal.routed.reason, reason);
+    hc(c, ["cancel", id]);
+  }
+});
+
+test("B29 (SCHED-3): private state without a remote: a default standard job is routed here, saying the lane is off", async () => {
+  const c = context("balance-off");
+  const s = hc(c, ["submit", "--class", "standard", "--", "true"], { cwd: c.repo("r") });
+  assert.equal(s.code, 0, s.err);
+  assert.match(s.err, /runs here \(factory-worker\), not on alickers: the remote lane is off \(private state without a remote/);
+  assert.equal(waitFor(c, s.out.trim()).code, 0);
+  assert.match(result(c, s.out.trim()).goal.routed.reason, /^the remote lane is off/);
+});

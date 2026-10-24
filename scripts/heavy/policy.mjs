@@ -54,7 +54,26 @@ export const CLASS_NAMES = Object.keys(CLASSES);
 // outages, never faked here; `soak`: alickers first, here only while alickers
 // is paused or unreachable.
 export const MACHINES = ["any", "3090", "4070", "soak"];
-export const defaultMachine = (cls) => (cls === "playthrough" || cls === "heavy-suite" ? "any" : cls === "soak" ? "soak" : "3090");
+// SCHED-3 (DIRECTION, "Balance the two GPUs"): work goes to whichever machine
+// frees first unless the question needs one. Kept here by default: quick (the
+// express slot; shipping a commit costs more than the job), bake (it writes
+// local artifacts) and exclusive (it measures the 3090). Soak has its own tag.
+const LOCAL_CLASSES = new Set(["quick", "bake", "exclusive"]);
+export const defaultMachine = (cls) => (cls === "soak" ? "soak" : LOCAL_CLASSES.has(cls) ? "3090" : "any");
+
+/**
+ * The machine a request resolves to, given `why` it can't run on alickers
+ * (null if it can): an `any` request that can't goes to the 3090, recording
+ * why (`routed`, on the ticket and its result); a `4070` request that can't is
+ * refused; every other tag stands (`soak` runs here by its own rule).
+ * Returns { machine, routed? } or { error }.
+ */
+export function resolveMachine(machine, why) {
+  if (!why) return { machine };
+  if (machine === "4070") return { error: `--machine 4070 runs on alickers, but ${why}` };
+  if (machine === "any") return { machine: "3090", routed: { from: "any", reason: why } };
+  return { machine };
+}
 export const MACHINE_LABELS = Object.freeze({
   local: "RTX 3090 (factory-worker)",
   remote: "RTX 4070 Laptop (alickers, shared desktop host)",
