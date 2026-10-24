@@ -26,6 +26,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { deflateSync, inflateSync } from "node:zlib";
+import { guardLocalRun } from "./local-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -40,6 +41,7 @@ if (!isMainThread) {
   process.exit(0);
 }
 
+guardLocalRun();
 const args = new Set(process.argv.slice(2));
 const out = join(root, "public", "terrain");
 const work = join(process.env.TMPDIR ?? tmpdir(), `siltwake-bake-${process.pid}`);

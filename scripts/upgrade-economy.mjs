@@ -10,6 +10,9 @@
 // Optional: --out <result.json>
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
+import { guardLocalRun } from "./local-guard.mjs";
+
+guardLocalRun();
 
 const args = process.argv.slice(2), out = args[args.indexOf("--out") + 1];
 if (!(args.length === 0 || (args.length === 2 && args[0] === "--out"))) throw new Error("only --out is supported");

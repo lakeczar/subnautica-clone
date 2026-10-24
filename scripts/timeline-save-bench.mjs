@@ -12,6 +12,9 @@
  * the median and maximum of the run (indicative on a shared host). */
 import path from "node:path";
 import { pathToFileURL } from "node:url";
+import { guardLocalRun } from "./local-guard.mjs";
+
+guardLocalRun();
 
 const args = process.argv.slice(2);
 const value = (flag, fallback) => { const i = args.indexOf(flag); return i >= 0 ? args[i + 1] : fallback; };

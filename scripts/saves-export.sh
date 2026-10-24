@@ -5,19 +5,63 @@
 #   scripts/saves-export.sh [--here] [--deadline S]
 #
 # Run it from a clean worktree at the commit to export (the coordinator: root, after
-# each merge). The whole playthrough runs on the second worker (siltwake-alickers)
-# through scripts/alickers-job.sh, writing /work/tmp/siltwake-saves/<sha> there too;
-# the directory is copied back, its files checked against the manifest and every save
-# decoded here, then published read-only. Exit 75 or 255 from the second worker
-# (paused or unreachable) falls back to factory-worker's heavy-check queue; --here
-# skips the second worker. Any other failure is the export's own (a blocked scenario,
-# a kind without its facts) and is reported, not retried.
+# each merge). It compiles and decodes nothing itself (STEW-2): every build, playthrough
+# and decode runs inside a heavy-check job, so it never competes with a 3090 exclusive
+# run, and it may be started at any time; it waits in the queue like any job.
 #
-# When SCHED-2b's remote lane lands, remote_export becomes one call:
-#   $H --machine any --artifact /work/tmp/siltwake-saves/$sha -- <the same command>
-# Both paths run the export from scripts/saves-build-at.sh's archive build of the SHA.
+# 1. The export, one `--machine any` playthrough job: on the second worker
+#    (siltwake-alickers) when its slot is free, else here. The job builds the SHA from
+#    `git archive` (scripts/saves-build-at.sh), plays every scenario with --export into
+#    that machine's library root, and verifies the result there. The queue brings the
+#    commit directory back (--artifact).
+# 2. Only when it ran on alickers: the import, a small job here, decodes every save with
+#    the SHA's own build and publishes it read-only into the shared library.
+# If the commit is already in the library, one job here verifies it instead.
+# --here pins the export to factory-worker. Failures are the export's own (a blocked
+# scenario, a kind without its facts) and are reported, not retried; a sandbox outage
+# is the queue's business (an `any` job then runs here).
+#
+# Internal, run inside those jobs (never by hand):
+#   saves-export.sh --job-export SHA | --job-verify SHA | --job-import SHA DIR
 set -euo pipefail
 cd "$(git rev-parse --show-toplevel)"
+H="${SILTWAKE_HEAVY_CHECK:-/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh}"
+default_root=/work/tmp/siltwake-saves
+root="${SILTWAKE_SAVES:-$default_root}"
+
+# The SHA's own build, in a directory of its own (removed on exit), and its CLI: it
+# decodes with the SHA's own code.
+build_at() {
+  build="$(mktemp -d "/work/tmp/siltwake-export-${1:0:12}-XXXXXX")"
+  trap 'rm -rf "$build"' EXIT
+  scripts/saves-build-at.sh "$1" "$build"
+}
+saves() { node "$build/.test-build/scripts/playthrough/saves.js" "$@"; }
+
+case "${1:-}" in
+  --job-export)
+    sha="$2"; build_at "$sha"
+    if [[ -f "$root/$sha/manifest.json" ]] && saves verify "$sha" --root "$root"; then
+      echo "saves-export: $root/$sha already exported on this machine and verifies"; exit 0
+    fi
+    # At most three games at once, within the job's grant.
+    jobs=$(( ${SILTWAKE_JOB_CPUS:-3} < 3 ? ${SILTWAKE_JOB_CPUS:-3} : 3 ))
+    node "$build/.test-build/scripts/playthrough/run.js" --jobs "$jobs" --quiet --export --commit "$sha" --library-root "$root"
+    saves verify "$sha" --root "$root"
+    exit 0 ;;
+  --job-verify)
+    sha="$2"; build_at "$sha"
+    saves verify "$sha" --root "$root"
+    exit 0 ;;
+  --job-import)
+    sha="$2" incoming="$3"; build_at "$sha"
+    # Staged in the root, decoded by the SHA's build, and only then published.
+    saves import "$incoming" --root "$root"
+    # The fetched copy (read-only, as the queue staged it) is no longer needed.
+    chmod -R u+w "$(dirname "$incoming")" && rm -rf "$(dirname "$incoming")"
+    exit 0 ;;
+esac
+
 here=0 deadline=5400
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -27,43 +71,44 @@ while [[ $# -gt 0 ]]; do
   esac
 done
 [[ -z "$(git status --porcelain --untracked-files=no)" ]] || { echo "saves-export: commit first; a library is tagged by commit" >&2; exit 2; }
-# Everything below uses this one SHA, captured once: the export runs from an archive
-# build of it (scripts/saves-build-at.sh), never from this worktree's .test-build, so
-# a HEAD that moves meanwhile cannot change what is exported or how it is labelled.
+# Everything below uses this one SHA, captured once: the jobs build it from an archive
+# (scripts/saves-build-at.sh), never from this worktree's .test-build, so a HEAD that
+# moves meanwhile cannot change what is exported or how it is labelled.
 sha="$(git rev-parse HEAD)"
-root="${SILTWAKE_SAVES:-/work/tmp/siltwake-saves}"
-H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
-build="$(mktemp -d "/work/tmp/siltwake-export-${sha:0:12}-XXXXXX")"
-trap 'rm -rf "$build"' EXIT
-scripts/saves-build-at.sh "$sha" "$build"
-# The SHA's own CLI: it decodes with the SHA's own code.
-saves() { node "$build/.test-build/scripts/playthrough/saves.js" "$@"; }
+# The second worker has the default root only; another root is exported here, and
+# named to the jobs.
+job=(bash scripts/saves-export.sh)
+[[ "$root" == "$default_root" ]] || { here=1; job=(env "SILTWAKE_SAVES=$root" "${job[@]}"); }
+
+# Submits a job, waits for it, and leaves its result record in $receipt.
+run_job() {
+  local ticket
+  ticket="$("$H" submit "$@")" || { echo "saves-export: the queue refused the job" >&2; return 2; }
+  echo "saves-export: queued as $ticket (output: $H log $ticket)"
+  local out rc=0
+  out="$("$H" wait "$ticket" --json)" || rc=$?
+  printf '%s\n' "$out" | sed '$d'
+  receipt="$(printf '%s\n' "$out" | tail -n 1)"
+  return "$rc"
+}
+field() { node -e 'const r = JSON.parse(process.argv[1]); const v = process.argv[2].split(".").reduce((o, k) => o?.[k], r); console.log(v ?? "")' "$receipt" "$1"; }
+
 if [[ -f "$root/$sha/manifest.json" ]]; then
-  saves verify "$sha" --root "$root" || { echo "saves-export: $root/$sha exists but does not verify; it is immutable, so investigate before removing it" >&2; exit 1; }
+  rc=0; run_job --class quick --machine 3090 --snapshot -- "${job[@]}" --job-verify "$sha" || rc=$?
+  [[ $rc == 0 ]] || { echo "saves-export: $root/$sha exists but does not verify (exit $rc); it is immutable, so investigate before removing it" >&2; exit 1; }
   echo "saves-export: $root/$sha already exported and verifies"; exit 0
 fi
 
-remote="/work/tmp/siltwake-saves"   # the same default root on both machines
-remote_export() {
-  local rb="/work/tmp/siltwake-export-$sha"
-  scripts/alickers-job.sh --sha "$sha" --deadline "$deadline" -- bash -c \
-    "rm -rf $rb && scripts/saves-build-at.sh $sha $rb && node $rb/.test-build/scripts/playthrough/run.js --jobs 3 --quiet --export --commit $sha --library-root $remote --json /work/results/siltwake-saves-$sha.json; rc=\$?; rm -rf $rb; exit \$rc"
-}
-fetch() {
-  local tmp; tmp="$(mktemp -d /work/tmp/siltwake-saves-incoming-XXXXXX)"
-  /usr/bin/ssh -F "$HOME/.ssh/siltwake.conf" siltwake-alickers -n "tar -C $remote -cf - $sha" | tar -C "$tmp" -xf -
-  # Staged in the root, decoded by the SHA's build, and only then published.
-  local rc=0; saves import "$tmp/$sha" --root "$root" || rc=$?
-  chmod -R u+w "$tmp"; rm -rf "$tmp"
-  return $rc
-}
-
-if [[ $here == 0 ]]; then
-  rc=0; remote_export || rc=$?
-  if [[ $rc == 0 ]]; then fetch; echo "saves-export: $sha exported on siltwake-alickers"; exit 0; fi
-  [[ $rc == 75 || $rc == 255 ]] || { echo "saves-export: the export failed on siltwake-alickers (exit $rc); see its output above" >&2; exit "$rc"; }
-  echo "saves-export: siltwake-alickers unavailable (exit $rc); exporting on factory-worker through the queue" >&2
+machine=any; [[ $here == 1 ]] && machine=3090
+# --snapshot: the job doesn't depend on this worktree staying unchanged while it waits.
+rc=0; run_job --class playthrough --machine "$machine" --snapshot --deadline "$deadline" --artifact "$root/$sha" \
+  -- "${job[@]}" --job-export "$sha" || rc=$?
+[[ $rc == 0 ]] || { echo "saves-export: the export failed (exit $rc); see its output above" >&2; exit "$rc"; }
+if [[ "$(field remote)" != "true" ]]; then
+  echo "saves-export: $sha exported and verified on factory-worker, in $root/$sha"; exit 0
 fi
-# --snapshot: the job doesn't depend on this worktree staying unchanged; it runs the archive build.
-"$H" --class playthrough --snapshot -- node "$build/.test-build/scripts/playthrough/run.js" --quiet --export --commit "$sha"
-saves verify "$sha" --root "$root"
+incoming="$(field artifacts.0.local)"
+[[ -n "$incoming" && -f "$incoming/manifest.json" ]] || { echo "saves-export: the export ran on siltwake-alickers, but its library didn't come back ($(field artifacts.0.error))" >&2; exit 1; }
+rc=0; run_job --class quick --machine 3090 --snapshot -- "${job[@]}" --job-import "$sha" "$incoming" || rc=$?
+[[ $rc == 0 ]] || { echo "saves-export: importing $incoming failed (exit $rc)" >&2; exit "$rc"; }
+echo "saves-export: $sha exported on siltwake-alickers and published in $root/$sha"

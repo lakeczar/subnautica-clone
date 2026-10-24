@@ -30,15 +30,17 @@
 // scripts/heavy-containment.mjs: in a delegated scope, a child cgroup per file
 // (files share a pool of up to three, within three quarters of the job's
 // memory, at most 4.5 GiB); otherwise one file at a time with its process group
-// watched. Files listed under `exclusive` there assert elapsed time and run
-// alone. The heavy tier runs only inside scripts/heavy-check.sh (which sets
-// SILTWAKE_HEAVY_LOCK_HELD); `npm run test:heavy` does that.
+// watched. Files listed under `exclusive` there assert elapsed time: they run
+// last, one at a time, in a timing phase of their own. The heavy tier runs only
+// inside scripts/heavy-check.sh (which sets SILTWAKE_HEAVY_LOCK_HELD); `npm run
+// test:heavy` does that.
 import { spawn } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { grantedMemoryMiB, heavyContainment } from "./heavy-containment.mjs";
+import { guardLocalRun } from "./local-guard.mjs";
 import { pruneBuildCache } from "./test-build-cache.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
@@ -57,6 +59,8 @@ if (tier !== "fast" && tier !== "heavy") {
   console.error("usage: node scripts/test-tier.mjs fast|heavy [compiled test files...]");
   process.exit(2);
 }
+// Not while a 3090 exclusive run is running or queued, outside the queue (STEW-2).
+guardLocalRun();
 if (!existsSync(testDir)) {
   console.error(`test-tier: ${relative(root, testDir)} is missing; run \`node scripts/test-build.mjs\` first`);
   process.exit(2);
@@ -184,13 +188,26 @@ if (!process.env.SILTWAKE_HEAVY_LOCK_HELD) {
   console.error("test-tier: the heavy tier runs under the shared lock. Use `npm run test:heavy`, or wrap it in scripts/heavy-check.sh.");
   process.exit(2);
 }
-const budgets = JSON.parse(readFileSync(join(root, "tests", "heavy-budgets.json"), "utf8"));
+// SILTWAKE_HEAVY_BUDGETS names another budgets file (the tier's own tests classify probe files with it).
+const budgets = JSON.parse(readFileSync(process.env.SILTWAKE_HEAVY_BUDGETS || join(root, "tests", "heavy-budgets.json"), "utf8"));
 // SILTWAKE_HEAVY_BUDGET_MIB overrides every budget, e.g. to check that containment fires.
 const budgetMiB = (file) => Number(process.env.SILTWAKE_HEAVY_BUDGET_MIB) ||
   (budgets.files?.[basename(file).replace(/\.js$/, ".ts")] ?? budgets.defaultMiB);
-// Files whose tests assert elapsed time run with no other heavy file beside them.
-const exclusive = new Set(budgets.exclusive ?? []);
-const isExclusive = (file) => exclusive.has(basename(file).replace(/\.js$/, ".ts"));
+// Files whose tests assert elapsed time (`exclusive` in heavy-budgets.json) run in a
+// phase of their own after every other file, one at a time (STEW-2). A heavy file
+// that reads a clock must say which kind it is, listed under `exclusive` or under
+// `clockWithoutBound` (it only reports a time), so a new timing bound can't run
+// beside other files unnoticed. Only the test file itself is scanned, not helpers.
+const tsName = (file) => basename(file).replace(/\.js$/, ".ts");
+const timingFiles = new Set(budgets.exclusive ?? []), clockOnly = new Set(budgets.clockWithoutBound ?? []);
+const isTiming = (file) => timingFiles.has(tsName(file));
+const CLOCK_RE = /\bperformance\.now\s*\(|\bprocess\.hrtime\b|\bthreadCpuUsage\s*\(|\bprocess\.cpuUsage\s*\(/;
+const unclassified = files.filter((f) => !isTiming(f) && !clockOnly.has(tsName(f)) && CLOCK_RE.test(readFileSync(f, "utf8")));
+if (unclassified.length) {
+  console.error(`test-tier: ${unclassified.map(tsName).join(", ")} read a clock. In tests/heavy-budgets.json, list each under ` +
+    "`exclusive` if it asserts elapsed time (it then runs in the timing phase, alone), or under `clockWithoutBound` if it only reports one.");
+  process.exit(2);
+}
 const containment = heavyContainment();
 // The pool follows the job's grant: SCHED-1 exports SILTWAKE_JOB_CPUS, and the
 // scope's memory.max bounds the budgets reserved at once (three quarters of it,
@@ -245,13 +262,11 @@ function runHeavy(file) {
   });
 }
 // Files run side by side while their budgets together fit the pool (largest
-// first; a file larger than the pool, or an exclusive one, runs alone).
-const started = Date.now(), queue = [...files].sort((a, b) => budgetMiB(b) - budgetMiB(a)), running = new Map();
+// first; a file larger than the pool runs alone).
+const started = Date.now(), queue = files.filter((f) => !isTiming(f)).sort((a, b) => budgetMiB(b) - budgetMiB(a)), running = new Map();
 let reserved = 0;
 while (queue.length || running.size) {
-  const alone = [...running.values()].some(isExclusive);
-  const next = alone ? -1 : queue.findIndex((f) => running.size === 0 ||
-    (!isExclusive(f) && running.size < concurrency && reserved + budgetMiB(f) <= poolMiB));
+  const next = queue.findIndex((f) => running.size === 0 || (running.size < concurrency && reserved + budgetMiB(f) <= poolMiB));
   if (next >= 0) {
     const [file] = queue.splice(next, 1), budget = budgetMiB(file);
     reserved += budget;
@@ -261,10 +276,35 @@ while (queue.length || running.size) {
   }
   await Promise.race(running.keys());
 }
+// The timing phase: nothing else of this tier runs. Other jobs on the machine still
+// may, so each file's row reports how long this job and the host waited for a CPU
+// while it ran (PSI "some"): a bound missed under contention says so.
+const timed = files.filter(isTiming);
+if (timed.length) console.log(`\n=== timing phase: ${timed.length} file(s) asserting elapsed time, one at a time, nothing else of this tier beside them`);
+const jobCgroup = (() => {
+  try {
+    const dir = join("/sys/fs/cgroup", readFileSync("/proc/self/cgroup", "utf8").trim().split(":").pop());
+    return basename(dir) === "tt1-runner" ? dirname(dir) : dir; // the runner's leaf (heavy-containment.mjs)
+  } catch { return null; }
+})();
+const cpuSomeUs = (path) => { try { return Number(/^some .*total=(\d+)/m.exec(readFileSync(path, "utf8"))?.[1]); } catch { return NaN; } };
+const cpuWait = () => ({ at: process.hrtime.bigint(), job: jobCgroup ? cpuSomeUs(join(jobCgroup, "cpu.pressure")) : NaN, host: cpuSomeUs("/proc/pressure/cpu") });
+for (const file of timed) {
+  const before = cpuWait();
+  await runHeavy(file);
+  const after = cpuWait(), us = Number(after.at - before.at) / 1000;
+  const pct = (k) => Number.isFinite(after[k] - before[k]) ? Math.round(((after[k] - before[k]) / us) * 1000) / 10 : null;
+  const row = rows.at(-1);
+  row.wait = { job: pct("job"), host: pct("host") };
+  if (row.status !== "ok" && row.wait.job != null && row.wait.job >= 5)
+    console.error(`test-tier: ${row.file} failed while this job waited for a CPU ${row.wait.job}% of the time (host: ${row.wait.host ?? "?"}%): ` +
+      "its time was measured under contention from other work on the machine. The bound stands; a run on a quiet machine decides.");
+}
 rmSync(scratch, { recursive: true, force: true });
 console.log(`\ntest:heavy summary (peak: the file's whole process tree, ${containment.kind} containment)`);
 for (const r of rows)
-  console.log(`  ${r.file.padEnd(36)} ${r.seconds.toFixed(1).padStart(6)} s  peak ${String(r.peakMiB).padStart(5)} MiB / ${r.budget} MiB  ${r.status}`);
+  console.log(`  ${r.file.padEnd(36)} ${r.seconds.toFixed(1).padStart(6)} s  peak ${String(r.peakMiB).padStart(5)} MiB / ${r.budget} MiB  ${r.status}` +
+    (r.wait ? `  [timing; CPU wait: job ${r.wait.job ?? "?"}%, host ${r.wait.host ?? "?"}%]` : ""));
 console.log(`  total ${rows.reduce((t, r) => t + r.seconds, 0).toFixed(1)} s of file time in ${((Date.now() - started) / 1000).toFixed(1)} s ` +
   `(up to ${concurrency} files within ${poolMiB} MiB of budgets at once)`);
 process.exit(failed ? 1 : 0);

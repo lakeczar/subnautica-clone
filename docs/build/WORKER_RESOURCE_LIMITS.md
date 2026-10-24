@@ -37,7 +37,20 @@ Heavy jobs are **admitted through the queue**, not run one at a time. `scripts/h
 H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 ```
 
-**Heavy** means render/NullEngine tests, `npm run test:heavy`, playthroughs, terrain bake or `--verify`, GPU browser sessions, and anything that needs more than about 1 GiB or 2 cores. **Light** work runs directly, outside the queue: `npm test`, typecheck, compiles (`npm run test:build`, `npx tsc -p scripts/playthrough/tsconfig.json`), a warm `npm run build` and focused non-render tests. Never wrap `npm run test:heavy`, `build` or a typecheck in `$H`: `test:heavy` already queues itself.
+**Heavy** means render/NullEngine tests, `npm run test:heavy`, playthroughs, terrain bake or `--verify`, GPU browser sessions, and anything that needs more than about 1 GiB or 2 cores. **Light** work runs directly, outside the queue: `npm test`, typecheck, compiles (`npm run test:build`, `npx tsc -p scripts/playthrough/tsconfig.json`), a warm `npm run build` and focused non-render tests. Never wrap `npm run test:heavy` in `$H`: it already queues itself.
+
+**Except beside a 3090 exclusive run (STEW-2).** While an `exclusive` ticket is running *or queued* (a queued one can start at any moment), the repo's CPU-heavy entry points refuse to run outside the queue, in one line, exit 75: `npm test`/`test:fast`, `test:build`, `build`, `typecheck`, `playthrough`, `check`'s local tail, `scripts/test-tier.mjs`, `test-build.mjs`, `guard-architecture.mjs`, `bake-terrain.mjs`, the economy scripts, the benches, `saves-build-at.sh` and `sim-differential.sh`. Send the same command through the queue instead, as the message says:
+
+```sh
+$H --machine any -- npm test        # commit first (a WIP commit is fine): alickers runs it at once if free, else it runs here between exclusive runs
+```
+
+- **Inside a queued job** (and on alickers, which has no queue) they run normally. The guard checks the job's scope, not just its variables.
+- **Override:** `SILTWAKE_LOCAL_OVERRIDE="<why>" npm test` runs it anyway and logs who, what, why and the exclusive tickets it may disturb to `/work/tmp/siltwake-sched/local-runs.jsonl`. If an exclusive was *running*, tell the coordinator with the ticket id and time.
+- **`node scripts/local-guard.mjs --status`** shows what the guard sees and the local runs in progress.
+- **Not guarded** (call the npm scripts instead): bare `npx tsc`, `npx vite build` and `node --test <file>`.
+- **Local runs leave a lease** (`/work/tmp/siltwake-sched/local-runs/<pid>.json`) while they run. With SCHED's `local` admission rule (proposed in [STEW-2](streams/STEW-2.md)), an exclusive about to start waits for them, which closes the gap of an exclusive submitted after a local run began.
+- **`npm run gate`** routes its local steps the same way on its own (one `--machine any` job), and **`scripts/saves-export.sh`** compiles nothing outside the queue.
 
 **A job has a goal, not a time limit** (owner, 2026-10-23; SCHED-2). It runs until its command ends. The queue stops it only when:
 - it **stalls**: nothing written to its output, and no touch of `$SILTWAKE_JOB_HEARTBEAT`, for the stall window (exit **123**, `stalled: no output for N min`, with what its processes were doing). A job that is legitimately quiet for long stretches touches the heartbeat file or passes `--stall S`;

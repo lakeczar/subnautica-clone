@@ -15,5 +15,10 @@
     "caves-reef-isles-game.heavy.test.ts",
     "large-cave-canopy.heavy.test.ts"
   ],
-  "exclusiveComment": "These files assert elapsed time (build cost or per-step query cost), so the heavy runner starts them with no other heavy file running beside them."
+  "exclusiveComment": "These files assert elapsed time (build cost or per-step query cost), so the heavy runner runs them last, one at a time, in a timing phase with no other heavy file beside them, and reports the CPU wait each one saw (STEW-2).",
+  "clockWithoutBound": [
+    "ecology-render.heavy.test.ts",
+    "ux1-carrier-corridor.heavy.test.ts"
+  ],
+  "clockWithoutBoundComment": "These files read a clock only to report a time; they assert no bound, so they share the pool. Every heavy file that reads a clock is in one of the two lists, or the tier refuses to run."
 }

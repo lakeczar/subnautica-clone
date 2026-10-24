@@ -13,6 +13,9 @@ import { disableVehicle, recoveryCommand, updateRecovery } from "../.test-build/
 import { createWorldQueries } from "../.test-build/src/sim/world.js";
 import { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } from "../.test-build/src/save/codec.js";
 import { validState } from "../.test-build/src/save/validation.js";
+import { guardLocalRun } from "./local-guard.mjs";
+
+guardLocalRun();
 
 const args = process.argv.slice(2), option = name => { const i = args.indexOf(name); return i < 0 ? null : args[i + 1]; };
 assert.ok(args.every((a, i) => i % 2 ? true : ["--earned", "--out"].includes(a)), "only --earned and --out are supported");

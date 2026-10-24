@@ -20,7 +20,10 @@ import { existsSync, readdirSync, rmSync } from "node:fs";
 import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { heavyJobGuard, keepHeavyJobMarker } from "./heavy/build-guard.mjs";
+import { guardLocalRun } from "./local-guard.mjs";
 
+// Not while a 3090 exclusive run is running or queued, outside the queue (STEW-2).
+guardLocalRun();
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 // The build directory sits at the worktree root, like .test-build, so compiled
 // tests that find the root at ../../ still do.

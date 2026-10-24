@@ -13,6 +13,9 @@ import { advanceRenewal, renewalCap } from "../.test-build/src/sim/renewal.js";
 import { createGame } from "../.test-build/src/sim/state.js";
 import { FIXED_SECONDS } from "../.test-build/src/sim/clock.js";
 import { createWorldQueries } from "../.test-build/src/sim/world.js";
+import { guardLocalRun } from "./local-guard.mjs";
+
+guardLocalRun();
 
 const world = createWorldQueries(), ids = Object.keys(RECIPES);
 const opened = () => { const s = createGame(); completeOpening(s); return s; };

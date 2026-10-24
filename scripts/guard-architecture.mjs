@@ -34,6 +34,7 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import ts from "typescript";
+import { guardLocalRun } from "./local-guard.mjs";
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -330,6 +331,7 @@ export function repositoryFiles(root = ROOT) {
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+  guardLocalRun();
   const t0 = performance.now(), quiet = process.argv.includes("--quiet");
   const { failures, notes, report } = analyse(repositoryFiles());
   const ms = Math.round(performance.now() - t0);
