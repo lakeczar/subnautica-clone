@@ -1,15 +1,16 @@
 import { EXPOSURE, HAZARD_FIELDS, HULL_TOLERANCE, PRESSURE_BANDS, PRESSURE_REFITS, PROTECTION, UNPROTECTED } from "../../content/ecology/hazards.js";
-import type { HazardCycle, HazardFieldDefinition, HazardFieldId, HazardKind, HazardShape, ProtectionId } from "../../content/ecology/hazards.js";
+import type { HazardCycle, HazardFieldDefinition, HazardFieldId, HazardShape, ProtectionId } from "../../content/ecology/hazards.js";
 import { sitePosition } from "../../content/ecology/sites.js";
 import type { HullId } from "../../content/registry.js";
 import type { Vec3 } from "../types.js";
 import { ECOLOGY_DT, MAX_WARNING_AGE, WARNING_LEAD } from "./types.js";
 import type { EcologyEvent, Exposure, Protection } from "./types.js";
-import { clamp01, v } from "./vector.js";
+import { clamp01 } from "./vector.js";
 import { cycleLevel as frameworkLevel, fromHazardCycle, secondsAt, secondsUntil } from "../cycles/cycle.js";
 import type { CycleDef } from "../cycles/cycle.js";
 import { WORLD_CYCLES } from "../../content/currents/cycles.js";
 import { DEEP_CAVE_HAZARDS } from "../../content/regions/caves/deepCaves.js";
+import { registerCache } from "../caches.js";
 
 const FIELD_IDS = Object.keys(HAZARD_FIELDS) as HazardFieldId[];
 const field = (id: HazardFieldId): HazardFieldDefinition => HAZARD_FIELDS[id];
@@ -51,9 +52,21 @@ export function fieldLevel(id: HazardFieldId, tick: number): number {
   const base = f.baseline ?? 0;
   return base + (1 - base) * cycleLevel(f.cycle, tick);
 }
+/** Each world and cave field's absolute centre, resolved once at load (SIM-PERF-1: every
+ * field's centre was rebuilt on every sample, several samples a step). A fixed table of the
+ * content's fields, the world's and CA-3's cave fields (CW-1): one entry a field, about 80
+ * bytes each (a Map entry and a frozen point), never evicted, in the sim's cache ledger
+ * (`sim/caches.ts`). A shape that isn't content's (a test's) is resolved on each call, uncached. */
+const CENTERS = new Map<HazardShape, Readonly<Vec3>>([...FIELD_IDS.map(id => field(id).shape), ...DEEP_CAVE_HAZARDS.map(f => f.shape)]
+  .map(shape => [shape, Object.freeze(sitePosition(shape.center))]));
+const CENTER_BYTES = 80;
+registerCache(() => ({ owner: "sim/ecology/hazards field centres", eviction: "none: a fixed table of the world's and caves' fields, built at load",
+  entries: CENTERS.size, maxEntries: CENTERS.size, bytes: CENTERS.size * CENTER_BYTES, maxBytes: CENTERS.size * CENTER_BYTES,
+  hits: 0, misses: 0, evictions: 0, declined: 0 }));
+const centerOf = (shape: HazardShape): Readonly<Vec3> => CENTERS.get(shape) ?? sitePosition(shape.center);
 /** 1 inside the shape, falling linearly to 0 over `edge` metres outside it. */
 export function shapeWeight(shape: HazardShape, edge: number, p: Vec3): number {
-  const c = sitePosition(shape.center);
+  const c = centerOf(shape);
   let outside: number;
   if (shape.kind === "cylinder") {
     const radial = Math.max(0, Math.hypot(p.x - c.x, p.z - c.z) - shape.radius);
@@ -87,30 +100,38 @@ export interface HazardSample {
   fields: HazardFieldId[];
 }
 export function sampleHazards(p: Vec3, tick: number): HazardSample {
-  const out: Record<HazardKind, number> = { heat: 0, brine: 0, current: 0, sediment: 0, darkness: 0 };
-  let flow = v(); const fields: HazardFieldId[] = [];
+  // Running maxima and the flow sum as scalars (SIM-PERF-1: no record or vector per field).
+  let heat = 0, brine = 0, sediment = 0, darkness = 0, fx = 0, fy = 0, fz = 0;
+  const fields: HazardFieldId[] = [];
   for (const id of FIELD_IDS) {
     const f = field(id), w = shapeWeight(f.shape, f.edge, p);
     if (w <= 0) continue;
     const level = w * fieldLevel(id, tick) * f.intensity;
     if (level <= 1e-9) continue;
     fields.push(id);
-    out[f.kind] = f.kind === "current" ? out[f.kind] + level : Math.max(out[f.kind], level);
+    if (f.kind === "heat") heat = Math.max(heat, level);
+    else if (f.kind === "brine") brine = Math.max(brine, level);
+    else if (f.kind === "sediment") sediment = Math.max(sediment, level);
+    else if (f.kind === "darkness") darkness = Math.max(darkness, level);
     if (f.flow) {
       const k = f.kind === "sediment" ? level * 0.45 : level;
-      flow = { x: flow.x + f.flow.x * k, y: flow.y + f.flow.y * k, z: flow.z + f.flow.z * k };
+      fx += f.flow.x * k; fy += f.flow.y * k; fz += f.flow.z * k;
     }
   }
   // CA-3's cave fields (CW-1): heat breaths and brine pools, same rule; they
   // carry no flow and are not world fields, so `fields` stays the world's.
   for (const f of DEEP_CAVE_HAZARDS) {
     const level = caveFieldLevel(f, p, tick);
-    if (level > 1e-9) out[f.kind] = Math.max(out[f.kind], level);
+    if (level <= 1e-9) continue;
+    if (f.kind === "heat") heat = Math.max(heat, level);
+    else if (f.kind === "brine") brine = Math.max(brine, level);
+    else if (f.kind === "sediment") sediment = Math.max(sediment, level);
+    else if (f.kind === "darkness") darkness = Math.max(darkness, level);
   }
   return {
-    heat: out.heat, brine: out.brine, sediment: out.sediment, darkness: out.darkness, flow,
-    ambient: ambientLight(p.y) * (1 - out.darkness),
-    visibility: clamp01(1 - out.sediment * 0.85 - out.brine * 0.3),
+    heat, brine, sediment, darkness, flow: { x: fx, y: fy, z: fz },
+    ambient: ambientLight(p.y) * (1 - darkness),
+    visibility: clamp01(1 - sediment * 0.85 - brine * 0.3),
     fields,
   };
 }

@@ -29,6 +29,14 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 ## Pacing rules for builders
 - **Something new** (a tool, area, craft, discovery or story beat) every **15–20 minutes** of efficient play. Tune from playtests.
 - **Empty travel** is no more than **about 90 seconds between points of interest, at the speed of the best craft you'd normally have on that leg.**
+  - **A spacing guide, not the letter of the law** (owner, 2026-10-24). As you progress, longer journeys may take longer. The rule keeps things well spaced out.
+  - **For checks:** the empty-travel limit may grow with progression and journey length, and a long leg is reported for judgement rather than auto-failed. The 15–20 minute new-content rule and "no decode-only waiting" stay the hard gates.
+  - **Tension counts while it's live:** sneaking past a predator you can hear counts as something happening only while its warning cue plays.
+- **Late-game needs are inferred from evidence, not handed over** (owner, 2026-10-24).
+  - **How:** a player can work out what a late task needs from what they've seen: machines visibly built from a material, a rare decoded log, cryptic messages.
+  - **No shopping list:** no explicit list is required.
+  - **Fair in hindsight:** the clue must exist and be reachable before the point where missing it costs a trip. A player who misses it pays one return trip, never a dead end.
+- **Carrier hold-course** (owner, 2026-10-24): on long journeys in the slow carrier, it can hold a course along lanes you've already sailed, so you can craft, tend planters or decode aboard. Otherwise you always steer.
 - **Gathering:** no single gathering trip for one recipe takes more than about 5 minutes. Tune from playtests.
 - **Waiting** is only allowed when it's part of the gameplay: decoding, growing, cycles with alternatives. No idle charging bars.
 

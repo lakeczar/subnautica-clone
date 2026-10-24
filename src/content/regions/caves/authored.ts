@@ -231,6 +231,44 @@ export function openProfile(p: readonly number[], step: number, width: number): 
   return out;
 }
 
+/** An exact (x, z) -> height memo. A rounded key would hand a later query
+ * the height of whichever nearby point was asked first, so a cave's floor
+ * (and its shells) would depend on build order (COL-1 R6). Open addressing
+ * over Float64 triples keeps every point's own value at about the memory a
+ * numeric-keyed Map took. Queries are never NaN (they are inside the
+ * footprint), so NaN marks an empty slot.
+ *
+ * Owned by its `caveFloor`; at most `POINT_MEMO_ENTRIES` points (a table of
+ * 6 MiB at most: the largest cave build asks about 64 thousand); past that
+ * it starts empty again, which changes no answer, since every entry is the
+ * exact height of its point. (Ledger registration waits on STEW-1's.) */
+const POINT_MEMO_ENTRIES = 1 << 17;
+function pointMemo(): { get(x: number, z: number): number | undefined; set(x: number, z: number, h: number): void } {
+  let cap = 1 << 12, size = 0, table = new Float64Array(cap * 3).fill(NaN);
+  const find = (t: Float64Array, n: number, x: number, z: number): number => {
+    let i = (Math.imul(Math.round(x * 64) | 0, 0x9e3779b1) ^ Math.imul(Math.round(z * 64) | 0, 0x85ebca6b)) & (n - 1);
+    while (!Number.isNaN(t[i * 3]!) && (t[i * 3] !== x || t[i * 3 + 1] !== z)) i = (i + 1) & (n - 1);
+    return i;
+  };
+  return {
+    get(x, z) {
+      const i = find(table, cap, x, z);
+      return Number.isNaN(table[i * 3]!) ? undefined : table[i * 3 + 2]!;
+    },
+    set(x, z, h) {
+      if (size >= POINT_MEMO_ENTRIES) { cap = 1 << 12; size = 0; table = new Float64Array(cap * 3).fill(NaN); }
+      if ((size + 1) * 2 > cap) {
+        const old = table, n = cap;
+        cap *= 2; table = new Float64Array(cap * 3).fill(NaN);
+        for (let j = 0; j < n; j++) if (!Number.isNaN(old[j * 3]!)) table.set(old.subarray(j * 3, j * 3 + 3), find(table, cap, old[j * 3]!, old[j * 3 + 1]!) * 3);
+      }
+      const i = find(table, cap, x, z);
+      if (Number.isNaN(table[i * 3]!)) size++;
+      table[i * 3] = x; table[i * 3 + 1] = z; table[i * 3 + 2] = h;
+    },
+  };
+}
+
 /** The floor a cave is built on: the exterior floor, except in a band
  * `EDGE_SHELF` wide inside each footprint edge, which stands at least at
  * that edge's open profile (`openProfile` of the floor along the edge) and
@@ -251,7 +289,7 @@ export function openProfile(p: readonly number[], step: number, width: number): 
  * above the falling side edge there, over a strip half a voxel wide. The
  * tests bound it by the corner's own relief and report each one. */
 export function caveFloor(source: CaveSource, floor: FloorFunction): FloorFunction {
-  const f = source.footprint, cache = new Map<number, number>();
+  const f = source.footprint, cache = pointMemo();
   type Edge = { d: (x: number, z: number) => number; l: (x: number, z: number) => number; at: (l: number) => [number, number];
     inward: [number, number]; profile: number[] };
   const edge = (d: Edge["d"], l: Edge["l"], at: Edge["at"], inward: [number, number], length: number): Edge => {
@@ -271,8 +309,7 @@ export function caveFloor(source: CaveSource, floor: FloorFunction): FloorFuncti
     // Outside, and exactly on every edge line (where the shell is snapped),
     // this is the exterior floor.
     if (!(x > f.minX && x < f.maxX && z > f.minZ && z < f.maxZ)) return ground;
-    const key = Math.round(x * 64) * 1e7 + Math.round(z * 64);
-    const hit = cache.get(key);
+    const hit = cache.get(x, z);
     if (hit !== undefined) return hit;
     let h = ground;
     for (const e of edges) {
@@ -288,7 +325,7 @@ export function caveFloor(source: CaveSource, floor: FloorFunction): FloorFuncti
       const below = floor(qx + e.inward[0] * reach, qz + e.inward[1] * reach);
       h = Math.max(h, top + (below - top) * (d - EDGE_SHELF) / EDGE_LIP);
     }
-    cache.set(key, h);
+    cache.set(x, z, h);
     return h;
   };
 }

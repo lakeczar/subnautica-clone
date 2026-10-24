@@ -161,6 +161,14 @@
 .pilot-guidance { padding: 9px 10px; border-left: 2px solid #c5d4af99; border-radius: 3px; font-size: 12px; line-height: 1.5; background: #102f3ef5; }
 .pilot-guidance small { display: block; margin-top: 5px; font-size: 12px; color: #d2dfcd; }
 .pilot-guidance.urgent { border-color: #ffca89; color: #ffe0ad; }
+/* SIG-1: the craft action bar (number row). Active tools glow; waiting ones dim. */
+.pilot-guidance .craft-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 4px; }
+.pilot-guidance .craft-action { white-space: nowrap; }
+.pilot-guidance .craft-action small { display: inline; margin: 0; color: #a9c0b8; }
+.pilot-guidance .craft-action.active { color: #ffe1b2; }
+.pilot-guidance .craft-action.active kbd { border-color: #ffca89; }
+.pilot-guidance .craft-action.waiting { opacity: 0.6; }
+.pilot-guidance .craft-action progress { width: 48px; height: 6px; vertical-align: middle; }
 /* This sibling survives a hidden HUD. In panels and menus its sidebar reserves
    actual space; an empty sidebar consumes none of the preparation viewport. */
 .session-notices { grid-column: 3; grid-row: 3; align-self: start; display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; pointer-events: none; }
@@ -170,6 +178,7 @@
 .session-warning button { border: 1px solid #e5bd8180; padding: 6px 10px; font-size: 12px; }
 [data-opening="true"] .hud-top { justify-content: flex-end; }
 #system-status { max-width: 290px; padding: 7px 10px; border: 1px solid #a3c7bd70; border-radius: 4px; background: #102d36fa; color: #d6e5d9; font-size: 12px; line-height: 1.5; }
+#system-status.error { border-color: #e5bd81; background: #38372ffa; color: #ffe1b2; }
 .experience-layout:has(> #menu:not([hidden])), [data-screen="panel"] .experience-layout { padding: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); gap: 0; overflow: hidden; }
 [data-screen="panel"] .experience-layout { background: #102d3ef5; }
 .experience-layout > .menu-screen, .experience-layout > .game-panel { position: relative; inset: auto; grid-column: 1; grid-row: 1; min-width: 0; min-height: 0; pointer-events: auto; }

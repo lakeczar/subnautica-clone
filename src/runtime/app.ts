@@ -1,4 +1,5 @@
 import { armTarget, fittedCabin } from "../sim/fleet.js";
+import { craftActions } from "../sim/signatures.js";
 import { SiltwakeAudio } from "../audio/director.js";
 import { relocateForCave } from "../sim/step.js";
 import { gameWorld, setKitCaveRecords } from "../sim/world.js";
@@ -7,11 +8,16 @@ import { HULL_COLLIDERS } from "../content/registry.js";
 import { gameCaveStore } from "../render/caves/caveStore.js";
 import { createCaveRuntime, type CaveHold } from "../world/caves/admission.js";
 import { StepFault, StepGuard } from "../sim/stepGuard.js";
+import { PHASE, StepCosts, stepMeter } from "../sim/stepCosts.js";
+import type { StepCostSnapshot } from "../sim/stepCosts.js";
+import { simCaches } from "../sim/caches.js";
+import type { CacheStats } from "../sim/caches.js";
+import { warmSimulation } from "../sim/warmup.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
 import { encodeSave } from "../save/codec.js";
-import { SaveRepository } from "../save/repository.js";
+import { SaveRepository, warmCommit } from "../save/repository.js";
 import type { StoragePort } from "../save/repository.js";
 import { browserWriterLock } from "./browserLock.js";
 import { ExpeditionSession } from "./session.js";
@@ -22,10 +28,9 @@ import { HelmControl } from "./helm.js";
 import { forgetCorridorView } from "../sim/carrierStations.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
-import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY,
-  TIMELINE_WHOLE_FLOOR } from "../sim/timeline/recorder.js";
+import { exportTimelineText, observe, recordSystemsEvents } from "../sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../sim/timeline/recorder.js";
-import { parseTimeline } from "../sim/timeline/report.js";
+import { LiveTimeline, type Tone } from "./liveTimeline.js";
 import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint, regionAtPosition } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
@@ -61,10 +66,6 @@ const ENTRY_LIGHT_FAILED = "This cave's light could not be loaded, even at a saf
 const UNLIT_MOVED = "The cave's light could not be loaded in time: you were moved to safe water.";
 /** Vite's development build (false in production and in Node tests). */
 const DEV = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV === true;
-/** A browser's full-storage error: the standard name and code 22, and Firefox's legacy name and code 1014. */
-const quotaExceeded = (error: unknown): boolean => error instanceof Error &&
-  (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
-    (error as { code?: number }).code === 22 || (error as { code?: number }).code === 1014);
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 
@@ -140,9 +141,11 @@ export class SiltwakeApp {
       return this.world.clearance(feet, v ? HULL_COLLIDERS[v.hull] : DIVER_SHAPE);
     },
   });
+  /** One cross-tab writer lock port: the save slot and the play timeline each use their own lock name. */
+  private readonly writerLock = browserWriterLock(navigator.locks);
   private readonly repository = new SaveRepository(
     storagePort(),
-    browserWriterLock(navigator.locks),
+    this.writerLock,
   );
   private readonly view: GameView;
   private renderer: GameRenderer | null = null;
@@ -185,8 +188,12 @@ export class SiltwakeApp {
   /** SIM-1: the live state steps in place; a throw restores it (development
    * builds also check every 10th checkpoint's replay against the live state). */
   private readonly guard = new StepGuard({ verifyEvery: DEV ? 10 : 0 });
-  /** Local-only play timeline (SYS-2, C4): never in the save, never sent. */
-  private timeline: TimelineRecorder | null = null;
+  /** SIM-PERF-1: each fixed step's time by phase, the app's own work included.
+   * Pulled on demand (`stepCosts()`); recording allocates nothing per step. */
+  private readonly costs = new StepCosts();
+  /** Local-only play timeline (SYS-2, C4): never in the save, never sent. One per expedition entry (SIM-1b). */
+  private live: LiveTimeline | null = null;
+  private get timeline(): TimelineRecorder | null { return this.live?.recorder ?? null; }
   private timelineSaved = 0;
 
   constructor(root: HTMLElement) {
@@ -222,6 +229,7 @@ export class SiltwakeApp {
       save: () => this.session.manualSave(),
       exportGame: () => this.exportGame(),
       exportTimeline: () => this.exportTimeline(),
+      repairTimeline: () => this.repairTimeline(),
       exportBackup: () => this.exportBackup(),
       exportRaw: () => this.exportRaw(),
       importFile: (file) =>
@@ -360,9 +368,10 @@ export class SiltwakeApp {
         return;
       }
       if (event.code === "KeyN" && this.active) { event.preventDefault(); this.feedbackNote(); return; }
-      // C4: piloted upgrade actions on the number row, and the handheld ping.
-      const upgrade = ({ Digit1: "overdrive", Digit2: "flare", Digit3: "ballast", Digit4: "listen", Digit5: "sample", Digit6: "anchor" } as const)[event.code as "Digit1"];
-      if (upgrade && this.state?.player.controlledVehicleId) { event.preventDefault(); this.command({ type: "upgrade", action: upgrade }); return; }
+      // SIG-1: the number row runs the piloted craft's fitted actions, numbered on the HUD.
+      const digit = /^Digit([1-9])$/.exec(event.code)?.[1];
+      const craftAction = digit && this.state?.player.controlledVehicleId ? craftActions(this.state)[Number(digit) - 1] : undefined;
+      if (craftAction) { event.preventDefault(); this.command({ type: "upgrade", action: craftAction.action }); return; }
       const commands: Record<string, GameCommand> = {
         KeyE: { type: "interact" }, KeyQ: { type: "scan" }, KeyP: { type: "ping" },
         KeyB: { type: "buoy" }, KeyF: { type: "eat" },
@@ -388,10 +397,18 @@ export class SiltwakeApp {
       "pagehide",
       (event) => {
         if (event.persisted) this.pause("Paused after page navigation.");
-        else this.dispose();
+        else {
+          // Ask for a last timeline commit without depending on it: a note is durable once its own commit returns.
+          this.live?.close(this.state, true);
+          this.dispose();
+        }
       },
       options,
     );
+    // FORK(step-costs-global): a pulled diagnostic global beside REC-1's `__siltwake` hook;
+    // retire in whichever of REC-1 and SIM-PERF-1 merges second (as `__siltwake.steps()`).
+    (globalThis as { __siltwakeStepCosts?: () => StepCostSnapshot & { caches: CacheStats[] } }).__siltwakeStepCosts =
+      () => ({ ...this.stepCosts(), caches: simCaches() });
     this.frameId = requestAnimationFrame((now) => this.frame(now));
   }
 
@@ -444,7 +461,12 @@ export class SiltwakeApp {
     this.clock.advance(now, this.active && !hold?.holding && !this.renderer?.settling, () => {
       if (!this.state || !this.active) return;
       const stepStart = perf ? performance.now() : 0;
-      try { this.step(now); } finally { if (perf) { simMs += performance.now() - stepStart; steps++; saveMs += this.lastSaveMs; } }
+      stepMeter.active = this.costs;
+      this.costs.open();
+      try { this.step(now); } finally {
+        this.costs.close(this.state?.tick ?? 0);
+        if (perf) { simMs += performance.now() - stepStart; steps++; saveMs += this.lastSaveMs; }
+      }
     });
     const presentStart = perf ? performance.now() : 0;
     this.present(now);
@@ -454,41 +476,6 @@ export class SiltwakeApp {
     this.frameId = requestAnimationFrame((time) => this.frame(time));
   }
 
-  /** One fixed simulation step with this frame's input. */
-  private step(now: number): void {
-    if (!this.state || !this.active) return;
-    const gesture = this.sampleGesture();
-    const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
-    this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
-    // SIM-1: the live state steps in place; the guard keeps a throw atomic.
-    let result: { state: GameState; events: GameEvent[] };
-    try {
-      result = { state: this.state, events: this.guard.step(this.state, [...controls, ...gesture], this.world) };
-    } catch (error) {
-      this.simulationFault(error);
-      return;
-    }
-    this.events(result.events);
-    this.observeTimeline(result.state, [...controls, ...gesture], result.events);
-    this.observeAscent(result.events);
-    this.observeThrust(result.events);
-    this.view.presentationStep(result.state);
-    this.validateGesture();
-    for (const event of result.events)
-      if (
-        event.type === "foundation-boundary" &&
-        now - this.lastBoundaryNotice > 6000
-      ) {
-        this.view.notify(
-          "World edge · open ocean beyond. Turn back toward the regions.",
-          false, { channel: "system" },
-        );
-        this.lastBoundaryNotice = now;
-      }
-    const saveStart = performance.now();
-    this.session.autosave();
-    this.lastSaveMs = performance.now() - saveStart;
-  }
   /** Measurement only: the last step's autosave and the last HUD update, ms. */
   private lastSaveMs = 0;
   private lastHudMs = 0;
@@ -538,6 +525,52 @@ export class SiltwakeApp {
     this.sound.update(this.state, this.active);
   }
 
+  /** One fixed simulation step with this frame's input, marked phase by phase (SIM-PERF-1). */
+  private step(now: number): void {
+    if (!this.state || !this.active) return;
+    const costs = this.costs;
+    const gesture = this.sampleGesture();
+    const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
+    this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
+    costs.mark(PHASE.input);
+    // SIM-1: the live state steps in place; the guard keeps a throw atomic.
+    let result: { state: GameState; events: GameEvent[] };
+    try {
+      result = { state: this.state, events: this.guard.step(this.state, [...controls, ...gesture], this.world) };
+    } catch (error) {
+      this.simulationFault(error);
+      return;
+    }
+    this.events(result.events);
+    costs.mark(PHASE.events);
+    this.observeTimeline(result.state, [...controls, ...gesture], result.events);
+    costs.mark(PHASE.timelineSave);
+    this.observeAscent(result.events);
+    this.observeThrust(result.events);
+    this.view.presentationStep(result.state);
+    this.validateGesture();
+    for (const event of result.events)
+      if (
+        event.type === "foundation-boundary" &&
+        now - this.lastBoundaryNotice > 6000
+      ) {
+        this.view.notify(
+          "World edge · open ocean beyond. Turn back toward the regions.",
+          false, { channel: "system" },
+        );
+        this.lastBoundaryNotice = now;
+      }
+    costs.mark(PHASE.presentation);
+    const saveStart = performance.now();
+    this.session.autosave();
+    this.lastSaveMs = performance.now() - saveStart;
+    costs.mark(PHASE.autosave);
+  }
+
+  /** Where the fixed steps' time has gone this page (SIM-PERF-1), read on demand; the sim's
+   * cache ledger (`simCaches()`) is read beside it through the same diagnostic global. */
+  stepCosts(): StepCostSnapshot { return this.costs.snapshot(); }
+
   private syncSessionUi(): void {
     if (this.disposed) return;
     this.view.slot(this.repository.status, this.state !== null);
@@ -574,44 +607,73 @@ export class SiltwakeApp {
     observe(this.timeline, s, { input, waiting });
     const systems = events.flatMap((e) => e.type === "systems" ? [e.event] : []);
     if (systems.length) recordSystemsEvents(this.timeline, s, systems);
+    this.costs.mark(PHASE.timeline);
     if (s.tick - this.timelineSaved >= 600) this.saveTimeline();
   }
-  /** The whole timeline under its one key, in one atomic write (SIM-1a; incremental storage is
-   * SIM-1b). Rotation bounds the export and keeps every note. On a full quota the stored copy
-   * keeps fewer whole chunks, halving each try down to the open chunk plus two, the older ones
-   * folded into summaries (notes, new things, deaths and recoveries verbatim); the timeline in
-   * memory keeps its window. False when even that doesn't fit, or storage refused it. */
-  private saveTimeline(): boolean {
-    if (!this.timeline || !this.state) return false;
+  /** Commits the timeline journal (SIM-1b): the small head plus any new or folded chunk. */
+  private saveTimeline(): void {
+    if (!this.live || !this.state) return;
     this.timelineSaved = this.state.tick;
-    for (let whole = this.timeline.sealed.length; ; whole = Math.max(TIMELINE_WHOLE_FLOOR, Math.floor(whole / 2))) {
-      try { localStorage.setItem(TIMELINE_STORAGE_KEY, exportTimelineText(this.timeline, this.state, whole)); return true; }
-      catch (error) { if (!quotaExceeded(error) || whole <= TIMELINE_WHOLE_FLOOR) return false; }
-    }
+    this.live.save(this.state);
   }
   /** Start or resume the timeline for the session just entered (same save session resumes). */
   private startTimeline(): void {
+    // The previous generation ends here: a commit of it still waiting for the lock never writes.
+    this.live?.close(null, false);
+    this.live = null;
     const meta = this.session.envelope()?.meta;
-    if (!meta || !this.state) { this.timeline = null; return; }
-    const options = { regionAt: (x: number, z: number) => regionAtPoint(x, z) };
-    let stored: string | null = null;
-    try { stored = localStorage.getItem(TIMELINE_STORAGE_KEY); } catch {}
-    const parsed = stored ? parseTimeline(stored) : null;
-    this.timeline = parsed?.ok && parsed.value.session.id === meta.sessionId ? resumeRecorder(parsed.value, options)
-      : createRecorder({ id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION }, options);
+    if (!meta || !this.state) { this.view.timelineRepair(false); return; }
+    let storage: Storage | null = null;
+    try { storage = window.localStorage; } catch { /* memory only */ }
+    // What opening says is delivered once entry is complete (after the session's own entry notices),
+    // so a protection or memory-only warning is the one left showing (SIM-1b R1 F5).
+    const opening: [string, Tone][] = [];
+    let opened = false;
+    const say = (message: string, tone: Tone): void => {
+      if (!opened) opening.push([message, tone]);
+      // A timeline storage failure is a persistence warning in its own context: below urgent
+      // hazards and game-save warnings, never resolved by a game save, resolved by a timeline
+      // commit that succeeds (SIM-1b R2 F3/F4).
+      else if (!this.disposed) this.view.notify(message, tone === "error",
+        tone === "info" ? { channel: "system" } : { channel: "persistence", context: "timeline" });
+    };
+    this.live = LiveTimeline.open(storage, this.writerLock, { id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION },
+      { regionAt: (x: number, z: number) => regionAtPoint(x, z) }, say,
+      () => { if (!this.disposed) this.view.timelineRepair(this.live?.protected ?? false); });
+    const live = this.live;
+    queueMicrotask(() => {
+      opened = true;
+      if (this.live === live) for (const [message, tone] of opening) say(message, tone);
+    });
+    this.view.timelineRepair(this.live.protected);
     this.timelineSaved = this.state.tick;
+  }
+  /** The menu's Repair play timeline: export the unreadable records first, explain, confirm, then replace. */
+  private repairTimeline(): void {
+    const live = this.live;
+    if (!live?.protected || !this.state) return;
+    const records = live.records();
+    if (typeof records === "string") {
+      this.view.notify(`The play-timeline store can't be repaired now: ${records}. Nothing was changed.`, true, { channel: "system" });
+      return;
+    }
+    this.download(JSON.stringify({ format: "siltwake.timeline.records", ...records }), "siltwake-timeline-record.json");
+    this.session.ask({
+      title: "Replace the local play-timeline store?",
+      detail: "The unreadable play-timeline record was just exported as siltwake-timeline-record.json. Replacing it stores this expedition's timeline in its place: the unreadable record, and any earlier timeline it held, are removed from this browser. Your game saves are not affected.",
+      accept: "Replace & save timeline",
+    }, () => { if (this.live === live && this.state) live.repair(this.state, records); });
   }
   /** N: a one-line feedback note stamped with play time and place. */
   private feedbackNote(): void {
     if (!this.timeline || !this.state) return;
     this.pause("", true);
     this.view.noteEntry((text) => {
-      if (text && this.timeline && this.state) {
-        const no = addNote(this.timeline, this.state, text, new Date().toISOString());
-        // "Note saved" only once the write has returned.
-        const saved = !no && this.saveTimeline();
-        this.view.notify(no ?? (saved ? "Note saved to the play timeline."
-          : "Note kept in memory only: the browser refused to store the play timeline. Export it from the menu to keep it."), !saved, { channel: "system" });
+      if (text && this.live && this.state) {
+        // "Saving note…", then "Note saved" once its commit returns, come from the timeline.
+        const no = this.live.note(this.state, text);
+        if (no) this.view.notify(no, true, { channel: "system" });
+        this.timelineSaved = this.state.tick;
       }
       this.resume(true);
     });
@@ -635,7 +697,6 @@ export class SiltwakeApp {
     // CW-1 R2: recovery state belongs to the expedition it was learned in.
     this.caves.reset();
     this.caveHolding = false;
-    this.startTimeline();
     // A loaded save neither replays its history nor inherits old cooldowns.
     this.sound.reset();
     this.resolutionPhase = this.state?.story.resolution.phase ?? null;
@@ -643,8 +704,11 @@ export class SiltwakeApp {
     this.cancelGesture();
     // UX-1: a replaced session inherits no head look or rudder, before its first frame.
     this.helm.clear();
+    this.warm();
     forgetCorridorView();
     this.view.resetPresentation();
+    // After the reset, so the new timeline's protection or memory-only notice stays (SIM-1b R1 F5).
+    this.startTimeline();
     // CW-1 R1: the expedition stays behind the menu's loading presentation
     // (paused, busy, no HUD) until its caves are admitted: records installed,
     // admission clear, or a rescue or refuge applied. Usually that is now.
@@ -726,6 +790,16 @@ export class SiltwakeApp {
     } catch (error) {
       this.view.graphicsError(errorText(error));
     }
+  }
+
+  /** SIM-PERF-1: the first steps' compilation, the hull contact meshes and the save path's
+   * first commit are paid here, behind the entry pause, not in the first seconds of play
+   * (5–8, about 3 and 12–17 ms). Nothing live changes: the step runs on a copy. */
+  private warm(): void {
+    if (!this.state) return;
+    warmSimulation(this.state, this.world);
+    const save = this.session.envelope();
+    if (save) warmCommit(save);
   }
 
   private resume(capture = false): boolean {
@@ -1087,7 +1161,11 @@ export class SiltwakeApp {
     this.view.cancelFeedback();
     this.disposed = true;
     this.paused = true;
+    this.live?.close(null, false);
     cancelAnimationFrame(this.frameId);
+    if (stepMeter.active === this.costs) stepMeter.active = null;
+    const g = globalThis as { __siltwakeStepCosts?: () => unknown };
+    if (g.__siltwakeStepCosts) delete g.__siltwakeStepCosts;
     this.abort.abort();
     this.session.dispose();
     this.input?.dispose();

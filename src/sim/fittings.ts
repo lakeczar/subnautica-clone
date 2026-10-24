@@ -16,12 +16,13 @@ import type { DockKind, UpgradeId } from "../content/upgrades/catalogue.js";
 import { LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import { isSeed, SEEDS } from "../content/systems/cultivation.js";
 import { SYS2_SOURCES } from "../content/systems/items.js";
-import { caveFieldLevel, cycleLevel, fieldLevel, protectionFor, sampleHazards, shapeWeight } from "./ecology/hazards.js";
+import { caveFieldLevel, cycleLevel, fieldLevel, protectionFor, shapeWeight } from "./ecology/hazards.js";
 import { DEEP_CAVE_HAZARDS } from "../content/regions/caves/deepCaves.js";
 import type { Protection } from "./ecology/types.js";
 import { launchPoint } from "./carrier.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import { addItem, distance, hasRoom, supportedServiceSite, takeInstance, usedCapacity } from "./inventory.js";
+import { fittedUpgradeKinds } from "./fleet.js";
 import { airLineSupply, type AirLineCraft, type AirLineSupply } from "./power/airline.js";
 import { bioFeedStep, insertBioCellRefusal, startBioFeed, totalRate, trickleRates } from "./power/charging.js";
 import { craftProfile } from "./upgrades/effects.js";
@@ -34,15 +35,8 @@ import {
 } from "./upgrades/tools.js";
 import type { GameState, ItemStack, Vec3, VehicleState, WorldQueries } from "./types.js";
 
-/** The upgrade kinds fitted to a hull, in fitting order. */
-export function fittedKinds(s: Readonly<GameState>, v: Readonly<VehicleState>): UpgradeId[] {
-  const out: UpgradeId[] = [];
-  for (const id of v.modules) {
-    const kind = s.inventory.items.find((i) => i.id === id)?.kind;
-    if (kind && upgradeId(kind)) out.push(kind);
-  }
-  return out;
-}
+/** The upgrade kinds fitted to a hull, in fitting order (one helper, in fleet.ts). */
+export const fittedKinds = fittedUpgradeKinds;
 export const fittedList = (s: Readonly<GameState>, v: Readonly<VehicleState>): Fitted[] =>
   v.modules.flatMap((id) => {
     const kind = s.inventory.items.find((i) => i.id === id)?.kind;
@@ -62,25 +56,34 @@ export const effectiveRating = (s: Readonly<GameState>, v: Readonly<VehicleState
 /** S4's hazard fields at a point, as SYS-1's heat contributions: a cycled plume
  * is a core while quiet and a burst while it vents; steady warm water is ambient. */
 export function hazardsAt(p: Vec3, tick: number): Hazards {
-  const heat: HeatContribution[] = [];
-  for (const id of Object.keys(HAZARD_FIELDS) as HazardFieldId[]) {
+  // One pass for heat and brine, each field's level read once (SIM-PERF-1: this ran a
+  // second full sampleHazards for brine alone). Brine is that sample's: the strongest field.
+  let heat: HeatContribution[] | null = null, brine = 0;
+  for (const id of HAZARD_FIELD_IDS) {
     const f = HAZARD_FIELDS[id];
-    if (f.kind !== "heat") continue;
-    const level = shapeWeight(f.shape, f.edge, p) * fieldLevel(id, tick) * f.intensity;
+    if (f.kind !== "heat" && f.kind !== "brine") continue;
+    const w = shapeWeight(f.shape, f.edge, p);
+    if (w <= 0) continue;
+    const field = fieldLevel(id, tick), level = w * field * f.intensity;
     if (level <= 1e-9) continue;
+    if (f.kind === "brine") { brine = Math.max(brine, level); continue; }
     const cycled = "cycle" in f;
-    heat.push({ level, kind: !cycled ? "ambient" : fieldLevel(id, tick) > ((f as { baseline?: number }).baseline ?? 0) + 1e-9 ? "burst" : "core" });
+    (heat ??= []).push({ level, kind: !cycled ? "ambient" : field > ((f as { baseline?: number }).baseline ?? 0) + 1e-9 ? "burst" : "core" });
   }
-  // CA-3's cave heat (CW-1): a breath is a burst above its baseline, else a core.
+  // CA-3's cave fields (CW-1): a breath is a burst above its baseline, else a core; a
+  // brine pool counts as sampleHazards counts it.
   for (const f of DEEP_CAVE_HAZARDS) {
-    if (f.kind !== "heat") continue;
+    if (f.kind !== "heat" && f.kind !== "brine") continue;
     const level = caveFieldLevel(f, p, tick);
     if (level <= 1e-9) continue;
+    if (f.kind === "brine") { brine = Math.max(brine, level); continue; }
     const cycled = f.cycle ? cycleLevel(f.cycle, tick) > 1e-9 : false;
-    heat.push({ level, kind: !f.cycle ? "ambient" : cycled ? "burst" : "core" });
+    (heat ??= []).push({ level, kind: !f.cycle ? "ambient" : cycled ? "burst" : "core" });
   }
-  return { heat, brine: sampleHazards(p, tick).brine };
+  return { heat: heat ?? NO_HEAT, brine };
 }
+const HAZARD_FIELD_IDS = Object.keys(HAZARD_FIELDS) as HazardFieldId[];
+const NO_HEAT = Object.freeze([]) as unknown as HeatContribution[];
 const NO_HAZARD: Hazards = { heat: [], brine: 0 };
 const depthOf = (p: Vec3): number => Math.max(0, -(p.y + 0.5));
 
@@ -123,7 +126,8 @@ export function fitTarget(s: Readonly<GameState>, v: Readonly<VehicleState>): Fi
     ...(v.hull === "hearthline" && docking?.vehicleId === v.id ? { carrier: {
       configuration: docking.configuration, berthsEmpty: !s.fleet.vehicles.some((a) => a.berth), systemOccupied,
     } } : {}),
-    inUse: { anchored: v.upgrades.anchored },
+    inUse: { anchored: v.upgrades.anchored, pod: v.upgrades.pod !== null, grapple: v.upgrades.grapple !== null,
+      drone: v.upgrades.drone !== null, lift: v.upgrades.lift !== null, tow: v.upgrades.tow !== null },
   };
 }
 const fittedItem = (s: GameState, id: string): ItemStack | undefined => s.inventory.items.find((i) => i.id === id);
@@ -170,7 +174,7 @@ export function actorProtection(s: GameState, suitFitted: Parameters<typeof prot
 const controlled = (s: GameState): VehicleState | undefined =>
   s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
 /** A direction from the pilot's view. */
-const forward = (s: GameState): Vec3 => ({
+export const pilotForward = (s: Readonly<GameState>): Vec3 => ({
   x: Math.sin(s.player.pose.yaw) * Math.cos(s.player.pose.pitch), y: Math.sin(s.player.pose.pitch),
   z: -Math.cos(s.player.pose.yaw) * Math.cos(s.player.pose.pitch),
 });
@@ -192,7 +196,7 @@ export function upgradeAction(s: GameState, action: string, world: WorldQueries,
       return null;
     }
     case "flare": {
-      const fired = fireFlare(p, v.upgrades, v.pose.position, forward(s), s.tick, world);
+      const fired = fireFlare(p, v.upgrades, v.pose.position, pilotForward(s), s.tick, world);
       if ("refusal" in fired) return fired.refusal;
       if (s.world.flares.length >= MAX_FLARES) s.world.flares.shift();
       v.upgrades = fired.runtime;

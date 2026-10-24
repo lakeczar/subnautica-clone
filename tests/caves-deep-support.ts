@@ -2,7 +2,7 @@
 // Each check returns a list of problems (empty = pass) so the tests assert
 // `[]` and print what broke, and the dev loop can call the same code.
 import { AUTHORED_CAVE_SOURCES, caveDef, EXTERIOR, MIN_ROCK, type CaveDef, type CavePortal } from "../src/content/regions/caves.js";
-import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
+import { caveShell, caveVolume, shellSeamProblems } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { CRAFT_PROFILES, type CraftProfileId } from "../src/content/regions/passages.js";
 import { DEEP_CAVES, sampleDeepHazards } from "../src/content/regions/caves/deep.js";
@@ -435,14 +435,10 @@ export function collarProblems(c: DeepCave, world: WorldQueries = deepWorld()): 
   for (let u = f.minX + 0.5; u < f.maxX; u += 1) { step(u, f.minZ + 0.25, u, f.minZ - 0.25); step(u, f.maxZ - 0.25, u, f.maxZ + 0.25); }
   for (let u = f.minZ + 0.5; u < f.maxZ; u += 1) { step(f.minX + 0.25, u, f.minX - 0.25, u); step(f.maxX - 0.25, u, f.maxX + 0.25, u); }
   if (worst > 0.75) out.push(`${c.source.id}: collar step ${worst.toFixed(2)} m beyond the floor's own fall at ${at}`);
-  for (const lod of ["fine", "coarse"] as const) {
-    const m = pr.shell(lod);
-    for (let i = 0; i < m.positions.length / 3; i++) {
-      const p = vertex(m, i);
-      if (Math.abs(p.x - f.minX) > 1e-6 && Math.abs(p.x - f.maxX) > 1e-6 && Math.abs(p.z - f.minZ) > 1e-6 && Math.abs(p.z - f.maxZ) > 1e-6) continue;
-      if (Math.abs(p.y - worldFloor(p.x, p.z)) > 1e-4) { out.push(`${c.source.id}: ${lod} collar vertex off the floor at ${fmt(p)}`); break; }
-    }
-  }
+  // The art seam meets the floor: no open edge ends off it on a collar side
+  // (where the snap must leave a vertex, the seam is closed in the side plane;
+  // COL-1 R6/R7).
+  for (const lod of ["fine", "coarse"] as const) out.push(...shellSeamProblems(pr.def, lod, worldFloor, pr.shell(lod)).slice(0, 1));
   return out;
 }
 

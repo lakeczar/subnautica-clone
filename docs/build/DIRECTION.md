@@ -79,6 +79,20 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - `soak`: alickers first.
 
   Until the lane exists, builders may call `scripts/alickers-job.sh` directly.
+- **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive` on the 3090.
+  - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. Results from the 4070 are labelled indicative.
+  - Pin a job to one machine only when the question needs that machine (e.g. factory-worker's host pauses, or a 4070 player-floor check).
+- **Graphics first; integrated graphics later** (owner, 2026-10-24):
+  - **Order:** build for the best graphics first; the dedicated-GPU gates stay (3090 at 60 fps, the 4070 laptop as the player floor). Integrated-graphics laptops come later, through a settings change (a lower preset), not as a target now.
+  - **The low preset, when it comes:** a steady **30 fps at a reduced internal resolution**, keeping readable exits, warning poses, lamp reach and landmark silhouettes.
+  - **Keep it reachable:** don't make choices that rule it out. Quality must stay scalable through settings (resolution scale, draw distance, effects), and memory and streaming budgets must stay parameterised rather than hard-wired to the 3090.
+  - **Still open:** the representative integrated-GPU device is chosen later.
+  - **No battery mode and no frame-cap setting** (owner, 2026-10-24). The browser already paces frames to the display's refresh rate.
+- **High refresh rates** (owner, 2026-10-24): on 120 Hz-and-above displays, motion should look as smooth as the hardware allows.
+  - **The gap today:** the simulation steps at a fixed 60 Hz and the renderer draws the latest step without interpolation, so above 60 Hz frames repeat (and 144 Hz judders).
+  - **Fix:** render interpolation between the last two fixed steps (camera, craft, creatures, particles), with the simulation unchanged and deterministic.
+  - **When:** a small stream after CW-1 merges (CW-1 owns `renderer.ts` and `app.ts`).
+  - **Acceptance:** the 60 fps gate on the 3090 stays. Measure at 120 Hz (8.3 ms budget) as indicative, not a gate.
 - **Evidence:**
   - Functional results count from either machine, bound to the exact SHA tested.
   - 3090 exclusive numbers are the target.
@@ -104,9 +118,21 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   3. **SAVE-1:** the save library, exporting on alickers.
 
 ## Evidence reading and quality review (owner, 2026-10-23)
-- **Tiered evidence:** agents read `summary.json`, then `story.md` (with its attention list), then only the frame strips for flagged items. The budget is about 6–10 strips per review. Builders and reviewers look at frames themselves and report conclusions in text; the coordinator reads conclusions.
-- **Fixed-view visual regression** (REC-1): every run, or a short `gpu` job, captures a fixed set of camera views and compares them with the last accepted baseline per machine class. Changed views go on the attention list. Accepting a new baseline is a deliberate, recorded act.
-- **Taste review once per wave:** an Opus agent reviews the fixed-view contact sheet against GAME-DIRECTION after each wave of work, and the coordinator dispatches it. The owner's playtests remain the judge of feel.
+- **Tiered, question-led evidence** (owner, 2026-10-24): agents start from at most three questions about the change, read `summary.json`, then the play debrief or story, then only the images that answer a question:
+  - none by default for logic changes;
+  - 2–4 for visual or content changes;
+  - 6–10 as a ceiling, for a stage exit or a named risk.
+
+  Hitches the pack doesn't judge get no strips. Builders and reviewers look at frames themselves and report conclusions in text, at most five findings, each marked observed, inferred or a question for the owner. The coordinator reads conclusions.
+- **Fixed-view visual regression** (REC-1; owner, 2026-10-24):
+  - stream handoffs capture the affected subset (views tagged by region and system);
+  - root merges that touch rendering or content, and every wave end, capture the full set;
+  - each capture is compared with the last accepted baseline per machine class. Changed views go on the attention list. Accepting a new baseline is a deliberate, recorded act.
+- **Taste review once per wave:** an Opus agent reviews the fixed-view contact sheet against GAME-DIRECTION after each wave of work, together with the latest owner playtest's moment cards. The owner's notes outrank the contact sheet. The coordinator dispatches it. The owner's playtests remain the judge of feel.
+- **Owner playtests** (owner, 2026-10-24; plan B in `research/recording-feedback-opus:docs/build/research/RECORDING-FEEDBACK-OPUS.md`):
+  - **During:** the owner plays uninterrupted with OS screen recording (for HUD and sound), and uses tagged notes: `?` lost, `-` feels like work, `+` loved it, `!` bug.
+  - **After:** a playtest debrief is read by **one** Opus agent and checked by the owner's answers (at most five time-anchored questions), not by a second agent. Sol reviews the code fixes that follow.
+  - **No outside blind testers** (owner, 2026-10-24): first-timer time is estimated from the owner's play as a lower bound, calibrated per leg as a range.
 
 ## Codebase stewardship (owner, 2026-10-23)
 - **Every review brief checks reuse and simplicity:** no new parallel implementation of something that already exists; shared helpers over copies; dead or legacy code removed when it's replaced; hot-path allocation justified; obvious names and one way to do each thing.

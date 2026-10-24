@@ -1,6 +1,7 @@
 import { CREEL_GEOMETRY as C, SCOUT_GEOMETRY as S } from "../content/encounterGeometry.js";
 import { contactParts, type ContactPose, type S3HullId } from "../content/fleet/hulls.js";
 import type { ContactBox, LoftSection, Point3 } from "../content/encounterGeometry.js";
+import { HULLS } from "../content/registry.js";
 import type { HullId } from "../content/registry.js";
 import type { GameState, Vec3, VehicleState } from "./types.js";
 import { carrierStructure } from "./carrier.js";
@@ -127,10 +128,17 @@ export function hullMesh(hull: HullId, pose: ContactPose = {}): ContactMesh {
   }
   const result = contactMesh(components,triangles); hullMeshes.set(key, result); return result;
 }
+/** Builds every contact mesh a hull can show (each hull at rest; the Spindle folded or
+ * not, loaded or not: `hullContactPose`'s whole range), so a first hunter contact never
+ * pays for one in play (SIM-PERF-1: about 3 ms). Called behind the entry pause. */
+export function warmContactMeshes(): void {
+  for (const hull of Object.keys(HULLS) as HullId[]) hullMesh(hull);
+  for (const fold of [0, 1]) for (const cargoLoaded of [false, true]) hullMesh("spindle", { fold, cargoLoaded });
+}
 export const DIVER_MESH=contactMesh([box({center:[0,.475,0],size:[.68,.95,.68]})]);
 const shells=new Map<string,ContactMesh>();
 /** The existing structural walls include the sealed panes; no carrier bubble. */
-export function carrierShell(configuration: "compact" | "medium", slot?: 0 | 1): ContactMesh {
+export function carrierShell(configuration: "compact" | "medium" | "mixed", slot?: 0 | 1): ContactMesh {
   const key=configuration+"/"+slot,cached=shells.get(key);if(cached)return cached;
   const components=carrierStructure(configuration,slot).map(b=>box({
     center:[(b.min.x+b.max.x)/2,(b.min.y+b.max.y)/2,(b.min.z+b.max.z)/2],

@@ -90,10 +90,16 @@ test("W2-02: each stage restores at the door through Fabricate, paid exactly onc
     const unpaid = craftButton(s, id);
     assert.ok(unpaid?.disabled, `${id}: shown and disabled before payment`);
     refused(s, unpaid!.command);
-    // A later stage waits for this one.
+    // A later stage waits for this one, even fully paid for with its other needs
+    // met (HUB-2-01: unfunded, missing materials alone would keep it disabled, so
+    // the order check must fund it; it fails when the stage's prerequisite is removed).
     if (n < 2) {
-      const later = craftButton(s, STAGES[n + 1]!);
-      assert.ok(!later || later.disabled, `${STAGES[n + 1]} before ${id}`);
+      const ahead = structuredClone(s), next = STAGES[n + 1]!;
+      fundDiver(ahead, next);
+      const later = craftButton(ahead, next);
+      assert.ok(later?.disabled, `${next} before ${id}: disabled even when paid for`);
+      assert.ok((later!.reason ?? "").includes(RECIPES[id].label), `${next} names ${id} as what it needs, not materials: ${later!.reason}`);
+      refused(ahead, { type: "craft", recipeId: next });
     }
     // One unit short: still refused, nothing moves.
     fundDiver(s, id);

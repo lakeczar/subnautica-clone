@@ -1,11 +1,11 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createEnvelope, decodeSave, encodeSave, MAX_SAVE_BYTES } from "../src/save/codec.js";
+import { createEnvelope, decodeSave, encodeSave, MAX_SAVE_BYTES, SAVE_SCHEMA_VERSION } from "../src/save/codec.js";
 import { CARRIER_LAYOUT, carrierCommand, fixtureGame, localToWorld } from "../src/sim/carrier.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import { WORLD_VERTICAL_BOUNDS } from "../src/content/routes.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
-import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
+import { LOCAL_SAVE_KEY, SaveRepository, warmCommit } from "../src/save/repository.js";
 import type { CommitResult } from "../src/save/repository.js";
 import { SAVE_WRITER_LOCK } from "../src/save/writer-lock.js";
 import { browserWriterLock } from "../src/runtime/browserLock.js";
@@ -86,7 +86,7 @@ test("invalid JSON, unrecognized format, unsafe numeric ranges and nonempty futu
 });
 
 test("unsupported schema and different content are rejected without rewriting data", () => {
-  for (const version of [0, 7, 100, "1", null, ["1"], { toString: {} }]) {
+  for (const version of [0, SAVE_SCHEMA_VERSION + 1, 100, "1", null, ["1"], { toString: {} }]) {
     const result = decodeSave(
       JSON.stringify({ ...sample(), schemaVersion: version }),
     );
@@ -147,7 +147,7 @@ test("invalid writes and rejected corrupt/future imports leave current AND backu
   // The runtime only offers import confirmation if decode succeeds.
   for (const text of [
     "{bad json}",
-    JSON.stringify({ ...sample(99), schemaVersion: 7 }),
+    JSON.stringify({ ...sample(99), schemaVersion: SAVE_SCHEMA_VERSION + 1 }),
   ]) {
     const result = decodeSave(text);
     if (result.ok) await repo.commit(result.value);
@@ -185,6 +185,34 @@ test("corrupt current recovers previous, blocks autosave and preserves raw recor
   const backup = decodeSave(repaired.previous);
   assert.equal(backup.ok, true);
   if (backup.ok) assert.equal(backup.value.state.tick, 10);
+});
+
+test("a commit reuses the record it read or wrote: its slot equals a fresh page's, through repair and another tab's write", async () => {
+  // SIM-PERF-1: the repository remembers its own record decoded instead of decoding it again.
+  const lock = new TestWriterLock(), storage = new MemoryStorage(), repo = new SaveRepository(storage, lock);
+  const fresh = () => new SaveRepository(storage, lock).load();
+  const same = (label: string): void => {
+    const page = fresh();
+    assert.equal(repo.status.kind, page.kind, label);
+    assert.deepEqual(repo.status.save, page.save, `${label}: current`);
+    assert.deepEqual(repo.status.backup, page.backup, `${label}: backup`);
+  };
+  repo.load();
+  for (const tick of [10, 20, 30]) { assert.equal((await repo.commit(sample(tick))).ok, true); same(`after ${tick}`); }
+  // A corrupt current loads as recovered; the repair keeps the old previous as the backup.
+  const record = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)!) as Record<string, unknown>;
+  record.current = "{corrupt";
+  storage.setItem(LOCAL_SAVE_KEY, JSON.stringify(record));
+  const repairer = new SaveRepository(storage, lock);
+  assert.equal(repairer.load().kind, "recovered");
+  assert.equal((await repairer.commit(sample(40), true)).ok, true);
+  assert.equal(repairer.status.backup?.state.tick, 20);
+  assert.equal((await repairer.commit(sample(50))).ok, true);
+  assert.equal(repairer.status.backup?.state.tick, 40);
+  assert.deepEqual(repairer.status.backup, fresh().backup);
+  // The first repository's memory is stale now: it must see the conflict, never reuse it.
+  assert.equal((await repo.commit(sample(60))).ok, false);
+  assert.equal(fresh().save?.state.tick, 50);
 });
 
 test("unsupported local current is protected, even with a valid previous save", async () => {
@@ -373,4 +401,10 @@ test("carrier saves preserve all transforms; a walking pose inside a sealed comp
   s.player.interiorPose!.position = { ...CARRIER_LAYOUT.helm };
   s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
   assert.equal(encodeSave(envelope).ok, true, "the authored helm is clear");
+});
+
+test("warming the commit path (SIM-PERF-1) leaves the envelope as it was", () => {
+  const save = sample(40), before = structuredClone(save);
+  warmCommit(save);
+  assert.deepEqual(save, before);
 });

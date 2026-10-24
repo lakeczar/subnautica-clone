@@ -57,11 +57,13 @@ import {
   nextId,
   applySpend,
   hasRoomAfter,
+  podContainerId,
   planSpend,
   supportedServiceSite,
 } from "./inventory.js";
 import type { SpendPlan } from "./inventory.js";
 import { makeVehicle } from "./state.js";
+import { DROP_POD } from "./upgrades/tools.js";
 import { personalLimit as personalPressureLimit, safePersonalDepth } from "./capabilities.js";
 import { RECOVERY_SURFACE_OPERATOR } from "../content/routes.js";
 import { recordStory, storyInteractions } from "./storyLink.js";
@@ -545,6 +547,9 @@ export function craft(
         r.maintenance ? "maintenance" : "public",
       );
       if (r.output === "salvage_buoy") s.inventory.buoy.itemId = item.id;
+      // SIG-1: the Creel's cargo pod carries its own container, as the cabin its locker.
+      if (r.output === "creel_drop_pod")
+        s.inventory.containers.push({ id: podContainerId(item.id), kind: "locker", capacity: DROP_POD.cu, ownerId: item.id });
     }
   }
   if (!s.knowledge.crafted.includes(id)) s.knowledge.crafted.push(id);

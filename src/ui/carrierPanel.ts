@@ -5,7 +5,7 @@
  * existing carrier command; a refused action shows why, with the exact text the
  * command would give. Developer tools appear only with `?dev`. */
 import { HULLS } from "../content/registry.js";
-import { captureApproach, carrierCommand, carrierHull, carrierInReach, launchPoint, localToWorld, CARRIER_LAYOUT } from "../sim/carrier.js";
+import { captureApproach, carrierCommand, carrierHull, carrierInReach, launchPoint, localToWorld, nextBerthLayout, slotSize, CARRIER_LAYOUT } from "../sim/carrier.js";
 import { aboardCarrier, atCarrierHelm, carrierSpeed, HOLD_SPEED, launchCorridorNow } from "../sim/carrierStations.js";
 import { distance, usedCapacity } from "../sim/inventory.js";
 import type { GameCommand, GameState, VehicleState, WorldQueries } from "../sim/types.js";
@@ -24,7 +24,7 @@ const degrees = (yaw: number): string => `${Math.round(((yaw * 180) / Math.PI + 
 const percent = (n: number): string => `${Math.round(n)}%`;
 
 export function berthName(state: GameState, slot: 0 | 1): string {
-  return state.fleet.docking?.configuration === "medium" ? "Service berth" : slot === 0 ? "Port berth" : "Starboard berth";
+  return slotSize(state.fleet.docking?.configuration ?? "compact", slot) === "medium" ? "Service berth" : slot === 0 ? "Port berth" : "Starboard berth";
 }
 
 /** One status line: under way or holding station, where, and the lock. */
@@ -79,7 +79,7 @@ export function carrierPanel(state: GameState, world: WorldQueries, button: Comm
     return button(label, { type: "carrier", action: "launch", vehicleId: v.id }, no !== null, reason ?? undefined);
   };
   // Berths and their craft.
-  const slots: (0 | 1)[] = d.configuration === "medium" ? [0] : [0, 1];
+  const slots = ([0, 1] as const).filter((n) => slotSize(d.configuration, n) !== null);
   html += '<h3 class="carrier-heading">Berths</h3>';
   for (const slot of slots) {
     const v = state.fleet.vehicles.find((a) => a.berth?.carrierId === h.id && a.berth.slot === slot);
@@ -102,7 +102,9 @@ export function carrierPanel(state: GameState, world: WorldQueries, button: Comm
     }
   } else html += '<p class="carrier-hint">To recover a craft, leave it settled within 13 m of the lock mouth under the bow, then use this console from aboard.</p>';
   // Refitting the berths: only where a repair dock makes it possible.
-  if (d.supportedDock) html += `<div class="service-actions carrier-refit">${act(d.configuration === "compact" ? "Refit: one service berth" : "Refit: two compact berths", "reconfigure")}</div>`;
+  const next = nextBerthLayout(state, h);
+  if (d.supportedDock) html += `<div class="service-actions carrier-refit">${act(next === "medium" ? "Refit: one service berth"
+    : next === "mixed" ? "Refit: service berth beside a compact berth" : "Refit: two compact berths", "reconfigure")}</div>`;
   if (developer) html += developerTools(state, h, button);
   return html;
 }

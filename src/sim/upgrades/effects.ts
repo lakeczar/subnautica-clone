@@ -6,6 +6,7 @@ import { HULL_BASE } from "../../content/upgrades/base.js";
 import { UPGRADES } from "../../content/upgrades/catalogue.js";
 import type { ContractKind, ToolKind, UpgradeEffect, UpgradeId } from "../../content/upgrades/catalogue.js";
 import type { HullId } from "../../content/registry.js";
+import { BoundedMemo } from "../caches.js";
 
 export type MotionMode = "idle" | "quiet" | "cruise" | "boost";
 export interface CraftProfile {
@@ -41,9 +42,22 @@ export interface CraftProfile {
 export const MAX_CURRENT_AUTHORITY = 0.95;
 const BASE_SYSTEM_SOCKETS = 2;
 
+/** Profiles by their inputs (SIM-PERF-1): the fold ran several times a step, the step's
+ * largest allocation (about 17 KiB). The key is the inputs' values, so a hit is exactly the
+ * fold's answer; profiles are frozen. A profile retains about 400 bytes (one object of 24
+ * fields, two four-number objects, two small arrays at 16 bytes an entry; `drainMode` is the
+ * hull base's own), plus its key at two bytes a character: at most 128 entries and 96 KiB,
+ * the oldest dropped first, in the sim's cache ledger (`sim/caches.ts`). */
+const profiles = new BoundedMemo<CraftProfile>("sim/upgrades/effects craftProfile", 128, 96 * 1024,
+  (key, p) => 400 + 16 * (p.tools.length + p.contracts.length) + 2 * key.length);
+
 /** Fold fitted upgrades onto the hull base. `rating` is the paid hull rating
  * (VehicleState.rating); refits are already in it, so refit entries add nothing. */
 export function craftProfile(hull: HullId, rating: number, fitted: readonly UpgradeId[]): CraftProfile {
+  return profiles.get(`${hull}|${rating}|${fitted.join(",")}`, () => foldProfile(hull, rating, fitted));
+}
+
+function foldProfile(hull: HullId, rating: number, fitted: readonly UpgradeId[]): CraftProfile {
   const b = HULL_BASE[hull];
   const effects: UpgradeEffect[] = fitted.map((id) => UPGRADES[id].effect);
   const product = (key: "speed" | "noise" | "lamp" | "drain" | "capacity" | "damage" | "heatLoad" | "solar"): number =>
@@ -58,11 +72,11 @@ export function craftProfile(hull: HullId, rating: number, fitted: readonly Upgr
   let boost = Math.max(cruise, b.speed.boost * k + sum("boostAdd"));
   if (has("noBoost")) boost = cruise;
   const n = product("noise");
-  return {
+  return Object.freeze({
     hull,
     rating: hull === "spindle" ? 0 : rating + sum("ratingAdd"),
-    speed: { quiet: Math.min(quiet, cruise), cruise, boost },
-    loudness: { idle: b.loudness.idle * n, quiet: b.loudness.quiet * n, cruise: b.loudness.cruise * n, boost: b.loudness.boost * n },
+    speed: Object.freeze({ quiet: Math.min(quiet, cruise), cruise, boost }),
+    loudness: Object.freeze({ idle: b.loudness.idle * n, quiet: b.loudness.quiet * n, cruise: b.loudness.cruise * n, boost: b.loudness.boost * n }),
     drain: b.drain * product("drain"),
     drainMode: b.drainMode,
     capacity: product("capacity"),
@@ -80,9 +94,9 @@ export function craftProfile(hull: HullId, rating: number, fitted: readonly Upgr
     airLine: has("airLine") ? "hull" : "basic",
     systemSockets: hull === "hearthline" ? BASE_SYSTEM_SOCKETS + sum("systemSockets") : 0,
     mixedBerths: has("mixedBerths"),
-    tools: fitted.flatMap((id) => { const t = (UPGRADES[id].effect as UpgradeEffect).tool; return t ? [t] : []; }),
-    contracts: fitted.flatMap((id) => { const c = (UPGRADES[id].effect as UpgradeEffect).contract; return c ? [c] : []; }),
-  };
+    tools: Object.freeze(fitted.flatMap((id) => { const t = (UPGRADES[id].effect as UpgradeEffect).tool; return t ? [t] : []; })),
+    contracts: Object.freeze(fitted.flatMap((id) => { const c = (UPGRADES[id].effect as UpgradeEffect).contract; return c ? [c] : []; })),
+  });
 }
 
 export interface Motion {

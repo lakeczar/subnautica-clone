@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
+import { caveVolume, shellSeamProblems } from "../src/content/regions/caveGeometry.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { caveOwner, createCaveWorldQueries, gameWorld, SOLIDS, surfaceHeight, type Solid } from "../src/sim/world.js";
 import type { Vec3 } from "../src/sim/types.js";
@@ -65,15 +65,10 @@ test("hub caves: roofs are sound and the collar meets the heightfield at every f
       const top = world.supportHeight(x, z, 1000), relief = localRelief(x, z);
       assert.ok(Math.abs(top - outside) <= 0.75 + relief, `${def.id}: collar step ${(top - outside).toFixed(2)} m at ${x}, ${z} (relief ${relief.toFixed(2)})`);
     }
-    // The art seam: every shell vertex on the footprint edge lies on the floor.
-    for (const lod of ["fine", "coarse"] as const) {
-      const m = caveShell(def, lod);
-      for (let i = 0; i < m.positions.length / 3; i++) {
-        const p = vertex(m, i);
-        if (Math.abs(p.x - f.minX) > 1e-6 && Math.abs(p.x - f.maxX) > 1e-6 && Math.abs(p.z - f.minZ) > 1e-6 && Math.abs(p.z - f.maxZ) > 1e-6) continue;
-        assert.ok(Math.abs(p.y - worldFloor(p.x, p.z)) < 1e-4, `${def.id} ${lod}: collar vertex ${p.y.toFixed(2)} vs floor ${worldFloor(p.x, p.z).toFixed(2)}`);
-      }
-    }
+    // The art seam meets the floor: no open edge ends off it on a collar side
+    // (where the snap must leave a vertex, the seam is closed in the side
+    // plane; COL-1 R6/R7).
+    for (const lod of ["fine", "coarse"] as const) assert.deepEqual(shellSeamProblems(def, lod, worldFloor), []);
   }
 });
 

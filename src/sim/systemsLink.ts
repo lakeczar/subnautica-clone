@@ -26,7 +26,8 @@ import { effectiveRating, vehicleProfile } from "./fittings.js";
 import { hostPowerState, hostDrainStep } from "./power/hosts.js";
 import type { HostCell, HostPowerInput } from "./power/hosts.js";
 import { cellTransfer, dockCharge } from "./power/charging.js";
-import { livePosition, MAST_REACH, outpostLimitBonus } from "./upgrades/hosts.js";
+import { decoderSpeed, livePosition, MAST_REACH, outpostLimitBonus } from "./upgrades/hosts.js";
+import { surveyModuleTier } from "./hostUpgrades.js";
 import { RADIO_MAST } from "./upgrades/tools.js";
 import {
   advanceSystems, collectBeacon, deployOutpost, discoverSite, handheldPing, harvest, hostById, installModule, listHosts,
@@ -61,14 +62,17 @@ function mastWithin(s: GameState, p: Vec3, reach: number): boolean {
     vehicleProfile(s, v).contracts.includes("radio_mast") && distance(v.pose.position, p) <= reach);
 }
 export function systemsContext(s: GameState): DecoderContext {
-  return { power: hostPower, relayed: (host) => mastWithin(s, host.position, DECODER_LOCAL_RANGE * RADIO_MAST.factor) };
+  return { power: hostPower, relayed: (host) => mastWithin(s, host.position, DECODER_LOCAL_RANGE * RADIO_MAST.factor),
+    // SIG-1: a decoder lattice speeds its own module.
+    decoderSpeed: decoderSpeed(s.systems.moduleUpgrades) };
 }
-/** Survey tier at a host: SYS-1's arrays are not composed yet; a mast adds one. */
+/** Survey tier at a host: its best array (a fixed host's built-in one, or a
+ * survey module's fitted array, SIG-1), and a surfaced radio mast nearby adds one. */
 export const surveyTierAt = (s: GameState, host: SocketHost): number => {
   // HUB-2: a fixed host's built-in array has its own tier (the crown's is 300 m).
   const fixed = Object.hasOwn(FIXED_HOSTS, host.id) ? FIXED_HOSTS[host.id as keyof typeof FIXED_HOSTS] : null;
-  const own = fixed && "surveyTier" in fixed ? fixed.surveyTier : 0;
-  return Math.min(3, Math.max(own, mastWithin(s, host.position, MAST_REACH) ? 1 : 0));
+  const own = Math.max(fixed && "surveyTier" in fixed ? fixed.surveyTier : 0, surveyModuleTier(s, host.id));
+  return Math.min(3, own + (mastWithin(s, host.position, MAST_REACH) ? 1 : 0));
 };
 export const outpostRules = (s: GameState) => ({ limitBonus: outpostLimitBonus(s.knowledge.crafted) });
 export const chartOptions = (s: GameState) => ({ livePosition: livePosition(s.knowledge.crafted) });
@@ -269,8 +273,9 @@ export function stepSystems(s: GameState, events: GameEvent[]): void {
       message: `${site.label} · data captured: ${fresh.map((d) => DECODABLES[d].label).join(", ")}. Decode it at a decoder module to read it.` },
       { type: "sound", cue: "scan" });
   }
-  // Host drain: cell outposts draw their lockers' cells; the carrier its battery.
-  for (const host of listHosts(s, sys)) {
+  // Host drain: cell outposts draw their lockers' cells; the carrier its battery. Only
+  // occupied hosts can have powered modules.
+  for (const host of listHosts(s, sys, { occupied: true })) {
     const input = powerInput(s, host);
     if (input.poweredModules <= 0) continue;
     const drain = hostDrainStep(input, 1 / 60);

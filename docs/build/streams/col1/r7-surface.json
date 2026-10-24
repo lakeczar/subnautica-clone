@@ -1,0 +1,6274 @@
+{
+ "fine-pre": [
+  {
+   "id": "fanvault",
+   "area": 5116,
+   "hausdorff": 0.003,
+   "at": [
+    -300.94,
+    -20.2,
+    -40
+   ],
+   "preToNow": {
+    "max": 0.001,
+    "at": [
+     -307.94,
+     -28.8,
+     -92
+    ]
+   },
+   "nowToPre": {
+    "max": 0.003,
+    "at": [
+     -300.94,
+     -20.2,
+     -40
+    ]
+   },
+   "changedTriangles": [
+    6,
+    11
+   ],
+   "p95changed": 0.001,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "hub_step_arch",
+   "area": 3792,
+   "hausdorff": 0.114,
+   "at": [
+    90.38,
+    -76.11,
+    -418
+   ],
+   "preToNow": {
+    "max": 0.043,
+    "at": [
+     99.95,
+     -75.98,
+     -390.34
+    ]
+   },
+   "nowToPre": {
+    "max": 0.114,
+    "at": [
+     90.38,
+     -76.11,
+     -418
+    ]
+   },
+   "changedTriangles": [
+    84,
+    177
+   ],
+   "p95changed": 0.032,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0.053,
+    "waterM2": 0.02,
+    "waterMax": 0.114,
+    "waterAt": [
+     90.38,
+     -76.11,
+     -418
+    ]
+   }
+  },
+  {
+   "id": "hub_crown_shaft",
+   "area": 13767,
+   "hausdorff": 0.08,
+   "at": [
+    358,
+    -69.17,
+    -578.58
+   ],
+   "preToNow": {
+    "max": 0.063,
+    "at": [
+     357.92,
+     -69.11,
+     -578.64
+    ]
+   },
+   "nowToPre": {
+    "max": 0.08,
+    "at": [
+     358,
+     -69.17,
+     -578.58
+    ]
+   },
+   "changedTriangles": [
+    106,
+    243
+   ],
+   "p95changed": 0.034,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.01,
+    "waterMax": 0.08,
+    "waterAt": [
+     358,
+     -69.17,
+     -578.58
+    ]
+   }
+  },
+  {
+   "id": "reef_bellhole",
+   "area": 2548,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    248,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_pumphouse_undercut",
+   "area": 0,
+   "hausdorff": 0,
+   "unchanged": true
+  },
+  {
+   "id": "reef_shelf_lip",
+   "area": 2726,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    372,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_lantern_grotto",
+   "area": 9731,
+   "hausdorff": 0.005,
+   "at": [
+    -510,
+    -41.16,
+    -99.57
+   ],
+   "preToNow": {
+    "max": 0.005,
+    "at": [
+     -509.95,
+     -41.15,
+     -99.58
+    ]
+   },
+   "nowToPre": {
+    "max": 0.005,
+    "at": [
+     -510,
+     -41.16,
+     -99.57
+    ]
+   },
+   "changedTriangles": [
+    3,
+    5
+   ],
+   "p95changed": 0.005,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "isles_scar_crawl",
+   "area": 1654,
+   "hausdorff": 0.093,
+   "at": [
+    350,
+    -37.06,
+    60.82
+   ],
+   "preToNow": {
+    "max": 0.053,
+    "at": [
+     350.05,
+     -37.06,
+     60.19
+    ]
+   },
+   "nowToPre": {
+    "max": 0.093,
+    "at": [
+     350,
+     -37.06,
+     60.82
+    ]
+   },
+   "changedTriangles": [
+    15,
+    33
+   ],
+   "p95changed": 0.053,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.01,
+    "waterMax": 0.093,
+    "waterAt": [
+     350,
+     -37.06,
+     60.82
+    ]
+   }
+  },
+  {
+   "id": "isles_cove_undercut",
+   "area": 1521,
+   "hausdorff": 0.094,
+   "at": [
+    979.89,
+    -23.38,
+    -65.94
+   ],
+   "preToNow": {
+    "max": 0.071,
+    "at": [
+     979.86,
+     -23.29,
+     -65.89
+    ]
+   },
+   "nowToPre": {
+    "max": 0.094,
+    "at": [
+     979.89,
+     -23.38,
+     -65.94
+    ]
+   },
+   "changedTriangles": [
+    167,
+    21
+   ],
+   "p95changed": 0.071,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0.071,
+    "waterM2": 0.03,
+    "waterMax": 0.094,
+    "waterAt": [
+     979.89,
+     -23.38,
+     -65.94
+    ]
+   }
+  },
+  {
+   "id": "isles_headland_root",
+   "area": 1758,
+   "hausdorff": 0.086,
+   "at": [
+    1030,
+    -37.55,
+    -72.4
+   ],
+   "preToNow": {
+    "max": 0.081,
+    "at": [
+     1029.9,
+     -37.65,
+     -72.46
+    ]
+   },
+   "nowToPre": {
+    "max": 0.086,
+    "at": [
+     1030,
+     -37.55,
+     -72.4
+    ]
+   },
+   "changedTriangles": [
+    258,
+    10
+   ],
+   "p95changed": 0.071,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.02,
+    "waterMax": 0.086,
+    "waterAt": [
+     1030,
+     -37.55,
+     -72.4
+    ]
+   }
+  },
+  {
+   "id": "isles_blowhole",
+   "area": 1886,
+   "hausdorff": 0.067,
+   "at": [
+    1062.07,
+    -14.49,
+    133.92
+   ],
+   "preToNow": {
+    "max": 0.067,
+    "at": [
+     1062.07,
+     -14.49,
+     133.92
+    ]
+   },
+   "nowToPre": {
+    "max": 0.057,
+    "at": [
+     1062,
+     -14.54,
+     133.92
+    ]
+   },
+   "changedTriangles": [
+    11,
+    20
+   ],
+   "p95changed": 0.053,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.01,
+    "waterMax": 0.067,
+    "waterAt": [
+     1062.07,
+     -14.49,
+     133.92
+    ]
+   }
+  },
+  {
+   "id": "isles_headland_west",
+   "area": 2725,
+   "hausdorff": 0.129,
+   "at": [
+    946.31,
+    -11.17,
+    26
+   ],
+   "preToNow": {
+    "max": 0.12,
+    "at": [
+     946.26,
+     -10.85,
+     25.88
+    ]
+   },
+   "nowToPre": {
+    "max": 0.129,
+    "at": [
+     946.31,
+     -11.17,
+     26
+    ]
+   },
+   "changedTriangles": [
+    59,
+    135
+   ],
+   "p95changed": 0.071,
+   "visibility": {
+    "buriedM2": 0.1,
+    "buriedMax": 0.129,
+    "waterM2": 0.03,
+    "waterMax": 0.098,
+    "waterAt": [
+     946.8,
+     -8.46,
+     25.9
+    ]
+   }
+  },
+  {
+   "id": "canopy_eastcrown",
+   "area": 5436,
+   "hausdorff": 0.018,
+   "at": [
+    780.35,
+    -87.34,
+    -44.02
+   ],
+   "preToNow": {
+    "max": 0.018,
+    "at": [
+     780.35,
+     -87.34,
+     -44.02
+    ]
+   },
+   "nowToPre": {
+    "max": 0.017,
+    "at": [
+     780.36,
+     -87.33,
+     -44
+    ]
+   },
+   "changedTriangles": [
+    12,
+    24
+   ],
+   "p95changed": 0.012,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "canopy_fin_cleft",
+   "area": 1825,
+   "hausdorff": 0.04,
+   "at": [
+    621.79,
+    -114.35,
+    -118.04
+   ],
+   "preToNow": {
+    "max": 0.04,
+    "at": [
+     621.79,
+     -114.35,
+     -118.04
+    ]
+   },
+   "nowToPre": {
+    "max": 0.036,
+    "at": [
+     621.8,
+     -114.33,
+     -118
+    ]
+   },
+   "changedTriangles": [
+    32,
+    68
+   ],
+   "p95changed": 0.024,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "canopy_lantern_hall",
+   "area": 9259,
+   "hausdorff": 0.069,
+   "at": [
+    501.48,
+    -175.24,
+    -260
+   ],
+   "preToNow": {
+    "max": 0.04,
+    "at": [
+     470.04,
+     -170.06,
+     -249.58
+    ]
+   },
+   "nowToPre": {
+    "max": 0.069,
+    "at": [
+     501.48,
+     -175.24,
+     -260
+    ]
+   },
+   "changedTriangles": [
+    134,
+    300
+   ],
+   "p95changed": 0.026,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0.069,
+    "waterAt": [
+     501.48,
+     -175.24,
+     -260
+    ]
+   }
+  },
+  {
+   "id": "basin_burrow_warren",
+   "area": 2414,
+   "hausdorff": 0.084,
+   "at": [
+    795.27,
+    -268.37,
+    -672
+   ],
+   "preToNow": {
+    "max": 0.073,
+    "at": [
+     784.86,
+     -261.95,
+     -672.07
+    ]
+   },
+   "nowToPre": {
+    "max": 0.084,
+    "at": [
+     795.27,
+     -268.37,
+     -672
+    ]
+   },
+   "changedTriangles": [
+    176,
+    362
+   ],
+   "p95changed": 0.049,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.1,
+    "waterMax": 0.084,
+    "waterAt": [
+     795.27,
+     -268.37,
+     -672
+    ]
+   }
+  },
+  {
+   "id": "basin_fracture_pocket",
+   "area": 1584,
+   "hausdorff": 0.037,
+   "at": [
+    341.38,
+    -215.82,
+    -352
+   ],
+   "preToNow": {
+    "max": 0.033,
+    "at": [
+     341.38,
+     -215.85,
+     -352.03
+    ]
+   },
+   "nowToPre": {
+    "max": 0.037,
+    "at": [
+     341.38,
+     -215.82,
+     -352
+    ]
+   },
+   "changedTriangles": [
+    26,
+    56
+   ],
+   "p95changed": 0.015,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "basin_dish_lee_vault",
+   "area": 8234,
+   "hausdorff": 0.251,
+   "at": [
+    574,
+    -273.03,
+    -630.96
+   ],
+   "preToNow": {
+    "max": 0.167,
+    "at": [
+     573.83,
+     -273.24,
+     -630.96
+    ]
+   },
+   "nowToPre": {
+    "max": 0.251,
+    "at": [
+     574,
+     -273.03,
+     -630.96
+    ]
+   },
+   "changedTriangles": [
+    190,
+    444
+   ],
+   "p95changed": 0.101,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.34,
+    "waterMax": 0.251,
+    "waterAt": [
+     574,
+     -273.03,
+     -630.96
+    ]
+   }
+  },
+  {
+   "id": "rift_tube_mites",
+   "area": 1087,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    1,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "rift_west_blister",
+   "area": 0,
+   "hausdorff": 0,
+   "unchanged": true
+  },
+  {
+   "id": "rift_kiln_tube",
+   "area": 6859,
+   "hausdorff": 12.513,
+   "at": [
+    159.27,
+    -274.41,
+    -856
+   ],
+   "preToNow": {
+    "max": 12.513,
+    "at": [
+     159.27,
+     -274.41,
+     -856
+    ]
+   },
+   "nowToPre": {
+    "max": 0.154,
+    "at": [
+     140,
+     -268.29,
+     -853.5
+    ]
+   },
+   "changedTriangles": [
+    115,
+    233
+   ],
+   "p95changed": 11.786,
+   "visibility": {
+    "buriedM2": 75.83,
+    "buriedMax": 12.513,
+    "waterM2": 0.67,
+    "waterMax": 0.2,
+    "waterAt": [
+     160.56,
+     -262.11,
+     -856
+    ]
+   }
+  },
+  {
+   "id": "divide_crest_hollow",
+   "area": 1275,
+   "hausdorff": 0.039,
+   "at": [
+    702,
+    -360.51,
+    -1217.57
+   ],
+   "preToNow": {
+    "max": 0.027,
+    "at": [
+     701.97,
+     -360.48,
+     -1217.53
+    ]
+   },
+   "nowToPre": {
+    "max": 0.039,
+    "at": [
+     702,
+     -360.51,
+     -1217.57
+    ]
+   },
+   "changedTriangles": [
+    24,
+    56
+   ],
+   "p95changed": 0.023,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "divide_lee_burrow",
+   "area": 1046,
+   "hausdorff": 0.014,
+   "at": [
+    456,
+    -390.97,
+    -1089.8
+   ],
+   "preToNow": {
+    "max": 0.012,
+    "at": [
+     456.01,
+     -390.96,
+     -1089.82
+    ]
+   },
+   "nowToPre": {
+    "max": 0.014,
+    "at": [
+     456,
+     -390.97,
+     -1089.8
+    ]
+   },
+   "changedTriangles": [
+    2,
+    4
+   ],
+   "p95changed": 0.011,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "divide_lintel_galleries",
+   "area": 12639,
+   "hausdorff": 0.139,
+   "at": [
+    689.25,
+    -368.16,
+    -1300
+   ],
+   "preToNow": {
+    "max": 0.086,
+    "at": [
+     686.09,
+     -360.49,
+     -1292.58
+    ]
+   },
+   "nowToPre": {
+    "max": 0.139,
+    "at": [
+     689.25,
+     -368.16,
+     -1300
+    ]
+   },
+   "changedTriangles": [
+    77,
+    151
+   ],
+   "p95changed": 0.059,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.07,
+    "waterMax": 0.139,
+    "waterAt": [
+     689.25,
+     -368.16,
+     -1300
+    ]
+   }
+  },
+  {
+   "id": "meridian_footing_void",
+   "area": 1141,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    1,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "meridian_spire_footing",
+   "area": 1427,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    2,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "meridian_terrace_crack",
+   "area": 1757,
+   "hausdorff": 0.306,
+   "at": [
+    1131,
+    -608.38,
+    -1469.65
+   ],
+   "preToNow": {
+    "max": 0.234,
+    "at": [
+     1130.77,
+     -607.47,
+     -1469.91
+    ]
+   },
+   "nowToPre": {
+    "max": 0.306,
+    "at": [
+     1131,
+     -608.38,
+     -1469.65
+    ]
+   },
+   "changedTriangles": [
+    180,
+    331
+   ],
+   "p95changed": 0.19,
+   "visibility": {
+    "buriedM2": 2.98,
+    "buriedMax": 0.306,
+    "waterM2": 0.04,
+    "waterMax": 0.149,
+    "waterAt": [
+     1121.98,
+     -600.29,
+     -1486.98
+    ]
+   }
+  },
+  {
+   "id": "meridian_escarp_culvert",
+   "area": 3808,
+   "hausdorff": 0.231,
+   "at": [
+    1320,
+    -529.82,
+    -946.14
+   ],
+   "preToNow": {
+    "max": 0.113,
+    "at": [
+     1320.11,
+     -529.7,
+     -946.3
+    ]
+   },
+   "nowToPre": {
+    "max": 0.231,
+    "at": [
+     1320,
+     -529.82,
+     -946.14
+    ]
+   },
+   "changedTriangles": [
+    17,
+    35
+   ],
+   "p95changed": 0.141,
+   "visibility": {
+    "buriedM2": 0.16,
+    "buriedMax": 0.231,
+    "waterM2": 0.04,
+    "waterMax": 0.138,
+    "waterAt": [
+     1320,
+     -529.5,
+     -946.07
+    ]
+   }
+  },
+  {
+   "id": "hub_apron_hollow",
+   "area": 883,
+   "hausdorff": 0.163,
+   "at": [
+    41.91,
+    -38.06,
+    -394
+   ],
+   "preToNow": {
+    "max": 0.091,
+    "at": [
+     41.95,
+     -20.67,
+     -374.12
+    ]
+   },
+   "nowToPre": {
+    "max": 0.163,
+    "at": [
+     41.91,
+     -38.06,
+     -394
+    ]
+   },
+   "changedTriangles": [
+    39,
+    83
+   ],
+   "p95changed": 0.09,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.08,
+    "waterMax": 0.163,
+    "waterAt": [
+     41.91,
+     -38.06,
+     -394
+    ]
+   }
+  },
+  {
+   "id": "hub_glimmer_crack",
+   "area": 5990,
+   "hausdorff": 0.192,
+   "at": [
+    184.8,
+    -82.7,
+    -442
+   ],
+   "preToNow": {
+    "max": 0.057,
+    "at": [
+     172.08,
+     -80.03,
+     -480.62
+    ]
+   },
+   "nowToPre": {
+    "max": 0.192,
+    "at": [
+     184.8,
+     -82.7,
+     -442
+    ]
+   },
+   "changedTriangles": [
+    397,
+    813
+   ],
+   "p95changed": 0.074,
+   "visibility": {
+    "buriedM2": 0.04,
+    "buriedMax": 0.138,
+    "waterM2": 0.63,
+    "waterMax": 0.192,
+    "waterAt": [
+     184.8,
+     -82.7,
+     -442
+    ]
+   }
+  },
+  {
+   "id": "reef_archlet",
+   "area": 3080,
+   "hausdorff": 0.003,
+   "at": [
+    -438,
+    -19.3,
+    110.51
+   ],
+   "preToNow": {
+    "max": 0.001,
+    "at": [
+     -438,
+     -19.28,
+     110.51
+    ]
+   },
+   "nowToPre": {
+    "max": 0.003,
+    "at": [
+     -438,
+     -19.3,
+     110.51
+    ]
+   },
+   "changedTriangles": [
+    439,
+    4
+   ],
+   "p95changed": 0.003,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_wrackhollow",
+   "area": 2155,
+   "hausdorff": 0.003,
+   "at": [
+    -522,
+    -23.3,
+    124.54
+   ],
+   "preToNow": {
+    "max": 0.001,
+    "at": [
+     -522,
+     -23.29,
+     124.63
+    ]
+   },
+   "nowToPre": {
+    "max": 0.003,
+    "at": [
+     -522,
+     -23.3,
+     124.54
+    ]
+   },
+   "changedTriangles": [
+    338,
+    4
+   ],
+   "p95changed": 0.002,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_fan_crawl",
+   "area": 2051,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    192,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_gully_window",
+   "area": 2100,
+   "hausdorff": 0.107,
+   "at": [
+    -222,
+    -61.91,
+    -150.33
+   ],
+   "preToNow": {
+    "max": 0.028,
+    "at": [
+     -221.97,
+     -61.93,
+     -150.55
+    ]
+   },
+   "nowToPre": {
+    "max": 0.107,
+    "at": [
+     -222,
+     -61.91,
+     -150.33
+    ]
+   },
+   "changedTriangles": [
+    4,
+    10
+   ],
+   "p95changed": 0.076,
+   "visibility": {
+    "buriedM2": 0.01,
+    "buriedMax": 0.107,
+    "waterM2": 0.01,
+    "waterMax": 0.091,
+    "waterAt": [
+     -222,
+     -61.85,
+     -150.3
+    ]
+   }
+  },
+  {
+   "id": "reef_drop_cathedral",
+   "area": 14259,
+   "hausdorff": 0.08,
+   "at": [
+    -261.06,
+    -49.96,
+    -128
+   ],
+   "preToNow": {
+    "max": 0.065,
+    "at": [
+     -261.05,
+     -49.93,
+     -128.08
+    ]
+   },
+   "nowToPre": {
+    "max": 0.08,
+    "at": [
+     -261.06,
+     -49.96,
+     -128
+    ]
+   },
+   "changedTriangles": [
+    7,
+    13
+   ],
+   "p95changed": 0.064,
+   "visibility": {
+    "buriedM2": 0.04,
+    "buriedMax": 0.08,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "isles_surf_cave",
+   "area": 1292,
+   "hausdorff": 0.087,
+   "at": [
+    542.92,
+    -4.07,
+    102
+   ],
+   "preToNow": {
+    "max": 0.074,
+    "at": [
+     542.96,
+     -4.1,
+     102.08
+    ]
+   },
+   "nowToPre": {
+    "max": 0.087,
+    "at": [
+     542.92,
+     -4.07,
+     102
+    ]
+   },
+   "changedTriangles": [
+    4,
+    8
+   ],
+   "p95changed": 0.072,
+   "visibility": {
+    "buriedM2": 0.06,
+    "buriedMax": 0.087,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "isles_cove_crawl",
+   "area": 1492,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    471,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "isles_east_ledge_cave",
+   "area": 1482,
+   "hausdorff": 0.066,
+   "at": [
+    1170,
+    -26.59,
+    54
+   ],
+   "preToNow": {
+    "max": 0.008,
+    "at": [
+     1141.58,
+     -15.14,
+     28.04
+    ]
+   },
+   "nowToPre": {
+    "max": 0.066,
+    "at": [
+     1170,
+     -26.59,
+     54
+    ]
+   },
+   "changedTriangles": [
+    6,
+    12
+   ],
+   "p95changed": 0.044,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0.066,
+    "waterAt": [
+     1170,
+     -26.59,
+     54
+    ]
+   }
+  },
+  {
+   "id": "isles_storm_arch",
+   "area": 9910,
+   "hausdorff": 0.064,
+   "at": [
+    1147,
+    -13.45,
+    75.37
+   ],
+   "preToNow": {
+    "max": 0.042,
+    "at": [
+     1147.04,
+     -13.59,
+     74.85
+    ]
+   },
+   "nowToPre": {
+    "max": 0.064,
+    "at": [
+     1147,
+     -13.45,
+     75.37
+    ]
+   },
+   "changedTriangles": [
+    20,
+    44
+   ],
+   "p95changed": 0.038,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0.064,
+    "waterAt": [
+     1147,
+     -13.45,
+     75.37
+    ]
+   }
+  },
+  {
+   "id": "canopy_knot_hollow",
+   "area": 1606,
+   "hausdorff": 0.026,
+   "at": [
+    731.48,
+    -114.64,
+    -110
+   ],
+   "preToNow": {
+    "max": 0.022,
+    "at": [
+     723.76,
+     -114.89,
+     -110.03
+    ]
+   },
+   "nowToPre": {
+    "max": 0.026,
+    "at": [
+     731.48,
+     -114.64,
+     -110
+    ]
+   },
+   "changedTriangles": [
+    9,
+    19
+   ],
+   "p95changed": 0.019,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "canopy_lee_hollow",
+   "area": 1360,
+   "hausdorff": 0.076,
+   "at": [
+    680.6,
+    -187.07,
+    -243
+   ],
+   "preToNow": {
+    "max": 0.043,
+    "at": [
+     680.63,
+     -187.14,
+     -243.05
+    ]
+   },
+   "nowToPre": {
+    "max": 0.076,
+    "at": [
+     680.6,
+     -187.07,
+     -243
+    ]
+   },
+   "changedTriangles": [
+    55,
+    121
+   ],
+   "p95changed": 0.031,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0.01,
+    "waterMax": 0.076,
+    "waterAt": [
+     680.6,
+     -187.07,
+     -243
+    ]
+   }
+  },
+  {
+   "id": "canopy_root_arch",
+   "area": 8967,
+   "hausdorff": 0.065,
+   "at": [
+    1236,
+    -263.86,
+    -263.58
+   ],
+   "preToNow": {
+    "max": 0.05,
+    "at": [
+     1236.05,
+     -263.93,
+     -263.6
+    ]
+   },
+   "nowToPre": {
+    "max": 0.065,
+    "at": [
+     1236,
+     -263.86,
+     -263.58
+    ]
+   },
+   "changedTriangles": [
+    70,
+    142
+   ],
+   "p95changed": 0.029,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0.065,
+    "waterAt": [
+     1236,
+     -263.86,
+     -263.58
+    ]
+   }
+  },
+  {
+   "id": "basin_culvert_north",
+   "area": 1369,
+   "hausdorff": 0.029,
+   "at": [
+    400.01,
+    -269.51,
+    -507
+   ],
+   "preToNow": {
+    "max": 0.019,
+    "at": [
+     400,
+     -269.55,
+     -506.98
+    ]
+   },
+   "nowToPre": {
+    "max": 0.029,
+    "at": [
+     400.01,
+     -269.51,
+     -507
+    ]
+   },
+   "changedTriangles": [
+    24,
+    52
+   ],
+   "p95changed": 0.019,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "basin_buried_hut",
+   "area": 1110,
+   "hausdorff": 0.023,
+   "at": [
+    572,
+    -381.69,
+    -763.52
+   ],
+   "preToNow": {
+    "max": 0.011,
+    "at": [
+     571.99,
+     -381.73,
+     -763.56
+    ]
+   },
+   "nowToPre": {
+    "max": 0.023,
+    "at": [
+     572,
+     -381.69,
+     -763.52
+    ]
+   },
+   "changedTriangles": [
+    5,
+    11
+   ],
+   "p95changed": 0.023,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "basin_west_rim",
+   "area": 10616,
+   "hausdorff": 0.039,
+   "at": [
+    283.93,
+    -264.83,
+    -798
+   ],
+   "preToNow": {
+    "max": 0.038,
+    "at": [
+     283.92,
+     -264.87,
+     -798.05
+    ]
+   },
+   "nowToPre": {
+    "max": 0.039,
+    "at": [
+     283.93,
+     -264.83,
+     -798
+    ]
+   },
+   "changedTriangles": [
+    23,
+    44
+   ],
+   "p95changed": 0.025,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "rift_north_shoulder",
+   "area": 3193,
+   "hausdorff": 0.061,
+   "at": [
+    -110.16,
+    -289.01,
+    -808
+   ],
+   "preToNow": {
+    "max": 0.047,
+    "at": [
+     -73.17,
+     -314.41,
+     -784.04
+    ]
+   },
+   "nowToPre": {
+    "max": 0.061,
+    "at": [
+     -110.16,
+     -289.01,
+     -808
+    ]
+   },
+   "changedTriangles": [
+    36,
+    70
+   ],
+   "p95changed": 0.025,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0.061,
+    "waterAt": [
+     -110.16,
+     -289.01,
+     -808
+    ]
+   }
+  },
+  {
+   "id": "rift_stub_hollow",
+   "area": 0,
+   "hausdorff": 0,
+   "unchanged": true
+  },
+  {
+   "id": "rift_west_tube",
+   "area": 0,
+   "hausdorff": 0,
+   "unchanged": true
+  },
+  {
+   "id": "divide_mirror_pocket",
+   "area": 0,
+   "hausdorff": 0,
+   "unchanged": true
+  },
+  {
+   "id": "divide_east_pocket",
+   "area": 0,
+   "hausdorff": 0,
+   "unchanged": true
+  },
+  {
+   "id": "divide_fissure_window",
+   "area": 1576,
+   "hausdorff": 0.1,
+   "at": [
+    533,
+    -404.77,
+    -1316.31
+   ],
+   "preToNow": {
+    "max": 0.093,
+    "at": [
+     533.09,
+     -404.77,
+     -1316.35
+    ]
+   },
+   "nowToPre": {
+    "max": 0.1,
+    "at": [
+     533,
+     -404.77,
+     -1316.31
+    ]
+   },
+   "changedTriangles": [
+    134,
+    188
+   ],
+   "p95changed": 0.027,
+   "visibility": {
+    "buriedM2": 0.45,
+    "buriedMax": 0.1,
+    "waterM2": 0.02,
+    "waterMax": 0.088,
+    "waterAt": [
+     556.9,
+     -402.01,
+     -1317.64
+    ]
+   }
+  },
+  {
+   "id": "divide_brine_cistern",
+   "area": 6796,
+   "hausdorff": 0.257,
+   "at": [
+    924,
+    -449.7,
+    -1192
+   ],
+   "preToNow": {
+    "max": 0.136,
+    "at": [
+     923.86,
+     -449.68,
+     -1192.23
+    ]
+   },
+   "nowToPre": {
+    "max": 0.257,
+    "at": [
+     924,
+     -449.7,
+     -1192
+    ]
+   },
+   "changedTriangles": [
+    197,
+    386
+   ],
+   "p95changed": 0.072,
+   "visibility": {
+    "buriedM2": 1.97,
+    "buriedMax": 0.257,
+    "waterM2": 0.07,
+    "waterMax": 0.142,
+    "waterAt": [
+     924,
+     -450.25,
+     -1192.86
+    ]
+   }
+  },
+  {
+   "id": "meridian_culvert_north",
+   "area": 2297,
+   "hausdorff": 0.151,
+   "at": [
+    1224.15,
+    -559.27,
+    -1156.76
+   ],
+   "preToNow": {
+    "max": 0.151,
+    "at": [
+     1224.15,
+     -559.27,
+     -1156.76
+    ]
+   },
+   "nowToPre": {
+    "max": 0.141,
+    "at": [
+     1224,
+     -588.09,
+     -1158.2
+    ]
+   },
+   "changedTriangles": [
+    633,
+    1327
+   ],
+   "p95changed": 0.095,
+   "visibility": {
+    "buriedM2": 12.73,
+    "buriedMax": 0.151,
+    "waterM2": 0,
+    "waterMax": 0.058,
+    "waterAt": [
+     1224,
+     -599.79,
+     -1160.07
+    ]
+   }
+  },
+  {
+   "id": "meridian_escarp_pocket",
+   "area": 1398,
+   "hausdorff": 6.924,
+   "at": [
+    1396,
+    -492.8,
+    -931.16
+   ],
+   "preToNow": {
+    "max": 6.924,
+    "at": [
+     1396,
+     -492.8,
+     -931.16
+    ]
+   },
+   "nowToPre": {
+    "max": 0.099,
+    "at": [
+     1395.69,
+     -483.26,
+     -944
+    ]
+   },
+   "changedTriangles": [
+    352,
+    411
+   ],
+   "p95changed": 5.832,
+   "visibility": {
+    "buriedM2": 38.96,
+    "buriedMax": 6.924,
+    "waterM2": 0.01,
+    "waterMax": 0.064,
+    "waterAt": [
+     1381.92,
+     -501.01,
+     -920.07
+    ]
+   }
+  },
+  {
+   "id": "meridian_window_gallery",
+   "area": 7654,
+   "hausdorff": 0.204,
+   "at": [
+    1052,
+    -520.31,
+    -1297.1
+   ],
+   "preToNow": {
+    "max": 0.1,
+    "at": [
+     1051.9,
+     -520.12,
+     -1297.25
+    ]
+   },
+   "nowToPre": {
+    "max": 0.204,
+    "at": [
+     1052,
+     -520.31,
+     -1297.1
+    ]
+   },
+   "changedTriangles": [
+    181,
+    303
+   ],
+   "p95changed": 0.016,
+   "visibility": {
+    "buriedM2": 0.05,
+    "buriedMax": 0.204,
+    "waterM2": 0.05,
+    "waterMax": 0.15,
+    "waterAt": [
+     1052,
+     -520.23,
+     -1297.02
+    ]
+   }
+  }
+ ],
+ "coarse-pre": [
+  {
+   "id": "fanvault",
+   "area": 5157,
+   "hausdorff": 0.452,
+   "at": [
+    -264,
+    -26.42,
+    -92
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.452,
+    "at": [
+     -264,
+     -26.42,
+     -92
+    ]
+   },
+   "changedTriangles": [
+    0,
+    713
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 24.1,
+    "waterMax": 0.452,
+    "waterAt": [
+     -264,
+     -26.42,
+     -92
+    ]
+   }
+  },
+  {
+   "id": "hub_step_arch",
+   "area": 3907,
+   "hausdorff": 3.788,
+   "at": [
+    100,
+    -113.05,
+    -382
+   ],
+   "preToNow": {
+    "max": 0.721,
+    "at": [
+     80.03,
+     -54.22,
+     -383.27
+    ]
+   },
+   "nowToPre": {
+    "max": 3.788,
+    "at": [
+     100,
+     -113.05,
+     -382
+    ]
+   },
+   "changedTriangles": [
+    2034,
+    3218
+   ],
+   "p95changed": 0.605,
+   "visibility": {
+    "buriedM2": 384.72,
+    "buriedMax": 3.788,
+    "waterM2": 243.9,
+    "waterMax": 1.683,
+    "waterAt": [
+     100,
+     -110.94,
+     -382
+    ]
+   }
+  },
+  {
+   "id": "hub_crown_shaft",
+   "area": 14452,
+   "hausdorff": 3.941,
+   "at": [
+    358,
+    -100.16,
+    -590
+   ],
+   "preToNow": {
+    "max": 0.694,
+    "at": [
+     314.13,
+     -59.37,
+     -542.36
+    ]
+   },
+   "nowToPre": {
+    "max": 3.941,
+    "at": [
+     358,
+     -100.16,
+     -590
+    ]
+   },
+   "changedTriangles": [
+    1218,
+    2889
+   ],
+   "p95changed": 0.735,
+   "visibility": {
+    "buriedM2": 254.73,
+    "buriedMax": 3.941,
+    "waterM2": 127.69,
+    "waterMax": 1.666,
+    "waterAt": [
+     358,
+     -97.87,
+     -590
+    ]
+   }
+  },
+  {
+   "id": "reef_bellhole",
+   "area": 2639,
+   "hausdorff": 1.011,
+   "at": [
+    -430.3,
+    -24.7,
+    48.7
+   ],
+   "preToNow": {
+    "max": 0.527,
+    "at": [
+     -430.65,
+     -23.76,
+     48.51
+    ]
+   },
+   "nowToPre": {
+    "max": 1.011,
+    "at": [
+     -430.3,
+     -24.7,
+     48.7
+    ]
+   },
+   "changedTriangles": [
+    156,
+    6
+   ],
+   "p95changed": 0.779,
+   "visibility": {
+    "buriedM2": 0.82,
+    "buriedMax": 1.011,
+    "waterM2": 1.05,
+    "waterMax": 0.527,
+    "waterAt": [
+     -430.65,
+     -23.76,
+     48.51
+    ]
+   }
+  },
+  {
+   "id": "reef_pumphouse_undercut",
+   "area": 1086,
+   "hausdorff": 0.426,
+   "at": [
+    -378,
+    -22.75,
+    -46
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.426,
+    "at": [
+     -378,
+     -22.75,
+     -46
+    ]
+   },
+   "changedTriangles": [
+    0,
+    339
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 12.09,
+    "waterMax": 0.426,
+    "waterAt": [
+     -378,
+     -22.75,
+     -46
+    ]
+   }
+  },
+  {
+   "id": "reef_shelf_lip",
+   "area": 2808,
+   "hausdorff": 0.389,
+   "at": [
+    -363.99,
+    -32.76,
+    -97.21
+   ],
+   "preToNow": {
+    "max": 0.258,
+    "at": [
+     -363.67,
+     -32.43,
+     -97.48
+    ]
+   },
+   "nowToPre": {
+    "max": 0.389,
+    "at": [
+     -363.99,
+     -32.76,
+     -97.21
+    ]
+   },
+   "changedTriangles": [
+    217,
+    13
+   ],
+   "p95changed": 0.299,
+   "visibility": {
+    "buriedM2": 0.21,
+    "buriedMax": 0.389,
+    "waterM2": 1.22,
+    "waterMax": 0.258,
+    "waterAt": [
+     -363.67,
+     -32.43,
+     -97.48
+    ]
+   }
+  },
+  {
+   "id": "reef_lantern_grotto",
+   "area": 9942,
+   "hausdorff": 0.474,
+   "at": [
+    -510,
+    -69.53,
+    -150
+   ],
+   "preToNow": {
+    "max": 0.017,
+    "at": [
+     -471.86,
+     -52.85,
+     -113.94
+    ]
+   },
+   "nowToPre": {
+    "max": 0.474,
+    "at": [
+     -510,
+     -69.53,
+     -150
+    ]
+   },
+   "changedTriangles": [
+    44,
+    1013
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 25.07,
+    "waterMax": 0.474,
+    "waterAt": [
+     -510,
+     -69.53,
+     -150
+    ]
+   }
+  },
+  {
+   "id": "isles_scar_crawl",
+   "area": 1651,
+   "hausdorff": 0.782,
+   "at": [
+    366.65,
+    -23.71,
+    30
+   ],
+   "preToNow": {
+    "max": 0.342,
+    "at": [
+     356.44,
+     -27.09,
+     59.77
+    ]
+   },
+   "nowToPre": {
+    "max": 0.782,
+    "at": [
+     366.65,
+     -23.71,
+     30
+    ]
+   },
+   "changedTriangles": [
+    5,
+    450
+   ],
+   "p95changed": 0.409,
+   "visibility": {
+    "buriedM2": 2.75,
+    "buriedMax": 0.782,
+    "waterM2": 12,
+    "waterMax": 0.428,
+    "waterAt": [
+     378,
+     -14.5,
+     61
+    ]
+   }
+  },
+  {
+   "id": "isles_cove_undercut",
+   "area": 1568,
+   "hausdorff": 0.524,
+   "at": [
+    979.48,
+    -23.61,
+    -65.52
+   ],
+   "preToNow": {
+    "max": 0.451,
+    "at": [
+     979.6,
+     -22.96,
+     -65.62
+    ]
+   },
+   "nowToPre": {
+    "max": 0.524,
+    "at": [
+     979.48,
+     -23.61,
+     -65.52
+    ]
+   },
+   "changedTriangles": [
+    106,
+    17
+   ],
+   "p95changed": 0.441,
+   "visibility": {
+    "buriedM2": 0.85,
+    "buriedMax": 0.524,
+    "waterM2": 0.69,
+    "waterMax": 0.451,
+    "waterAt": [
+     979.6,
+     -22.96,
+     -65.62
+    ]
+   }
+  },
+  {
+   "id": "isles_headland_root",
+   "area": 1789,
+   "hausdorff": 0.554,
+   "at": [
+    1030,
+    -27.7,
+    -64.3
+   ],
+   "preToNow": {
+    "max": 0.239,
+    "at": [
+     1029.77,
+     -34.81,
+     -70.38
+    ]
+   },
+   "nowToPre": {
+    "max": 0.554,
+    "at": [
+     1030,
+     -27.7,
+     -64.3
+    ]
+   },
+   "changedTriangles": [
+    152,
+    66
+   ],
+   "p95changed": 0.415,
+   "visibility": {
+    "buriedM2": 2.48,
+    "buriedMax": 0.554,
+    "waterM2": 1.83,
+    "waterMax": 0.239,
+    "waterAt": [
+     1029.77,
+     -34.81,
+     -70.38
+    ]
+   }
+  },
+  {
+   "id": "isles_blowhole",
+   "area": 1887,
+   "hausdorff": 1.437,
+   "at": [
+    1084,
+    -22.48,
+    124
+   ],
+   "preToNow": {
+    "max": 0.336,
+    "at": [
+     1062.55,
+     -13.9,
+     134.65
+    ]
+   },
+   "nowToPre": {
+    "max": 1.437,
+    "at": [
+     1084,
+     -22.48,
+     124
+    ]
+   },
+   "changedTriangles": [
+    6,
+    351
+   ],
+   "p95changed": 0.355,
+   "visibility": {
+    "buriedM2": 1.23,
+    "buriedMax": 0.766,
+    "waterM2": 12.12,
+    "waterMax": 1.437,
+    "waterAt": [
+     1084,
+     -22.48,
+     124
+    ]
+   }
+  },
+  {
+   "id": "isles_headland_west",
+   "area": 2748,
+   "hausdorff": 1.571,
+   "at": [
+    953.79,
+    3.93,
+    5.92
+   ],
+   "preToNow": {
+    "max": 1.571,
+    "at": [
+     953.79,
+     3.93,
+     5.92
+    ]
+   },
+   "nowToPre": {
+    "max": 1.511,
+    "at": [
+     954.75,
+     -0.42,
+     7.38
+    ]
+   },
+   "changedTriangles": [
+    270,
+    967
+   ],
+   "p95changed": 1.122,
+   "visibility": {
+    "buriedM2": 74.71,
+    "buriedMax": 1.571,
+    "waterM2": 44.53,
+    "waterMax": 1.17,
+    "waterAt": [
+     945.73,
+     -9.03,
+     24.86
+    ]
+   }
+  },
+  {
+   "id": "canopy_eastcrown",
+   "area": 5568,
+   "hausdorff": 1.064,
+   "at": [
+    748.1,
+    -89.7,
+    -46.3
+   ],
+   "preToNow": {
+    "max": 0.575,
+    "at": [
+     754.93,
+     -103.36,
+     -90.81
+    ]
+   },
+   "nowToPre": {
+    "max": 1.064,
+    "at": [
+     748.1,
+     -89.7,
+     -46.3
+    ]
+   },
+   "changedTriangles": [
+    16,
+    922
+   ],
+   "p95changed": 0.417,
+   "visibility": {
+    "buriedM2": 4.68,
+    "buriedMax": 1.064,
+    "waterM2": 30.25,
+    "waterMax": 0.851,
+    "waterAt": [
+     748.07,
+     -89.34,
+     -46.12
+    ]
+   }
+  },
+  {
+   "id": "canopy_fin_cleft",
+   "area": 1774,
+   "hausdorff": 1.206,
+   "at": [
+    637.92,
+    -117.7,
+    -120.3
+   ],
+   "preToNow": {
+    "max": 0.291,
+    "at": [
+     614.05,
+     -113.57,
+     -120.17
+    ]
+   },
+   "nowToPre": {
+    "max": 1.206,
+    "at": [
+     637.92,
+     -117.7,
+     -120.3
+    ]
+   },
+   "changedTriangles": [
+    8,
+    360
+   ],
+   "p95changed": 0.739,
+   "visibility": {
+    "buriedM2": 0.73,
+    "buriedMax": 1.206,
+    "waterM2": 11.91,
+    "waterMax": 1.086,
+    "waterAt": [
+     614.03,
+     -114.7,
+     -119.7
+    ]
+   }
+  },
+  {
+   "id": "canopy_lantern_hall",
+   "area": 9394,
+   "hausdorff": 1.086,
+   "at": [
+    537.92,
+    -163.7,
+    -206.3
+   ],
+   "preToNow": {
+    "max": 0.3,
+    "at": [
+     537.7,
+     -173.91,
+     -256.47
+    ]
+   },
+   "nowToPre": {
+    "max": 1.086,
+    "at": [
+     537.92,
+     -163.7,
+     -206.3
+    ]
+   },
+   "changedTriangles": [
+    9,
+    908
+   ],
+   "p95changed": 0.444,
+   "visibility": {
+    "buriedM2": 2.79,
+    "buriedMax": 1.086,
+    "waterM2": 27.72,
+    "waterMax": 1.018,
+    "waterAt": [
+     537.95,
+     -163.46,
+     -206.19
+    ]
+   }
+  },
+  {
+   "id": "basin_burrow_warren",
+   "area": 2477,
+   "hausdorff": 1.369,
+   "at": [
+    811.64,
+    -334.1,
+    -702
+   ],
+   "preToNow": {
+    "max": 0.649,
+    "at": [
+     803.59,
+     -319.4,
+     -700.84
+    ]
+   },
+   "nowToPre": {
+    "max": 1.369,
+    "at": [
+     811.64,
+     -334.1,
+     -702
+    ]
+   },
+   "changedTriangles": [
+    372,
+    1291
+   ],
+   "p95changed": 0.707,
+   "visibility": {
+    "buriedM2": 71.79,
+    "buriedMax": 1.369,
+    "waterM2": 50.72,
+    "waterMax": 1.252,
+    "waterAt": [
+     776,
+     -261.96,
+     -673.62
+    ]
+   }
+  },
+  {
+   "id": "basin_fracture_pocket",
+   "area": 1565,
+   "hausdorff": 0.864,
+   "at": [
+    322.09,
+    -213.7,
+    -354.3
+   ],
+   "preToNow": {
+    "max": 0.22,
+    "at": [
+     322.09,
+     -212.74,
+     -354.3
+    ]
+   },
+   "nowToPre": {
+    "max": 0.864,
+    "at": [
+     322.09,
+     -213.7,
+     -354.3
+    ]
+   },
+   "changedTriangles": [
+    2,
+    367
+   ],
+   "p95changed": 0.387,
+   "visibility": {
+    "buriedM2": 0.25,
+    "buriedMax": 0.864,
+    "waterM2": 11.27,
+    "waterMax": 0.718,
+    "waterAt": [
+     346,
+     -217.43,
+     -354.2
+    ]
+   }
+  },
+  {
+   "id": "basin_dish_lee_vault",
+   "area": 8382,
+   "hausdorff": 1.318,
+   "at": [
+    572.35,
+    -274.15,
+    -629
+   ],
+   "preToNow": {
+    "max": 0.661,
+    "at": [
+     538.4,
+     -367.38,
+     -680.84
+    ]
+   },
+   "nowToPre": {
+    "max": 1.318,
+    "at": [
+     572.35,
+     -274.15,
+     -629
+    ]
+   },
+   "changedTriangles": [
+    321,
+    1659
+   ],
+   "p95changed": 0.686,
+   "visibility": {
+    "buriedM2": 66.02,
+    "buriedMax": 1.138,
+    "waterM2": 59.81,
+    "waterMax": 1.318,
+    "waterAt": [
+     572.35,
+     -274.15,
+     -629
+    ]
+   }
+  },
+  {
+   "id": "rift_tube_mites",
+   "area": 1076,
+   "hausdorff": 1.1,
+   "at": [
+    -127.33,
+    -308.74,
+    -1112
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 1.1,
+    "at": [
+     -127.33,
+     -308.74,
+     -1112
+    ]
+   },
+   "changedTriangles": [
+    0,
+    296
+   ],
+   "p95changed": 0.315,
+   "visibility": {
+    "buriedM2": 0.44,
+    "buriedMax": 1.1,
+    "waterM2": 9.84,
+    "waterMax": 0.545,
+    "waterAt": [
+     -128,
+     -308.38,
+     -1112
+    ]
+   }
+  },
+  {
+   "id": "rift_west_blister",
+   "area": 1573,
+   "hausdorff": 0.478,
+   "at": [
+    -386,
+    -259.88,
+    -974
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.478,
+    "at": [
+     -386,
+     -259.88,
+     -974
+    ]
+   },
+   "changedTriangles": [
+    0,
+    390
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 12.63,
+    "waterMax": 0.478,
+    "waterAt": [
+     -386,
+     -259.88,
+     -974
+    ]
+   }
+  },
+  {
+   "id": "rift_kiln_tube",
+   "area": 7278,
+   "hausdorff": 12.187,
+   "at": [
+    156.95,
+    -274.11,
+    -854.67
+   ],
+   "preToNow": {
+    "max": 12.187,
+    "at": [
+     156.95,
+     -274.11,
+     -854.67
+    ]
+   },
+   "nowToPre": {
+    "max": 1.913,
+    "at": [
+     163,
+     -289.02,
+     -855.84
+    ]
+   },
+   "changedTriangles": [
+    661,
+    1543
+   ],
+   "p95changed": 10.686,
+   "visibility": {
+    "buriedM2": 309.58,
+    "buriedMax": 12.187,
+    "waterM2": 93.61,
+    "waterMax": 1.58,
+    "waterAt": [
+     158.77,
+     -288.41,
+     -854.04
+    ]
+   }
+  },
+  {
+   "id": "divide_crest_hollow",
+   "area": 1294,
+   "hausdorff": 0.811,
+   "at": [
+    697.7,
+    -360.7,
+    -1221.7
+   ],
+   "preToNow": {
+    "max": 0.417,
+    "at": [
+     697.4,
+     -360,
+     -1221.4
+    ]
+   },
+   "nowToPre": {
+    "max": 0.811,
+    "at": [
+     697.7,
+     -360.7,
+     -1221.7
+    ]
+   },
+   "changedTriangles": [
+    12,
+    379
+   ],
+   "p95changed": 0.353,
+   "visibility": {
+    "buriedM2": 1.06,
+    "buriedMax": 0.811,
+    "waterM2": 10.87,
+    "waterMax": 0.435,
+    "waterAt": [
+     678,
+     -370.49,
+     -1198
+    ]
+   }
+  },
+  {
+   "id": "divide_lee_burrow",
+   "area": 1050,
+   "hausdorff": 0.426,
+   "at": [
+    456,
+    -391.92,
+    -1097
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.426,
+    "at": [
+     456,
+     -391.92,
+     -1097
+    ]
+   },
+   "changedTriangles": [
+    0,
+    351
+   ],
+   "p95changed": 0.302,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 11.29,
+    "waterMax": 0.426,
+    "waterAt": [
+     456,
+     -391.92,
+     -1097
+    ]
+   }
+  },
+  {
+   "id": "divide_lintel_galleries",
+   "area": 12849,
+   "hausdorff": 1.15,
+   "at": [
+    745.24,
+    -373.71,
+    -1300
+   ],
+   "preToNow": {
+    "max": 0.588,
+    "at": [
+     719.86,
+     -371.37,
+     -1298.81
+    ]
+   },
+   "nowToPre": {
+    "max": 1.15,
+    "at": [
+     745.24,
+     -373.71,
+     -1300
+    ]
+   },
+   "changedTriangles": [
+    11,
+    867
+   ],
+   "p95changed": 0.314,
+   "visibility": {
+    "buriedM2": 2.05,
+    "buriedMax": 1.15,
+    "waterM2": 25.4,
+    "waterMax": 0.588,
+    "waterAt": [
+     719.86,
+     -371.37,
+     -1298.81
+    ]
+   }
+  },
+  {
+   "id": "meridian_footing_void",
+   "area": 1114,
+   "hausdorff": 0.432,
+   "at": [
+    1062,
+    -520.45,
+    -1213
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.432,
+    "at": [
+     1062,
+     -520.45,
+     -1213
+    ]
+   },
+   "changedTriangles": [
+    0,
+    302
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 11.05,
+    "waterMax": 0.432,
+    "waterAt": [
+     1062,
+     -520.45,
+     -1213
+    ]
+   }
+  },
+  {
+   "id": "meridian_spire_footing",
+   "area": 1417,
+   "hausdorff": 0.424,
+   "at": [
+    1194,
+    -600.11,
+    -1346
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.424,
+    "at": [
+     1194,
+     -600.11,
+     -1346
+    ]
+   },
+   "changedTriangles": [
+    0,
+    296
+   ],
+   "p95changed": 0.307,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 11.89,
+    "waterMax": 0.424,
+    "waterAt": [
+     1194,
+     -600.11,
+     -1346
+    ]
+   }
+  },
+  {
+   "id": "meridian_terrace_crack",
+   "area": 1901,
+   "hausdorff": 1.308,
+   "at": [
+    1131,
+    -608.95,
+    -1469
+   ],
+   "preToNow": {
+    "max": 0.664,
+    "at": [
+     1130.69,
+     -606.53,
+     -1470.55
+    ]
+   },
+   "nowToPre": {
+    "max": 1.308,
+    "at": [
+     1131,
+     -608.95,
+     -1469
+    ]
+   },
+   "changedTriangles": [
+    1415,
+    2540
+   ],
+   "p95changed": 0.562,
+   "visibility": {
+    "buriedM2": 284.89,
+    "buriedMax": 1.308,
+    "waterM2": 182.39,
+    "waterMax": 0.664,
+    "waterAt": [
+     1130.69,
+     -606.53,
+     -1470.55
+    ]
+   }
+  },
+  {
+   "id": "meridian_escarp_culvert",
+   "area": 3911,
+   "hausdorff": 1.056,
+   "at": [
+    1320,
+    -542.33,
+    -970.68
+   ],
+   "preToNow": {
+    "max": 0.42,
+    "at": [
+     1324.54,
+     -520.38,
+     -946.45
+    ]
+   },
+   "nowToPre": {
+    "max": 1.056,
+    "at": [
+     1320,
+     -542.33,
+     -970.68
+    ]
+   },
+   "changedTriangles": [
+    72,
+    680
+   ],
+   "p95changed": 0.602,
+   "visibility": {
+    "buriedM2": 14.7,
+    "buriedMax": 1.056,
+    "waterM2": 21.8,
+    "waterMax": 0.427,
+    "waterAt": [
+     1352,
+     -508.03,
+     -946
+    ]
+   }
+  },
+  {
+   "id": "hub_apron_hollow",
+   "area": 908,
+   "hausdorff": 1.983,
+   "at": [
+    47.72,
+    -50.98,
+    -394
+   ],
+   "preToNow": {
+    "max": 0.774,
+    "at": [
+     40.74,
+     -33.16,
+     -392.72
+    ]
+   },
+   "nowToPre": {
+    "max": 1.983,
+    "at": [
+     47.72,
+     -50.98,
+     -394
+    ]
+   },
+   "changedTriangles": [
+    429,
+    1020
+   ],
+   "p95changed": 0.671,
+   "visibility": {
+    "buriedM2": 85.56,
+    "buriedMax": 1.983,
+    "waterM2": 52.69,
+    "waterMax": 0.918,
+    "waterAt": [
+     47.96,
+     -49.87,
+     -394
+    ]
+   }
+  },
+  {
+   "id": "hub_glimmer_crack",
+   "area": 6257,
+   "hausdorff": 7.867,
+   "at": [
+    204,
+    -145.8,
+    -486
+   ],
+   "preToNow": {
+    "max": 0.666,
+    "at": [
+     173.24,
+     -63.41,
+     -476.76
+    ]
+   },
+   "nowToPre": {
+    "max": 7.867,
+    "at": [
+     204,
+     -145.8,
+     -486
+    ]
+   },
+   "changedTriangles": [
+    4221,
+    6913
+   ],
+   "p95changed": 0.66,
+   "visibility": {
+    "buriedM2": 807.45,
+    "buriedMax": 7.867,
+    "waterM2": 455.12,
+    "waterMax": 3.655,
+    "waterAt": [
+     204,
+     -141.58,
+     -486
+    ]
+   }
+  },
+  {
+   "id": "reef_archlet",
+   "area": 3188,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    227,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_wrackhollow",
+   "area": 2212,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    128,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_fan_crawl",
+   "area": 2112,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    156,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_gully_window",
+   "area": 2143,
+   "hausdorff": 1.11,
+   "at": [
+    -222,
+    -73.7,
+    -174.99
+   ],
+   "preToNow": {
+    "max": 0.723,
+    "at": [
+     -217.59,
+     -56,
+     -151.05
+    ]
+   },
+   "nowToPre": {
+    "max": 1.11,
+    "at": [
+     -222,
+     -73.7,
+     -174.99
+    ]
+   },
+   "changedTriangles": [
+    69,
+    508
+   ],
+   "p95changed": 0.7,
+   "visibility": {
+    "buriedM2": 11.3,
+    "buriedMax": 1.11,
+    "waterM2": 15.44,
+    "waterMax": 0.723,
+    "waterAt": [
+     -217.59,
+     -56,
+     -151.05
+    ]
+   }
+  },
+  {
+   "id": "reef_drop_cathedral",
+   "area": 14669,
+   "hausdorff": 1.276,
+   "at": [
+    -258.5,
+    -53.71,
+    -128.27
+   ],
+   "preToNow": {
+    "max": 0.565,
+    "at": [
+     -262.48,
+     -48.69,
+     -129.19
+    ]
+   },
+   "nowToPre": {
+    "max": 1.276,
+    "at": [
+     -258.5,
+     -53.71,
+     -128.27
+    ]
+   },
+   "changedTriangles": [
+    57,
+    1179
+   ],
+   "p95changed": 0.55,
+   "visibility": {
+    "buriedM2": 10.11,
+    "buriedMax": 1.276,
+    "waterM2": 30.1,
+    "waterMax": 0.565,
+    "waterAt": [
+     -262.48,
+     -48.69,
+     -129.19
+    ]
+   }
+  },
+  {
+   "id": "isles_surf_cave",
+   "area": 1291,
+   "hausdorff": 1.21,
+   "at": [
+    528.3,
+    -0.7,
+    125.22
+   ],
+   "preToNow": {
+    "max": 0.445,
+    "at": [
+     543.58,
+     -5.02,
+     102.66
+    ]
+   },
+   "nowToPre": {
+    "max": 1.21,
+    "at": [
+     528.3,
+     -0.7,
+     125.22
+    ]
+   },
+   "changedTriangles": [
+    19,
+    450
+   ],
+   "p95changed": 0.47,
+   "visibility": {
+    "buriedM2": 3.18,
+    "buriedMax": 1.21,
+    "waterM2": 14.97,
+    "waterMax": 0.445,
+    "waterAt": [
+     543.58,
+     -5.02,
+     102.66
+    ]
+   }
+  },
+  {
+   "id": "isles_cove_crawl",
+   "area": 1545,
+   "hausdorff": 0.605,
+   "at": [
+    980,
+    -28.14,
+    -69.68
+   ],
+   "preToNow": {
+    "max": 0.587,
+    "at": [
+     999.99,
+     -36.38,
+     -76.82
+    ]
+   },
+   "nowToPre": {
+    "max": 0.605,
+    "at": [
+     980,
+     -28.14,
+     -69.68
+    ]
+   },
+   "changedTriangles": [
+    213,
+    29
+   ],
+   "p95changed": 0.501,
+   "visibility": {
+    "buriedM2": 2.04,
+    "buriedMax": 0.605,
+    "waterM2": 1.43,
+    "waterMax": 0.587,
+    "waterAt": [
+     999.99,
+     -36.38,
+     -76.82
+    ]
+   }
+  },
+  {
+   "id": "isles_east_ledge_cave",
+   "area": 1516,
+   "hausdorff": 1.099,
+   "at": [
+    1170,
+    -37.7,
+    35.01
+   ],
+   "preToNow": {
+    "max": 0.064,
+    "at": [
+     1169.96,
+     -36.36,
+     35.13
+    ]
+   },
+   "nowToPre": {
+    "max": 1.099,
+    "at": [
+     1170,
+     -37.7,
+     35.01
+    ]
+   },
+   "changedTriangles": [
+    10,
+    475
+   ],
+   "p95changed": 0.524,
+   "visibility": {
+    "buriedM2": 1.9,
+    "buriedMax": 1.099,
+    "waterM2": 11.2,
+    "waterMax": 0.424,
+    "waterAt": [
+     1138,
+     -13.62,
+     54
+    ]
+   }
+  },
+  {
+   "id": "isles_storm_arch",
+   "area": 10146,
+   "hausdorff": 0.949,
+   "at": [
+    1147,
+    -17.45,
+    107.46
+   ],
+   "preToNow": {
+    "max": 0.064,
+    "at": [
+     1147.05,
+     -16.5,
+     107.15
+    ]
+   },
+   "nowToPre": {
+    "max": 0.949,
+    "at": [
+     1147,
+     -17.45,
+     107.46
+    ]
+   },
+   "changedTriangles": [
+    8,
+    789
+   ],
+   "p95changed": 0.308,
+   "visibility": {
+    "buriedM2": 0.77,
+    "buriedMax": 0.949,
+    "waterM2": 19.57,
+    "waterMax": 0.501,
+    "waterAt": [
+     1184,
+     -43.5,
+     55
+    ]
+   }
+  },
+  {
+   "id": "canopy_knot_hollow",
+   "area": 1609,
+   "hausdorff": 1.219,
+   "at": [
+    708.07,
+    -116.7,
+    -112.3
+   ],
+   "preToNow": {
+    "max": 0.229,
+    "at": [
+     731.96,
+     -114.73,
+     -111.3
+    ]
+   },
+   "nowToPre": {
+    "max": 1.219,
+    "at": [
+     708.07,
+     -116.7,
+     -112.3
+    ]
+   },
+   "changedTriangles": [
+    4,
+    366
+   ],
+   "p95changed": 0.598,
+   "visibility": {
+    "buriedM2": 0.08,
+    "buriedMax": 1.219,
+    "waterM2": 13.42,
+    "waterMax": 1.041,
+    "waterAt": [
+     708.03,
+     -116.25,
+     -112.15
+    ]
+   }
+  },
+  {
+   "id": "canopy_lee_hollow",
+   "area": 1357,
+   "hausdorff": 1.078,
+   "at": [
+    678.08,
+    -188.7,
+    -245.3
+   ],
+   "preToNow": {
+    "max": 0.222,
+    "at": [
+     678.08,
+     -187.19,
+     -245.3
+    ]
+   },
+   "nowToPre": {
+    "max": 1.078,
+    "at": [
+     678.08,
+     -188.7,
+     -245.3
+    ]
+   },
+   "changedTriangles": [
+    4,
+    365
+   ],
+   "p95changed": 0.512,
+   "visibility": {
+    "buriedM2": 0.06,
+    "buriedMax": 1.078,
+    "waterM2": 11.34,
+    "waterMax": 1.02,
+    "waterAt": [
+     678.05,
+     -188.52,
+     -245.2
+    ]
+   }
+  },
+  {
+   "id": "canopy_root_arch",
+   "area": 9298,
+   "hausdorff": 1.204,
+   "at": [
+    1237.67,
+    -266.94,
+    -260
+   ],
+   "preToNow": {
+    "max": 0.52,
+    "at": [
+     1299.73,
+     -315.39,
+     -261.33
+    ]
+   },
+   "nowToPre": {
+    "max": 1.204,
+    "at": [
+     1237.67,
+     -266.94,
+     -260
+    ]
+   },
+   "changedTriangles": [
+    28,
+    1410
+   ],
+   "p95changed": 0.542,
+   "visibility": {
+    "buriedM2": 17.8,
+    "buriedMax": 1.058,
+    "waterM2": 33.03,
+    "waterMax": 1.204,
+    "waterAt": [
+     1237.67,
+     -266.94,
+     -260
+    ]
+   }
+  },
+  {
+   "id": "basin_culvert_north",
+   "area": 1343,
+   "hausdorff": 0.665,
+   "at": [
+    398,
+    -270.64,
+    -505.06
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.665,
+    "at": [
+     398,
+     -270.64,
+     -505.06
+    ]
+   },
+   "changedTriangles": [
+    0,
+    364
+   ],
+   "p95changed": 0.308,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 10.87,
+    "waterMax": 0.665,
+    "waterAt": [
+     398,
+     -270.64,
+     -505.06
+    ]
+   }
+  },
+  {
+   "id": "basin_buried_hut",
+   "area": 1096,
+   "hausdorff": 0.496,
+   "at": [
+    571.7,
+    -381.66,
+    -758
+   ],
+   "preToNow": {
+    "max": 0.161,
+    "at": [
+     570.47,
+     -382.17,
+     -781.92
+    ]
+   },
+   "nowToPre": {
+    "max": 0.496,
+    "at": [
+     571.7,
+     -381.66,
+     -758
+    ]
+   },
+   "changedTriangles": [
+    9,
+    346
+   ],
+   "p95changed": 0.306,
+   "visibility": {
+    "buriedM2": 0.22,
+    "buriedMax": 0.496,
+    "waterM2": 11.9,
+    "waterMax": 0.428,
+    "waterAt": [
+     548,
+     -381.95,
+     -782
+    ]
+   }
+  },
+  {
+   "id": "basin_west_rim",
+   "area": 10914,
+   "hausdorff": 0.634,
+   "at": [
+    286,
+    -266.35,
+    -800.04
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.634,
+    "at": [
+     286,
+     -266.35,
+     -800.04
+    ]
+   },
+   "changedTriangles": [
+    0,
+    938
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 30.12,
+    "waterMax": 0.634,
+    "waterAt": [
+     286,
+     -266.35,
+     -800.04
+    ]
+   }
+  },
+  {
+   "id": "rift_north_shoulder",
+   "area": 3258,
+   "hausdorff": 1.391,
+   "at": [
+    -75.7,
+    -314.7,
+    -784.3
+   ],
+   "preToNow": {
+    "max": 1.008,
+    "at": [
+     -83.79,
+     -301.26,
+     -785.17
+    ]
+   },
+   "nowToPre": {
+    "max": 1.391,
+    "at": [
+     -75.7,
+     -314.7,
+     -784.3
+    ]
+   },
+   "changedTriangles": [
+    318,
+    1017
+   ],
+   "p95changed": 0.891,
+   "visibility": {
+    "buriedM2": 68.18,
+    "buriedMax": 1.391,
+    "waterM2": 47.27,
+    "waterMax": 1.008,
+    "waterAt": [
+     -83.79,
+     -301.26,
+     -785.17
+    ]
+   }
+  },
+  {
+   "id": "rift_stub_hollow",
+   "area": 1093,
+   "hausdorff": 0.447,
+   "at": [
+    20,
+    -268.65,
+    -1148
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.447,
+    "at": [
+     20,
+     -268.65,
+     -1148
+    ]
+   },
+   "changedTriangles": [
+    0,
+    341
+   ],
+   "p95changed": 0.303,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 10.14,
+    "waterMax": 0.447,
+    "waterAt": [
+     20,
+     -268.65,
+     -1148
+    ]
+   }
+  },
+  {
+   "id": "rift_west_tube",
+   "area": 4800,
+   "hausdorff": 1.22,
+   "at": [
+    -345.7,
+    -278.7,
+    -956.3
+   ],
+   "preToNow": {
+    "max": 0.465,
+    "at": [
+     -345.37,
+     -277.54,
+     -956.63
+    ]
+   },
+   "nowToPre": {
+    "max": 1.22,
+    "at": [
+     -345.7,
+     -278.7,
+     -956.3
+    ]
+   },
+   "changedTriangles": [
+    6,
+    644
+   ],
+   "p95changed": 0.302,
+   "visibility": {
+    "buriedM2": 0.92,
+    "buriedMax": 1.22,
+    "waterM2": 20.04,
+    "waterMax": 0.465,
+    "waterAt": [
+     -345.37,
+     -277.54,
+     -956.63
+    ]
+   }
+  },
+  {
+   "id": "divide_mirror_pocket",
+   "area": 1490,
+   "hausdorff": 0.822,
+   "at": [
+    388.3,
+    -354.7,
+    -1234.3
+   ],
+   "preToNow": {
+    "max": 0.443,
+    "at": [
+     388.63,
+     -353.94,
+     -1234.47
+    ]
+   },
+   "nowToPre": {
+    "max": 0.822,
+    "at": [
+     388.3,
+     -354.7,
+     -1234.3
+    ]
+   },
+   "changedTriangles": [
+    6,
+    356
+   ],
+   "p95changed": 0.31,
+   "visibility": {
+    "buriedM2": 0.55,
+    "buriedMax": 0.822,
+    "waterM2": 10.73,
+    "waterMax": 0.473,
+    "waterAt": [
+     412,
+     -362.81,
+     -1252
+    ]
+   }
+  },
+  {
+   "id": "divide_east_pocket",
+   "area": 1929,
+   "hausdorff": 0.746,
+   "at": [
+    782.3,
+    -366.79,
+    -1240.81
+   ],
+   "preToNow": {
+    "max": 0.385,
+    "at": [
+     782.42,
+     -366.03,
+     -1240.82
+    ]
+   },
+   "nowToPre": {
+    "max": 0.746,
+    "at": [
+     782.3,
+     -366.79,
+     -1240.81
+    ]
+   },
+   "changedTriangles": [
+    15,
+    694
+   ],
+   "p95changed": 0.338,
+   "visibility": {
+    "buriedM2": 4.72,
+    "buriedMax": 0.746,
+    "waterM2": 21.25,
+    "waterMax": 0.433,
+    "waterAt": [
+     782,
+     -367.03,
+     -1247
+    ]
+   }
+  },
+  {
+   "id": "divide_fissure_window",
+   "area": 1802,
+   "hausdorff": 6.444,
+   "at": [
+    547.93,
+    -416.61,
+    -1317.54
+   ],
+   "preToNow": {
+    "max": 6.444,
+    "at": [
+     547.93,
+     -416.61,
+     -1317.54
+    ]
+   },
+   "nowToPre": {
+    "max": 1.583,
+    "at": [
+     546.61,
+     -425.97,
+     -1316.25
+    ]
+   },
+   "changedTriangles": [
+    329,
+    892
+   ],
+   "p95changed": 5.3,
+   "visibility": {
+    "buriedM2": 203.76,
+    "buriedMax": 6.444,
+    "waterM2": 60.43,
+    "waterMax": 1.451,
+    "waterAt": [
+     545.03,
+     -425.53,
+     -1317.65
+    ]
+   }
+  },
+  {
+   "id": "divide_brine_cistern",
+   "area": 6996,
+   "hausdorff": 1.524,
+   "at": [
+    886.3,
+    -371.7,
+    -1232.29
+   ],
+   "preToNow": {
+    "max": 0.754,
+    "at": [
+     921.91,
+     -443.2,
+     -1192.86
+    ]
+   },
+   "nowToPre": {
+    "max": 1.524,
+    "at": [
+     886.3,
+     -371.7,
+     -1232.29
+    ]
+   },
+   "changedTriangles": [
+    461,
+    1628
+   ],
+   "p95changed": 0.627,
+   "visibility": {
+    "buriedM2": 115.66,
+    "buriedMax": 1.524,
+    "waterM2": 70,
+    "waterMax": 0.754,
+    "waterAt": [
+     921.91,
+     -443.2,
+     -1192.86
+    ]
+   }
+  },
+  {
+   "id": "meridian_culvert_north",
+   "area": 2354,
+   "hausdorff": 1.109,
+   "at": [
+    1224.3,
+    -598.7,
+    -1158.3
+   ],
+   "preToNow": {
+    "max": 0.948,
+    "at": [
+     1224.99,
+     -598,
+     -1159.12
+    ]
+   },
+   "nowToPre": {
+    "max": 1.109,
+    "at": [
+     1224.3,
+     -598.7,
+     -1158.3
+    ]
+   },
+   "changedTriangles": [
+    1024,
+    2278
+   ],
+   "p95changed": 0.762,
+   "visibility": {
+    "buriedM2": 255.94,
+    "buriedMax": 1.109,
+    "waterM2": 116.5,
+    "waterMax": 0.948,
+    "waterAt": [
+     1224.99,
+     -598,
+     -1159.12
+    ]
+   }
+  },
+  {
+   "id": "meridian_escarp_pocket",
+   "area": 1560,
+   "hausdorff": 5.947,
+   "at": [
+    1394.52,
+    -493.19,
+    -928.86
+   ],
+   "preToNow": {
+    "max": 5.947,
+    "at": [
+     1394.52,
+     -493.19,
+     -928.86
+    ]
+   },
+   "nowToPre": {
+    "max": 1.706,
+    "at": [
+     1395.7,
+     -471.7,
+     -920.3
+    ]
+   },
+   "changedTriangles": [
+    560,
+    1079
+   ],
+   "p95changed": 4.447,
+   "visibility": {
+    "buriedM2": 285.3,
+    "buriedMax": 5.947,
+    "waterM2": 95.38,
+    "waterMax": 1.589,
+    "waterAt": [
+     1394.29,
+     -501.46,
+     -932.83
+    ]
+   }
+  },
+  {
+   "id": "meridian_window_gallery",
+   "area": 8022,
+   "hausdorff": 1.19,
+   "at": [
+    1052,
+    -598.74,
+    -1303.41
+   ],
+   "preToNow": {
+    "max": 0.644,
+    "at": [
+     1050.85,
+     -524.44,
+     -1299.64
+    ]
+   },
+   "nowToPre": {
+    "max": 1.19,
+    "at": [
+     1052,
+     -598.74,
+     -1303.41
+    ]
+   },
+   "changedTriangles": [
+    1397,
+    2716
+   ],
+   "p95changed": 0.618,
+   "visibility": {
+    "buriedM2": 279.71,
+    "buriedMax": 1.19,
+    "waterM2": 194.34,
+    "waterMax": 0.644,
+    "waterAt": [
+     1050.85,
+     -524.44,
+     -1299.64
+    ]
+   }
+  }
+ ],
+ "coarse-r6": [
+  {
+   "id": "fanvault",
+   "area": 5157,
+   "hausdorff": 0.452,
+   "at": [
+    -264,
+    -26.42,
+    -92
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.452,
+    "at": [
+     -264,
+     -26.42,
+     -92
+    ]
+   },
+   "changedTriangles": [
+    0,
+    713
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 24.1,
+    "waterMax": 0.452,
+    "waterAt": [
+     -264,
+     -26.42,
+     -92
+    ]
+   }
+  },
+  {
+   "id": "hub_step_arch",
+   "area": 4077,
+   "hausdorff": 1.089,
+   "at": [
+    76,
+    -42.72,
+    -406.35
+   ],
+   "preToNow": {
+    "max": 0.305,
+    "at": [
+     99.84,
+     -75.08,
+     -406.1
+    ]
+   },
+   "nowToPre": {
+    "max": 1.089,
+    "at": [
+     76,
+     -42.72,
+     -406.35
+    ]
+   },
+   "changedTriangles": [
+    718,
+    1196
+   ],
+   "p95changed": 0.249,
+   "visibility": {
+    "buriedM2": 26.72,
+    "buriedMax": 1.089,
+    "waterM2": 9.58,
+    "waterMax": 0.484,
+    "waterAt": [
+     100,
+     -113.84,
+     -418
+    ]
+   }
+  },
+  {
+   "id": "hub_crown_shaft",
+   "area": 14672,
+   "hausdorff": 1.218,
+   "at": [
+    358,
+    -68.7,
+    -574.3
+   ],
+   "preToNow": {
+    "max": 0.447,
+    "at": [
+     313.28,
+     -102.87,
+     -522.11
+    ]
+   },
+   "nowToPre": {
+    "max": 1.218,
+    "at": [
+     358,
+     -68.7,
+     -574.3
+    ]
+   },
+   "changedTriangles": [
+    584,
+    1703
+   ],
+   "p95changed": 0.32,
+   "visibility": {
+    "buriedM2": 55.99,
+    "buriedMax": 1.218,
+    "waterM2": 20.52,
+    "waterMax": 0.575,
+    "waterAt": [
+     345.17,
+     -120.68,
+     -516
+    ]
+   }
+  },
+  {
+   "id": "reef_bellhole",
+   "area": 2641,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    150,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_pumphouse_undercut",
+   "area": 1086,
+   "hausdorff": 0.426,
+   "at": [
+    -378,
+    -22.75,
+    -46
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.426,
+    "at": [
+     -378,
+     -22.75,
+     -46
+    ]
+   },
+   "changedTriangles": [
+    0,
+    339
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 12.09,
+    "waterMax": 0.426,
+    "waterAt": [
+     -378,
+     -22.75,
+     -46
+    ]
+   }
+  },
+  {
+   "id": "reef_shelf_lip",
+   "area": 2809,
+   "hausdorff": 0,
+   "at": [
+    -364,
+    -32.68,
+    -97.21
+   ],
+   "preToNow": {
+    "max": 0,
+    "at": [
+     -364,
+     -32.68,
+     -97.21
+    ]
+   },
+   "nowToPre": {
+    "max": 0,
+    "at": [
+     -364,
+     -32.51,
+     -97.2
+    ]
+   },
+   "changedTriangles": [
+    211,
+    3
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_lantern_grotto",
+   "area": 9942,
+   "hausdorff": 0.474,
+   "at": [
+    -510,
+    -69.53,
+    -150
+   ],
+   "preToNow": {
+    "max": 0.017,
+    "at": [
+     -471.86,
+     -52.85,
+     -113.94
+    ]
+   },
+   "nowToPre": {
+    "max": 0.474,
+    "at": [
+     -510,
+     -69.53,
+     -150
+    ]
+   },
+   "changedTriangles": [
+    44,
+    1013
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 25.07,
+    "waterMax": 0.474,
+    "waterAt": [
+     -510,
+     -69.53,
+     -150
+    ]
+   }
+  },
+  {
+   "id": "isles_scar_crawl",
+   "area": 1652,
+   "hausdorff": 0.782,
+   "at": [
+    366.65,
+    -23.71,
+    30
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.782,
+    "at": [
+     366.65,
+     -23.71,
+     30
+    ]
+   },
+   "changedTriangles": [
+    0,
+    445
+   ],
+   "p95changed": 0.398,
+   "visibility": {
+    "buriedM2": 1.84,
+    "buriedMax": 0.782,
+    "waterM2": 11.58,
+    "waterMax": 0.428,
+    "waterAt": [
+     378,
+     -14.5,
+     61
+    ]
+   }
+  },
+  {
+   "id": "isles_cove_undercut",
+   "area": 1569,
+   "hausdorff": 0,
+   "at": [
+    950,
+    -19.7,
+    -51.99
+   ],
+   "preToNow": {
+    "max": 0,
+    "at": [
+     950,
+     -19.7,
+     -51.99
+    ]
+   },
+   "nowToPre": {
+    "max": 0,
+    "at": [
+     950,
+     -19.86,
+     -51.98
+    ]
+   },
+   "changedTriangles": [
+    100,
+    5
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "isles_headland_root",
+   "area": 1795,
+   "hausdorff": 0,
+   "at": [
+    1030,
+    -44.08,
+    -76.69
+   ],
+   "preToNow": {
+    "max": 0,
+    "at": [
+     1030,
+     -44.08,
+     -76.69
+    ]
+   },
+   "nowToPre": {
+    "max": 0,
+    "at": [
+     1030,
+     -48.11,
+     -79.15
+    ]
+   },
+   "changedTriangles": [
+    152,
+    32
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "isles_blowhole",
+   "area": 1888,
+   "hausdorff": 1.437,
+   "at": [
+    1084,
+    -22.48,
+    124
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 1.437,
+    "at": [
+     1084,
+     -22.48,
+     124
+    ]
+   },
+   "changedTriangles": [
+    0,
+    345
+   ],
+   "p95changed": 0.309,
+   "visibility": {
+    "buriedM2": 0.74,
+    "buriedMax": 0.766,
+    "waterM2": 11.49,
+    "waterMax": 1.437,
+    "waterAt": [
+     1084,
+     -22.48,
+     124
+    ]
+   }
+  },
+  {
+   "id": "isles_headland_west",
+   "area": 2768,
+   "hausdorff": 1.242,
+   "at": [
+    942.7,
+    -23.7,
+    26
+   ],
+   "preToNow": {
+    "max": 0.429,
+    "at": [
+     938.45,
+     -20.35,
+     25.56
+    ]
+   },
+   "nowToPre": {
+    "max": 1.242,
+    "at": [
+     942.7,
+     -23.7,
+     26
+    ]
+   },
+   "changedTriangles": [
+    119,
+    726
+   ],
+   "p95changed": 0.382,
+   "visibility": {
+    "buriedM2": 17.87,
+    "buriedMax": 1.242,
+    "waterM2": 16.22,
+    "waterMax": 0.429,
+    "waterAt": [
+     938.45,
+     -20.35,
+     25.56
+    ]
+   }
+  },
+  {
+   "id": "canopy_eastcrown",
+   "area": 5569,
+   "hausdorff": 0.87,
+   "at": [
+    812.91,
+    -85.7,
+    -46.3
+   ],
+   "preToNow": {
+    "max": 0.333,
+    "at": [
+     812.64,
+     -88.78,
+     -76.41
+    ]
+   },
+   "nowToPre": {
+    "max": 0.87,
+    "at": [
+     812.91,
+     -85.7,
+     -46.3
+    ]
+   },
+   "changedTriangles": [
+    9,
+    913
+   ],
+   "p95changed": 0.378,
+   "visibility": {
+    "buriedM2": 3.62,
+    "buriedMax": 0.87,
+    "waterM2": 29.21,
+    "waterMax": 0.819,
+    "waterAt": [
+     812.94,
+     -85.6,
+     -46.24
+    ]
+   }
+  },
+  {
+   "id": "canopy_fin_cleft",
+   "area": 1777,
+   "hausdorff": 0.977,
+   "at": [
+    637.7,
+    -130.7,
+    -142
+   ],
+   "preToNow": {
+    "max": 0.291,
+    "at": [
+     614.05,
+     -113.57,
+     -120.17
+    ]
+   },
+   "nowToPre": {
+    "max": 0.977,
+    "at": [
+     637.7,
+     -130.7,
+     -142
+    ]
+   },
+   "changedTriangles": [
+    8,
+    356
+   ],
+   "p95changed": 0.483,
+   "visibility": {
+    "buriedM2": 0.68,
+    "buriedMax": 0.977,
+    "waterM2": 11.74,
+    "waterMax": 0.794,
+    "waterAt": [
+     638,
+     -116.63,
+     -119.36
+    ]
+   }
+  },
+  {
+   "id": "canopy_lantern_hall",
+   "area": 9397,
+   "hausdorff": 0.985,
+   "at": [
+    470.04,
+    -160.7,
+    -205.3
+   ],
+   "preToNow": {
+    "max": 0.3,
+    "at": [
+     537.7,
+     -173.91,
+     -256.47
+    ]
+   },
+   "nowToPre": {
+    "max": 0.985,
+    "at": [
+     470.04,
+     -160.7,
+     -205.3
+    ]
+   },
+   "changedTriangles": [
+    8,
+    903
+   ],
+   "p95changed": 0.38,
+   "visibility": {
+    "buriedM2": 2.4,
+    "buriedMax": 0.985,
+    "waterM2": 27.2,
+    "waterMax": 0.948,
+    "waterAt": [
+     470,
+     -160.65,
+     -205.72
+    ]
+   }
+  },
+  {
+   "id": "basin_burrow_warren",
+   "area": 2524,
+   "hausdorff": 1.161,
+   "at": [
+    812,
+    -304.72,
+    -686.38
+   ],
+   "preToNow": {
+    "max": 1,
+    "at": [
+     782.58,
+     -303.41,
+     -702
+    ]
+   },
+   "nowToPre": {
+    "max": 1.161,
+    "at": [
+     812,
+     -304.72,
+     -686.38
+    ]
+   },
+   "changedTriangles": [
+    167,
+    956
+   ],
+   "p95changed": 0.652,
+   "visibility": {
+    "buriedM2": 21.86,
+    "buriedMax": 1.161,
+    "waterM2": 19.51,
+    "waterMax": 0.875,
+    "waterAt": [
+     776,
+     -261.69,
+     -673.33
+    ]
+   }
+  },
+  {
+   "id": "basin_fracture_pocket",
+   "area": 1565,
+   "hausdorff": 0.864,
+   "at": [
+    322.09,
+    -213.7,
+    -354.3
+   ],
+   "preToNow": {
+    "max": 0.22,
+    "at": [
+     322.09,
+     -212.74,
+     -354.3
+    ]
+   },
+   "nowToPre": {
+    "max": 0.864,
+    "at": [
+     322.09,
+     -213.7,
+     -354.3
+    ]
+   },
+   "changedTriangles": [
+    2,
+    367
+   ],
+   "p95changed": 0.387,
+   "visibility": {
+    "buriedM2": 0.25,
+    "buriedMax": 0.864,
+    "waterM2": 11.27,
+    "waterMax": 0.718,
+    "waterAt": [
+     346,
+     -217.43,
+     -354.2
+    ]
+   }
+  },
+  {
+   "id": "basin_dish_lee_vault",
+   "area": 8427,
+   "hausdorff": 1.087,
+   "at": [
+    524,
+    -330.7,
+    -652.3
+   ],
+   "preToNow": {
+    "max": 0.788,
+    "at": [
+     555.38,
+     -351.39,
+     -682
+    ]
+   },
+   "nowToPre": {
+    "max": 1.087,
+    "at": [
+     524,
+     -330.7,
+     -652.3
+    ]
+   },
+   "changedTriangles": [
+    150,
+    1376
+   ],
+   "p95changed": 0.634,
+   "visibility": {
+    "buriedM2": 22.77,
+    "buriedMax": 1.087,
+    "waterM2": 31.23,
+    "waterMax": 1.037,
+    "waterAt": [
+     572.84,
+     -273.85,
+     -629
+    ]
+   }
+  },
+  {
+   "id": "rift_tube_mites",
+   "area": 1076,
+   "hausdorff": 1.1,
+   "at": [
+    -127.33,
+    -308.74,
+    -1112
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 1.1,
+    "at": [
+     -127.33,
+     -308.74,
+     -1112
+    ]
+   },
+   "changedTriangles": [
+    0,
+    296
+   ],
+   "p95changed": 0.315,
+   "visibility": {
+    "buriedM2": 0.44,
+    "buriedMax": 1.1,
+    "waterM2": 9.84,
+    "waterMax": 0.545,
+    "waterAt": [
+     -128,
+     -308.38,
+     -1112
+    ]
+   }
+  },
+  {
+   "id": "rift_west_blister",
+   "area": 1573,
+   "hausdorff": 0.478,
+   "at": [
+    -386,
+    -259.88,
+    -974
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.478,
+    "at": [
+     -386,
+     -259.88,
+     -974
+    ]
+   },
+   "changedTriangles": [
+    0,
+    390
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 12.63,
+    "waterMax": 0.478,
+    "waterAt": [
+     -386,
+     -259.88,
+     -974
+    ]
+   }
+  },
+  {
+   "id": "rift_kiln_tube",
+   "area": 6947,
+   "hausdorff": 1.047,
+   "at": [
+    152.66,
+    -304.74,
+    -798
+   ],
+   "preToNow": {
+    "max": 0.506,
+    "at": [
+     140.3,
+     -266.06,
+     -855.35
+    ]
+   },
+   "nowToPre": {
+    "max": 1.047,
+    "at": [
+     152.66,
+     -304.74,
+     -798
+    ]
+   },
+   "changedTriangles": [
+    114,
+    886
+   ],
+   "p95changed": 0.376,
+   "visibility": {
+    "buriedM2": 18.83,
+    "buriedMax": 1.047,
+    "waterM2": 22.89,
+    "waterMax": 0.506,
+    "waterAt": [
+     140.3,
+     -266.06,
+     -855.35
+    ]
+   }
+  },
+  {
+   "id": "divide_crest_hollow",
+   "area": 1296,
+   "hausdorff": 0.435,
+   "at": [
+    678,
+    -370.49,
+    -1198
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.435,
+    "at": [
+     678,
+     -370.49,
+     -1198
+    ]
+   },
+   "changedTriangles": [
+    0,
+    367
+   ],
+   "p95changed": 0.31,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 9.52,
+    "waterMax": 0.435,
+    "waterAt": [
+     678,
+     -370.49,
+     -1198
+    ]
+   }
+  },
+  {
+   "id": "divide_lee_burrow",
+   "area": 1050,
+   "hausdorff": 0.426,
+   "at": [
+    456,
+    -391.92,
+    -1097
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.426,
+    "at": [
+     456,
+     -391.92,
+     -1097
+    ]
+   },
+   "changedTriangles": [
+    0,
+    351
+   ],
+   "p95changed": 0.302,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 11.29,
+    "waterMax": 0.426,
+    "waterAt": [
+     456,
+     -391.92,
+     -1097
+    ]
+   }
+  },
+  {
+   "id": "divide_lintel_galleries",
+   "area": 12850,
+   "hausdorff": 1.15,
+   "at": [
+    745.24,
+    -373.71,
+    -1300
+   ],
+   "preToNow": {
+    "max": 0.475,
+    "at": [
+     686.14,
+     -359.66,
+     -1235.09
+    ]
+   },
+   "nowToPre": {
+    "max": 1.15,
+    "at": [
+     745.24,
+     -373.71,
+     -1300
+    ]
+   },
+   "changedTriangles": [
+    9,
+    861
+   ],
+   "p95changed": 0.307,
+   "visibility": {
+    "buriedM2": 1.12,
+    "buriedMax": 1.15,
+    "waterM2": 24.72,
+    "waterMax": 0.433,
+    "waterAt": [
+     754,
+     -362.84,
+     -1228
+    ]
+   }
+  },
+  {
+   "id": "meridian_footing_void",
+   "area": 1114,
+   "hausdorff": 0.432,
+   "at": [
+    1062,
+    -520.45,
+    -1213
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.432,
+    "at": [
+     1062,
+     -520.45,
+     -1213
+    ]
+   },
+   "changedTriangles": [
+    0,
+    302
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 11.05,
+    "waterMax": 0.432,
+    "waterAt": [
+     1062,
+     -520.45,
+     -1213
+    ]
+   }
+  },
+  {
+   "id": "meridian_spire_footing",
+   "area": 1417,
+   "hausdorff": 0.424,
+   "at": [
+    1194,
+    -600.11,
+    -1346
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.424,
+    "at": [
+     1194,
+     -600.11,
+     -1346
+    ]
+   },
+   "changedTriangles": [
+    0,
+    296
+   ],
+   "p95changed": 0.307,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 11.89,
+    "waterMax": 0.424,
+    "waterAt": [
+     1194,
+     -600.11,
+     -1346
+    ]
+   }
+  },
+  {
+   "id": "meridian_terrace_crack",
+   "area": 1948,
+   "hausdorff": 0.552,
+   "at": [
+    1121.72,
+    -600.51,
+    -1487
+   ],
+   "preToNow": {
+    "max": 0.329,
+    "at": [
+     1124.17,
+     -625.38,
+     -1486.7
+    ]
+   },
+   "nowToPre": {
+    "max": 0.552,
+    "at": [
+     1121.72,
+     -600.51,
+     -1487
+    ]
+   },
+   "changedTriangles": [
+    493,
+    1132
+   ],
+   "p95changed": 0.246,
+   "visibility": {
+    "buriedM2": 33.98,
+    "buriedMax": 0.552,
+    "waterM2": 8.96,
+    "waterMax": 0.524,
+    "waterAt": [
+     1131,
+     -679.88,
+     -1479.18
+    ]
+   }
+  },
+  {
+   "id": "meridian_escarp_culvert",
+   "area": 3924,
+   "hausdorff": 0.826,
+   "at": [
+    1331.7,
+    -529.7,
+    -990
+   ],
+   "preToNow": {
+    "max": 0.42,
+    "at": [
+     1324.54,
+     -520.38,
+     -946.45
+    ]
+   },
+   "nowToPre": {
+    "max": 0.826,
+    "at": [
+     1331.7,
+     -529.7,
+     -990
+    ]
+   },
+   "changedTriangles": [
+    62,
+    638
+   ],
+   "p95changed": 0.468,
+   "visibility": {
+    "buriedM2": 9.47,
+    "buriedMax": 0.826,
+    "waterM2": 19.47,
+    "waterMax": 0.427,
+    "waterAt": [
+     1352,
+     -508.03,
+     -946
+    ]
+   }
+  },
+  {
+   "id": "hub_apron_hollow",
+   "area": 970,
+   "hausdorff": 1.063,
+   "at": [
+    30,
+    -25.74,
+    -383.33
+   ],
+   "preToNow": {
+    "max": 0.377,
+    "at": [
+     47.7,
+     -41.01,
+     -391.98
+    ]
+   },
+   "nowToPre": {
+    "max": 1.063,
+    "at": [
+     30,
+     -25.74,
+     -383.33
+    ]
+   },
+   "changedTriangles": [
+    173,
+    600
+   ],
+   "p95changed": 0.333,
+   "visibility": {
+    "buriedM2": 15.93,
+    "buriedMax": 1.063,
+    "waterM2": 8.33,
+    "waterMax": 0.439,
+    "waterAt": [
+     48,
+     -38.75,
+     -390.66
+    ]
+   }
+  },
+  {
+   "id": "hub_glimmer_crack",
+   "area": 6754,
+   "hausdorff": 1.151,
+   "at": [
+    204,
+    -145.8,
+    -486
+   ],
+   "preToNow": {
+    "max": 0.381,
+    "at": [
+     203.7,
+     -135.61,
+     -485.76
+    ]
+   },
+   "nowToPre": {
+    "max": 1.151,
+    "at": [
+     204,
+     -145.8,
+     -486
+    ]
+   },
+   "changedTriangles": [
+    1789,
+    2703
+   ],
+   "p95changed": 0.207,
+   "visibility": {
+    "buriedM2": 97.93,
+    "buriedMax": 1.151,
+    "waterM2": 8.83,
+    "waterMax": 0.381,
+    "waterAt": [
+     203.7,
+     -135.61,
+     -485.76
+    ]
+   }
+  },
+  {
+   "id": "reef_archlet",
+   "area": 3188,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    227,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_wrackhollow",
+   "area": 2212,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    128,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_fan_crawl",
+   "area": 2112,
+   "hausdorff": 0,
+   "at": null,
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0
+   },
+   "changedTriangles": [
+    156,
+    0
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "reef_gully_window",
+   "area": 2148,
+   "hausdorff": 1.11,
+   "at": [
+    -222,
+    -73.7,
+    -174.99
+   ],
+   "preToNow": {
+    "max": 0.614,
+    "at": [
+     -216.83,
+     -55.39,
+     -151.23
+    ]
+   },
+   "nowToPre": {
+    "max": 1.11,
+    "at": [
+     -222,
+     -73.7,
+     -174.99
+    ]
+   },
+   "changedTriangles": [
+    53,
+    486
+   ],
+   "p95changed": 0.575,
+   "visibility": {
+    "buriedM2": 9.2,
+    "buriedMax": 1.11,
+    "waterM2": 12.62,
+    "waterMax": 0.611,
+    "waterAt": [
+     -216.81,
+     -55.31,
+     -151.18
+    ]
+   }
+  },
+  {
+   "id": "reef_drop_cathedral",
+   "area": 14672,
+   "hausdorff": 1.276,
+   "at": [
+    -258.5,
+    -53.71,
+    -128.27
+   ],
+   "preToNow": {
+    "max": 0.438,
+    "at": [
+     -267.03,
+     -43.7,
+     -128.67
+    ]
+   },
+   "nowToPre": {
+    "max": 1.276,
+    "at": [
+     -258.5,
+     -53.71,
+     -128.27
+    ]
+   },
+   "changedTriangles": [
+    24,
+    1146
+   ],
+   "p95changed": 0.469,
+   "visibility": {
+    "buriedM2": 4.18,
+    "buriedMax": 1.276,
+    "waterM2": 25.9,
+    "waterMax": 0.557,
+    "waterAt": [
+     -258.5,
+     -101.87,
+     -209
+    ]
+   }
+  },
+  {
+   "id": "isles_surf_cave",
+   "area": 1294,
+   "hausdorff": 0.424,
+   "at": [
+    558,
+    -13.46,
+    126
+   ],
+   "preToNow": {
+    "max": 0.31,
+    "at": [
+     542.91,
+     -3.63,
+     102.4
+    ]
+   },
+   "nowToPre": {
+    "max": 0.424,
+    "at": [
+     558,
+     -13.46,
+     126
+    ]
+   },
+   "changedTriangles": [
+    4,
+    435
+   ],
+   "p95changed": 0.301,
+   "visibility": {
+    "buriedM2": 1.26,
+    "buriedMax": 0.369,
+    "waterM2": 13.06,
+    "waterMax": 0.424,
+    "waterAt": [
+     558,
+     -13.46,
+     126
+    ]
+   }
+  },
+  {
+   "id": "isles_cove_crawl",
+   "area": 1548,
+   "hausdorff": 0,
+   "at": [
+    980,
+    -27.57,
+    -69.99
+   ],
+   "preToNow": {
+    "max": 0,
+    "at": [
+     980,
+     -27.57,
+     -69.99
+    ]
+   },
+   "nowToPre": {
+    "max": 0,
+    "at": [
+     980,
+     -28.16,
+     -69.99
+    ]
+   },
+   "changedTriangles": [
+    200,
+    6
+   ],
+   "p95changed": 0,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 0,
+    "waterMax": 0,
+    "waterAt": null
+   }
+  },
+  {
+   "id": "isles_east_ledge_cave",
+   "area": 1516,
+   "hausdorff": 1.099,
+   "at": [
+    1170,
+    -37.7,
+    35.01
+   ],
+   "preToNow": {
+    "max": 0.064,
+    "at": [
+     1169.96,
+     -36.36,
+     35.13
+    ]
+   },
+   "nowToPre": {
+    "max": 1.099,
+    "at": [
+     1170,
+     -37.7,
+     35.01
+    ]
+   },
+   "changedTriangles": [
+    10,
+    475
+   ],
+   "p95changed": 0.524,
+   "visibility": {
+    "buriedM2": 1.9,
+    "buriedMax": 1.099,
+    "waterM2": 11.2,
+    "waterMax": 0.424,
+    "waterAt": [
+     1138,
+     -13.62,
+     54
+    ]
+   }
+  },
+  {
+   "id": "isles_storm_arch",
+   "area": 10147,
+   "hausdorff": 0.949,
+   "at": [
+    1147,
+    -17.45,
+    107.46
+   ],
+   "preToNow": {
+    "max": 0.064,
+    "at": [
+     1147.05,
+     -16.5,
+     107.15
+    ]
+   },
+   "nowToPre": {
+    "max": 0.949,
+    "at": [
+     1147,
+     -17.45,
+     107.46
+    ]
+   },
+   "changedTriangles": [
+    6,
+    785
+   ],
+   "p95changed": 0.307,
+   "visibility": {
+    "buriedM2": 0.65,
+    "buriedMax": 0.949,
+    "waterM2": 19.45,
+    "waterMax": 0.501,
+    "waterAt": [
+     1184,
+     -43.5,
+     55
+    ]
+   }
+  },
+  {
+   "id": "canopy_knot_hollow",
+   "area": 1611,
+   "hausdorff": 0.974,
+   "at": [
+    731.96,
+    -115.7,
+    -111.3
+   ],
+   "preToNow": {
+    "max": 0.229,
+    "at": [
+     731.96,
+     -114.73,
+     -111.3
+    ]
+   },
+   "nowToPre": {
+    "max": 0.974,
+    "at": [
+     731.96,
+     -115.7,
+     -111.3
+    ]
+   },
+   "changedTriangles": [
+    4,
+    364
+   ],
+   "p95changed": 0.402,
+   "visibility": {
+    "buriedM2": 0.02,
+    "buriedMax": 0.974,
+    "waterM2": 13.16,
+    "waterMax": 0.955,
+    "waterAt": [
+     731.96,
+     -115.68,
+     -111.3
+    ]
+   }
+  },
+  {
+   "id": "canopy_lee_hollow",
+   "area": 1358,
+   "hausdorff": 0.777,
+   "at": [
+    702,
+    -188.73,
+    -244.84
+   ],
+   "preToNow": {
+    "max": 0.222,
+    "at": [
+     678.08,
+     -187.19,
+     -245.3
+    ]
+   },
+   "nowToPre": {
+    "max": 0.777,
+    "at": [
+     702,
+     -188.73,
+     -244.84
+    ]
+   },
+   "changedTriangles": [
+    4,
+    363
+   ],
+   "p95changed": 0.374,
+   "visibility": {
+    "buriedM2": 0.04,
+    "buriedMax": 0.584,
+    "waterM2": 11.15,
+    "waterMax": 0.777,
+    "waterAt": [
+     702,
+     -188.73,
+     -244.84
+    ]
+   }
+  },
+  {
+   "id": "canopy_root_arch",
+   "area": 9299,
+   "hausdorff": 1.204,
+   "at": [
+    1237.67,
+    -266.94,
+    -260
+   ],
+   "preToNow": {
+    "max": 0.343,
+    "at": [
+     1307.75,
+     -220.47,
+     -297.99
+    ]
+   },
+   "nowToPre": {
+    "max": 1.204,
+    "at": [
+     1237.67,
+     -266.94,
+     -260
+    ]
+   },
+   "changedTriangles": [
+    19,
+    1397
+   ],
+   "p95changed": 0.548,
+   "visibility": {
+    "buriedM2": 16.71,
+    "buriedMax": 1.058,
+    "waterM2": 31.55,
+    "waterMax": 1.204,
+    "waterAt": [
+     1237.67,
+     -266.94,
+     -260
+    ]
+   }
+  },
+  {
+   "id": "basin_culvert_north",
+   "area": 1343,
+   "hausdorff": 0.665,
+   "at": [
+    398,
+    -270.64,
+    -505.06
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.665,
+    "at": [
+     398,
+     -270.64,
+     -505.06
+    ]
+   },
+   "changedTriangles": [
+    0,
+    364
+   ],
+   "p95changed": 0.308,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 10.87,
+    "waterMax": 0.665,
+    "waterAt": [
+     398,
+     -270.64,
+     -505.06
+    ]
+   }
+  },
+  {
+   "id": "basin_buried_hut",
+   "area": 1096,
+   "hausdorff": 0.496,
+   "at": [
+    571.7,
+    -381.66,
+    -758
+   ],
+   "preToNow": {
+    "max": 0.161,
+    "at": [
+     570.47,
+     -382.17,
+     -781.92
+    ]
+   },
+   "nowToPre": {
+    "max": 0.496,
+    "at": [
+     571.7,
+     -381.66,
+     -758
+    ]
+   },
+   "changedTriangles": [
+    9,
+    346
+   ],
+   "p95changed": 0.306,
+   "visibility": {
+    "buriedM2": 0.22,
+    "buriedMax": 0.496,
+    "waterM2": 11.9,
+    "waterMax": 0.428,
+    "waterAt": [
+     548,
+     -381.95,
+     -782
+    ]
+   }
+  },
+  {
+   "id": "basin_west_rim",
+   "area": 10914,
+   "hausdorff": 0.634,
+   "at": [
+    286,
+    -266.35,
+    -800.04
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.634,
+    "at": [
+     286,
+     -266.35,
+     -800.04
+    ]
+   },
+   "changedTriangles": [
+    0,
+    938
+   ],
+   "p95changed": 0.3,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 30.12,
+    "waterMax": 0.634,
+    "waterAt": [
+     286,
+     -266.35,
+     -800.04
+    ]
+   }
+  },
+  {
+   "id": "rift_north_shoulder",
+   "area": 3291,
+   "hausdorff": 1.391,
+   "at": [
+    -75.7,
+    -314.7,
+    -784.3
+   ],
+   "preToNow": {
+    "max": 0.53,
+    "at": [
+     -90.31,
+     -289.16,
+     -784.72
+    ]
+   },
+   "nowToPre": {
+    "max": 1.391,
+    "at": [
+     -75.7,
+     -314.7,
+     -784.3
+    ]
+   },
+   "changedTriangles": [
+    125,
+    788
+   ],
+   "p95changed": 0.443,
+   "visibility": {
+    "buriedM2": 26.66,
+    "buriedMax": 1.391,
+    "waterM2": 22.72,
+    "waterMax": 0.526,
+    "waterAt": [
+     -90.28,
+     -289.24,
+     -784.76
+    ]
+   }
+  },
+  {
+   "id": "rift_stub_hollow",
+   "area": 1093,
+   "hausdorff": 0.447,
+   "at": [
+    20,
+    -268.65,
+    -1148
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.447,
+    "at": [
+     20,
+     -268.65,
+     -1148
+    ]
+   },
+   "changedTriangles": [
+    0,
+    341
+   ],
+   "p95changed": 0.303,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 10.14,
+    "waterMax": 0.447,
+    "waterAt": [
+     20,
+     -268.65,
+     -1148
+    ]
+   }
+  },
+  {
+   "id": "rift_west_tube",
+   "area": 4800,
+   "hausdorff": 1.22,
+   "at": [
+    -345.7,
+    -278.7,
+    -956.3
+   ],
+   "preToNow": {
+    "max": 0.465,
+    "at": [
+     -345.37,
+     -277.54,
+     -956.63
+    ]
+   },
+   "nowToPre": {
+    "max": 1.22,
+    "at": [
+     -345.7,
+     -278.7,
+     -956.3
+    ]
+   },
+   "changedTriangles": [
+    6,
+    644
+   ],
+   "p95changed": 0.302,
+   "visibility": {
+    "buriedM2": 0.92,
+    "buriedMax": 1.22,
+    "waterM2": 20.04,
+    "waterMax": 0.465,
+    "waterAt": [
+     -345.37,
+     -277.54,
+     -956.63
+    ]
+   }
+  },
+  {
+   "id": "divide_mirror_pocket",
+   "area": 1490,
+   "hausdorff": 0.473,
+   "at": [
+    412,
+    -362.81,
+    -1252
+   ],
+   "preToNow": {
+    "max": 0
+   },
+   "nowToPre": {
+    "max": 0.473,
+    "at": [
+     412,
+     -362.81,
+     -1252
+    ]
+   },
+   "changedTriangles": [
+    0,
+    350
+   ],
+   "p95changed": 0.303,
+   "visibility": {
+    "buriedM2": 0,
+    "buriedMax": 0,
+    "waterM2": 9.96,
+    "waterMax": 0.473,
+    "waterAt": [
+     412,
+     -362.81,
+     -1252
+    ]
+   }
+  },
+  {
+   "id": "divide_east_pocket",
+   "area": 1929,
+   "hausdorff": 0.746,
+   "at": [
+    782.3,
+    -366.79,
+    -1240.81
+   ],
+   "preToNow": {
+    "max": 0.385,
+    "at": [
+     782.42,
+     -366.03,
+     -1240.82
+    ]
+   },
+   "nowToPre": {
+    "max": 0.746,
+    "at": [
+     782.3,
+     -366.79,
+     -1240.81
+    ]
+   },
+   "changedTriangles": [
+    15,
+    694
+   ],
+   "p95changed": 0.338,
+   "visibility": {
+    "buriedM2": 4.72,
+    "buriedMax": 0.746,
+    "waterM2": 21.25,
+    "waterMax": 0.433,
+    "waterAt": [
+     782,
+     -367.03,
+     -1247
+    ]
+   }
+  },
+  {
+   "id": "divide_fissure_window",
+   "area": 1627,
+   "hausdorff": 0.848,
+   "at": [
+    557,
+    -410.71,
+    -1321.3
+   ],
+   "preToNow": {
+    "max": 0.381,
+    "at": [
+     556.64,
+     -400.66,
+     -1316.99
+    ]
+   },
+   "nowToPre": {
+    "max": 0.848,
+    "at": [
+     557,
+     -410.71,
+     -1321.3
+    ]
+   },
+   "changedTriangles": [
+    34,
+    587
+   ],
+   "p95changed": 0.536,
+   "visibility": {
+    "buriedM2": 15.8,
+    "buriedMax": 0.848,
+    "waterM2": 11.26,
+    "waterMax": 0.388,
+    "waterAt": [
+     533,
+     -446.36,
+     -1336
+    ]
+   }
+  },
+  {
+   "id": "divide_brine_cistern",
+   "area": 7046,
+   "hausdorff": 0.818,
+   "at": [
+    895.3,
+    -389.7,
+    -1233
+   ],
+   "preToNow": {
+    "max": 0.504,
+    "at": [
+     915.79,
+     -423.5,
+     -1193.2
+    ]
+   },
+   "nowToPre": {
+    "max": 0.818,
+    "at": [
+     895.3,
+     -389.7,
+     -1233
+    ]
+   },
+   "changedTriangles": [
+    185,
+    1268
+   ],
+   "p95changed": 0.43,
+   "visibility": {
+    "buriedM2": 43.96,
+    "buriedMax": 0.818,
+    "waterM2": 27.66,
+    "waterMax": 0.504,
+    "waterAt": [
+     915.79,
+     -423.5,
+     -1193.2
+    ]
+   }
+  },
+  {
+   "id": "meridian_culvert_north",
+   "area": 2375,
+   "hausdorff": 0.434,
+   "at": [
+    1239.7,
+    -599.13,
+    -1151.71
+   ],
+   "preToNow": {
+    "max": 0.434,
+    "at": [
+     1239.7,
+     -599.13,
+     -1151.71
+    ]
+   },
+   "nowToPre": {
+    "max": 0.424,
+    "at": [
+     1224,
+     -599.9,
+     -1164
+    ]
+   },
+   "changedTriangles": [
+    359,
+    1259
+   ],
+   "p95changed": 0.251,
+   "visibility": {
+    "buriedM2": 55.5,
+    "buriedMax": 0.342,
+    "waterM2": 12.45,
+    "waterMax": 0.434,
+    "waterAt": [
+     1239.7,
+     -599.13,
+     -1151.71
+    ]
+   }
+  },
+  {
+   "id": "meridian_escarp_pocket",
+   "area": 1279,
+   "hausdorff": 0.888,
+   "at": [
+    1388.7,
+    -500.7,
+    -944
+   ],
+   "preToNow": {
+    "max": 0.507,
+    "at": [
+     1388.17,
+     -485.83,
+     -920.58
+    ]
+   },
+   "nowToPre": {
+    "max": 0.888,
+    "at": [
+     1388.7,
+     -500.7,
+     -944
+    ]
+   },
+   "changedTriangles": [
+    100,
+    599
+   ],
+   "p95changed": 0.41,
+   "visibility": {
+    "buriedM2": 20.16,
+    "buriedMax": 0.888,
+    "waterM2": 15.24,
+    "waterMax": 0.507,
+    "waterAt": [
+     1388.17,
+     -485.83,
+     -920.58
+    ]
+   }
+  },
+  {
+   "id": "meridian_window_gallery",
+   "area": 8087,
+   "hausdorff": 0.557,
+   "at": [
+    1036.27,
+    -599.92,
+    -1326
+   ],
+   "preToNow": {
+    "max": 0.316,
+    "at": [
+     1031.27,
+     -524.71,
+     -1325.74
+    ]
+   },
+   "nowToPre": {
+    "max": 0.557,
+    "at": [
+     1036.27,
+     -599.92,
+     -1326
+    ]
+   },
+   "changedTriangles": [
+    560,
+    1327
+   ],
+   "p95changed": 0.242,
+   "visibility": {
+    "buriedM2": 39.53,
+    "buriedMax": 0.331,
+    "waterM2": 18.73,
+    "waterMax": 0.557,
+    "waterAt": [
+     1036.27,
+     -599.92,
+     -1326
+    ]
+   }
+  }
+ ]
+}

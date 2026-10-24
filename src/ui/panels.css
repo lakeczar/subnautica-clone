@@ -190,3 +190,7 @@
 .carrier-berth h4 { margin: 0; font-size: 14px; font-weight: 500; }
 .carrier-hint { opacity: .75; font-size: 13px; }
 .developer-tools { margin-top: 16px; opacity: .85; }
+
+/* UI-01: Cargo's kind filter. */
+.cargo-filter { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.filtered-out { font-size: 12px; opacity: 0.7; }

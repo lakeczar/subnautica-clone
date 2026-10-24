@@ -42,6 +42,9 @@ export class GameView {
   slot(_slot: SaveSlot, _hasSession: boolean): void {}
   /** The menu's busy presentation (a save operation, or CW-1's entry wait). */
   busy = false;
+  /** Whether the menu shows Repair play timeline. */
+  repairVisible = false;
+  timelineRepair(visible: boolean): void { this.repairVisible = visible; }
   persistence(
     _message: string,
     _automatic: boolean,

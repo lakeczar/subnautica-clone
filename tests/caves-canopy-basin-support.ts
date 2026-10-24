@@ -2,7 +2,7 @@
 // Every check returns failure strings so a test asserts an empty list and a
 // failure names the cave, room or portal and the point.
 import { caves, EXTERIOR, MIN_ROCK, type CaveDef, type CavePortal } from "../src/content/regions/caves.js";
-import { caveShell, caveVolume, caveSampler } from "../src/content/regions/caveGeometry.js";
+import { caveShell, caveVolume, caveSampler, shellSeamProblems } from "../src/content/regions/caveGeometry.js";
 import { caveFloor, EDGE_LIP, EDGE_SHELF, groupDef, type CaveGroup } from "../src/content/regions/caves/authored.js";
 import { CANOPY_BASIN_GROUPS } from "../src/content/regions/caves/index.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
@@ -454,8 +454,8 @@ export function corners(def: CaveDef): Corner[] {
  * across the seam is not read as a step; half a voxel plus the slope over
  * one voxel where that is more), except next to
  * corners, which keep their relief bound; `residuals` lists the largest
- * departure at each such corner. Shell vertices on every edge lie on the
- * floor. */
+ * departure at each such corner. The shell's seam meets the floor on every
+ * edge (`shellSeamProblems`). */
 export function collarSteps(g: CaveGroup): { failures: string[]; residuals: { corner: [number, number]; step: number; bound: number }[] } {
   const def = defOf(g), fr = frameOf(def), f = def.replacementFootprints[0]!, failures: string[] = [];
   const cs = corners(def), residuals = cs.map(c => ({ corner: c.corner, step: 0, bound: c.bound }));
@@ -474,11 +474,10 @@ export function collarSteps(g: CaveGroup): { failures: string[]; residuals: { co
       if (Math.abs(step) > cs[zone]!.bound) failures.push(`${def.id}: corner step ${step.toFixed(2)} m at ${x}, ${z} over its ${cs[zone]!.bound.toFixed(2)} m bound`);
     } else if (Math.abs(step) > tolerance(x, z)) failures.push(`${def.id}: collar step ${step.toFixed(2)} m at ${x}, ${z}`);
   }
-  for (const m of [caveShell(def, "fine"), caveShell(def, "coarse")]) for (let v = 0; v < m.positions.length / 3; v++) {
-    const p = vertex(m, v);
-    if (Math.abs(p.x - f.minX) > 1e-6 && Math.abs(p.x - f.maxX) > 1e-6 && Math.abs(p.z - f.minZ) > 1e-6 && Math.abs(p.z - f.maxZ) > 1e-6) continue;
-    if (Math.abs(p.y - worldFloor(p.x, p.z)) >= 1e-4) { failures.push(`${def.id}: collar vertex ${p.y.toFixed(2)} vs floor ${worldFloor(p.x, p.z).toFixed(2)}`); break; }
-  }
+  // The art seam meets the floor: no open edge ends off it on a collar side
+  // (where the snap must leave a vertex, the seam is closed in the side plane;
+  // COL-1 R6/R7).
+  for (const lod of ["fine", "coarse"] as const) failures.push(...shellSeamProblems(def, lod, worldFloor).slice(0, 1));
   return { failures: failures.slice(0, 8), residuals: residuals.filter(r => r.step > 0.75) };
 }
 export const checkCollar = (g: CaveGroup): string[] => collarSteps(g).failures;
