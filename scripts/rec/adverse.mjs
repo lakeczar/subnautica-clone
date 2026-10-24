@@ -26,7 +26,7 @@
 //
 // Writes DIR/adverse.json; exits 1 when a check fails.
 import { execFileSync, spawnSync } from "node:child_process";
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { createRequire } from "node:module";
 import path from "node:path";
@@ -104,6 +104,18 @@ for (const n of ["capture", "recorder", "retention", "zip", "webm", "spool.worke
   writeFileSync(path.join(mods, `${n}.js`), ts.transpileModule(src, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } })
     .outputText.replace("./spool.worker.ts", "./spool.worker.js"));
 }
+// Variants for the failure checks (R3): the same modules, with only the browser's
+// encoder wrapped in the worker: one throws on its tenth picture (R3-1), one
+// reports itself behind from 2 s to 4 s after it starts (R3-3).
+const VARIANTS = {
+  throw: `{ const encode = VideoEncoder.prototype.encode; let n = 0; VideoEncoder.prototype.encode = function (...a) { if (++n === 10) throw new DOMException("injected encode failure", "OperationError"); return encode.apply(this, a); }; }\n`,
+  behind: `{ const d = Object.getOwnPropertyDescriptor(VideoEncoder.prototype, "encodeQueueSize"); const t0 = performance.now(); Object.defineProperty(VideoEncoder.prototype, "encodeQueueSize", { configurable: true, get() { const t = performance.now() - t0; return t > 2000 && t < 4000 ? 9 : d.get.call(this); } }); }\n`,
+};
+for (const [name, prefix] of Object.entries(VARIANTS)) {
+  const dir = path.join(www, `modules-${name}`);
+  mkdirSync(dir, { recursive: true });
+  for (const f of readdirSync(mods)) writeFileSync(path.join(dir, f), (f === "spool.worker.js" ? prefix : "") + readFileSync(path.join(mods, f), "utf8"));
+}
 const server = createServer((req, res) => {
   const file = path.join(www, decodeURIComponent(req.url.split("?")[0]));
   try { res.setHeader("Content-Type", file.endsWith(".js") ? "text/javascript" : file.endsWith(".html") ? "text/html" : "application/octet-stream"); res.end(readFileSync(file)); }
@@ -111,7 +123,21 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const result = { clock: null, workers: null, timeline: null, dpr2: null, errors: [], failed: [] };
+const result = { clock: null, workers: null, encodeThrow: null, removals: null, backpressure: null, timeline: null, dpr2: null, errors: [], failed: [] };
+/** Draws a barcoded picture every 83 ms for `ms`, the capture told after every frame (as the game does); returns the draws. Runs in the page. */
+const DRAW = `async (cap, ms) => {
+  const canvas = document.getElementById("c"), x = canvas.getContext("2d"), draws = [], t0 = performance.now();
+  let last = -1, id = 0;
+  await new Promise((done) => { const f = (now) => {
+    if (now - last > 83) { last = now; id++; draws.push({ id, t: now }); x.fillStyle = "#246578"; x.fillRect(0, 0, 640, 360);
+      for (let bit = 0; bit < 16; bit++) { x.fillStyle = id & (1 << bit) ? "#fff" : "#000"; x.fillRect(bit * 40, 0, 40, 80); } }
+    cap.afterRender(now);
+    if (now - t0 < ms) requestAnimationFrame(f); else done(); }; requestAnimationFrame(f); });
+  return draws;
+}`;
+const zipOf = `async (cap) => { const exp = await cap.exportZip(), bytes = new Uint8Array(await exp.blob.arrayBuffer());
+  let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); }`;
+const ndjson = (file) => (existsSync(file) ? readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
 const c = await composer({ chrome: arg("chrome"), pw: arg("pw") });
 c.page.on("pageerror", (e) => result.errors.push(e.message.slice(0, 300)));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -217,6 +243,109 @@ try {
   if (workers.length > 1) result.failed.push(`workers: ${workers.length} spool workers alive after four retirements`);
   if (!(result.workers.latestExportBytes > 0)) result.failed.push("workers: the latest completed recording did not export");
 
+  // --- R3-1: an encoder that throws leaves the spool working ------------------
+  await c.page.goto(`${origin}/?r3=throw`);
+  const thrown = await c.page.evaluate(async ({ DRAW, zipOf }) => {
+    const { FlightCapture } = await import("/modules-throw/capture.js");
+    const cap = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
+    await (0, eval)(DRAW)(cap, 3000);
+    cap.recorder.event("action", "after the failure", { snapshot: false });
+    cap.flush(performance.now());
+    const t0 = performance.now(), zip = await (0, eval)(zipOf)(cap);
+    return { zip, exportMs: Math.round(performance.now() - t0), lost: cap.header.retention.lost };
+  }, { DRAW, zipOf });
+  {
+    const dir = path.join(out, "throw");
+    writeFileSync(path.join(out, "throw.zip"), Buffer.from(thrown.zip, "base64"));
+    unzip(path.join(out, "throw.zip"), dir);
+    const header = JSON.parse(readFileSync(path.join(dir, "header.json"), "utf8"));
+    const after = ndjson(path.join(dir, "events.ndjson")).some((e) => e.text === "after the failure");
+    result.encodeThrow = { exportMs: thrown.exportMs, lossFact: header.retention.lost.some((l) => /video encoder failed/.test(l.why)), telemetryAfter: after,
+      lost: header.retention.lost.map((l) => l.why).slice(0, 3) };
+    if (!result.encodeThrow.lossFact) result.failed.push("encode throw: no loss fact in the exported ledger");
+    if (!after) result.failed.push("encode throw: telemetry after the failure missing from the export");
+  }
+
+  // --- R3-2: Off → on keeps the previous recording; a refused removal is not credited ---
+  await c.page.goto(`${origin}/?recbudget=1`);
+  result.removals = await c.page.evaluate(async () => {
+    const { FlightCapture } = await import("/modules/capture.js");
+    const canvas = document.getElementById("c"), build = { content: "adverse", bake: "", commit: "adverse" };
+    const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+    const bytesOf = async (session) => {
+      let total = 0;
+      const walk = async (d) => { for await (const [, h] of d.entries()) total += h.kind === "file" ? (await h.getFile()).size : (await walk(h), 0); };
+      try { await walk(await (await (await navigator.storage.getDirectory()).getDirectoryHandle("flight")).getDirectoryHandle(session)); } catch { return null; }
+      return total;
+    };
+    // Another context (as another tab would) holds an older recording's file open.
+    const lock = new Worker(URL.createObjectURL(new Blob([`onmessage = async () => { const root = await navigator.storage.getDirectory();
+      const d = await (await root.getDirectoryHandle("flight", { create: true })).getDirectoryHandle("1999-01-01-held", { create: true });
+      const h = await (await d.getFileHandle("samples.ndjson", { create: true })).createSyncAccessHandle();
+      h.truncate(0); h.write(new Uint8Array(3 * 1048576)); h.flush(); self.held = h; postMessage("locked"); };`], { type: "text/javascript" })));
+    await new Promise((r) => { lock.onmessage = r; lock.postMessage(1); });
+    // A: a recording turned off, kept exportable (the app's latest completed recording).
+    const a = new FlightCapture(canvas, "playtest", false, build);
+    await sleep(300);
+    for (let i = 0; i < 1500; i++) a.recorder.sample({ t: i, pad: "a".repeat(400) });
+    a.flush(performance.now());
+    await sleep(500);
+    a.stop();
+    await sleep(1500);
+    // B: the next recording, with a 1 MiB budget.
+    const b = new FlightCapture(canvas, "playtest", false, build);
+    await sleep(3000);
+    const aBytes = await bytesOf(a.session), heldBytes = await bytesOf("1999-01-01-held");
+    const aExport = (await a.exportZip()).blob.size;
+    lock.terminate();
+    const ledger = b.header.retention;
+    return { aSession: a.session, aBytes, aExport, heldBytes, bStopped: b.stopped, bStopWhy: ledger.stopped?.why ?? null,
+      removedOlder: ledger.removedOlder.map((r) => r.session), removalRefused: ledger.removalRefused.map((r) => ({ session: r.session, why: r.why })) };
+  });
+  {
+    const r = result.removals;
+    if (!(r.aBytes > 1_000_000)) result.failed.push(`removals: the previous recording lost its bytes (${r.aBytes})`);
+    if (!(r.aExport > 0)) result.failed.push("removals: the previous recording did not export");
+    if (r.removedOlder.includes(r.aSession)) result.failed.push("removals: the previous recording was removed while exportable");
+    if (!(r.heldBytes >= 3 * 1048576)) result.failed.push(`removals: the held recording's bytes are not on disk (${r.heldBytes})`);
+    if (r.removedOlder.includes("1999-01-01-held")) result.failed.push("removals: a refused removal was credited");
+    if (!r.removalRefused.some((x) => x.session === "1999-01-01-held")) result.failed.push("removals: the refused removal is not in the ledger");
+  }
+
+  // --- R3-3: encoder backpressure: a recorded gap, an honest pack and held strip tiles ---
+  await c.page.goto(`${origin}/?r3=behind`);
+  const behind = await c.page.evaluate(async ({ DRAW, zipOf }) => {
+    const { FlightCapture } = await import("/modules-behind/capture.js");
+    const cap = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
+    const draws = await (0, eval)(DRAW)(cap, 6000);
+    return { zip: await (0, eval)(zipOf)(cap), draws };
+  }, { DRAW, zipOf });
+  {
+    const zip = path.join(out, "behind.zip"), pack = path.join(out, "behind-pack");
+    writeFileSync(zip, Buffer.from(behind.zip, "base64"));
+    const packed = spawnSync(process.execPath, [path.join(repo, "scripts/rec/pack.mjs"), "--zip", zip, pack], { encoding: "utf8" });
+    const header = JSON.parse(readFileSync(path.join(pack, "recording", "header.json"), "utf8"));
+    const lost = header.retention.videoGaps.filter((g) => g.kind === "lost");
+    const story = existsSync(path.join(pack, "story.md")) ? readFileSync(path.join(pack, "story.md"), "utf8") : "";
+    const row = (name) => story.split("\n").find((l) => l.startsWith(`| ${name} |`)) ?? null;
+    const { heldNote } = await import(path.join(repo, "scripts/rec/pack.mjs"));
+    const { analyse, loadRecording } = await import(path.join(repo, "scripts/rec/analyse.mjs"));
+    const t0 = analyse(loadRecording(pack)).t0, mid = lost[0] ? (lost[0].from + lost[0].to) / 2 : null;
+    // A strip across the gap, to look at: its tiles must say they hold an earlier picture.
+    let stripFile = null;
+    if (mid != null) {
+      stripFile = path.join(out, "behind-gap-strip.jpg");
+      spawnSync(process.execPath, [path.join(repo, "scripts/rec/strip.mjs"), pack, "--at", ((mid - t0) / 1000).toFixed(2), "--out", stripFile], { encoding: "utf8" });
+      if (!existsSync(stripFile)) stripFile = null;
+    }
+    result.backpressure = { packExit: packed.status, gaps: lost.map((g) => ({ from: g.from, to: g.to, pictures: g.pictures, heldFrom: g.heldFrom, why: g.why })),
+      drops: header.retention.videoDrops, complete: row("recording complete"), video: row("video"), heldAtMid: mid == null ? null : heldNote(header, mid, t0), stripFile, drawsInGap: mid == null ? null : behind.draws.filter((d) => d.t >= lost[0].from && d.t <= lost[0].to).length };
+    if (!lost.length) result.failed.push("backpressure: no gap recorded");
+    if (!/partial/.test(result.backpressure.complete ?? "") || !/not captured/.test(result.backpressure.complete ?? "")) result.failed.push(`backpressure: completeness does not report the gap (${result.backpressure.complete})`);
+    if (!/partial/.test(result.backpressure.video ?? "")) result.failed.push(`backpressure: video coverage does not report the gap (${result.backpressure.video})`);
+    if (mid != null && !/NO PICTURE/.test(result.backpressure.heldAtMid ?? "")) result.failed.push("backpressure: a strip tile in the gap is not marked held");
+  }
+
   // --- R2-4: a campaign-length timeline ---------------------------------------
   const frames = Array.from({ length: 360_000 }, (_, i) => ({ t: i * 100, gap: i % 50_000 === 7 ? 140 : 16.7 }));
   const mem = Array.from({ length: 144_000 }, (_, i) => ({ t: i * 250, v: 200 + (i % 13) }));
@@ -257,5 +386,7 @@ try {
 }
 console.log(JSON.stringify({ failed: result.failed, clock: result.clock && { codec: result.clock.codec, hiddenSeen: result.clock.hiddenSeen, reachesCutoff: result.clock.reachesCutoff,
   segments: result.clock.segments?.map((s) => `${s.file}: ${s.frames} frames, ${s.misdated} misdated`) }, workers: result.workers,
+  encodeThrow: result.encodeThrow, removals: result.removals && { aBytes: result.removals.aBytes, aExport: result.removals.aExport, heldBytes: result.removals.heldBytes, refused: result.removals.removalRefused.length, bStopped: result.removals.bStopped },
+  backpressure: result.backpressure && { gaps: result.backpressure.gaps.length, drops: result.backpressure.drops, complete: result.backpressure.complete, video: result.backpressure.video, held: result.backpressure.heldAtMid },
   timeline: result.timeline && { loadMs: result.timeline.loadMs, seekMs: result.timeline.seekMs, errors: result.timeline.errors.length }, dpr2: result.dpr2 }));
 process.exit(result.failed.length ? 1 : 0);
