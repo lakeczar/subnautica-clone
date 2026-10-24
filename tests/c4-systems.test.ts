@@ -44,9 +44,12 @@ test("CB's frontier sits exactly at each tier limit, 0.3–1.5 m above the compo
     const above = src.position.y - world.groundHeight(src.position.x, src.position.z);
     assert.ok(above >= 0.3 && above <= 1.5, `${id}: ${above.toFixed(2)} m above the bed`);
   }
+  // The bed under a patch is the support surface (LS-1: the keeper's racks sit on the
+  // second step, inside the glimmer crack's cave footprint, where the kit is the rock).
   for (const id of Object.keys(C4_SOURCES).filter((k) => !Object.hasOwn(FRONTIER_SOURCES, k))) {
     const p = SOURCES[id as keyof typeof SOURCES].position;
-    assert.ok(Math.abs(p.y - world.groundHeight(p.x, p.z) - 0.8) < 0.02, id);
+    const bed = world.supportHeight(p.x, p.z, p.y);
+    assert.ok(Math.abs(p.y - bed - 0.8) < 0.02, `${id}: ${(p.y - bed).toFixed(2)} m above the bed`);
   }
 });
 

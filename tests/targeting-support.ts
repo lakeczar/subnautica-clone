@@ -163,6 +163,15 @@ export const NORMAL_VIEWS: readonly { id: string; position: Vec3; mode: Movement
   // LS-1: the hub spur's two lost sites.
   {id: "lost:hub_keepers_racks", position: {x: 175, y: -47.5, z: -459.5}, mode: "swimming"},
   {id: "lost:hub_beacon_house", position: {x: 341, y: -47.5, z: -574}, mode: "swimming"},
+  // LS-1 1b: the keeper's planting card and racks, the kiln tubers and the lost sites' caches.
+  {id: "hub_racks_card", position: {x: 175.5, y: -47.3, z: -459.9}, mode: "swimming"},
+  {id: "hub_racks_cups", position: {x: 179.5, y: -38.2, z: -459.4}, mode: "swimming"},
+  {id: "hub_racks_fans", position: {x: 176, y: -48.1, z: -458.4}, mode: "swimming"},
+  {id: "hub_racks_fronds", position: {x: 174.5, y: -48.2, z: -464.4}, mode: "swimming"},
+  {id: "rift_kiln_tubers", position: {x: -417, y: -251.4, z: -894.4}, mode: "swimming"},
+  {id: "site_cache_canopy_basket_bins", position: {x: 761.5, y: -108.5, z: -99.9}, mode: "swimming"},
+  {id: "site_cache_basin_pump_spares", position: {x: 241.5, y: -260, z: -759.9}, mode: "swimming"},
+  {id: "site_cache_meridian_wild_crop", position: {x: 1151.5, y: -599.9, z: -1249.9}, mode: "swimming"},
   {id: "basin_pale_spores", position: {x: 212.5, y: -179, z: -220}, mode: "swimming"},
   // CR-1: creature grounds, residents' shed, protected egg cases and fall salvage,
   // found by the same collision-checked search.

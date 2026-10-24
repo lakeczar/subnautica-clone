@@ -58,11 +58,12 @@ export const FRONTIER_SOURCES = {
 } as const satisfies Record<string, SourceDefinition>;
 
 /** SYS-2's seed patches, each datum lowered to 0.8 m above the composed floor
- * like the other sources, so the patch sits on the bed in reach. */
+ * like the other sources, so the patch sits on the bed in reach. The floor is the
+ * support surface: on the spur's second step that is the glimmer crack's kit (LS-1). */
 const SEED_FLOOR = {
   reef_staple_cuttings: -8.09, reef_ribbon_cuttings: -10.36, island_salve_fronds: -5.58,
   canopy_lumen_bulbs: -133.25, basin_pale_spores: -180.08,
-  hub_racks_cups: -48.4, hub_racks_fans: -48.4, hub_racks_fronds: -48.4, rift_kiln_tubers: -251.4,
+  hub_racks_cups: -38.5, hub_racks_fans: -48, hub_racks_fronds: -48.5, rift_kiln_tubers: -251.4,
 } as const satisfies Record<keyof typeof SYS2_SOURCES, number>;
 export const SEED_SOURCES = Object.fromEntries((Object.keys(SYS2_SOURCES) as (keyof typeof SYS2_SOURCES)[]).map((id) => {
   const s = SYS2_SOURCES[id];

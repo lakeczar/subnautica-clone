@@ -43,11 +43,11 @@ export const idle = (seconds: number, s: GameState): GameState => {
   return s;
 };
 
-/** Creel-first (B1) with the workshop's outpost and signal records read and a
- * basic outpost kit, a decoder and a planter made at their benches. */
+/** Creel-first (B1) with the workshop's outpost and signal records and the keeper's
+ * planting card read, and a basic outpost kit, a decoder and a planter made at their benches. */
 export function systemsGame(): GameState {
   let s = creelFirst();
-  for (const id of ["workshop_outpost_sheet", "workshop_decoder_rack", "canopy_lab_outpost_sheet"]) s = read(s, id);
+  for (const id of ["workshop_outpost_sheet", "workshop_decoder_rack", "canopy_lab_outpost_sheet", "hub_racks_card"]) s = read(s, id);
   // Stow everything else from the diver hold in the pod locker, as a player would.
   const stow = () => { for (const i of s.inventory.items.filter((i) => i.containerId === "diver" && !/^(outpost_kit_basic|mod_)/.test(i.kind))) i.containerId = "pod_locker"; };
   for (const id of ["outpost_kit_basic", "mod_decoder", "mod_planter"] as RecipeId[]) { stow(); fund(s, id); }

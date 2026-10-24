@@ -132,21 +132,23 @@ export const SYS2_SOURCES = {
     context: "A soft spore mat clings to the survey fins.",
     scan: "Spores tear when handled. Gentle sampling keeps them alive.",
   },
-  // LS-1: the keeper's racks on the spur's second step (the owner's mid-game plot).
+  // LS-1: the keeper's racks up the second step's west riser (the owner's mid-game
+  // plot): cups on the summit lip, fans at the riser's foot, fronds in its shade. The
+  // step is the glimmer crack's terrace, so the bed is the cave kit's surface.
   hub_racks_cups: {
-    label: "Keeper's racks: staple cups", region: "silt_basin", position: { x: 172, y: -48, z: -463 }, item: "seed_staple_cup",
+    label: "Keeper's racks: staple cups", region: "silt_basin", position: { x: 179.5, y: -38.5, z: -461 }, item: "seed_staple_cup",
     stock: 3, reserve: 0, bundle: 1, asset: "food",
     context: "Cups spill over the top tier of the keeper's racks.",
     scan: "A cutting re-roots in a planter. Each harvest leaves the cutting in place.",
   },
   hub_racks_fans: {
-    label: "Keeper's racks: ribbon fans", region: "silt_basin", position: { x: 177, y: -48, z: -459 }, item: "seed_ribbon_fan",
+    label: "Keeper's racks: ribbon fans", region: "silt_basin", position: { x: 176, y: -48, z: -460 }, item: "seed_ribbon_fan",
     stock: 3, reserve: 0, bundle: 1, asset: "ribbons",
     context: "Fan sprigs crowd the racks' middle tier.",
     scan: "Fan sprigs keep shedding membrane in still water. A planter gives them still water.",
   },
   hub_racks_fronds: {
-    label: "Keeper's racks: salve fronds", region: "silt_basin", position: { x: 179, y: -48, z: -465 }, item: "seed_salve_frond",
+    label: "Keeper's racks: salve fronds", region: "silt_basin", position: { x: 174.5, y: -48.5, z: -466 }, item: "seed_salve_frond",
     stock: 3, reserve: 0, bundle: 1, asset: "food",
     context: "Thick fronds in the shade under the lowest tier.",
     scan: "Frond sap dresses wounds. A cutting grows a fresh leaf in a planter.",
