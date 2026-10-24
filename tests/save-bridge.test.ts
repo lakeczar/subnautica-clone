@@ -14,11 +14,14 @@ import { executeCommand } from "../src/sim/step.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameState } from "../src/sim/types.js";
 import { encoded, MemoryStorage, sample, settled, TestWriterLock } from "./persistence-support.js";
-import { creelFirst, creelOf } from "./b1-support.js";
-import { initialRuntime } from "../src/sim/upgrades/tools.js";
+import { creelFirst } from "./b1-support.js";
+import { craftingBlock, readTechRecord } from "../src/sim/progression.js";
+import { installModule } from "../src/sim/systems/hosts.js";
+import { plant } from "../src/sim/systems/cultivation.js";
+import { legacyRow, legacySourceHeld } from "../src/save/legacyGrants.js";
 
-// Save policy (DIRECTION): schema 7 loads; schema 6 / expedition.7 is the one bridged
-// predecessor (SIG-1); schemas 1–5 are refused as older development builds.
+// Save policy (DIRECTION): schema 8 loads; schema 7 / expedition.7 is the one bridged
+// predecessor (LS-1 1b); schemas 1–6 are refused as older development builds.
 const world = createWorldQueries();
 const meta = { sessionId: "save-bridge-test-01", createdAt: "2026-10-18T00:00:00.000Z", savedAt: "2026-10-19T00:00:00.000Z" };
 const fixture = (name: string) => readFileSync(`tests/fixtures/${name}`, "utf8");
@@ -41,46 +44,113 @@ function progressed(): GameState {
 const older = (schemaVersion: number, contentVersion: string) =>
   JSON.stringify({ ...createEnvelope(createGame(), meta), schemaVersion, contentVersion });
 
-const SCHEMA7_RUNTIME = ["sonar", "tag", "drone", "lift", "tow"] as const;
-/** A real schema 6 export: today's state without the schema 7 fields, under the
- * schema 6 / expedition.7 tags (what the previous build wrote). */
-function schema6(state: GameState): string {
+/** A real schema 7 export: today's state without the schema 8 fields, under the
+ * schema 7 / expedition.7 tags (what the previous build wrote). */
+function schema7(state: GameState): string {
   const s = structuredClone(state) as unknown as Record<string, any>;
-  delete s.systems.moduleUpgrades;
-  for (const v of s.fleet.vehicles) for (const k of SCHEMA7_RUNTIME) delete v.upgrades[k];
-  return JSON.stringify({ ...createEnvelope(state, meta), schemaVersion: 6, contentVersion: "expedition.7", state: s });
+  delete s.systems.opened;
+  delete s.knowledge.legacyGrants;
+  return JSON.stringify({ ...createEnvelope(state, meta), schemaVersion: 7, contentVersion: "expedition.7", state: s });
+}
+/** A schema 7 player who read the workshop's outpost sheet while it still granted the
+ * planter plan, optionally with a planter socketed at the pod and a crop growing. */
+function earnedPlanter(withCrop: boolean): GameState {
+  const s = creelFirst();
+  readTechRecord(s, "workshop_outpost_sheet");
+  if (!s.knowledge.blueprints.includes("bp_cultivation" as never)) s.knowledge.blueprints.push("bp_cultivation" as never);
+  if (withCrop) {
+    s.player.pose.position = { x: 0, y: 0.18, z: 21.2 }; s.player.mode = "swimming";
+    const planter = addItem(s, "mod_planter", 1, "diver").id;
+    assert.equal(installModule(s, s.systems, "home_pod", "s0", planter), null);
+    addItem(s, "seed_staple_cup", 1, "diver");
+    assert.equal(plant(s, s.systems, "home_pod", "s0", "seed_staple_cup"), null);
+    s.systems.planters[0]!.progress = 120;
+  }
+  return s;
 }
 
-test("a schema 6 save bridges once: New Game's signature runtime and an empty host-upgrade record", () => {
+test("a schema 7 save bridges once: no doors opened, and no legacy grant it did not earn", () => {
   const s = creelFirst();
-  const v = creelOf(s);
-  v.upgrades.flares = 2;
-  const out = decodeSave(schema6(s));
+  const out = decodeSave(schema7(s));
   assert.ok(out.ok, out.ok ? "" : out.error);
-  const b = out.value.state, creel = b.fleet.vehicles.find((x) => x.id === v.id)!;
-  assert.deepEqual(b.systems, { ...s.systems, moduleUpgrades: {} });
-  assert.deepEqual(creel.upgrades, { ...initialRuntime(), flares: 2 }, "schema 6 runtime kept, schema 7 tools at New Game's value");
-  assert.deepEqual(Object.keys(creel.upgrades), Object.keys(initialRuntime()), "in New Game's key order");
-  assert.equal(out.value.schemaVersion, 7);
+  const b = out.value.state;
+  assert.deepEqual(b.systems.opened, []);
+  assert.deepEqual(b.knowledge.legacyGrants, []);
+  assert.deepEqual(Object.keys(b.systems), Object.keys(s.systems), "in New Game's key order");
+  assert.deepEqual(Object.keys(b.knowledge), Object.keys(s.knowledge));
+  assert.equal(out.value.schemaVersion, 8);
   assert.deepEqual(b, s, "nothing else changes");
-  // Written once, it is a canonical schema 7 save that reads back unchanged.
   const written = encoded(out.value), again = decodeSave(written);
   assert.ok(again.ok); assert.deepEqual(again.value, out.value);
 });
 
-test("a schema 6 save holding any schema 7 field, or mixed tags, is refused before bridging", () => {
-  const base = JSON.parse(schema6(creelFirst()));
-  const withRecord = structuredClone(base); withRecord.state.systems.moduleUpgrades = {};
-  const withTool = structuredClone(base); withTool.state.fleet.vehicles[0].upgrades.drone = null;
-  for (const [raw, pattern] of [[withRecord, /only schema 7 writes/], [withTool, /only schema 7 writes/],
+test("a schema 7 save holding any schema 8 field, or mixed tags, is refused before bridging", () => {
+  const base = JSON.parse(schema7(creelFirst()));
+  const withDoors = structuredClone(base); withDoors.state.systems.opened = [];
+  const withGrants = structuredClone(base); withGrants.state.knowledge.legacyGrants = [];
+  for (const [raw, pattern] of [[withDoors, /only schema 8 writes/], [withGrants, /only schema 8 writes/],
     [{ ...base, contentVersion: "expedition.6" }, /another content version/]] as const) {
     const out = decodeSave(JSON.stringify(raw));
     assert.equal(out.ok, false); if (!out.ok) assert.match(out.error, pattern);
   }
 });
 
-test("Continue from a stored schema 6 journal reads without writing; the first save keeps the original as previous", async () => {
-  const original = schema6(progressed()), storage = new MemoryStorage();
+test("earned planter knowledge survives the plan's move: post-workshop with a planter and crop, and without a planter", () => {
+  for (const withCrop of [true, false]) {
+    const s = earnedPlanter(withCrop);
+    const out = decodeSave(schema7(s));
+    assert.ok(out.ok, out.ok ? "" : out.error);
+    const b = out.value.state;
+    assert.deepEqual(b.knowledge.legacyGrants, [{ blueprint: "bp_cultivation", source: { kind: "scan", id: "workshop_outpost_sheet" } }]);
+    assert.ok(b.knowledge.blueprints.includes("bp_cultivation" as never), "the plan is kept");
+    assert.ok(validState(b));
+    assert.notEqual(craftingBlock(b, "mod_planter", world)?.code, "blueprint", "another planter can still be built");
+    if (withCrop) assert.deepEqual(b.systems.planters, s.systems.planters, "the growing crop is kept");
+  }
+});
+
+test("a fresh schema 8 game gets the planter plan only from the keeper's racks; an unheld legacy source is refused", () => {
+  const s = creelFirst();
+  readTechRecord(s, "workshop_outpost_sheet");
+  assert.ok(!s.knowledge.blueprints.includes("bp_cultivation" as never), "the workshop sheet no longer grants it");
+  readTechRecord(s, "hub_racks_card");
+  assert.ok(s.knowledge.blueprints.includes("bp_cultivation" as never), "the racks' card does");
+  assert.deepEqual(s.knowledge.legacyGrants, []);
+  assert.ok(validState(s));
+  const forged = structuredClone(creelFirst());
+  forged.knowledge.blueprints.push("bp_cultivation" as never);
+  forged.knowledge.legacyGrants = [{ blueprint: "bp_cultivation" as never, source: { kind: "scan", id: "workshop_outpost_sheet" } }];
+  assert.equal(validState(forged), false, "a legacy entry whose scan was never read is refused");
+  forged.knowledge.scans.push("workshop_outpost_sheet");
+  assert.ok(validState(forged), "with its source held it is accepted");
+  const notARow = structuredClone(forged);
+  notARow.knowledge.legacyGrants = [{ blueprint: "bp_cultivation" as never, source: { kind: "scan", id: "canopy_lab_outpost_sheet" } }];
+  assert.equal(validState(notARow), false, "only LEGACY_GRANTS rows are legal");
+  // The discovery source kind (PACE-1's row, until it lands, through a stand-in row).
+  const row = { blueprint: "bp_pod_buffer" as never, source: { kind: "discovery" as const, id: "C07" }, reason: "stand-in" };
+  assert.ok(legacyRow(row, [row]));
+  assert.equal(legacySourceHeld(row, ["C07"], []), false, "a discovery is not a scan");
+  assert.equal(legacySourceHeld(row, [], ["C07"]), true);
+  assert.equal(legacySourceHeld(row, [], []), false);
+});
+
+test("the legacy grant is permanent: 7 → 8, saved again without the racks, then the next transition still keeps plan and crop", () => {
+  const first = decodeSave(schema7(earnedPlanter(true)));
+  assert.ok(first.ok, first.ok ? "" : first.error);
+  // Saved again as schema 8, never having visited the racks.
+  const resaved = decodeSave(encoded(first.value));
+  assert.ok(resaved.ok, resaved.ok ? "" : resaved.error);
+  assert.ok(!resaved.value.state.knowledge.scans.includes("hub_racks_card"));
+  // A stand-in for the next bridge (8 → 9): it carries the field and the table unchanged.
+  const next = structuredClone(resaved.value.state);
+  assert.ok(validState(next));
+  assert.deepEqual(next.knowledge.legacyGrants, first.value.state.knowledge.legacyGrants);
+  assert.ok(next.knowledge.blueprints.includes("bp_cultivation" as never));
+  assert.deepEqual(next.systems.planters, first.value.state.systems.planters);
+});
+
+test("Continue from a stored schema 7 journal reads without writing; the first save keeps the original as previous", async () => {
+  const original = schema7(progressed()), storage = new MemoryStorage();
   storage.setItem(LOCAL_SAVE_KEY, JSON.stringify({ format: "siltwake.local", version: 1, current: original, previous: null, preserved: null }));
   const raw = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes;
   const repo = new SaveRepository(storage, new TestWriterLock());
@@ -90,25 +160,26 @@ test("Continue from a stored schema 6 journal reads without writing; the first s
   assert.equal(storage.getItem(LOCAL_SAVE_KEY), raw);
   assert.ok((await repo.commit(loaded.save)).ok);
   const journal = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)!);
-  assert.equal(journal.previous, original, "the original schema 6 generation remains byte-identical");
-  assert.equal(JSON.parse(journal.current).schemaVersion, 7);
+  assert.equal(journal.previous, original, "the original schema 7 generation remains byte-identical");
+  assert.equal(JSON.parse(journal.current).schemaVersion, 8);
 });
 
-test("schemas 1–5 are refused as older development builds, including the archived real exports", () => {
+test("schemas 1–6 are refused as older development builds, including the archived real exports", () => {
   const sources = [
-    older(1, "foundation.1"), older(2, "expedition.2"), older(2, "expedition.3"), older(3, "expedition.4"), older(5, "expedition.6"),
+    older(1, "foundation.1"), older(2, "expedition.2"), older(2, "expedition.3"), older(3, "expedition.4"), older(5, "expedition.6"), older(6, "expedition.7"),
     readFileSync("tests/fixtures/archive/reef-rib-trap-expedition3.json", "utf8"),
     readFileSync("tests/fixtures/archive/earned-c06-expedition4.json", "utf8"),
     readFileSync("tests/fixtures/archive/diagnostic-depleted-expedition5.schema4.json", "utf8"),
     readFileSync("tests/fixtures/archive/earned-c06.schema5.json", "utf8"),
     readFileSync("tests/fixtures/archive/reef-rib-trap.schema5.json", "utf8"),
+    readFileSync("tests/fixtures/archive/earned-c06.schema6.json", "utf8"),
   ];
   for (const raw of sources) {
     const out = decodeSave(raw);
     assert.equal(out.ok, false);
-    if (!out.ok) assert.match(out.error, /older development build.*schema [12345]\).*Keep the original file/);
+    if (!out.ok) assert.match(out.error, /older development build.*schema [123456]\).*Keep the original file/);
   }
-  for (const schemaVersion of [0, 8, 99]) {
+  for (const schemaVersion of [0, 9, 99]) {
     const out = decodeSave(older(schemaVersion, "expedition.7"));
     assert.equal(out.ok, false); if (!out.ok) assert.match(out.error, /unsupported/);
   }
@@ -163,17 +234,17 @@ test("a refused older-build Import preserves the active session, journal and sou
   } finally { session.dispose(); }
 });
 
-test("named fixtures were converted once to schema 7; the archived originals are evidence, never rewritten", () => {
-  for (const [name, archived] of [["earned-c06.json", "earned-c06.schema6.json"], ["reef-rib-trap.json", "reef-rib-trap.schema6.json"],
-    ["diagnostic-depleted.json", "diagnostic-depleted.schema6.json"]] as const) {
+test("named fixtures were converted once to schema 8; the archived originals are evidence, never rewritten", () => {
+  for (const [name, archived] of [["earned-c06.json", "earned-c06.schema7.json"], ["reef-rib-trap.json", "reef-rib-trap.schema7.json"],
+    ["diagnostic-depleted.json", "diagnostic-depleted.schema7.json"]] as const) {
     const raw = fixture(name), out = decodeSave(raw);
     assert.ok(out.ok, out.ok ? "" : out.error);
-    assert.equal(JSON.parse(raw).schemaVersion, 7);
+    assert.equal(JSON.parse(raw).schemaVersion, 8);
     const written = encoded(out.value);
     assert.equal(JSON.stringify(JSON.parse(written)), JSON.stringify(JSON.parse(raw)), `${name} is already canonical`);
-    // The archived schema 6 original still bridges to exactly this save.
+    // The archived schema 7 original still bridges to exactly this save.
     const bridged = decodeSave(readFileSync(`tests/fixtures/archive/${archived}`, "utf8"));
-    assert.ok(bridged.ok); assert.deepEqual(bridged.value, out.value);
+    assert.ok(bridged.ok, bridged.ok ? "" : bridged.error); assert.deepEqual(bridged.value, out.value);
   }
   assert.equal(sha(readFileSync("tests/fixtures/archive/earned-c06.schema5.json", "utf8")), "7729a4a2132890d207647120d650126eaf7f6e0806b44988c4a887c686f4286f");
   assert.equal(sha(readFileSync("tests/fixtures/archive/reef-rib-trap.schema5.json", "utf8")), "eee910ad3ebcf775b77ad068e986c68818211059d4c35b784ae3e174cf9891bf");
