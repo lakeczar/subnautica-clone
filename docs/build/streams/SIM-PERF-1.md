@@ -36,7 +36,30 @@ Every slow step was re-executed from its own pre-step state (`--verify`), or its
 - **The step meter and harness** (above), and the driver's optional `DriverObserver.before`.
 
 ## Evidence
-PENDING
+Each result names the SHA it ran at. "Before" is `a35da972` (root plus the step meter only; `probe/sim-perf-1-before` carries the same harness). Timings from alickers (RTX 4070 Laptop, a shared desktop host) and factory-worker shared runs are indicative; 3090 exclusive numbers are below.
+
+**Determinism (final code `36dabcf3` against root `168a5084`, alickers):**
+- **The differential** (`scripts/sim-differential.sh 168a5084`; root's own compiled simulation fed every scenario's real command stream beside this one): all 8 scenarios identical, 4.19 M ticks and 2,518 commands, 72,420 state checks, every tick's events and 1,225 timeline checks (1,821 s).
+- **Cross-commit playthroughs** (`npm run playthrough -- --jobs 3`, root and head): all 8 complete, all 122 milestone hashes identical, every reload matched, and the run records (phases, legs, gathered and spent ledgers, hazards, discoveries, refusals) equal apart from wall time.
+
+**Ordinary play, all 8 scenarios** (`stepcost --verify --host`, 4,190,887 steps, alickers):
+
+| | p99 | p99.9 | max | steps over 8 ms |
+|---|---|---|---|---|
+| Before (`a35da972`) | 0.86 ms | 1.88 ms | 10.8 ms | 4: two collections, two not reproduced on re-execution |
+| After (`36dabcf3`) | **0.43 ms** | **1.33 ms** | 12.5 ms | 3: two collections; one (12.5 ms, ecology) is 1.08 ms replayed to the same tick in a fresh process |
+
+Phases over 1 ms, before → after: threat 2,423 → off the list; autosave 2,253 → 2,017, its maximum 6.3 → 3.6 ms and none over 4 ms (44 before).
+
+**Held travel from all 16 library kinds** (576,000 steps, alickers, same inputs): p99 0.26 → **0.17 ms**, max 10.3 → **4.1 ms**, steps over 8 ms 1 → **0**; minor collections 1,139 (528 ms) → 634 (341 ms), majors 3 → 3. The creel scenario: p99 0.94 → 0.43 ms, max 9.1 → 6.0 ms; minor collections 4,042 (1,502 ms) → 1,784 (982 ms), majors 6 (21 ms) → 18 (52 ms; the harness re-warms at each of its 82 milestone reloads, the app once per entry), heap at the end 96 → 73 MiB.
+
+**Allocation per step** (`stepcost --alloc`, five held kinds: `tour-ready`, `canopy-over-geared`, `creel-800`, `pre-ending-carrier`, `hull-damaged`): root 118.1 KiB, CW-1 `3779f59c` 124.2 KiB, this branch **76.1 KiB** (−36%). Biggest left: terrain sampling (`hypot`, `fbm`, `sampleAuthored`; the world stream's), `moveCapsule`'s per-call arrays (CW-1's `dataInBox` replaces them), host views.
+
+**Focused costs:** threat p99 1,117 → 21 µs and step p99 1.22 → 0.28 ms (held, `hull-damaged` and `carrier-fitout`, factory-worker shared); `repository.commit` 3.4 → 1.2 ms on a 46 KB save; the first autosave after a load 9.1 → 1.6 ms (`pre-ending-carrier`) and 10.1 → 1.3 ms (`tour-ready`).
+
+**Browser, 4070 control** (`probe/sim-perf-1-cw1` at `99425bc4`: this branch at `9e6d3e99` with CW-1; segments 2 and 3 of CW-1's `saves-t6` plan, `SIMPERF_HOST=1`): 87,845 steps, **none over 8 ms**, p99 0.61 ms, p99.9 1.6–1.7 ms, max 4.6 ms (an autosave). The frame's own work p99 4.2–7 ms, max 9.9 ms; the gate passed and no long frame was the simulation's. Every long gap (GPU-bound, up to 200 ms) had the renderer's main thread **blocked** (`S futex` for 95–98% of the gap, 2–7 ms on CPU), the canary running through it and no steal.
+
+**Browser, 3090** (profiled, `gpu` class, before-tree probe `81ee4a12`, segment 2): 52,969 steps, two over 8 ms: the 61.7 ms movement step (Chrome's sampler caught no movement code; the guest counted 86 ms of 100 on CPU) and a 12.2 ms step (presentation 5.7, upgrades 5.3). PENDING: the exclusive runs.
 
 ## Contracts and merge notes
 - **New per-step work** marks its phase: add a `STEP_PHASES` entry and `meter?.mark(PHASE.x)` after it, or it is counted in the next phase.
