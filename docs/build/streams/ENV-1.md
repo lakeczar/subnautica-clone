@@ -1,5 +1,7 @@
 # ENV-1: explorable interiors with environmental storytelling (design plan, stage 0, revision 2)
 
+> **Stage 1 resume note (paused for the host reboot, 2026-10-24).** Where: kit, data model, `AirRoom` table (lab row wired into `inCanopyAir` and the shader), validator and tests are written, uncommitted work saved here as WIP; the last targeted run (5 files, 2 s) had 3 failures. Next: (1) trap rule counts only poses inside the building (the hut control); (2) pump house: floor at the site's y (terrain −23.49..−23.20), cabinet turned to face the room with the logger host in front of it; (3) widen the kettle recipe to its 0.22 m; then the full fast tier, the typecheck and the heavy library test (`tests/interiors-scenarios.heavy.test.ts`, on factory-worker) and the handoff. Tickets to resubmit: none queued; rerun the typecheck (`261024-232939-e0aa` was rejected for a changed tree) and the targeted tests.
+
 Opus 5.5 high, design authority for the stream. Branch `t3/env-1-interiors`, with root `e136beb6` merged. **Docs only: no code stage starts until the coordinator approves this plan.** Spoiler-safe. The lore notes (hindsight meanings, canon ties, rulings and the player-text rules) are in `docs/spoilers/ENV-1-LORE.md`, for writers and integration agents only.
 
 This revision answers Sol's R1 (`review/env-1-r1`, `b2f5de12`), the coordinator's two owner points, and Sol's R2 (`review/env-1-r2`, `a77c186d`). The dispositions are in *Review responses* at the end.

@@ -12,6 +12,8 @@ import { CAVE_SAMPLERS, CAVE_UNIFORMS, injectCaveLight } from "./caves/caveLight
 import { DEPTH_LIGHT_SHADER, DEPTH_UNIFORMS, GOD_RAYS_SHADER, WATER_MEDIUM_SHADER, waterLightAt,
   type WaterLight } from "./lighting/depthLight.js";
 import { LOCAL_LIGHT_SHADER, LOCAL_LIGHT_UNIFORMS } from "./lighting/localLights.js";
+import { AIR_ROOMS } from "../content/airRooms.js";
+import { airIntervalGlsl, roomMaskGlsl } from "./airRoomsGlsl.js";
 import "@babylonjs/core/Shaders/ShadersInclude/instancesDeclaration.js";
 import "@babylonjs/core/Shaders/ShadersInclude/instancesVertex.js";
 
@@ -21,9 +23,8 @@ export const opticalUniforms = [
 ];
 
 /** Optical intervals only: these never grant air or change a seal. The lab
- * interval copies src/sim/inventory.ts inCanopyAir's existing box; that function
- * remains the air authority. Keep this render-only dependency in sync until
- * those bounds have a shared descriptor. The carrier interval reads
+ * interval is written from its row in the one air-room table
+ * (content/airRooms.ts), which the sim's air rule (inCanopyAir) reads too. The carrier interval reads
  * the shared dry deck/room layout and is transformed with the rendered hull.
  * Subtract only the part of each air interval that is actually below Y=0.
  * The water's colour depends on the ray's direction (ATM-1): darker looking
@@ -50,7 +51,7 @@ float waterPath(vec3 a,vec3 b){
   vec2 span=vec2(0.0,1.0);
   if(a.y>=0.0)span.x=-a.y/(b.y-a.y);
   else if(b.y>=0.0)span.y=-a.y/(b.y-a.y);
-  vec2 lab=boxInterval(a,b,vec3(111.4,-118.1,-129.6),vec3(120.6,-114.5,-122.4),span);
+  vec2 lab=${airIntervalGlsl(AIR_ROOMS.canopy_lab)};
   vec2 cabin=carrierPresent*boxInterval(carrierLocal(a),carrierLocal(b),carrierAirMin,carrierAirMax,span);
   float overlap=max(0.0,min(lab.y,cabin.y)-max(lab.x,cabin.x));
   float air=lab.y-lab.x+cabin.y-cabin.x-overlap;
@@ -199,7 +200,7 @@ void main(){
   // Authored diffuse warmth, bounded to the existing refuge interiors. This
   // shader owns the visible light pools; Babylon lamps cannot light this cel.
   float pod=step(abs(vWorld.x),2.94)*step(19.38,vWorld.z)*step(vWorld.z,24.01)*step(.15,vWorld.y)*step(vWorld.y,3.73);
-  float lab=step(111.28,vWorld.x)*step(vWorld.x,120.61)*step(-129.72,vWorld.z)*step(vWorld.z,-122.39)*step(-118.03,vWorld.y)*step(vWorld.y,-113.97);
+  float lab=${roomMaskGlsl(AIR_ROOMS.canopy_lab)};
   // ATM-1 depth light: daylight falls with the surface's own depth and takes
   // the region's colour. Dry rooms (pod, lab, carrier air) keep their light.
   // The lamp (cave splice) and local lights below are what is left to see by.

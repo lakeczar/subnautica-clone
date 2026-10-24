@@ -10,6 +10,7 @@
  *   totals; everything else reads them or the size primitives (`cuOf`, `itemCu`). */
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, HULLS, ITEMS, MATERIALS } from "../content/registry.js";
 import type { FabricationSite, ItemKind, MaterialId } from "../content/registry.js";
+import { AIR_ROOMS, inAirRoomBounds } from "../content/airRooms.js";
 import { CANOPY_STOP } from "../content/routes.js";
 import { MOORING_SERVICE_RADIUS, SERVICE_MOORINGS, STOP_IDS, stopForSite, WORKING_STOPS, type WorkingStop, type WorkingStopId } from "../content/stops.js";
 import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
@@ -141,17 +142,9 @@ export function nearWorkshop(s: GameState): boolean {
     !s.player.controlledVehicleId
   );
 }
+/** The diver is in the Canopy lab's dry hood (its row in the one air-room table). */
 export function inCanopyAir(s: GameState): boolean {
-  const p = s.player.pose.position;
-  return (
-    p.x > 111.4 &&
-    p.x < 120.6 &&
-    p.z > -129.6 &&
-    p.z < -122.4 &&
-    p.y >= -118.1 &&
-    p.y < -114.5 &&
-    !s.player.controlledVehicleId
-  );
+  return !s.player.controlledVehicleId && inAirRoomBounds(AIR_ROOMS.canopy_lab, s.player.pose.position);
 }
 /** Diver at the outer-crown mooring's deck work face (restored or not). */
 export function nearCanopyStop(s: GameState): boolean {
