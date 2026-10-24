@@ -150,9 +150,32 @@ const num = (v: unknown): v is number => typeof v === "number" && Number.isFinit
 const obj = (v: unknown): v is Record<string, unknown> => typeof v === "object" && v !== null && !Array.isArray(v);
 export function parseTimeline(text: string): { ok: true; value: TimelineExport } | { ok: false; error: string } {
   let v: unknown;
-  try { v = JSON.parse(text); } catch (e) { return { ok: false, error: `Not JSON: ${(e as Error).message}` }; }
+  try { v = JSON.parse(text); } catch (e) { return { ok: false, error: `Not JSON: ${e instanceof Error ? e.message : "unparseable"}` }; }
+  return validTimeline(v);
+}
+/** The deepest nesting a timeline value may have (real records nest about 7 deep). Deeper
+ * untrusted JSON is refused, so no later clone or stringify of it can overflow the stack. */
+export const TIMELINE_MAX_DEPTH = 32;
+/** Whether `v` nests deeper than `limit` (iterative, so it can't overflow itself). */
+export function tooDeep(v: unknown, limit = TIMELINE_MAX_DEPTH): boolean {
+  const stack: [unknown, number][] = [[v, 0]];
+  while (stack.length) {
+    const [x, d] = stack.pop()!;
+    if (typeof x !== "object" || x === null) continue;
+    if (d >= limit) return true;
+    for (const y of Object.values(x)) stack.push([y, d + 1]);
+  }
+  return false;
+}
+/** The one timeline validator, over an already parsed value. Total: any input gives a result. */
+export function validTimeline(v: unknown): { ok: true; value: TimelineExport } | { ok: false; error: string } {
+  try { return validate(v); } catch { return { ok: false, error: "Malformed timeline." }; }
+}
+function validate(v: unknown): { ok: true; value: TimelineExport } | { ok: false; error: string } {
+  if (tooDeep(v)) return { ok: false, error: "Nested too deeply." };
   if (!obj(v) || v.format !== TIMELINE_FORMAT) return { ok: false, error: `Not a ${TIMELINE_FORMAT} file.` };
-  if (typeof v.version !== "number" || !TIMELINE_VERSIONS.includes(v.version)) return { ok: false, error: `Unsupported timeline version ${String(v.version)}.` };
+  if (typeof v.version !== "number" || !TIMELINE_VERSIONS.includes(v.version))
+    return { ok: false, error: `Unsupported timeline version${typeof v.version === "number" ? ` ${v.version}` : ""}.` };
   const session = v.session;
   if (!obj(session) || typeof session.id !== "string" || typeof session.started !== "string" || !obj(session.end) ||
     !num(session.end.tick) || !num(session.end.play) || !num(session.end.idle)) return { ok: false, error: "Malformed session header." };

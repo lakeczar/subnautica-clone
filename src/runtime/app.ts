@@ -539,7 +539,6 @@ export class SiltwakeApp {
   private entered(): void {
     if (this.disposed) return;
     this.sessionGeneration++;
-    this.startTimeline();
     // A loaded save neither replays its history nor inherits old cooldowns.
     this.sound.reset();
     this.resolutionPhase = this.state?.story.resolution.phase ?? null;
@@ -549,6 +548,8 @@ export class SiltwakeApp {
     this.helm.clear();
     forgetCorridorView();
     this.view.resetPresentation();
+    // After the reset, so the new timeline's protection or memory-only notice stays (SIM-1b R1 F5).
+    this.startTimeline();
     if (this.state) this.view.update(this.state, false);
     const automatically = this.entryCanResume;
     this.entryCanResume = false;

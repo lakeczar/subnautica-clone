@@ -16,6 +16,9 @@ import type { SaveSlot } from "../src/save/repository.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
 import type { WriterLockPort } from "../src/save/writer-lock.js";
 
+// The real HUD, loaded before the loader redirects app.ts's view imports to the test double.
+import { HudView } from "../src/ui/hud.js";
+import { EncounterPresentation } from "../src/ui/notices.js";
 register("./app-loader.js", import.meta.url);
 const { SiltwakeApp } = await import("../src/runtime/app.js");
 
@@ -328,4 +331,47 @@ test("R6-F7: a note queued behind a long-pending commit gets its own waiting not
     t.mock.timers.tick(2_000);
     assert.equal(waiting(), 2, "the queued note's own waiting notice");
   } finally { f.lock.gate = null; app.dispose(); f.restore(); }
+});
+
+/** The fixture's view, wired to a real HudView's notify and reset (DOM rendering stubbed), so
+ * the test sees what the player would. Returns the real presentation and a restore. */
+function realHud(): { presentation: EncounterPresentation; restore(): void } {
+  const notify = GameView.prototype.notify, reset = GameView.prototype.resetPresentation, presentation = new EncounterPresentation();
+  const nodes = new Map<string, object>(), hud = Object.create(HudView.prototype) as Record<string, unknown>;
+  Object.assign(hud, { presentation, current: null, announcedContexts: new Set(), threatEdge: { reset() {} }, cancelFeedback() {},
+    get(id: string) { if (!nodes.has(id)) nodes.set(id, {}); return nodes.get(id); }, renderNotices() {} });
+  const real = HudView.prototype as unknown as { notify(m: string, e: boolean, o: unknown, s: null): void; resetPresentation(): void };
+  GameView.prototype.notify = function (this: GameView, m: string, e = false, o = {}) { notify.call(this, m, e, o); real.notify.call(hud, m, e, o, null); };
+  GameView.prototype.resetPresentation = function () { real.resetPresentation.call(hud); };
+  return { presentation, restore: () => { GameView.prototype.notify = notify; GameView.prototype.resetPresentation = reset; } };
+}
+
+test("SIM-1b R1-F5: the protection warning survives expedition entry: New, Continue, import and session-only", async () => {
+  for (const entry of ["new", "continue", "import", "session-only"] as const) {
+    const f = browserFixture();
+    let app: AppSeams | null = null;
+    // An expedition to Continue or import, made before the store is damaged.
+    app = await newGame(f);
+    const saved = encoded(app.session.envelope()!);
+    app.dispose(); app = null;
+    f.storage.setItem(TIMELINE_JOURNAL_KEY, "{bad");
+    const hud = realHud();
+    try {
+      app = seams(new SiltwakeApp({} as HTMLElement)); f.frames();
+      const view = GameView.current;
+      if (entry === "new") { view.actions.newGame(); view.actions.confirm(); await settled(); }
+      else if (entry === "continue") view.actions.continueGame();
+      else {
+        await app.session.importFile({ size: saved.length, text: async () => saved });
+        if (entry === "session-only") f.storage.failWrite = true;
+        view.actions.confirm(); await settled();
+        if (entry === "session-only") { assert.match(app.session.confirmation?.title ?? "", /without local saving/); view.actions.confirm(); f.storage.failWrite = false; }
+      }
+      f.frames();
+      assert.equal(app.live.protected, true, entry);
+      const shown = [hud.presentation.central?.message, hud.presentation.status?.message].filter(Boolean).join(" | ");
+      assert.match(shown, /play-timeline store can't be read.*memory only/, `${entry}: the warning is still shown (${shown})`);
+      assert.equal(GameView.current.repairVisible, true, entry);
+    } finally { hud.restore(); app?.dispose(); f.restore(); }
+  }
 });

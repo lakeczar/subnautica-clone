@@ -10,10 +10,10 @@ import type { GameState } from "../src/sim/types.js";
 import { addNote, createRecorder, exportTimeline, exportTimelineText, recordEvent, resumeRecorder, TIMELINE_CHUNK_EVENTS,
   TIMELINE_RETAINED_CHUNKS, TIMELINE_STORAGE_KEY } from "../src/sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../src/sim/timeline/recorder.js";
-import { analyseTimeline, parseTimeline, serializeTimeline } from "../src/sim/timeline/report.js";
+import { analyseTimeline, parseTimeline, serializeTimeline, summarizeChunk } from "../src/sim/timeline/report.js";
 import type { TimelineEvent } from "../src/sim/timeline/report.js";
 import { TIMELINE_JOURNAL_KEY, TimelineJournal } from "../src/sim/timeline/store.js";
-import type { TimelineCommit, TimelineStoragePort } from "../src/sim/timeline/store.js";
+import type { TimelineCommit, TimelineRecords, TimelineStoragePort } from "../src/sim/timeline/store.js";
 import type { WriterLockPort } from "../src/save/writer-lock.js";
 import { deferred, TestWriterLock } from "./persistence-support.js";
 
@@ -540,7 +540,9 @@ test("R5: repair replaces a protected store with this timeline, only while its r
     const exported = j.records();
     assert.ok(typeof exported !== "string");
     if (typeof exported === "string") return;
-    assert.deepEqual(exported, { journal: "{not json", v1: "{also broken" }, "the raw bytes, exported first");
+    assert.deepEqual([exported.journal, exported.v1], ["{not json", "{also broken"], "the raw bytes, exported first");
+    assert.deepEqual(Object.keys(exported.chunks).sort(), [...storage.data.keys()].filter((k) => k.startsWith("siltwake.timeline.v2|")).sort(),
+      "every chunk too");
     if (conflictFirst) {
       // Another tab changes the records after the export: the repair is a conflict and writes nothing.
       storage.data.set(TIMELINE_JOURNAL_KEY, "{changed elsewhere");
@@ -674,7 +676,7 @@ test("R6-F3/F4: a refused repair stays protected and can be tried again; the rep
     storage.data.set(TIMELINE_JOURNAL_KEY, "{bad");
     const j = new TimelineJournal(storage, new TestWriterLock(), "A");
     assert.equal(j.load().kind, "protected");
-    const exported = j.records() as { journal: string | null; v1: string | null };
+    const exported = j.records() as TimelineRecords;
     storage.failFrom(0, true, refusal);
     const r = await j.repair(x.rec, x.s, new AbortController().signal, exported);
     storage.failFrom(-1, false);
@@ -693,7 +695,7 @@ test("R6-F3/F4: a refused repair stays protected and can be tried again; the rep
   storage.data.set(TIMELINE_STORAGE_KEY, "{also bad");
   const j = new TimelineJournal(storage, new TestWriterLock(), "A");
   assert.equal(j.load().kind, "protected");
-  const exported = j.records() as { journal: string | null; v1: string | null };
+  const exported = j.records() as TimelineRecords;
   const remove = storage.removeItem.bind(storage);
   storage.removeItem = (key: string) => { if (key === TIMELINE_STORAGE_KEY) throw new Error("refused"); remove(key); };
   storage.images = [];
@@ -722,7 +724,7 @@ test("R6-F5: an unreadable journal during a live commit protects; once reads rec
   assert.notEqual(j.protection, null);
   const records = j.records();
   assert.ok(typeof records !== "string", "reads have recovered");
-  const fixed = await j.repair(x.rec, x.s, new AbortController().signal, records as { journal: string | null; v1: string | null });
+  const fixed = await j.repair(x.rec, x.s, new AbortController().signal, records as TimelineRecords);
   assert.ok(fixed.ok);
   assert.deepEqual(allNotes(loaded(storage, "A", "repaired"), x.s), ["base", "second"]);
 });
@@ -785,4 +787,153 @@ test("every browser's quota error folds, then fails as write-refused; any other 
     else assert.equal(journalWrites, 1, `${label}: one attempt`);
     assert.deepEqual([...storage.data.keys()].filter((k) => k.startsWith("siltwake.timeline.v2|")), [], `${label}: no orphan chunk left`);
   }
+});
+
+// ---- SIM-1b R1 regressions ------------------------------------------------
+
+test("R1-F1: a failed repair leaves the exported records whole (v1 and same-session chunks), at every write; a retry still repairs", async () => {
+  // (a) A valid version 1 record and an unreadable journal.
+  const legacy = session("OLD");
+  for (let i = 0; i < 5; i++) addNote(legacy.rec, legacy.s, `legacy ${i}`);
+  const v1 = serializeTimeline({ ...exportTimeline(legacy.rec, legacy.s), version: 1 });
+  // (b) This expedition's own committed chunk, with a damaged head.
+  const ownCase = async (): Promise<Storage> => {
+    const storage = new Storage(), a = session("A");
+    a.add(TIMELINE_CHUNK_EVENTS + 10);
+    assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
+    const j = journalOf(storage); j.current.events = null; setJournal(storage, j);
+    return storage;
+  };
+  const cases: [string, () => Promise<Storage>][] = [
+    ["v1", async () => { const st = new Storage(); st.data.set(TIMELINE_JOURNAL_KEY, "{bad"); st.setItem(TIMELINE_STORAGE_KEY, v1); return st; }],
+    ["same-session chunks", ownCase],
+  ];
+  for (const [label, make] of cases) for (const name of ["SecurityError", "QuotaExceededError"]) for (let at = 0; at < 6; at++) {
+    const storage = await make(), x = session("A");
+    x.add(TIMELINE_CHUNK_EVENTS + 40);   // a sealed chunk of its own, numbered like the damaged A's
+    const j = new TimelineJournal(storage, new TestWriterLock(), "A");
+    assert.equal(j.load().kind, "protected", label);
+    const exported = j.records() as TimelineRecords;
+    storage.failFrom(at, false, name);
+    storage.images = [];
+    const r = await j.repair(x.rec, x.s, new AbortController().signal, exported);
+    storage.failFrom(-1, false);
+    const tag = `${label}, ${name} at write ${at}`;
+    if (!r.ok) {
+      assert.deepEqual(j.records(), exported, `${tag}: the exported records are untouched`);
+      assert.notEqual(j.protection, null, `${tag}: still protected`);
+    }
+    // Every crash image is either the protected records as exported, or the repaired store.
+    for (const image of storage.images) {
+      const fresh = new TimelineJournal(Storage.of(image), new TestWriterLock(), "A"), l = fresh.load();
+      if (l.kind === "loaded") assert.deepEqual(allNotes(l.recorder, x.s), allNotes(x.rec, x.s), `${tag}: a repaired image`);
+      else assert.equal(image.get(TIMELINE_JOURNAL_KEY), exported.journal ?? undefined, `${tag}: an image before the commit point keeps the journal`);
+    }
+    if (!r.ok) assert.ok((await j.repair(x.rec, x.s, new AbortController().signal, exported)).ok, `${tag}: the retry repairs (no conflict with itself)`);
+    reloadsWhole(storage, x.rec, x.s, tag);
+    noOrphans(storage, tag);
+  }
+});
+
+test("R1-F2: hostile and inconsistent records are protected, never thrown and never committed over", async () => {
+  const deepArray = "[".repeat(4000) + "]".repeat(4000);
+  const shapes: [string, (st: Storage) => void][] = [
+    ["v1 version with a null toString", (st) => st.data.set(TIMELINE_STORAGE_KEY, '{"format":"siltwake.timeline","version":{"toString":null}}')],
+    ["v1 version nested 4,000 deep", (st) => st.data.set(TIMELINE_STORAGE_KEY, `{"format":"siltwake.timeline","version":${deepArray}}`)],
+    ["nextChunk -1", (st) => { const j = journalOf(st); j.current.nextChunk = -1; setJournal(st, j); }],
+    ["a chunk number above 2^53", (st) => { const j = journalOf(st); j.current.nextChunk = 2 ** 60; setJournal(st, j); }],
+    ["the current property missing", (st) => { const j = journalOf(st); delete j.current; setJournal(st, j); }],
+    ["the previous property missing", (st) => { const j = journalOf(st); delete j.previous; setJournal(st, j); }],
+    ["an event with a field nested 4,000 deep", (st) => {
+      const [k] = chunkKeysOf(st, "A"), events = JSON.parse(st.data.get(k!)!);
+      events[0].extra = "__DEEP__";
+      st.data.set(k!, JSON.stringify(events).replace('"__DEEP__"', deepArray));
+    }],
+  ];
+  for (const [label, damage] of shapes) {
+    const storage = new Storage(), a = session("A");
+    a.add(TIMELINE_CHUNK_EVENTS + 5);
+    assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
+    damage(storage);
+    const before = new Map(storage.data);
+    for (const id of ["A", "B"]) {
+      const j = new TimelineJournal(storage, new TestWriterLock(), id);
+      let kind = "";
+      assert.doesNotThrow(() => { kind = j.load().kind; }, `${label}: ${id}`);
+      assert.equal(kind, "protected", `${label}: ${id}`);
+      const x = session(id);
+      x.add(TIMELINE_CHUNK_EVENTS);
+      assert.equal((await commit(j, x.rec, x.s)).ok, false, `${label}: ${id} never commits over it`);
+    }
+    assert.deepEqual(new Map(storage.data), before, `${label}: zero writes`);
+  }
+});
+
+test("R1-F3: a malformed summary in a chunk about to fold is caught by the one chunk validator, with zero mutations", async () => {
+  for (const [label, bad] of [["kept only", '{"kept":[]}'], ["a kept note's saveRef a number", ""]] as const) {
+    const storage = new Storage(), a = session("A");
+    a.add(TIMELINE_CHUNK_EVENTS * TIMELINE_RETAINED_CHUNKS + 10);
+    const j = tab(storage, "A");
+    assert.ok((await commit(j, a.rec, a.s)).ok);
+    const [k0] = chunkKeysOf(storage, "A").sort((x, y) => Number(x.split("|")[2]) - Number(y.split("|")[2]));
+    if (bad) storage.data.set(k0!, bad);
+    else {
+      const sum = summarizeChunk(JSON.parse(storage.data.get(k0!)!));
+      sum.kept.push({ kind: "note", tick: 1, play: 0, text: "x", saveRef: 7 as unknown as string });
+      storage.data.set(k0!, JSON.stringify(sum));
+    }
+    a.add(TIMELINE_CHUNK_EVENTS);   // rotates chunk 0: the commit would fold it
+    const before = new Map(storage.data);
+    const r = await commit(j, a.rec, a.s);
+    assert.deepEqual([r.ok, r.ok ? "" : r.code], [false, "protected"], label);
+    assert.deepEqual(new Map(storage.data), before, `${label}: zero mutations`);
+  }
+});
+
+test("R1-F4: under quota, every chunk the plan may fold and the previous head are read before the first committed-chunk change", async () => {
+  // (1) A full-window B whose ordinary rotation is planned on entry, with a damaged previous A.
+  {
+    const storage = new Storage(), a = session("A"), b = session("B");
+    a.add(TIMELINE_CHUNK_EVENTS + 10);
+    assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
+    const jb = tab(storage, "B");
+    b.add(TIMELINE_CHUNK_EVENTS * TIMELINE_RETAINED_CHUNKS + 10);
+    assert.ok((await commit(jb, b.rec, b.s)).ok);
+    for (const k of chunkKeysOf(storage, "A")) storage.data.set(k, "[{not json");
+    b.add(TIMELINE_CHUNK_EVENTS);
+    storage.quota = storage.used + 500;
+    const before = new Map(storage.data);
+    const r = await commit(jb, b.rec, b.s);
+    assert.deepEqual([r.ok, r.ok ? "" : r.code], [false, "protected"], "full window");
+    assert.deepEqual(new Map(storage.data), before, "full window: B's committed chunks unchanged");
+  }
+  // (2) Damage beyond the first fold target: chunk 1 of three.
+  {
+    const storage = new Storage(), a = session("A"), j = tab(storage, "A");
+    a.add(TIMELINE_CHUNK_EVENTS * 3 + 10);
+    assert.ok((await commit(j, a.rec, a.s)).ok);
+    const keys = chunkKeysOf(storage, "A").sort((x, y) => Number(x.split("|")[2]) - Number(y.split("|")[2]));
+    storage.data.set(keys[1]!, "[{not json");
+    for (let i = 0; i < 900; i++) addNote(a.rec, a.s, `large ${i} ${"x".repeat(200)}`);
+    storage.quota = storage.used + 100;
+    const before = new Map(storage.data);
+    const r = await commit(j, a.rec, a.s);
+    assert.deepEqual([r.ok, r.ok ? "" : r.code], [false, "protected"], "damage beyond the first fold");
+    assert.deepEqual(new Map(storage.data), before, "damage beyond the first fold: zero mutations");
+  }
+});
+
+test("R1-F4: a steady commit changes no committed chunk before its journal; a fold left unwritten is the same history", async () => {
+  const storage = new Storage(), a = session("A"), j = tab(storage, "A");
+  a.add(TIMELINE_CHUNK_EVENTS * TIMELINE_RETAINED_CHUNKS + 10);
+  assert.ok((await commit(j, a.rec, a.s)).ok);
+  a.add(TIMELINE_CHUNK_EVENTS);   // rotates chunk 0
+  const order: string[] = [];
+  const set = storage.setItem.bind(storage);
+  // Refuse the fold itself: the journal is already committed.
+  storage.setItem = (k: string, v: string) => { order.push(k); if (k.endsWith("|0") && !v.startsWith("[")) throw new Error("refused"); set(k, v); };
+  const r = await commit(j, a.rec, a.s);
+  assert.ok(r.ok, "the commit point is the journal");
+  assert.ok(order.indexOf(TIMELINE_JOURNAL_KEY) < order.findIndex((k) => k.endsWith("|0")), "the fold comes after the journal");
+  reloadsWhole(storage, a.rec, a.s, "a fold left unwritten");
 });
