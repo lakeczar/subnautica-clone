@@ -4,7 +4,7 @@ Branch `t3/sig-1-signatures`, from root `1662e5a0` (SIM-1a merged). Brief: the c
 
 ## Stage 0: one inventory authority (steward F12)
 
-**Code `f2bdb984`.** Reported separately so it can be reviewed before anything builds on it.
+**Code `f2bdb984`, R1 fixes `cc7f55f7`.** Reported separately so it can be reviewed before anything builds on it.
 
 ### Outcome
 `src/sim/inventory.ts` is the only inventory arithmetic. The temporary ledger fork (`src/sim/systems/ledger.ts`, `FORK(ledger)` in STEW-1's CORE-HELPERS) is deleted, and every one of its seven importers now calls the authority.
@@ -43,6 +43,30 @@ All bound to `f2bdb984` and run on the RTX 4070 Laptop (alickers), because of CW
   - tour 129.9;
   - over-geared 83.9.
 - **Unchanged means bit-identical.** Every one of the **122** saves the run made has a state hash that is in root's save library (`/work/tmp/siltwake-saves/b54bfd92…`, the same game code as `1662e5a0`), and all **73** library states are reproduced. Stage 0 changes no state on any route.
+
+### R1 fixes (Sol `review/sig-1-stage0`, request changes; code `cc7f55f7`)
+- **R2, an incomplete plan is not executable.** `applySpend(s, plan)` now takes the whole plan. It refuses with `SpendRefused` before writing anything when:
+  - any `missing` is nonempty;
+  - any line is stale: its stack is gone, has changed kind, container or spendability, or holds less than the lines on it ask.
+
+  Every caller passes its plan, including the outpost pack and upgrade previews (`PackPreview.loss` and `UpgradePreview.cost` are now `SpendPlan`). A refusal there is a logic error: no current command plans a shortfall and then applies it.
+- **R1, every removal and CU total goes through the authority.**
+  - **`takeInstance(s, itemId)`** lifts one chosen item out whole, keeping its ID, charge and provenance. It now serves:
+    - the bio-cell a hull is fed: the chosen cell, with its own charge;
+    - socket installation (`systems/hosts.ts`);
+    - outpost deployment and the modules refitted into its sockets (`systems/outposts.ts`).
+
+    Socket and layout ownership stay in their domains.
+  - **The duplicate CU sums** now read `usedCapacity`, `freeCapacity`, `itemCu` and `cuOf`:
+    - `render/fleetArt.ts` `updateCreelArt`;
+    - the playthrough `Driver.usedCu`/`freeCu`, its effects oracle and its cargo loads;
+    - canister salvage, and the frame-salvage destination check;
+    - the save loader's carrier hold split (over known items only, so a corrupt save is refused as before);
+    - the Cargo panel's item sizes.
+- **Checks (`cc7f55f7`, RTX 4070 Laptop on alickers):**
+  - **`npm test`:** **1,424/1,424**. The new regressions cover an unpaid multi-material cost (refused, state unchanged), a stale plan and an over-asked stack (all or nothing), and the chosen bio-cell (its ID gone, the other cell kept, the feed from its charge).
+  - **Economy:** all six scripts exit 0.
+  - **Playthrough:** 8/8 complete with all 122 reloads equal and the minutes unchanged. All **122** save hashes are in root's library, and all **73** library states are reproduced: still bit-identical.
 
 ### Follow-ups for the coordinator
 - **CORE-HELPERS** lives on STEW-1's branch. When STEW-1 merges, delete the `ledger` row from *Open forks*, since this stage retired it. If STEW-1 merges first, I'll remove the row in my root merge.
