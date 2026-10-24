@@ -81,5 +81,146 @@ All bound to `f2bdb984` and run on the RTX 4070 Laptop (alickers), because of CW
   - playthrough: 8/8 complete, with 122/122 reloads equal and the minutes unchanged. All **122** save hashes are in root's library, and all **73** library states are reproduced: still bit-identical.
 
 ### Follow-ups for the coordinator
-- **CORE-HELPERS** lives on STEW-1's branch. When STEW-1 merges, delete the `ledger` row from *Open forks*, since this stage retired it. If STEW-1 merges first, I'll remove the row in my root merge.
+- **CORE-HELPERS:** done. STEW-1 merged without the `ledger` row.
 - **F05 beyond this stage:** the panels' clone dry runs (`carrierPanel.ts`, `panels.ts` reserve and recovery) stay as the steward accepted them. Previews SIG-1 touches later use plans.
+
+## Stage 1: every signature live, visible outposts, a cargo filter
+
+**Code `094e7820`**, on root `7df4c8ab` (stage 0 merged) and STEW-1's merge (`06442757`).
+
+### Outcome
+Every catalogue upgrade now has a recipe, and none is inert. Each is felt in play, through ordinary keys, in a real browser.
+- **Dart:**
+  - **wide-sweep sonar:** a loud, 2% sweep (8 s cooldown) finds cave openings within 180 m. Each opening flares through the murk as the sweep's front reaches it, and each becomes a chart landmark.
+  - **range tagger:** holding the aim 1.5 s on a creature, material source or lost site files it in the journal from up to 60 m (a site's data is captured, as if visited). The aim drifting off loses it.
+- **Creel:**
+  - **cutting arm:** mineral hosts anywhere become arm work, in 4 s instead of 6, with half again the bundle (+2% charge).
+  - **grapple:** a 30 m line to rock holds the hull at its length (free station-keeping in currents) and reels it in. Aimed at a frame host, it hooks the frame and reels it aboard. It releases when the line is crossed or runs out.
+  - **cargo pod:** drops a 16 CU container to the floor at a work site; the diver loads it there, and the Creel collects it. Aboard, it opens like the hold.
+- **Spindle:**
+  - **deck crane:** from the surface, it lifts up to 10 CU of non-living material or a frame from 12 m or shallower, within 8 m, in 5 s (3% charge).
+- **Mantle:**
+  - **salvage clamp:** two frames, or a 20 CU wreck part, per 6 s grip (4% charge). Gripping a disabled hull holds it in tow behind the Mantle.
+  - **scout drone:** flies on the pilot's input (the view is its camera) while the Mantle holds station. It scans sources, lost sites and cave openings within 12 m and marks its path on the chart. It comes home on recall, at its 60 m tether or after its 120 s battery.
+- **Hearthline:**
+  - **berth extension:** a mixed layout, with the service berth beside a compact berth, so the carrier carries a medium and a compact craft at once.
+- **Host modules:** a decoder lattice (×1.5, ×2.25) or survey array (300, 500, 800 m) is fitted in place at the module's host, from the Base screen. It travels with the module.
+- **In the water:** deployed outposts are built by tier and power, with every socketed module visible:
+  - the planter crop by stage;
+  - the decoder lit while it decodes;
+  - the fish trap's cage and its catch.
+
+  Modules in fixed hosts' sockets show on a small rack. The pod, the grapple line and claw, the drone and its tether, crane and clamp lines, and fitted signature hardware on each hull all show.
+- **The craft action bar:** the number row runs the piloted craft's fitted actions in a fixed order per craft, shown with their state on the HUD (cooling, active, counts). Before, keys 1–6 were bound globally and never shown.
+- **Cargo filter (UI-01):** a "Show" select (All, Materials, Food & living, Power, Gear) with counts filters every container's rows. It is panel-local and never saved.
+- **HUB-2-01:** the crown stage-order test now funds the later stage and attempts it through Fabricate and `executeCommand`. It asserts the refusal names its prerequisite and that the state is unchanged, so it fails when the prerequisite is removed.
+
+### Changed contracts
+- **Saves: schema 7** (content stays `expedition.7`). `save/bridge6.ts` converts schema 6, purely additively:
+  - per craft: `upgrades.sonar`, `tag`, `drone`, `lift` and `tow`, at New Game's value;
+  - `systems.moduleUpgrades`, starting empty.
+
+  A schema 6 save holding any schema 7 field is refused. Per DIRECTION (the immediately previous schema only), **schema 5 is now refused as an older build**, and `bridge5.ts` is deleted. The named fixtures were converted once (originals archived as `tests/fixtures/archive/*.schema6.json`). The save library's compatibility reads `BRIDGED_SCHEMA_VERSION`, so root's schema 6 library saves still load.
+- **Validation:**
+  - each signature runtime field only on its hull, and only with its upgrade fitted (fitting refuses removal while a tool is out);
+  - tagged species in `knowledge.scans` (`species:<id>`);
+  - pod containers (`<item>_pod`, 16 CU) exist exactly with their pod items;
+  - host upgrades belong to an existing decoder or survey module;
+  - the mixed layout needs the extension fitted.
+- **Commands and events (F17):**
+  - `upgrade` takes `sonar`, `tag`, `grapple`, `reel`, `pod`, `crane`, `clamp` and `drone` (`sim/signatures.ts`);
+  - a new `upgrade-host-module` command (`sim/hostUpgrades.ts`).
+
+  Both return typed outcomes and emit a typed `{ type: "signature", event }` beside the notice. Neither sets `GameState.feedback`. The older `upgrade` actions keep their feedback path, as F17 defers migration.
+- **`step.ts` hooks:**
+  - dispatching signature actions and host upgrades;
+  - the drone taking look and move input;
+  - a held line counting as an anchor in currents;
+  - the sonar ping's loudness;
+  - `stepSignatures` after movement.
+
+  All of them are small and named.
+- **The carrier:**
+  - `BERTH_SLOT_SIZES` (SYS-1's fitting rules) is the one table of slot sizes;
+  - `slotSize`, `berthLocal`, `freeBerth` and `nextBerthLayout` replace the inline `configuration === "medium"` checks in the carrier, the validator, the corridor view and the panel.
+- **One way to do things:**
+  - `fleet.fittedUpgradeKinds` is the one fitted-kinds helper (`fittings.fittedKinds` re-exports it);
+  - the arm constants live in SYS-1's arm rule (`upgrades/tools.ts`);
+  - `nearestInCone` and `inCone` are shared by the tagger and the grapple;
+  - the hub's additive flare material is exported (`flareMaterial`, with a `tint` defaulting to white, so the hub is unchanged) and reused by the sonar flares.
+- **Behaviour change:** a surfaced radio mast now adds a survey tier on top of the host's own array, as its catalogue text says. Before, it took the maximum of the two.
+
+### Economy and progression (named changes)
+- **Nine new recipes,** at SYS-1's catalogue costs; `upgrade-economy` checks every tier. On existing plans:
+  - the range tagger: Canopy reinforcement, C04;
+  - the cutting arm, grapple and cargo pod: Creel service, C05;
+  - the wide sonar: the keel survey plate;
+  - the deck crane: the Spindle tender plate;
+  - the salvage clamp and drone bay: deep service, C07 and the Rift ledger;
+  - the berth extension: carrier workshop, C03.
+
+  The plan-set tests list the new rows.
+- **Yields:**
+  - the cutting arm's bulk (×1.5) and mineral access, frontier crust, core and lattice included;
+  - the clamp's 20 CU grip (10 alloy, or 2 frames);
+  - the crane's 10 CU lifts.
+
+  These are the upgrades' intended pacing gains. The bot doesn't fit them, so route timings are unchanged.
+- **Unchanged routes:** the playthrough plays identically to stage 0. For all eight scenarios, the following are equal:
+  - outcomes and minutes;
+  - ticks;
+  - the gathered and spent ledgers;
+  - discoveries, refusals and legs;
+  - milestone ticks.
+
+  All reloads match. Only the state hashes differ, from schema 7's added fields.
+
+### Checks
+- **`npm test`** (with STEW-1's architecture guard): **1,470/1,470**. New and updated tests:
+  - `tests/sig-1-signatures.test.ts` (12): each signature through the real commands and the fixed step, with save round trips while tools are out;
+  - `tests/inventory-authority.test.ts`;
+  - `tests/field-kit.heavy.test.ts` (NullEngine): builds near the camera, rebuilds only on change, tools show and hide, disposes clean;
+  - the schema 7 bridge tests;
+  - the HUB-2-01 negative control;
+  - the plan-set expectations.
+
+  The guard passes with both import cycles exactly at their allowances; the new sim modules joined no cycle.
+- **Economy:** all six scripts exit 0.
+- **Playthrough** (`14a7234e`, RTX 4070 Laptop on alickers): 8/8 complete, equal to stage 0 as above.
+- **3090 browser check, keys only** (`0267e513`; task-owned Chrome on ANGLE GL-EGL, RTX 3090; `docs/build/streams/sig1/play.mjs`; 0 page errors). Saves are derived from the shared library's earned carrier-route save (`carrier-deep`, b54bfd92, bridged), with the upgrades rule-staged as paid (`tests/sig-1-support.ts`; the Spindle is staged, since no route builds one):
+  - **Dart:** the sonar flares the Fanvault openings at 120–180 m, and 8 chart beacons are marked; tagging the reef nursery files it at 40 m.
+  - **Creel:** the cutting arm takes 3 crust in 4 s (hold 4 → 7 CU, 3.5% charge); the grapple reels a Basin frame aboard; the dropped pod shows in Cargo as a store destination for the diver.
+  - **Spindle:** the boom and line show over the water; 2 glass come aboard for 3%.
+  - **Mantle:** the drone flies (its own view) and is recalled; the clamp line runs from the hull to the frame stack, and 2 frames come aboard for 4%.
+  - **Hearthline:** refit to the mixed layout from its console, then the Mantle and the Dart are recovered into the service and starboard berths.
+  - **Outpost:** the standard outpost shows mast and lamp, solar, locker, charger, the lit decoder and the fish trap; the lattice is fitted from Base.
+- **4070 browser check** (`094e7820`, `docs/build/streams/sig1/run-4070.sh`, RTX 4070 Laptop on alickers through ANGLE and D3D12, 0 page errors): all seven scenarios match the 3090 run, notice for notice, including the mixed berths holding the Mantle and the Dart. These are functional evidence only; frame numbers from a shared desktop host aren't judged.
+
+### Adverse cases
+- **Refusals change nothing:**
+  - a sonar or tag without the upgrade;
+  - a cooling sonar;
+  - a stale or incomplete spend plan (stage 0);
+  - removing a module whose tool is out (pod, line, drone, lift or tow);
+  - a crown stage paid for out of order.
+- **A drifting aim** loses its tag.
+- **A crossed line** releases the grapple.
+- **A drone** past its tether or battery comes home.
+- **Saves:** a save taken with each tool out round-trips. A schema 6 save holding a schema 7 field is refused.
+
+### Compromises, limits and missing evidence
+- **`FORK(stream-drivers)` grows by one:** `docs/build/streams/sig1/play.mjs` is registered in the guard's allowlist. REC-1 hadn't merged (no `scripts/rec`), and the brief said to use the existing drivers until then. Root fix: REC-2's one driver library.
+- **Tow and pod placement aren't solved against the composed world:** the towed hull rides behind on the ordinary hull sweep and releases if it snags. Root fix: NAV-1's solved paths.
+- **The drone "maps caves"** as chart cells, cave openings and scans along its path. There is no interior cave map, because the chart has none.
+- **The sonar has no visible wavefront,** only flares at the openings, timed to the front. A pulse sphere was tried and was invisible from the Dart, which sits at its centre.
+- **Hot paths:**
+  - the tagger, crane, clamp and grapple scan the static source roster only on a command (a click);
+  - per step, the tag re-checks its own target;
+  - the lift re-checks its one source;
+  - the drone reads a static 50 m grid of points (built once).
+
+  `armTarget` keeps B1's per-call scan of the source roster (now filtered by the fitted profile). Root fix: `WorldQueries.dataInBox` when CW-1's spatial index lands.
+- **The field kit** builds a short key string per visible outpost each frame (bounded by the outpost limit), to decide rebuilds.
+- **Missing evidence:**
+  - the cutting arm's completion toast wasn't captured by the driver; the HUD's hold and charge show the result;
+  - no frame or perf numbers: these were functional sessions on a shared host.
