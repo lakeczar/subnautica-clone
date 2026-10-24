@@ -104,9 +104,21 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   3. **SAVE-1:** the save library, exporting on alickers.
 
 ## Evidence reading and quality review (owner, 2026-10-23)
-- **Tiered evidence:** agents read `summary.json`, then `story.md` (with its attention list), then only the frame strips for flagged items. The budget is about 6–10 strips per review. Builders and reviewers look at frames themselves and report conclusions in text; the coordinator reads conclusions.
-- **Fixed-view visual regression** (REC-1): every run, or a short `gpu` job, captures a fixed set of camera views and compares them with the last accepted baseline per machine class. Changed views go on the attention list. Accepting a new baseline is a deliberate, recorded act.
-- **Taste review once per wave:** an Opus agent reviews the fixed-view contact sheet against GAME-DIRECTION after each wave of work, and the coordinator dispatches it. The owner's playtests remain the judge of feel.
+- **Tiered, question-led evidence** (owner, 2026-10-24): agents start from at most three questions about the change, read `summary.json`, then the play debrief or story, then only the images that answer a question:
+  - none by default for logic changes;
+  - 2–4 for visual or content changes;
+  - 6–10 as a ceiling, for a stage exit or a named risk.
+
+  Hitches the pack doesn't judge get no strips. Builders and reviewers look at frames themselves and report conclusions in text, at most five findings, each marked observed, inferred or a question for the owner. The coordinator reads conclusions.
+- **Fixed-view visual regression** (REC-1; owner, 2026-10-24):
+  - stream handoffs capture the affected subset (views tagged by region and system);
+  - root merges that touch rendering or content, and every wave end, capture the full set;
+  - each capture is compared with the last accepted baseline per machine class. Changed views go on the attention list. Accepting a new baseline is a deliberate, recorded act.
+- **Taste review once per wave:** an Opus agent reviews the fixed-view contact sheet against GAME-DIRECTION after each wave of work, together with the latest owner playtest's moment cards. The owner's notes outrank the contact sheet. The coordinator dispatches it. The owner's playtests remain the judge of feel.
+- **Owner playtests** (owner, 2026-10-24; plan B in `research/recording-feedback-opus:docs/build/research/RECORDING-FEEDBACK-OPUS.md`):
+  - **During:** the owner plays uninterrupted with OS screen recording (for HUD and sound), and uses tagged notes: `?` lost, `-` feels like work, `+` loved it, `!` bug.
+  - **After:** a playtest debrief is read by **one** Opus agent and checked by the owner's answers (at most five time-anchored questions), not by a second agent. Sol reviews the code fixes that follow.
+  - **No outside blind testers** (owner, 2026-10-24): first-timer time is estimated from the owner's play as a lower bound, calibrated per leg as a range.
 
 ## Codebase stewardship (owner, 2026-10-23)
 - **Every review brief checks reuse and simplicity:** no new parallel implementation of something that already exists; shared helpers over copies; dead or legacy code removed when it's replaced; hot-path allocation justified; obvious names and one way to do each thing.
