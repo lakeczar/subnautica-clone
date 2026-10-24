@@ -584,9 +584,9 @@ exit $rc
 });
 
 
-test("S24 (TST-16 R6): the exclusive slice's unit is never removed or rewritten while the slice holds processes, also when systemd can't be asked", async () => {
+test("S24 (TST-16 R6, R7, R10): the exclusive slice's unit is never removed or rewritten while the slice holds processes, also when systemd can't be asked or there's no unit file: maintenance stays until a rerun; a running ticket refuses an install before anything pauses", async () => {
   const c = context("excl-inuse", { config: fast });
-  const home = join(c.dir, "home"), slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
+  const home = join(c.dir, "home"), slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE, esc = slice.replace(/\./g, "\\.");
   const unitFile = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user", slice);
   const install = (args = [], extra = {}) => spawnSync("bash", [join(here, "install.sh"), ...args], { env: { ...c.env, SILTWAKE_SCHED_HOME: home, ...extra }, encoding: "utf8" });
   assert.equal(install().status, 0);
@@ -596,46 +596,51 @@ test("S24 (TST-16 R6): the exclusive slice's unit is never removed or rewritten 
   const p = spawn("systemd-run", ["--user", "--scope", "--quiet", "--collect", `--slice=${slice}`, `--unit=${unit}`, "sleep", "60"], { stdio: "ignore" });
   try {
     await until("in the slice", () => !sliceEmpty(slice), 10000);
-    // Removal: refused by the normal query, and by a failing one (fail closed).
+    // Removal: refused once the queue is paused; the pause stays, with the reason (R10-F1).
     let r = install(["--remove-exclusive-slice"]);
-    assert.equal(r.status, 3);
-    assert.match(r.stderr, /holds processes, or that could not be established/);
+    assert.equal(r.status, 4, r.stderr);
+    assert.match(r.stderr, new RegExp(`not removed: ${esc} holds processes\\. The queue admits nothing until this is done`));
+    assert.match(stateOf(c).maintenance.reason, /unit update incomplete: .* holds processes/);
+    // A failing query is not an empty slice (fail closed).
     const d = join(c.dir, "shim");
     mkdirSync(d, { recursive: true });
     writeFileSync(join(d, "systemctl"), `#!/bin/bash\nif [[ "$*" == *" show "*"${slice}"* ]]; then echo "Failed to connect to bus" >&2; exit 1; fi\nexec /usr/bin/systemctl "$@"\n`, { mode: 0o755 });
     r = install(["--remove-exclusive-slice"], { PATH: `${d}:${process.env.PATH}` });
-    assert.equal(r.status, 3, "a failed query is not an empty slice");
+    assert.equal(r.status, 4);
+    assert.match(r.stderr, /systemd could not be asked/);
     assert.ok(existsSync(unitFile));
-    // A reinstall that would change the unit (another pool size) is refused while it's in use; nothing changes.
+    // A reinstall that would change the unit (another pool size): the same; the file is untouched.
     writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, poolMiB: 4096 }));
     r = install();
-    assert.equal(r.status, 3);
-    assert.match(r.stderr, new RegExp(`not installed: ${slice.replace(/\./g, "\\.")} would change while ${slice.replace(/\./g, "\\.")} holds processes`));
+    assert.equal(r.status, 4);
+    assert.match(r.stderr, new RegExp(`not installed: ${esc} holds processes`));
     assert.equal(readFileSync(unitFile, "utf8"), before);
-    r = install([], { PATH: `${d}:${process.env.PATH}` });
-    assert.equal(r.status, 3, "nor when that can't be established");
     // With no unit file at all (the slice made implicitly), the population check still applies (R7-F1).
     rmSync(unitFile); spawnSync("systemctl", ["--user", "daemon-reload"]);
     r = install();
-    assert.equal(r.status, 3, r.stdout);
+    assert.equal(r.status, 4, r.stdout);
     assert.equal(existsSync(unitFile), false);
+    assert.ok(stateOf(c).maintenance, "still paused");
   } finally { spawnSync("systemctl", ["--user", "stop", `${unit}.scope`], { stdio: "ignore" }); p.kill(); }
   await until("empty", () => sliceEmpty(slice), 10000);
-  // A running ticket refuses it too: the check, write and reload are one queue transaction (R7-F1).
-  const q = submit(c, c.wt("q"), "--class", "quick", "--", "sleep", "5");
-  await running(c, q);
+  // Once empty, the rerun recovers: the unit is written and admission resumes.
   let r = install();
-  assert.equal(r.status, 3);
-  assert.match(r.stderr, new RegExp(`would change while tickets ${q} are running`));
-  assert.equal(existsSync(unitFile), false);
-  assert.equal(waitFor(c, q).code, 0);
-  r = install();
   assert.equal(r.status, 0, r.stderr);
   assert.notEqual(readFileSync(unitFile, "utf8"), before, "rewritten once idle");
+  assert.equal(stateOf(c).maintenance, undefined);
+  // A running ticket refuses an install before anything is paused (R7-F1).
+  const q = submit(c, c.wt("q"), "--class", "quick", "--", "sleep", "5");
+  await running(c, q);
+  r = install(["--remove-exclusive-slice"]);
+  assert.equal(r.status, 3);
+  assert.match(r.stderr, new RegExp(`would change while tickets ${q} are running`));
+  assert.deepEqual([existsSync(unitFile), stateOf(c).maintenance], [true, undefined], "nothing paused or changed");
+  assert.equal(waitFor(c, q).code, 0);
   r = install(["--remove-exclusive-slice"]);
   assert.equal(r.status, 0, r.stderr);
   assert.equal(existsSync(unitFile), false);
 });
+
 
 test("S25 (TST-16 R8, R9): the exclusive unit changes under maintenance: admission pauses (queued work waits, none fails), systemd's own view is verified, a failure leaves maintenance and a rerun recovers; an equal file with a stale manager, an unreadable file, and removal", async () => {
   const c = context("excl-maint", { config: fast });
@@ -727,4 +732,77 @@ exec /usr/bin/systemctl "$@"
   r = install(["--remove-exclusive-slice"]);
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual([existsSync(unitFile), stateOf(c).maintenance, sliceProp(slice, "CPUWeight")], [false, undefined, "[not set]"]);
+});
+
+test("S26 (TST-16 R10): installers are serialized (one never adopts, overwrites or clears another's mark; admission resumes only on the owner's verified finish), a dead installer's mark is taken over by the rerun, and the reload has a hard deadline (KILL after TERM)", async () => {
+  const c = context("excl-serial", { config: fast });
+  const home = join(c.dir, "home"), slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
+  const unitFile = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user", slice);
+  const d = join(c.dir, "shim");
+  mkdirSync(d, { recursive: true });
+  writeFileSync(join(d, "systemctl"), `#!/bin/bash
+m=$(cat "${d}/mode" 2>/dev/null)
+if [[ " $* " == *" daemon-reload "* ]]; then
+  case "$m" in
+    hold:*) : > "${d}/mode"; sleep "\${m#hold:}"; exec /usr/bin/systemctl "$@" ;;
+    ignore-term) trap '' TERM; while :; do sleep 0.2; done ;;
+  esac
+fi
+exec /usr/bin/systemctl "$@"
+`, { mode: 0o755 });
+  const env = (extra = {}) => ({ ...c.env, SILTWAKE_SCHED_HOME: home, ...extra }), shimmed = { PATH: `${d}:${process.env.PATH}` };
+  const start = (args = [], extra = {}) => { const p = spawn("bash", [join(here, "install.sh"), ...args], { env: env(extra), stdio: ["ignore", "pipe", "pipe"] }); p.out = ""; p.stdout.on("data", (x) => { p.out += x; }); p.stderr.on("data", (x) => { p.out += x; }); p.done = new Promise((res) => p.on("exit", res)); return p; };
+  const install = (args = [], extra = {}) => spawnSync("bash", [join(here, "install.sh"), ...args], { env: env(extra), encoding: "utf8", timeout: 120000 });
+  const pool = (mib) => writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, poolMiB: mib }));
+  assert.equal(install().status, 0);
+
+  // 1. Two installers: B waits for A's whole operation; A's mark stays A's; nothing is admitted until A's verified finish.
+  pool(4096);
+  writeFileSync(join(d, "mode"), "hold:8");
+  const A = start([], shimmed);
+  await until("A paused the queue", () => stateOf(c).maintenance, 15000);
+  const opA = stateOf(c).maintenance.op;
+  const B = start(); // wants the same unit: a matching snapshot once A is done
+  for (let i = 0; i < 10 && A.exitCode == null; i++) {
+    assert.equal(stateOf(c).maintenance?.op, opA, "B never adopts, overwrites or clears A's mark");
+    assert.equal(B.exitCode, null, "B waits for the installer lock");
+    await sleep(500);
+  }
+  assert.equal(await A.done, 0, A.out);
+  assert.equal(await B.done, 0, B.out);
+  assert.equal(stateOf(c).maintenance, undefined);
+  const q = submit(c, c.wt("q"), "--class", "quick", "--", "true");
+  assert.equal(waitFor(c, q).code, 0);
+  assert.equal(sliceProp(slice, "MemoryMax"), String(Number(readFileSync(unitFile, "utf8").match(/MemoryMax=(\d+)M/)[1]) * 1048576));
+
+  // 2. An installer killed mid-reload: its mark stays (dead owner); the rerun takes it over and recovers.
+  pool(3072);
+  writeFileSync(join(d, "mode"), "hold:30");
+  const K = start([], shimmed);
+  await until("K paused the queue", () => stateOf(c).maintenance, 15000);
+  const k = stateOf(c).maintenance;
+  await sleep(1000);
+  killOwned(k.by);
+  await K.done;
+  spawnSync("pkill", ["-KILL", "-f", join(d, "systemctl")]); // its orphaned reload shim (ours, in the private dir)
+  assert.equal(stateOf(c).maintenance?.op, k.op, "a killed installer's mark stays");
+  assert.match(hc(c, ["status"]).out, /MAINTENANCE .*ended.*Recover: rerun scripts\/heavy\/install\.sh/);
+  const r = install();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(stateOf(c).maintenance, undefined, "taken over and cleared");
+
+  // 3. A reload that ignores TERM: killed after the grace; maintenance stays; no shim left; a rerun recovers.
+  pool(2048);
+  writeFileSync(join(d, "mode"), "ignore-term");
+  const t0 = Date.now();
+  const x = install([], { ...shimmed, SILTWAKE_EXCLUSIVE_RELOAD_MS: "1500" });
+  assert.equal(x.status, 4, x.stderr);
+  assert.ok(Date.now() - t0 < 15000, `bounded: ${Date.now() - t0} ms`);
+  assert.match(x.stderr, /systemd's reload overran 1\.5 s and was stopped \(killed\)/);
+  assert.ok(stateOf(c).maintenance);
+  await sleep(500);
+  assert.equal(spawnSync("pgrep", ["-f", join(d, "systemctl")]).status, 1, "the reload was really stopped");
+  writeFileSync(join(d, "mode"), "");
+  assert.equal(install().status, 0);
+  assert.equal(stateOf(c).maintenance, undefined);
 });

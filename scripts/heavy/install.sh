@@ -12,7 +12,7 @@
 #   scripts/heavy/install.sh --uninstall     remove `current`: every shim falls back to v1
 #                                            (the exclusive slice's unit stays: inert without jobs)
 #   scripts/heavy/install.sh --remove-exclusive-slice   remove that unit too; refuses
-#                                            unless no ticket is running and the slice is empty
+#                                            while a ticket runs, stops incomplete if the slice holds processes
 #
 # Every install also writes the exclusive slice's unit file once (TST-16):
 # siltwake_exclusive.slice, a top-level user slice with a fixed CPUWeight and
@@ -20,8 +20,9 @@
 # their CPU priority lasts exactly as long as their processes; nothing is set
 # at runtime. Older versions never place jobs there, so rolling back needs no
 # cleanup. Uninstall leaves the unit (it does nothing without jobs); removing it
-# is a separate step that checks and removes under the queue's state lock, so
-# no job can be admitted between the check and the removal.
+# is a separate step. Both go through exclusive-unit.mjs: one installer at a
+# time (install.lock), admission paused (maintenance) while systemd changes, and
+# resumed only by that operation's own verified result.
 #   scripts/heavy/install.sh --gpu-guard     wrap every Playwright Chrome binary so a GPU
 #                                            launch needs the GPU lease (chrome-guard.sh);
 #                                            per-user change: coordinator approval
@@ -105,10 +106,11 @@ install_guard() {
 # The exclusive slice's unit (TST-16), written once: a fixed CPUWeight, and the
 # heavy slice's caps for this machine (policy sliceLimits), so moving an
 # exclusive job here escapes no aggregate limit. Changed only when systemd's
-# view differs, never under a measurement: admission is paused (maintenance)
-# while systemd reloads, and resumes only once its properties are verified
-# (exclusive-unit.mjs). Before anything else is switched: a refusal or an
-# incomplete update changes nothing else.
+# view differs, never under a measurement: under the installer lock, admission
+# is paused (maintenance, owned by this operation) while systemd reloads, and
+# resumes only once its properties are verified (exclusive-unit.mjs). Before
+# anything else is switched: a refusal (3) or an incomplete update (4) changes
+# nothing else.
 if [[ -n $excl ]]; then
   SILTWAKE_SCHED_DIR="$dir" node "$src/exclusive-unit.mjs" write "$excl" "$excl_dir" || exit $?
 fi

@@ -129,11 +129,10 @@ export const self = () => ({ pid: process.pid, start: procStart(process.pid) });
 export function systemctl(...args) {
   return spawnSync("systemctl", ["--user", ...args], { encoding: "utf8" });
 }
-/** systemctl with a bound (ms): { ok, out, error }. ok only on exit 0, with no
- * spawn error, timeout or signal. For calls made while holding the state lock,
- * which queue clients wait 30 s for (R8-F1, F2). */
+/** systemctl with a hard bound (ms; killed at it): { ok, out, error }. ok only
+ * on exit 0, with no spawn error, timeout or signal. */
 export function systemctlBounded(timeoutMs, ...args) {
-  const r = spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", timeout: timeoutMs });
+  const r = spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", timeout: timeoutMs, killSignal: "SIGKILL" }); // a hard deadline, waited for (R10-F3)
   const ok = r.status === 0 && !r.error && !r.signal;
   return { ok, out: r.stdout ?? "", error: ok ? null : (r.error?.code === "ETIMEDOUT" ? `timed out after ${timeoutMs / 1000} s` : r.error?.message ?? (r.signal ? `killed by ${r.signal}` : (r.stderr || `exit ${r.status}`).trim())) };
 }
@@ -145,20 +144,24 @@ export function systemctlBounded(timeoutMs, ...args) {
  * populated, so a reservation is never freed on a guess.
  */
 export function scopePopulated(unit) { return unitPopulated(`${unit}.scope`); }
-/** Whether a unit (a scope, a slice) holds processes, failing closed: a failed
- * query, or an active unit whose cgroup can't be read, counts as populated;
- * only a conclusive not-found or an empty cgroup counts as empty. */
-export function unitPopulated(name, { timeoutMs = 0 } = {}) {
-  const r = timeoutMs ? systemctlBounded(timeoutMs, "show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", name) : systemctl("show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", name);
-  if (timeoutMs ? !r.ok : r.status !== 0) return true;
-  if (timeoutMs) r.stdout = r.out;
-  const p = Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+/** Whether a unit (a scope, a slice) holds processes, failing closed: anything
+ * but a conclusive "empty" counts as populated. */
+export function unitPopulated(name) { return unitPopulation(name) !== false; }
+/** A unit's population: true, false, or a reason it couldn't be told. Empty
+ * only when conclusive: not found, inactive with no cgroup, or an explicit
+ * "populated 0". timeoutMs: a hard bound on the query. */
+export function unitPopulation(name, { timeoutMs = 0 } = {}) {
+  const args = ["show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", name];
+  const r = timeoutMs ? systemctlBounded(timeoutMs, ...args) : (() => { const x = systemctl(...args); return { ok: x.status === 0, out: x.stdout ?? "", error: x.stderr }; })();
+  if (!r.ok) return `systemd could not be asked (${(r.error || "failed").trim().slice(0, 120)})`;
+  const p = Object.fromEntries(r.out.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   if (p.LoadState === "not-found") return false;
   if (p.ControlGroup) {
     const known = populatedFromEvents(cgroupRead(`/sys/fs/cgroup${p.ControlGroup}`, "cgroup.events"));
     if (known != null) return known;
   }
-  return p.ActiveState !== "inactive" && p.ActiveState !== "failed";
+  if (p.ActiveState === "inactive" || p.ActiveState === "failed") return false;
+  return `its cgroup's population could not be read (${p.ActiveState})`;
 }
 
 /** A cgroup.events text's population: true or false only when it says so

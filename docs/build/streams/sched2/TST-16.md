@@ -18,7 +18,24 @@ Four review rounds each found another lifetime race in one mechanism: changing a
 - **Deleted:** `handover.mjs`, the boost journal (`state.boost`), the freeze (`state.frozen`), the backstop, the runtime setter and read-back, `install.sh --rollback` and the thaw. Rollback is back to its pre-TST-16 form.
 - **R4's findings** (F1 freeze ownership across installer operations, F2 a reset outliving a killed handover, F3 freeze visibility) concern only that machinery, so they are removed with it. The diff is much smaller.
 
-## R9 review responses
+## R10 review responses
+
+Review `1895713a` on `review/tst-16-r10`, on `028793ae`: two P2s and one P3, all in how `exclusive-unit.mjs` ends an operation.
+- **F1 (P2), a failed recheck cleared maintenance.** Every failure after the pause now keeps the mark: the population recheck (populated, or unknown), the file read, the write, the reload and the verification. Each records "unit update incomplete: …; rerun install.sh" and exits 4. Exit 3 ("refused, nothing paused") is used only before the pause, when a ticket runs or a live installer holds the mark. Only this operation's own verified final state clears the mark; an empty queue is never taken as proof.
+- **F2 (P2), installers weren't serialized.**
+  - **The installer lock:** `install.sh`'s exclusive-unit work runs under `<state>/install.lock` (flock, waits up to 10 min). It's held for the whole operation, from the first read to the final clear, so a second installer waits instead of adopting, overwriting or clearing a live update's mark. The lock is separate from `state.lock`, so admission never waits on systemd work. A dead installer releases it with its process.
+  - **Operation identity:** the mark carries `op` (a random nonce) and `by` (pid and start time). Only the owner clears or rewrites it. A newcomer finding a mark whose owner is alive refuses (exit 3). If the owner is dead, it takes the mark over ("taking over …") and redoes the update from scratch, which is the existing recovery.
+  - **Gone:** the pre-transaction equality path and the duplicate preflight. Every decision happens after the lock and the pause. An unchanged file with a matching manager skips the reload but is still verified.
+- **F3 (P3), the reload bound was only a TERM.** The reload is now an async child: TERM at the deadline (120 s), KILL 5 s later, and the operation waits for its exit event. Overrunning counts as incomplete either way ("systemd's reload overran N s and was stopped (killed)"), so maintenance is kept. The deadline can be shortened by `SILTWAKE_EXCLUSIVE_RELOAD_MS` only for private (test) state. Queries are bounded by a hard KILL at 10 s (`systemctlBounded`).
+- **Tests:**
+  - **S24, rewritten:** a populated slice, a population query that fails, a pool change while populated, and a fileless populated slice. Each exits 4 with maintenance kept and the unit untouched. Once the slice empties, a rerun recovers. A running ticket refuses with exit 3 and pauses nothing.
+  - **S26, new:**
+    - **two installers:** B waits on the installer lock while A's reload is held 8 s. A's `op` stays the mark throughout. A finishes, then B, a matching snapshot, verifies and finishes. Admission then resumes;
+    - **a killed installer:** an installer SIGKILLed mid-reload leaves its mark, and `status` shows "ended" and the recovery. The rerun takes it over and clears it;
+    - **a TERM-ignoring reload with a 1.5 s deadline:** exit 4 within the bound, "overran 1.5 s and was stopped (killed)", maintenance kept, no reload process left. A rerun recovers.
+  - **Negative control:** with the R9 code (`028793ae`), the new S24 fails at the populated recheck (exit 3, maintenance cleared), and S26 fails at "B waits for the installer lock".
+
+## R9 review responses (history; R10 adds the installer lock and operation identity)
 
 Review `fddd7ae8` on `review/tst-16-r9`, on `b8e9b103`: three P2s, all from external systemd work done while holding the admission lock (F1: per-call bounds didn't bound the whole critical section; F2: a failed restore was forgotten; F3: a read error counted as absent, and rollback deleted the unit). Coordinator's decision: stop doing that, rather than add deadlines.
 - **Maintenance, set and cleared in short transactions.** `exclusive-unit.mjs`:
@@ -196,7 +213,9 @@ Review `ee0bee6d` on `review/tst-16-r3`, on `ef037871`: one P2.
     - uninstall leaves the inert unit; `--remove-exclusive-slice` refuses while a ticket runs, and removes it once done (R5).
   - **S23 (R5-F1):** a unit removed between readiness and launch (a default slice under the right name), and a wrong memory cap: `unavailable`, `DISTURBED`, judged on the live slice reading.
   - **S24 (R6, R7):** neither removal nor a changing reinstall happens while the slice holds processes, also when systemd can't be asked or there's no unit file, nor while a ticket runs.
+  - **S24 (R10):** every failure after the pause keeps maintenance, and a rerun recovers.
   - **S25 (R8, R9):** unit changes under maintenance: a held reload (queued work waits, none fails), a failed one (maintenance kept, rerun recovers), a stale manager with an equal file, an unreadable file, removal.
+  - **S26 (R10):** serialized installers (the owner's mark is untouched until its own verified finish), takeover from a killed installer, and the reload's hard deadline with a TERM-ignoring child.
   - **SCHED-1 test 7** checks the job's own measurement.
 - **Full suites** after R9 at `110f12d4`: SCHED-1 **23/23**, SCHED-2 **25/25**, SCHED-2b **27/27**, all local and sequential.
   - **Fast tier:** passed through the queue on alickers (`--machine 4070`, ticket `261023-231913-e8b7`, exit 0, 138 files, evidence for `110f12d4`), during CW-1's 3090 exclusive window.
