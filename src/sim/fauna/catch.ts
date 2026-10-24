@@ -98,7 +98,7 @@ export function cookCatch(s: GameState, portions: number): string | null {
   const p = cookPlan(s, portions);
   if (p.refusal) return p.refusal;
   const where = cookerHere(s) as Cooker, order = [where.to, ...where.raw.filter((c) => c !== where.to)];
-  applySpend(s, planSpend(s, p.use, order.filter((c) => s.inventory.containers.some((k) => k.id === c))).lines);
+  applySpend(s, planSpend(s, p.use, order.filter((c) => s.inventory.containers.some((k) => k.id === c))));
   addItem(s, "meal", p.meals, p.to!);
   const raw = (COOKABLE).filter((k) => p.use[k] > 0).map((k) => `${p.use[k]} ${k === "small_fish" ? "fish" : "roe"}`).join(" and ");
   s.feedback = `Cooked ${raw} at the ${p.cooker} · ${p.meals} ${p.meals === 1 ? "meal" : "meals"} → ${containerLabel(s, p.to!)}. Meals keep; eat with F.`;
@@ -158,7 +158,7 @@ export function feedPlanter(s: GameState, sys: SystemsState, hostId: string, soc
   if (no) return no;
   const host = hostById(s, sys, hostId)!, moduleId = host.sockets.find((k) => k.id === socketId)!.occupant!.itemId!;
   const crop = sys.planters.find((p) => p.moduleId === moduleId)!, grow = SEEDS[crop.seed].growSeconds;
-  applySpend(s, planSpend(s, { planter_feed: 1 }, workContainers(s, sys, host)).lines);
+  applySpend(s, planSpend(s, { planter_feed: 1 }, workContainers(s, sys, host)));
   crop.progress = Math.min(grow, crop.progress + grow * FERTILISER.boost);
   s.feedback = `Planter fed · ${SEEDS[crop.seed].label} jumps to ${Math.floor(100 * crop.progress / grow)}% grown.`;
   return null;

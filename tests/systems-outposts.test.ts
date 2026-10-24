@@ -154,7 +154,7 @@ test("packing previews the exact loss and moves, then returns the kit under its 
   const totals = conservedTotals(s, sys);
   const p = packPreview(s, sys, id);
   assert.equal(p.refusal, null);
-  assert.deepEqual(p.loss.map((l) => [l.kind, l.quantity, l.from]), [["structural_alloy", 1, outpostLockerId(id)]]);
+  assert.deepEqual(p.loss.lines.map((l) => [l.kind, l.quantity, l.from]), [["structural_alloy", 1, outpostLockerId(id)]]);
   assert.deepEqual(p.locker.map((m) => [m.kind, m.quantity]).sort(), [["silica_glass", 1], ["structural_alloy", 1]]);
   assert.deepEqual(p.modules.map((m) => m.itemId), [charger]);
   assert.equal(p.needCu, 6 + 2 + 2 + 1);
@@ -228,7 +228,7 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   const totals = conservedTotals(s, sys);
   const p = packPreview(s, sys, id);
   assert.equal(p.refusal, null);
-  assert.deepEqual(p.loss.map((l) => [l.kind, l.quantity, l.from]), [["structural_alloy", 1, outpostLockerId(id)], ["flex_membrane", 1, "diver"]]);
+  assert.deepEqual(p.loss.lines.map((l) => [l.kind, l.quantity, l.from]), [["structural_alloy", 1, outpostLockerId(id)], ["flex_membrane", 1, "diver"]]);
   assert.deepEqual(p.locker.map((m) => [m.kind, m.quantity]).sort(), [["meal", 24], ["reserve_cell", 1], ["structural_alloy", 2]]);
   assert.deepEqual(p.work, [
     'Decode "Relay hut fragment" at 55% pauses and travels with its decoder module. It resumes when the module is socketed again.',

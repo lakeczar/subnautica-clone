@@ -1,5 +1,6 @@
 import type { Mesh, Scene, ShaderMaterial } from "@babylonjs/core";
-import { ITEMS, SOURCES, TECH_RECORDS } from "../content/registry.js";
+import { SOURCES, TECH_RECORDS } from "../content/registry.js";
+import { usedCapacity } from "../sim/inventory.js";
 import { CANOPY_MARGIN_RIBS, CANOPY_STOP, CREEL_SLIP_SOLIDS } from "../content/routes.js";
 import { terrainHeight } from "../sim/world.js";
 import type { RenderRegion } from "./regions.js";
@@ -164,8 +165,7 @@ export function updateCreelArt(mesh: Mesh, state: GameState | null, v: VehicleSt
   const frames = state ? state.inventory.items.filter((i) => i.kind === "tagged_frame" && i.containerId === v.cargoId)
     .reduce((n, i) => n + i.quantity, 0) : 0;
   const capacity = state?.inventory.containers.find((c) => c.id === v.cargoId)?.capacity ?? 64;
-  const cu = state ? state.inventory.items.filter((i) => i.containerId === v.cargoId && !i.fitted)
-    .reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0) : 0;
+  const cu = state ? usedCapacity(state, v.cargoId) : 0;
   for (const c of mesh.getChildMeshes(true)) {
     const name = c.name;
     if (name === `${v.id}.mount.bare`) c.setEnabled(!mount);

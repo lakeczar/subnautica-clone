@@ -28,7 +28,7 @@ export function placeBeacon(s: GameState, sys: SystemsState, name: string): stri
     return `${PLAYER_BEACON_LIMIT} beacons are already placed. Collect one first.`;
   const pay = planSpend(s, { nav_beacon: 1 }, ["diver"]);
   if (Object.keys(pay.missing).length) return "Carry a navigation beacon to place one.";
-  applySpend(s, pay.lines);
+  applySpend(s, pay);
   sys.beacons.push({ id: nextId(s, "beacon"), name: clean, category: "player", position: { ...s.player.pose.position }, source: "player" });
   s.feedback = `Beacon "${clean}" placed.`;
   return null;

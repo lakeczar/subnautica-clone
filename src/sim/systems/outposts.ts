@@ -6,10 +6,10 @@ import { DECODABLES, DECODE_MINUTES } from "../../content/systems/decodes.js";
 import { SEEDS } from "../../content/systems/cultivation.js";
 import { FIXED_HOSTS, moduleOfItem, OUTPOST_LIMIT, OUTPOST_SITING, OUTPOST_TIER_ORDER, OUTPOST_TIERS, tierOfKit } from "../../content/systems/hosts.js";
 import type { OutpostTier } from "../../content/systems/hosts.js";
-import { applySpend, containerAccepts, containerLabel, costText, cuOf, distance, freeCapacity, labelOf, planSpend, restoreInstance } from "../inventory.js";
+import { applySpend, containerAccepts, containerLabel, costText, cuOf, distance, freeCapacity, freedBy, labelOf, planSpend, restoreInstance, takeInstance } from "../inventory.js";
 import type { GameState, Vec3 } from "../types.js";
 import { accessible, forgetRemembered, outpostHost, outpostLockerId, workContainers } from "./hosts.js";
-import type { SpendLine } from "../inventory.js";
+import type { SpendPlan } from "../inventory.js";
 import { layoutProblem } from "./state.js";
 import type { OutpostState, PowerSource, SystemsState } from "./state.js";
 
@@ -107,12 +107,12 @@ export function deployOutpost(s: GameState, sys: SystemsState, kitItemId: string
     id: kitItemId, tier: p.tier!, name: packed?.name ?? nextName(sys),
     position: { ...position }, region: p.region, power: p.power!,
   };
-  s.inventory.items = s.inventory.items.filter((i) => i.id !== kitItemId);
+  takeInstance(s, kitItemId);
   sys.packed = sys.packed.filter((k) => k !== packed);
   sys.outposts.push(outpost);
   s.inventory.containers.push({ id: outpostLockerId(outpost.id), kind: "locker", capacity: OUTPOST_TIERS[outpost.tier].lockerCu, ownerId: outpost.id });
   for (const r of p.refit) {
-    s.inventory.items = s.inventory.items.filter((i) => i.id !== r.itemId);
+    takeInstance(s, r.itemId);
     sys.sockets.push({ hostId: outpost.id, socket: r.socket, itemId: r.itemId, kind: r.kind });
     forgetRemembered(sys, r.itemId);
   }
@@ -138,8 +138,8 @@ export interface PackPreview {
   /** Kit kind and destination. */
   kit: string | null;
   to: string;
-  /** Anchor and seal material spent by packing. */
-  loss: SpendLine[];
+  /** Anchor and seal material spent by packing: the plan packing applies. */
+  loss: SpendPlan;
   /** Locker contents that move with the pack. */
   locker: PackMove[];
   modules: PackMove[];
@@ -153,7 +153,7 @@ export interface PackPreview {
  * and crops pause and travel with their module. Refused, with nothing changed,
  * when the material or the room isn't there. */
 export function packPreview(s: GameState, sys: SystemsState, outpostId: string, to = "diver"): PackPreview {
-  const base: PackPreview = { refusal: null, outpostId, kit: null, to, loss: [], locker: [], modules: [], work: [], needCu: 0, freeCu: 0 };
+  const base: PackPreview = { refusal: null, outpostId, kit: null, to, loss: { lines: [], missing: {} }, locker: [], modules: [], work: [], needCu: 0, freeCu: 0 };
   const o = sys.outposts.find((o) => o.id === outpostId);
   if (!o) return { ...base, refusal: "That outpost isn't deployed." };
   const host = outpostHost(sys, o), tier = OUTPOST_TIERS[o.tier];
@@ -163,7 +163,7 @@ export function packPreview(s: GameState, sys: SystemsState, outpostId: string, 
   if (host.lockers.includes(to) || !accessible(s, sys, to)) return { ...base, refusal: "Pack into your hold or a reachable craft hold." };
   const sources = [...host.lockers, to];
   const loss = planSpend(s, tier.packLoss, sources);
-  base.loss = loss.lines;
+  base.loss = loss;
   const paid = new Map<string, number>();
   for (const l of loss.lines) paid.set(l.itemId, (paid.get(l.itemId) ?? 0) + l.quantity);
   base.locker = s.inventory.items.filter((i) => host.lockers.includes(i.containerId)).flatMap((i) => {
@@ -174,8 +174,7 @@ export function packPreview(s: GameState, sys: SystemsState, outpostId: string, 
     .map((e) => ({ itemId: e.itemId, kind: e.kind, quantity: 1, cu: cuOf(e.kind), from: e.socket }));
   base.work = workLines(sys, base.modules.map((m) => m.itemId));
   base.needCu = cuOf(tier.kit) + [...base.locker, ...base.modules].reduce((n, m) => n + m.cu, 0);
-  const freedAtTo = loss.lines.filter((l) => l.from === to).reduce((n, l) => n + cuOf(l.kind) * l.quantity, 0);
-  base.freeCu = freeCapacity(s, to) + freedAtTo;
+  base.freeCu = freeCapacity(s, to) + freedBy(loss, to);
   if (Object.keys(loss.missing).length)
     return { ...base, refusal: `Packing breaks the anchor seals: it spends ${costText(tier.packLoss)}. Bring ${costText(loss.missing)} in your hold or the outpost locker. Nothing packed.` };
   const refused = [...base.locker, ...base.modules].find((m) => !containerAccepts(s, to, m.kind));
@@ -212,25 +211,26 @@ export function packOutpost(s: GameState, sys: SystemsState, outpostId: string, 
   restoreInstance(s, o.id, OUTPOST_TIERS[o.tier].kit, to);
   s.inventory.containers = s.inventory.containers.filter((c) => c.id !== outpostLockerId(o.id));
   sys.outposts = sys.outposts.filter((x) => x !== o);
-  s.feedback = `${o.name} packed into ${containerLabel(s, to)} · spent ${p.loss.map((l) => `${l.quantity} × ${labelOf(l.kind)}`).join(", ")}${p.work.length ? ` · ${p.work.length} job${p.work.length === 1 ? "" : "s"} paused` : ""}.`;
+  s.feedback = `${o.name} packed into ${containerLabel(s, to)} · spent ${p.loss.lines.map((l) => `${l.quantity} × ${labelOf(l.kind)}`).join(", ")}${p.work.length ? ` · ${p.work.length} job${p.work.length === 1 ? "" : "s"} paused` : ""}.`;
   return null;
 }
 
-export interface UpgradePreview { refusal: string | null; from: OutpostTier | null; to: OutpostTier | null; cost: SpendLine[] }
+const NO_SPEND: SpendPlan = { lines: [], missing: {} };
+export interface UpgradePreview { refusal: string | null; from: OutpostTier | null; to: OutpostTier | null; cost: SpendPlan }
 /** Raises a deployed outpost one tier in place: more sockets, a bigger locker. */
 export function upgradePreview(s: GameState, sys: SystemsState, outpostId: string): UpgradePreview {
   const o = sys.outposts.find((o) => o.id === outpostId);
-  if (!o) return { refusal: "That outpost isn't deployed.", from: null, to: null, cost: [] };
+  if (!o) return { refusal: "That outpost isn't deployed.", from: null, to: null, cost: NO_SPEND };
   const next = OUTPOST_TIER_ORDER[OUTPOST_TIER_ORDER.indexOf(o.tier) + 1];
-  if (!next) return { refusal: `${o.name} is already the highest tier.`, from: o.tier, to: null, cost: [] };
+  if (!next) return { refusal: `${o.name} is already the highest tier.`, from: o.tier, to: null, cost: NO_SPEND };
   const t = OUTPOST_TIERS[next], host = outpostHost(sys, o), cost = t.upgrade ?? {};
-  if (!(s.knowledge.blueprints as readonly string[]).includes(t.bp)) return { refusal: `You need the ${t.label.toLowerCase()} plans.`, from: o.tier, to: next, cost: [] };
+  if (!(s.knowledge.blueprints as readonly string[]).includes(t.bp)) return { refusal: `You need the ${t.label.toLowerCase()} plans.`, from: o.tier, to: next, cost: NO_SPEND };
   if (s.player.controlledVehicleId || s.player.interiorId || distance(s.player.pose.position, o.position) > OUTPOST_SITING.reach)
-    return { refusal: `Work at ${o.name} to upgrade it.`, from: o.tier, to: next, cost: [] };
+    return { refusal: `Work at ${o.name} to upgrade it.`, from: o.tier, to: next, cost: NO_SPEND };
   const plan = planSpend(s, cost, workContainers(s, sys, host));
   if (Object.keys(plan.missing).length)
-    return { refusal: `Upgrading needs ${costText(cost)}; missing ${costText(plan.missing)}.`, from: o.tier, to: next, cost: plan.lines };
-  return { refusal: null, from: o.tier, to: next, cost: plan.lines };
+    return { refusal: `Upgrading needs ${costText(cost)}; missing ${costText(plan.missing)}.`, from: o.tier, to: next, cost: plan };
+  return { refusal: null, from: o.tier, to: next, cost: plan };
 }
 export function upgradeOutpost(s: GameState, sys: SystemsState, outpostId: string): string | null {
   const p = upgradePreview(s, sys, outpostId);

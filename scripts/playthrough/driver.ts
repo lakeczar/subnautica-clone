@@ -4,8 +4,9 @@
  * and panel buttons go through `executeCommand`. Nothing here writes game state
  * directly. */
 import fs from "node:fs";
-import { ITEMS, RECIPES, SOURCES, techRecord } from "../../src/content/registry.js";
+import { RECIPES, SOURCES, techRecord } from "../../src/content/registry.js";
 import type { ItemKind, RecipeId } from "../../src/content/registry.js";
+import { freeCapacity, usedCapacity } from "../../src/sim/inventory.js";
 import { executeCommand } from "../../src/sim/step.js";
 import { StepGuard } from "../../src/sim/stepGuard.js";
 import { createGame } from "../../src/sim/state.js";
@@ -230,14 +231,9 @@ export class Driver {
     return this.state.inventory.items.filter((i) => i.kind === kind && (!containers || containers.includes(i.containerId)))
       .reduce((n, i) => n + i.quantity, 0);
   }
-  usedCu(container: string): number {
-    return this.state.inventory.items.filter((i) => i.containerId === container && !i.fitted)
-      .reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0);
-  }
-  freeCu(container: string): number {
-    const c = this.state.inventory.containers.find((c) => c.id === container);
-    return c ? c.capacity - this.usedCu(container) : 0;
-  }
+  /** The inventory authority's totals (`sim/inventory.ts`), for the driver's plans. */
+  usedCu(container: string): number { return usedCapacity(this.state, container); }
+  freeCu(container: string): number { return freeCapacity(this.state, container); }
   facility(id: string): boolean { return this.state.world.facilities.some((f) => f.id === id && f.repaired); }
   crafted(id: string): boolean { return (this.state.knowledge.crafted as readonly string[]).includes(id); }
   knows(id: string): boolean { return this.known.has(id); }

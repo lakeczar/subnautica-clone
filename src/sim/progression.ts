@@ -479,7 +479,7 @@ export function craft(
     s.world.maintenance.alloy -= 2;
     s.world.maintenance.glass--;
     s.world.maintenance.membrane -= 3;
-  } else applySpend(s, planSpend(s, r.cost, bins, "oldest").lines);
+  } else applySpend(s, planSpend(s, r.cost, bins, "oldest"));
   const hull = hullOutput(r), refit = refitHull(id), tier = refitTier(id), suit = suitRefit(id);
   if (r.output === "pod_repair")
     s.world.facilities.find((f) => f.id === "pod_fabricator")!.repaired = true;

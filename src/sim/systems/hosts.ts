@@ -5,7 +5,7 @@
 import { HEARTHLINE_SOCKETS } from "../../content/fleet/hearthlineInterior.js";
 import { CARRIER_OCCUPANTS, FIXED_HOSTS, HOST_REACH, MODULES, moduleOfItem, OUTPOST_TIERS } from "../../content/systems/hosts.js";
 import type { FixedHostId, ModuleKind } from "../../content/systems/hosts.js";
-import { containerAccepts, containerAccessible, containerLabel, cuOf, distance, facility, freeCapacity, labelOf, nearCanopyStop, nearPod, nearWorkshop, restoreInstance, usedCapacity } from "../inventory.js";
+import { containerAccepts, containerAccessible, containerLabel, cuOf, distance, facility, freeCapacity, labelOf, nearCanopyStop, nearPod, nearWorkshop, restoreInstance, takeInstance, usedCapacity } from "../inventory.js";
 import type { GameState, Vec3, VehicleState } from "../types.js";
 import type { OutpostState, PowerSource, SocketEntry, SystemsState } from "./state.js";
 
@@ -167,7 +167,7 @@ export function installModule(s: GameState, sys: SystemsState, hostId: string, s
   if (!workContainers(s, sys, host).includes(item.containerId) || item.fitted) return "Carry the module, or keep it in this host's locker.";
   if (!slot.accepts.includes(module)) return `This socket takes ${slot.accepts.map((m) => MODULES[m].label.toLowerCase()).join(", ")}, not the ${MODULES[module].label.toLowerCase()}.`;
   if (item.containerId === moduleLockerId(item.id)) return "A locker module can't hold itself.";
-  s.inventory.items = s.inventory.items.filter((i) => i !== item);
+  takeInstance(s, item.id);
   sys.sockets.push({ hostId, socket: socketId, itemId, kind: item.kind });
   forgetRemembered(sys, itemId);
   syncCarrierSocket(s, host, socketId, carrierOccupantName(socketId, module));

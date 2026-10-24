@@ -1,7 +1,13 @@
 /** The one inventory authority (SIG-1 stage 0, steward F12): item sizes and
- * labels, container capacity, stacking, and spending. Every spend is a detached
- * plan (`planSpend`) applied as is (`applySpend`), so a preview and its command
- * share one rule. Spend priority is explicit (`SpendPriority`). */
+ * labels, container capacity, stacking, adding, removing and spending.
+ * - **Spending** is a detached plan (`planSpend`) applied whole or not at all
+ *   (`applySpend`), so a preview and its command share one rule. Spend priority
+ *   is explicit (`SpendPriority`).
+ * - **Removing:** `removeQuantity` takes part of a stack; `takeInstance` lifts
+ *   one chosen item out whole, keeping its ID and charge (a cell fed to a hull,
+ *   a module socketed, a kit deployed); `restoreInstance` puts one back.
+ * - **Capacity:** `usedCapacity`, `freeCapacity` and `hasRoom` are the only CU
+ *   totals; everything else reads them or the size primitives (`cuOf`, `itemCu`). */
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, HULLS, ITEMS, MATERIALS } from "../content/registry.js";
 import type { FabricationSite, ItemKind, MaterialId } from "../content/registry.js";
 import { CANOPY_STOP } from "../content/routes.js";
@@ -92,6 +98,15 @@ export function removeQuantity(s: GameState, item: ItemStack, n: number): void {
   item.quantity -= n;
   if (item.quantity <= 0)
     s.inventory.items = s.inventory.items.filter((i) => i.id !== item.id);
+}
+/** Lifts one chosen item out of the inventory whole, keeping its ID, charge and
+ * provenance for its new owner (a hull's bio feed, a socket, a deployed outpost).
+ * Null when no such item exists; nothing changes then. */
+export function takeInstance(s: GameState, itemId: string): ItemStack | null {
+  const item = s.inventory.items.find((i) => i.id === itemId);
+  if (!item) return null;
+  s.inventory.items = s.inventory.items.filter((i) => i !== item);
+  return item;
 }
 /** Puts back one single-instance item (a module or kit) under its original ID. */
 export function restoreInstance(s: GameState, itemId: string, kind: string, containerId: string): ItemStack {
@@ -385,8 +400,27 @@ export function planSpend(s: Readonly<GameState>, cost: Readonly<Record<string, 
   }
   return { lines, missing };
 }
-export function applySpend(s: GameState, lines: readonly SpendLine[]): void {
-  for (const l of lines) removeQuantity(s, s.inventory.items.find((i) => i.id === l.itemId)!, l.quantity);
+/** A plan that cannot be applied: a shortfall, or lines that no longer match the inventory. */
+export class SpendRefused extends Error {
+  constructor(readonly reason: "missing" | "stale", readonly detail: Readonly<Record<string, number>> | string) {
+    super(`spend refused (${reason}): ${typeof detail === "string" ? detail : costText(detail)}`);
+  }
+}
+/** Applies a complete plan, all or nothing. An incomplete plan (any `missing`)
+ * or a stale one (a line whose stack is gone, changed, or short) is refused
+ * before anything is written. Callers refuse a shortfall themselves first, so a
+ * `SpendRefused` here is a logic error, never a partial payment. */
+export function applySpend(s: GameState, plan: Readonly<SpendPlan>): void {
+  if (Object.keys(plan.missing).length) throw new SpendRefused("missing", plan.missing);
+  const left = new Map<string, number>();
+  for (const l of plan.lines) {
+    const i = s.inventory.items.find((x) => x.id === l.itemId);
+    const have = left.get(l.itemId) ?? i?.quantity ?? 0;
+    if (!i || i.kind !== l.kind || i.containerId !== l.from || !spendable(i, l.kind) || !(l.quantity > 0) || have < l.quantity)
+      throw new SpendRefused("stale", l.itemId);
+    left.set(l.itemId, have - l.quantity);
+  }
+  for (const l of plan.lines) removeQuantity(s, s.inventory.items.find((i) => i.id === l.itemId)!, l.quantity);
 }
 /** CU a plan frees in one container. */
 export const freedBy = (plan: Pick<SpendPlan, "lines">, containerId: string): number =>

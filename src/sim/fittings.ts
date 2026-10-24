@@ -20,7 +20,7 @@ import { fieldLevel, protectionFor, sampleHazards, shapeWeight } from "./ecology
 import type { Protection } from "./ecology/types.js";
 import { launchPoint } from "./carrier.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
-import { addItem, distance, hasRoom, supportedServiceSite, usedCapacity } from "./inventory.js";
+import { addItem, distance, hasRoom, supportedServiceSite, takeInstance, usedCapacity } from "./inventory.js";
 import { airLineSupply, type AirLineCraft, type AirLineSupply } from "./power/airline.js";
 import { bioFeedStep, insertBioCellRefusal, startBioFeed, totalRate, trickleRates } from "./power/charging.js";
 import { craftProfile, motion } from "./upgrades/effects.js";
@@ -273,8 +273,9 @@ function bioCellCommand(s: GameState, v: VehicleState | null, itemId?: string): 
   const cell = s.inventory.items.find((i) => i.kind === "bio_cell" && holds.includes(i.containerId) && (!itemId || i.id === itemId));
   const no = insertBioCellRefusal(target.bioFeed, cell ? cell.charge ?? 100 : null, target.disabled);
   if (no) return no;
-  target.bioFeed = startBioFeed(cell!.charge ?? 100);
-  s.inventory.items = s.inventory.items.filter((i) => i !== cell);
+  // The chosen cell itself is consumed, with its own charge.
+  const fed = takeInstance(s, cell!.id)!;
+  target.bioFeed = startBioFeed(fed.charge ?? 100);
   s.feedback = `Bio-cell feeding the ${HULLS[target.hull].label} · about ${Math.round(target.bioFeed.remaining)}% over 100 s.`;
   return null;
 }

@@ -97,7 +97,7 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
       }).join("");
       extra = `${charges}<div class="service-actions">${button("Pack up", { type: "pack-outpost", outpostId: outpost.id }, !!pack.refusal, pack.refusal ?? undefined)}${
         up.to ? button(`Upgrade to ${up.to}`, { type: "upgrade-outpost", outpostId: outpost.id }, !!up.refusal, up.refusal ?? undefined) : ""}</div>${
-        group(`pack:${outpost.id}`, "Pack preview", `<p>Spends ${pack.loss.map((l) => `${l.quantity} ${esc(label(l.kind))}`).join(", ") || "nothing"}. Moves ${pack.locker.length} locker stack${pack.locker.length === 1 ? "" : "s"} and ${pack.modules.length} module${pack.modules.length === 1 ? "" : "s"} to your hold (${pack.needCu} CU, ${pack.freeCu} free).</p>${pack.work.map((w) => `<p>${esc(w)}</p>`).join("")}`)}`;
+        group(`pack:${outpost.id}`, "Pack preview", `<p>Spends ${pack.loss.lines.map((l) => `${l.quantity} ${esc(label(l.kind))}`).join(", ") || "nothing"}. Moves ${pack.locker.length} locker stack${pack.locker.length === 1 ? "" : "s"} and ${pack.modules.length} module${pack.modules.length === 1 ? "" : "s"} to your hold (${pack.needCu} CU, ${pack.freeCu} free).</p>${pack.work.map((w) => `<p>${esc(w)}</p>`).join("")}`)}`;
     }
     // The carrier's charging dock: a socketed charger fills the berths from the carrier.
     if (host.kind === "carrier") {

@@ -38,7 +38,7 @@ export function plant(s: GameState, sys: SystemsState, hostId: string, socketId:
   if (crop) return cropReady(crop) ? "Harvest the ready crop first." : `The planter is growing ${SEEDS[crop.seed].label.toLowerCase()}.`;
   const pay = planSpend(s, { [seed]: 1 }, at.containers);
   if (Object.keys(pay.missing).length) return `Carry a ${labelOf(seed).toLowerCase()} to plant it.`;
-  applySpend(s, pay.lines);
+  applySpend(s, pay);
   sys.planters.push({ moduleId: at.moduleId, seed, progress: 0 });
   s.feedback = `${SEEDS[seed].label} planted · ready in about ${Math.round(SEEDS[seed].growSeconds / 60)} min of play.`;
   return null;

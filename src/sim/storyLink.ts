@@ -190,7 +190,7 @@ function applyWorks(s: GameState, outcome: WorksOutcome, bins: string[]): string
   if (outcome.ok && outcome.consume) {
     if (outcome.consume === "service_power_assembly" || outcome.consume === "service_air_assembly")
       removeQuantity(s, s.inventory.items.find((i) => i.kind === outcome.consume && i.containerId === "diver")!, 1);
-    else applySpend(s, planSpend(s, STORY_RECIPES[outcome.consume].cost, bins, "oldest").lines);
+    else applySpend(s, planSpend(s, STORY_RECIPES[outcome.consume].cost, bins, "oldest"));
   }
   return outcome.message;
 }
