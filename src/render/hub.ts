@@ -6,6 +6,7 @@ import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder.js";
 import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import { TransformNode } from "@babylonjs/core/Meshes/transformNode.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { Color3 } from "@babylonjs/core/Maths/math.color.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { Vec3 } from "../sim/types.js";
 import { creatureParts } from "./creatures/kit.js";
@@ -36,20 +37,20 @@ const RAY_CULL = 330;
 const FLARE_VERTEX = `precision highp float; attribute vec3 position; attribute vec2 uv;
 uniform mat4 worldViewProjection; varying vec2 vUv;
 void main(){vUv=uv;gl_Position=worldViewProjection*vec4(position,1.);}`;
-const FLARE_FRAGMENT = `precision highp float; varying vec2 vUv; uniform float glow;
+const FLARE_FRAGMENT = `precision highp float; varying vec2 vUv; uniform float glow; uniform vec3 tint;
 void main(){vec2 d=vUv*2.-1.;float r2=dot(d,d);
   float core=exp(-r2*22.),halo=exp(-r2*4.)*.42,rays=exp(-abs(d.x*d.y)*90.)*exp(-r2*2.2)*.25;
-  vec3 c=mix(vec3(1.,.7,.36),vec3(1.,.97,.86),core);
+  vec3 c=mix(vec3(1.,.7,.36),vec3(1.,.97,.86),core)*tint;
   gl_FragColor=vec4(c,clamp((core+halo+rays)*glow,0.,1.));}`;
 const SHAFT_VERTEX = `precision highp float; attribute vec3 position; attribute vec3 normal;
 uniform mat4 world; uniform mat4 worldViewProjection; varying vec3 vWorld; varying vec3 vNormal; varying float vUp;
 void main(){vWorld=(world*vec4(position,1.)).xyz;vNormal=normalize((world*vec4(normal,0.)).xyz);vUp=position.y+.5;
   gl_Position=worldViewProjection*vec4(position,1.);}`;
 const SHAFT_FRAGMENT = `precision highp float; varying vec3 vWorld; varying vec3 vNormal; varying float vUp;
-uniform vec3 eye; uniform float glow;
+uniform vec3 eye; uniform float glow; uniform vec3 tint;
 void main(){vec3 v=normalize(eye-vWorld);float edge=abs(dot(normalize(vNormal),v));
   float a=pow(edge,2.5)*(1.-.75*vUp)*glow*.3;
-  gl_FragColor=vec4(1.,.8,.5,clamp(a,0.,1.));}`;
+  gl_FragColor=vec4(vec3(1.,.8,.5)*tint,clamp(a,0.,1.));}`;
 
 function additive(scene: Scene, name: string, vertex: string, fragment: string, attributes: string[], uniforms: string[]): ShaderMaterial {
   const m = new ShaderMaterial(name, scene, { vertexSource: vertex, fragmentSource: fragment },
@@ -59,18 +60,25 @@ function additive(scene: Scene, name: string, vertex: string, fragment: string, 
   m.disableDepthWrite = true;
   m.depthFunction = Constants.LEQUAL;
   m.setFloat("glow", 0);
+  m.setColor3("tint", new Color3(1, 1, 1));
   return m;
 }
+/** The hub's additive flare (a billboard plane's material): a strong source that
+ * reads through murk; `glow` 0..1 sets it, `tint` recolours it (SIG-1's sonar). */
+export const flareMaterial = (scene: Scene, name: string): ShaderMaterial =>
+  additive(scene, name, FLARE_VERTEX, FLARE_FRAGMENT, ["position", "uv"], ["worldViewProjection", "glow", "tint"]);
+/** The hub shaft's additive rim glow: edges facing across the view light up. */
+export const rimGlowMaterial = (scene: Scene, name: string): ShaderMaterial =>
+  additive(scene, name, SHAFT_VERTEX, SHAFT_FRAGMENT, ["position", "normal"], ["world", "worldViewProjection", "eye", "glow", "tint"]);
 
 export function createHubArt(scene: Scene, cel: Material): HubArt {
   const root = new TransformNode("hub", scene);
   // --- Beacon flare and shaft ---------------------------------------------------
-  const flareMaterial = additive(scene, "hub.beacon.flare", FLARE_VERTEX, FLARE_FRAGMENT, ["position", "uv"], ["worldViewProjection", "glow"]);
   const flare = CreatePlane("hub.beacon.flare", { size: 1 }, scene);
   flare.billboardMode = Mesh.BILLBOARDMODE_ALL;
-  flare.material = flareMaterial; flare.isPickable = false; flare.parent = root;
-  const shaftMaterial = additive(scene, "hub.beacon.shaft", SHAFT_VERTEX, SHAFT_FRAGMENT, ["position", "normal"],
-    ["world", "worldViewProjection", "eye", "glow"]);
+  const beaconFlare = flareMaterial(scene, "hub.beacon.flare");
+  flare.material = beaconFlare; flare.isPickable = false; flare.parent = root;
+  const shaftMaterial = rimGlowMaterial(scene, "hub.beacon.shaft");
   const shaftTop = -1.5, shaftHeight = shaftTop - BEACON.y;
   const shaft = CreateCylinder("hub.beacon.shaft", { height: 1, diameterBottom: 2.2, diameterTop: 10, tessellation: 16, cap: Mesh.NO_CAP }, scene);
   shaft.scaling.set(1, shaftHeight, 1);
@@ -80,7 +88,7 @@ export function createHubArt(scene: Scene, cel: Material): HubArt {
   // starting island. Hub art is created once and never streamed, and past the
   // far plane the flare is an impostor on the line of sight, so it shows at
   // the island lookout's 765 m.
-  const lampMaterial = additive(scene, "hub.mast.flare", FLARE_VERTEX, FLARE_FRAGMENT, ["position", "uv"], ["worldViewProjection", "glow"]);
+  const lampMaterial = flareMaterial(scene, "hub.mast.flare");
   const lamp = CreatePlane("hub.mast.flare", { size: 1 }, scene);
   lamp.billboardMode = Mesh.BILLBOARDMODE_ALL;
   lamp.material = lampMaterial; lamp.isPickable = false; lamp.parent = root;
@@ -104,7 +112,7 @@ export function createHubArt(scene: Scene, cel: Material): HubArt {
         flare.position.set(camera.x + dx * k, camera.y + dy * k, camera.z + dz * k);
         const size = beaconSize(d) * k;
         flare.scaling.set(size, size, size);
-        flareMaterial.setFloat("glow", glow);
+        beaconFlare.setFloat("glow", glow);
       }
       {
         const lx = MAST_LAMP.x - camera.x, ly = MAST_LAMP.y - camera.y, lz = MAST_LAMP.z - camera.z, ld = Math.hypot(lx, ly, lz);
@@ -135,7 +143,7 @@ export function createHubArt(scene: Scene, cel: Material): HubArt {
       if (disposed) return;
       disposed = true;
       for (const r of rays) r.dispose();
-      flareMaterial.dispose(); shaftMaterial.dispose(); lampMaterial.dispose();
+      beaconFlare.dispose(); shaftMaterial.dispose(); lampMaterial.dispose();
       root.dispose(false, false);
     },
   };

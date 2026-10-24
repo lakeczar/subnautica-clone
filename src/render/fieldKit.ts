@@ -14,7 +14,11 @@
  * the drone and the pulse are fixed meshes moved each frame (no per-frame
  * allocation beyond a short key per outpost). Hosts build within BUILD_DISTANCE
  * and are released beyond DROP_DISTANCE, like the placed hosts. */
-import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { CreatePlane } from "@babylonjs/core/Meshes/Builders/planeBuilder.js";
+import { CreateSphere } from "@babylonjs/core/Meshes/Builders/sphereBuilder.js";
+import { Color3 } from "@babylonjs/core/Maths/math.color.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import { HULL_COLLIDERS, SOURCES } from "../content/registry.js";
@@ -27,6 +31,7 @@ import { vehicleProfile } from "../sim/fittings.js";
 import { sonarContacts } from "../sim/signatures.js";
 import type { GameState, Vec3, VehicleState } from "../sim/types.js";
 import { ArtBatch, type Point } from "./geometry.js";
+import { flareMaterial, rimGlowMaterial } from "./hub.js";
 import { PALETTE as P } from "./palette.js";
 
 export const BUILD_DISTANCE = 160;
@@ -243,14 +248,23 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
     b.glow(b.ellipsoid([0, 0, -0.4], [0.09, 0.07, 0.04], P.warm, 8));
   });
   drone.unfreezeWorldMatrix(); drone.setEnabled(false);
-  const pulse = make("fieldkit.sonar.pulse", (b) => b.ring([0, 0, 0], [1, 0, 0], [0, 0, 1], 1, 0.985, P.reflection, 48), 0);
-  pulse.unfreezeWorldMatrix(); pulse.setEnabled(false);
-  const flares: Mesh[] = [];
+  // The sweep reads through murk on the hub beacon's additive materials: an expanding
+  // rim-lit bubble, then a flare at each opening it found, sized to stay legible at range.
+  const sonarTint = Color3.FromHexString("#7fe7ff");
+  const pulseMaterial = rimGlowMaterial(scene, "fieldkit.sonar.pulse");
+  pulseMaterial.setColor3("tint", sonarTint);
+  const pulse = CreateSphere("fieldkit.sonar.pulse", { diameter: 2, segments: 24 }, scene);
+  pulse.material = pulseMaterial; pulse.isPickable = false; pulse.renderingGroupId = 1; pulse.setEnabled(false);
+  const flares: { mesh: Mesh; material: ShaderMaterial; on: boolean }[] = [];
   for (let i = 0; i < MAX_FLARES; i++) {
-    const f = make(`fieldkit.sonar.flare.${i}`, (b) => b.glow(b.ellipsoid([0, 0, 0], [0.6, 0.6, 0.6], P.reflection, 8)), 0);
-    f.unfreezeWorldMatrix(); f.setEnabled(false);
-    flares.push(f);
+    const material = flareMaterial(scene, `fieldkit.sonar.flare.${i}`);
+    material.setColor3("tint", sonarTint);
+    const mesh = CreatePlane(`fieldkit.sonar.flare.${i}`, { size: 1 }, scene);
+    mesh.billboardMode = Mesh.BILLBOARDMODE_ALL; mesh.material = material; mesh.isPickable = false; mesh.renderingGroupId = 1;
+    mesh.setEnabled(false);
+    flares.push({ mesh, material, on: false });
   }
+  const eye = new Vector3();
   let sweepAt = -1;
   let disposed = false;
   return {
@@ -309,7 +323,8 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
           const d = rt.drone.position;
           drone.position.set(d.x, d.y, d.z);
           drone.rotation.set(rt.drone.pitch, -rt.drone.yaw, 0);
-          droneShown = true;
+          // Seen from outside only: while the pilot flies it, the view is the drone's own camera.
+          droneShown = s!.player.controlledVehicleId !== v.id;
           line(`tether.${v.id}`, at, d, P.coral, 0.015); usedLines.add(`tether.${v.id}`);
         }
         if (rt.lift) {
@@ -325,17 +340,26 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
           if (rt.sonar.at !== sweepAt) {
             sweepAt = rt.sonar.at;
             const contacts = sonarContacts(vehicleProfile(s!, v), rt.sonar.origin);
-            flares.forEach((f, i) => { const c = contacts[i]; if (c) f.position.set(c.position.x, c.position.y, c.position.z); f.metadata = { on: !!c }; });
+            flares.forEach((f, i) => { const c = contacts[i]; f.on = !!c; if (c) f.mesh.position.set(c.position.x, c.position.y, c.position.z); });
           }
-          const o = rt.sonar.origin;
+          const o = rt.sonar.origin, radius = age * PULSE_SPEED;
           pulse.position.set(o.x, o.y, o.z);
-          pulse.scaling.setAll(Math.max(0.1, age * PULSE_SPEED));
+          pulse.scaling.setAll(Math.max(0.1, radius));
+          eye.set(camera.x, camera.y, camera.z);
+          pulseMaterial.setVector3("eye", eye);
+          pulseMaterial.setFloat("glow", Math.max(0, 1 - age / PULSE_SECONDS) * 2.5);
           pulse.setEnabled(age >= 0 && age < PULSE_SECONDS);
-          for (const f of flares) f.setEnabled(!!f.metadata?.on && age * PULSE_SPEED >= 0 && age < FLARE_SECONDS &&
-            Math.hypot(f.position.x - o.x, f.position.y - o.y, f.position.z - o.z) <= age * PULSE_SPEED);
+          for (const f of flares) {
+            const p = f.mesh.position, reached = Math.hypot(p.x - o.x, p.y - o.y, p.z - o.z) <= radius;
+            const shown = f.on && reached && age < FLARE_SECONDS;
+            f.mesh.setEnabled(shown);
+            if (!shown) continue;
+            f.mesh.scaling.setAll(Math.max(3, Math.hypot(p.x - camera.x, p.y - camera.y, p.z - camera.z) * 0.06));
+            f.material.setFloat("glow", Math.min(1, (FLARE_SECONDS - age) / 4));
+          }
         }
       }
-      if (!playing || !s!.fleet.vehicles.some((v) => v.upgrades.sonar)) { pulse.setEnabled(false); for (const f of flares) f.setEnabled(false); }
+      if (!playing || !s!.fleet.vehicles.some((v) => v.upgrades.sonar)) { pulse.setEnabled(false); for (const f of flares) f.mesh.setEnabled(false); }
       pod.setEnabled(podShown); anchor.setEnabled(anchorShown); drone.setEnabled(droneShown);
       for (const [id, m] of lines) if (!usedLines.has(id)) m.setEnabled(false);
     },
@@ -346,7 +370,9 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
       built.clear();
       for (const m of lines.values()) m.dispose();
       lines.clear();
-      for (const m of [pod, anchor, drone, pulse, ...flares]) m.dispose();
+      for (const m of [pod, anchor, drone, pulse]) m.dispose();
+      pulseMaterial.dispose();
+      for (const f of flares) { f.mesh.dispose(); f.material.dispose(); }
     },
   };
 }

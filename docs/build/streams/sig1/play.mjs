@@ -50,6 +50,14 @@ async function action(label) {
   const after = await read(); note("pressed", row, "→", after.notices.slice(0, 200));
   return after;
 }
+/** Leave the craft by its exit key (held, for a deliberate exit), as the HUD says. */
+async function exitCraft() {
+  const g = (await read()).guidance, k = /X Exit|X Hold/.test(g) ? "KeyX" : "KeyE";
+  await hold(k, 1500); await page.waitForTimeout(900);
+  note("exited", JSON.stringify((await read()).guidance.slice(0, 80)));
+}
+const look = async (from, to) => turnTo(bearingTo(from, to), Math.atan2(to.y - from.y, Math.hypot(to.x - from.x, to.z - from.z)) * 180 / Math.PI);
+const camPos = async () => { const c = (await read()).cam; return { x: c[0], y: c[1], z: c[2] }; };
 async function hold(k, ms) { await page.keyboard.down(k); await page.waitForTimeout(ms); await page.keyboard.up(k); }
 async function turnTo(yaw, pitchDeg = 0) {
   for (let i = 0; i < 500; i++) {
@@ -66,7 +74,7 @@ async function press(selector, label) {
   }
   throw new Error(`Tab never reached ${label} (${selector})`);
 }
-const panelText = () => page.evaluate(() => document.querySelector("#game-panel")?.innerText.replace(/\s+/g, " ").slice(0, 900) ?? "");
+const panelText = () => page.evaluate(() => document.querySelector("#game-panel")?.innerText.replace(/\s+/g, " ").slice(0, 2400) ?? "");
 async function closePanel() { await page.keyboard.press("Escape"); await page.waitForTimeout(400); }
 
 async function load(name) {
@@ -121,10 +129,17 @@ const SCENARIOS = {
     await page.waitForTimeout(1500); await shot("frame-hooked");
     await page.waitForTimeout(6500); r.checks.landed = (await read()).notices; await shot("frame-aboard");
     r.checks.drop = (await action("Drop pod")).notices;
-    await page.waitForTimeout(800); await turnTo(((await read()).bearing * Math.PI / 180), -60); await shot("pod-dropped");
+    // The diver leaves the Creel and swims down to the dropped pod: it is a container within 8 m.
+    await exitCraft();
+    await hold("KeyC", 3000); await page.waitForTimeout(600);
+    await look(await camPos(), plan["creel-grapple"].position); await shot("pod-dropped");
     await page.keyboard.press("Tab"); await page.waitForTimeout(700);
-    r.checks.cargo = await panelText(); await shot("cargo-filter");
+    r.checks.cargo = await panelText(); await shot("cargo-with-pod");
     await page.locator("#cargo-filter").focus(); await page.locator("#cargo-filter").selectOption("materials"); await page.waitForTimeout(400);
+    for (const name of ["Creel hold", "cargo pod"]) {
+      const summary = page.locator("summary", { hasText: name }).first();
+      if (await summary.count()) { await summary.focus(); await page.keyboard.press("Enter"); await page.waitForTimeout(250); }
+    }
     r.checks.cargoMaterials = await panelText(); await shot("cargo-materials");
     await closePanel();
     await context.close();
@@ -133,21 +148,24 @@ const SCENARIOS = {
     const { r, context } = await load("spindle");
     await shot("action-bar");
     r.checks.crane = (await action("Crane lift")).notices;
-    await page.waitForTimeout(1200); await turnTo(((await read()).bearing * Math.PI / 180), -35); await shot("crane-lifting");
-    await page.waitForTimeout(4500); r.checks.lifted = (await read()).notices; await shot("crane-lifted");
+    // Seen from the water beside the Spindle: the boom and its line down to the ledge.
+    await exitCraft(); await page.waitForTimeout(300);
+    await turnTo(((await read()).bearing * Math.PI / 180) + Math.PI, -25); await shot("crane-lifting");
+    await page.waitForTimeout(4200); r.checks.lifted = (await read()).notices; await shot("crane-lifted");
     await context.close();
   },
   async mantle() {
     const { r, context } = await load("mantle");
     await shot("action-bar");
-    r.checks.clamp = (await action("Clamp")).notices;
-    await page.waitForTimeout(800); await turnTo(((await read()).bearing * Math.PI / 180), -50); await shot("clamp-gripping");
-    await page.waitForTimeout(6000); r.checks.gripped = (await read()).notices; await shot("clamp-aboard");
-    await turnTo(((await read()).bearing * Math.PI / 180), 0);
     r.checks.drone = (await action("Drone")).notices;
     await page.waitForTimeout(600); await shot("drone-view");
     await hold("KeyW", 3500); await page.waitForTimeout(300); r.checks.droneOut = await read(); await shot("drone-out");
     r.checks.recall = (await action("Recall drone")).notices; await page.waitForTimeout(600); await shot("drone-recalled");
+    r.checks.clamp = (await action("Clamp")).notices;
+    // Seen from the water: the jaw and its line on the frame host below.
+    await exitCraft(); await page.waitForTimeout(300);
+    await hold("KeyS", 900); await look(await camPos(), plan.mantle.position); await shot("clamp-gripping");
+    await page.waitForTimeout(5200); r.checks.gripped = (await read()).notices; await shot("clamp-aboard");
     await context.close();
   },
   async outpost() {

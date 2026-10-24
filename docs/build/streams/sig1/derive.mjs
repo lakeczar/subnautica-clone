@@ -60,15 +60,27 @@ const hullOf = (s, hull) => {
   pilot(s, v, at, mouth.position);
   write("dart", s, { mouth: mouth.position, at, target: { id: near.id, position: near.p } });
 }
-// 2. Creel: cutting arm at an island mineral host (arm 3 m off it).
+// 2. Creel: cutting arm at a mineral host, placed where the hull is clear of rock
+// and the arm (3.3 m ahead of the hull, bow to −Z) reaches the host.
 {
   const s = library(), v = hullOf(s, "creel");
-  const id = Object.keys(SOURCES).find((k) => ["island_chain", "refuge_reef", "suspended_garden"].includes(SOURCES[k].region) && Object.hasOwn(MATERIALS, SOURCES[k].item) &&
-    hostKind(SOURCES[k].item) === "mineral" && SOURCES[k].position.y < -8 && (s.world.resources.find((r) => r.id === k)?.stock ?? 0) > 0);
   fit(s, v, ["creel_cutting_arm"]);
-  const src = SOURCES[id].position;
-  pilot(s, v, { x: src.x, y: src.y + 2, z: src.z + 3.3 }, { x: src.x, y: src.y + 2, z: src.z - 5 });
-  write("creel-arm", s, { source: id, position: src });
+  const { HULL_COLLIDERS } = await import(B + "src/content/registry.js");
+  let chosen = null;
+  for (const id of Object.keys(SOURCES).sort()) {
+    const src = SOURCES[id];
+    if (!Object.hasOwn(MATERIALS, src.item) || hostKind(src.item) !== "mineral" || src.position.y > -8 || src.position.y < -300 ||
+      (s.world.resources.find((r) => r.id === id)?.stock ?? 0) <= 0) continue;
+    for (const up of [2, 3, 4, 5]) {
+      const at = { x: src.position.x, y: src.position.y + up, z: src.position.z + 3.3 };
+      if (world.clearance(at, HULL_COLLIDERS.creel)) { chosen = { id, at }; break; }
+    }
+    if (chosen) break;
+  }
+  if (!chosen) throw new Error("no clear mineral host for the cutting arm");
+  const src = SOURCES[chosen.id].position;
+  pilot(s, v, chosen.at, { x: src.x, y: chosen.at.y, z: src.z - 10 });
+  write("creel-arm", s, { source: chosen.id, position: src, at: chosen.at });
 }
 // 3. Creel: grapple and cargo pod over open Basin water beside a frame host.
 {
