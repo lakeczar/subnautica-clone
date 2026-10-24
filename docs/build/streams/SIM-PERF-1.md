@@ -68,7 +68,24 @@ The before-tree's slow steps were the game's, and are gone after: `carrier-fitou
 
 **Browser, 4070 control** (`probe/sim-perf-1-cw1` at `99425bc4`: this branch at `9e6d3e99` with CW-1; segments 2 and 3 of CW-1's `saves-t6` plan, `SIMPERF_HOST=1`): 87,845 steps, **none over 8 ms**, p99 0.61 ms, p99.9 1.6–1.7 ms, max 4.6 ms (an autosave). The frame's own work p99 4.2–7 ms, max 9.9 ms; the gate passed and no long frame was the simulation's. Every long gap (GPU-bound, up to 200 ms) had the renderer's main thread **blocked** (`S futex` for 95–98% of the gap, 2–7 ms on CPU), the canary running through it and no steal.
 
-**Browser, 3090** (profiled, `gpu` class, before-tree probe `81ee4a12`, segment 2): 52,969 steps, two over 8 ms: the 61.7 ms movement step (Chrome's sampler caught no movement code; the guest counted 86 ms of 100 on CPU) and a 12.2 ms step (presentation 5.7, upgrades 5.3). PENDING: the exclusive runs.
+**Browser, 3090, the decisive test** (`--class exclusive`, probe `9c36c647`: CW-1 `4ea4d4a7` plus this branch's game at `2af18fa1`; segment 2 of CW-1's `saves-t6`; `CW1_TRACE=1`, `SIMPERF_HOST=1`; NVIDIA's shader disk cache on a task-owned path, emptied for the cold run). Both runs are labelled `DISTURBED` by the queue: host steal 5.4% and 7% in their worst 5 s windows, and 17 and 1 major faults. The steal is what is under test, so they classify frames; their frame times are not clean performance evidence.
+
+| | Cold (`261024-123746-b92e`, 13:12:55–13:25:00 UTC) | Warm (`261024-123747-70a7`, 13:25:01–13:37:38 UTC) |
+|---|---|---|
+| Shader cache before → after | empty → 2 files, 847 KB | 847 KB → 1.02 MB |
+| Simulation steps, over 8 ms | 42,637, **0** (max 5.1 ms, p99 0.72 ms) | 44,593, **2**: 63 and 9.5 ms, both in the trivial `input` phase, wholly stolen (remainder 0) with the canary stalled 7.6–8.7 ms beside them: **host** |
+| Frames over 34 ms, CW-1's rule | 11: 10 host, 1 mixed | 24: 20 host, 2 mixed, 2 clean |
+| Trace | 7 rotations, 1,716 MB streamed, no data loss | 7 rotations, 1,800 MB, no data loss |
+
+- **The 5 frames that aren't plain host by the rule:** the 3 "mixed" and one "clean" had VM-wide steal of 80–470 ms inside them and the canary, on its own thread, stalled 30–113 ms: the VM paused, and the 10 ms jiffies charged other vCPUs. **One frame (warm, 50 ms) is not the host:** no steal anywhere, no canary stall, and the GPU process's main thread was on CPU for 53 ms in `GpuChannel::ExecuteDeferredRequest` (the renderer blocked in `futex` waiting for it). That is render-side work in the GPU process, not the simulation (0.3 ms in that frame).
+- **The simulation took at most 0.4 ms in every long frame of both runs.**
+- **Shader caches:** no compile or link slice appears in any long frame, cold or warm; the warm run had more long frames (24 against 11), all from host bursts. First-use shader compiles are not a cause on this route once the expedition has loaded (the loading screen compiles the scene first).
+- **Power state:** the GPU stayed in P5 (450–555 MHz, 20–40% busy) through every long frame; P0 appeared in 110 of 5,829 samples. The one non-host frame had the GPU process busy on the CPU, not waiting for the GPU, so the data does not point at clock or power-state ramping. It can't exclude it either; a locked-clock A/B needs root and the owner.
+- **Host bursts:** all 11 of the cold run's long frames came in one 18 s burst (13:16:37–13:16:55 UTC), with VM-wide steal of 230–870 ms per frame across the 8 vCPUs.
+- **Overlap:** COL-1's local test compile (about 8.5 s of CPU, then a 1 s probe) at about 13:20 UTC fell inside the cold run. No frame over 34 ms is within minutes of it, so nothing is discounted.
+- **The shader-cache settings:** the driver wrote its cache under the task-owned path in both runs, so they took effect; the harness's own reading of the GPU process's environment came back empty (it may read a different Chrome GPU child), which is unresolved.
+
+**Browser, 3090, profiled** (`gpu` class, before-tree probe `81ee4a12`, segment 2): 52,969 steps, two over 8 ms: the 61.7 ms movement step (Chrome's sampler caught no movement code; the guest counted 86 ms of 100 on CPU) and a 12.2 ms step (presentation 5.7, upgrades 5.3).
 
 **Harness equivalence (the 3090 decisive test).** The traversals ran on probe `9c36c647`: CW-1's `4ea4d4a7` (the streamed tracer, `stream-trace.mjs`, folded in from this stream) plus this stream's `SIMPERF_HOST` opt-ins as a private patch. CW-1 then folded those opt-ins into its tree at `6ca73311`, unchanged. `traverse.mjs`, `stream-trace.mjs` and `simperf-host-worker.mjs` are byte-identical between `9c36c647` and `6ca73311` (SHA-256 `39302a7d…`, `120d0925…`, `bde05d41…`), so these runs are the tree harness's. Later 3090 runs bind to `6ca73311` plus this branch's game merge, with no private patch.
 
