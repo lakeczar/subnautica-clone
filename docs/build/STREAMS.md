@@ -1003,3 +1003,16 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **N4–N5:** the recorder attached in `run.ts`, `idle.byCause`, declared `waitFor` causes; first-occurrence plus `yields` payoff counting.
   - **Review:** short Sol R3 running (`siltwake-ls1-review-r3-sol-e752c15`).
 - **Owner (2026-10-24): no battery mode, no frame-cap setting; smooth motion on 120 Hz+ displays wanted.** Found: a fixed 60 Hz sim with no render interpolation, so motion caps at 60 visually and judders at 144 Hz. **FRAME-1** (render interpolation) is queued for after CW-1 merges (it touches `renderer.ts`/`app.ts`). DIRECTION updated.
+- **SCHED-3 R2 fixes done at `3850c9bd`** (code `a01066f2`):
+  - **F1–F4:** an `invocationEnv` clean-environment rule (13 npm self-exports allowed; `NODE_OPTIONS` and the test/playthrough selectors block the default `any`); trailing build options make the declared artifact the contract; `terminalRecord` across all 7 writers with `ran` true/false/unknown from the launch; suites work inside a queue job.
+  - **Checks:** B34–B37 fail on R1 code; queue runs 48/48, 23/23, 27/27, 37/37; fast on the 4070.
+  - **Compromise:** a user `~/.npmrc` is not inspected.
+  - **Review:** short Sol R3 running (`siltwake-sched3-review-r3-sol-3850c9b`).
+- **Research #3 access and onboarding** (Sol `45811fa5` on `research/access-onboarding`): 5 barriers plus shared acceptance cases.
+  - **The barriers:**
+    - (1) fixed physical bindings and hand-written prompts (no remapping; AZERTY labels wrong; Settings omits P/O/U);
+    - (2) the keypad's input lifecycle;
+    - (3) fixed 11–14 px text with no text-size setting;
+    - (4) "Opening captions" really controls all captions, and essential captions can be replaced by routine ones;
+    - (5) no "reduce camera motion" for the opening's roll and drift (plus an FOV control before sustained play).
+  - **Owners:** (2) and the sound-tell equivalence go to LS-1 (sent). (1), (3), (4) and the settings plumbing for (5) form **UI-2**, queued after CW-1 (bindings live in CW-1-owned `app.ts`), before the first playtest. Opus call: keyboard rebinding is included. OP-1 consumes reduce-motion.
