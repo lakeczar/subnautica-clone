@@ -803,3 +803,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Checks:** npm test 1,472/1,472, heavy 465/465 (3 unattributed OOM kills to investigate), 6 economy scripts, playthrough 8/8 equal to stage 0, browser on both GPUs.
   - **Open:** the Spindle isn't built by any route.
   - **Review:** Sol R1 running (`siltwake-sig1-stage1-review-sol-416441b`).
+- **SIG-1 stage 1 R1** (Sol on `416441bc`, report on `review/sig-1-stage1` `fe580446`): REQUEST CHANGES, 5 P2s.
+  - **Findings:** unsaveable mid-action transitions; silent cutting-arm completion and inferred feedback; the drone can launch in rock; per-step roster scans for lifts; an unbounded field-kit line cache.
+  - **Resolved:** the OOM kills were intentional probes; the Spindle is intentionally optional (a specialist, walk-on Isles plate).
