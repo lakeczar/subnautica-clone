@@ -956,7 +956,7 @@ const works = (strategy: Strategy): Phase => ({
   id: "works", title: "The return-gate works: power, air, isolate, equalize, open; hall, food, turbine power",
   verify: custom("the works are incomplete (gate open, hall, food, hall power)", (d) => { const w = d.state.story.works; return w.gate === "open" && w.hall && w.food && w.hallPower; }),
   missing: worksMissing,
-  play(d, o) {
+  play(d) {
     provision(d);
     const fabricate: Plannable[] = ["service_power_assembly", "service_air_assembly"];
     const gate1: WorksAction[] = ["install_power", "install_air", "isolate", "equalize"];
