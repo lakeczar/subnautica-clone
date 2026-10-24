@@ -186,9 +186,11 @@ test("if the queue client can't be run, it refuses (75) with the reason; it neve
   }
 });
 
-test("inside a real job it runs directly; a prefix-named cgroup is not inside", { skip: !/^0::.*\.scope$/m.test(fs.readFileSync("/proc/self/cgroup", "utf8")) }, () => {
+test("inside a real job it runs directly: its recorded cgroup or one above it admits; a string prefix of it doesn't", () => {
   const own = fs.readFileSync("/proc/self/cgroup", "utf8").split("\n").find((l) => l.startsWith("0::"))!.slice(3);
-  for (const [recorded, direct] of [[own, true], [own.replace(/\.scope$/, ""), false]] as const) {
+  assert.ok(own.split("/").length > 2, own);
+  const parent = own.slice(0, own.lastIndexOf("/"));
+  for (const [recorded, direct] of [[own, true], [parent, true], [own.slice(0, -1), false]] as const) {
     const sched = temp("siltwake-guard-job-"), { queue, calls } = standIn();
     fs.mkdirSync(join(sched, "jobs", "261024-000000-test"), { recursive: true });
     fs.writeFileSync(join(sched, "jobs", "261024-000000-test", "cgroup"), `/sys/fs/cgroup${recorded}\n`);
