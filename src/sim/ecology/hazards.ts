@@ -60,7 +60,7 @@ const CENTERS = new Map<HazardShape, Readonly<Vec3>>(FIELD_IDS.map((id) => [fiel
 const CENTER_BYTES = 80;
 registerCache(() => ({ owner: "sim/ecology/hazards field centres", eviction: "none: a fixed table of the world's fields, built at load",
   entries: CENTERS.size, maxEntries: CENTERS.size, bytes: CENTERS.size * CENTER_BYTES, maxBytes: CENTERS.size * CENTER_BYTES,
-  hits: 0, misses: 0, evictions: 0 }));
+  hits: 0, misses: 0, evictions: 0, declined: 0 }));
 const centerOf = (shape: HazardShape): Readonly<Vec3> => CENTERS.get(shape) ?? sitePosition(shape.center);
 /** 1 inside the shape, falling linearly to 0 over `edge` metres outside it. */
 export function shapeWeight(shape: HazardShape, edge: number, p: Vec3): number {

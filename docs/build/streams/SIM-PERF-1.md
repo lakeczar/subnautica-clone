@@ -136,6 +136,13 @@ The before-tree's slow steps were the game's, and are gone after: `carrier-fitou
 - **R1-F2 (P3), memos without a byte budget or ledger:** the sim's cache ledger (`sim/caches.ts`). The profile memo is a `BoundedMemo` (value key and FIFO kept; 128 entries and 96 KiB). The hazard centres are a fixed table of the world's fields, registered with their bytes. Tests: `tests/sim-caches.test.ts`.
 - **The merge receipt:** the hazard resolution is at `74f51bc6`, and the local probe branch now points there.
 
+**R2 (Sol 6.1 xhigh, `review/sim-perf-1-r2` at `1a45e115`, on `2bcc25fe`): request changes, one P3; everything else verified.**
+- **R2-F1 (P3), `BoundedMemo` kept one entry past its byte ceiling and admitted one at `maxEntries: 0`:** fixed as `GeometryCache` does it.
+  - A value that alone exceeds `maxBytes` is returned uncached, and the entries already kept stay. It's counted as `declined` in the ledger; `GeometryCache` has no named counter, so the name is new.
+  - The eviction loop no longer stops at one entry; the new entry always fits alone.
+  - The constructor refuses `maxEntries` below 1 or fractional, and `maxBytes` at or below 0 or not finite.
+  - Regressions in `tests/sim-caches.test.ts`: the oversized value (101 bytes under 100), and the zero, negative, fractional and unbounded ceilings.
+
 ## Checks
 - **Fast tier:** passed at `36dabcf3`, 148 files including the typecheck and the architecture guard (alickers, `261024-093422-d448`). New tests: `hazard-sampling` (the exact reference), `warmup` (no trace), the repository's record reuse and `warmCommit`, and the occupied hosts.
 - **Determinism:** the differential and the cross-commit playthroughs above, at `36dabcf3`.

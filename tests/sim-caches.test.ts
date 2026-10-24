@@ -48,3 +48,26 @@ test("a shape outside the centre table is answered the same, uncached", () => {
   for (const p of [c, { x: c.x + 7, y: c.y - 3, z: c.z + 11 }, { x: c.x + 90, y: c.y, z: c.z }])
     assert.equal(shapeWeight(copy, f.edge, p), shapeWeight(f.shape, f.edge, p));
 });
+
+test("a value alone over the byte ceiling is returned uncached and declined; what was kept stays (R2-F1)", () => {
+  const memo = new BoundedMemo<string>("test oversize", 8, 100, (key) => (key === "big" ? 101 : 40));
+  let made = 0;
+  const get = (k: string) => memo.get(k, () => { made++; return `v:${k}`; });
+  get("a"); get("b");
+  assert.equal(get("big"), "v:big");
+  assert.equal(get("big"), "v:big");
+  assert.equal(made, 4, "an uncached value is made again on every call");
+  const s = memo.stats();
+  assert.deepEqual([s.entries, s.bytes, s.declined, s.evictions], [2, 80, 2, 0], JSON.stringify(s));
+  get("a"); get("b");
+  assert.equal(made, 4, "the entries already kept are still there");
+});
+
+test("a memo's ceilings must admit something: zero, negative, fractional or unbounded ceilings are refused (R2-F1)", () => {
+  const bytes = () => 1;
+  for (const [entries, max] of [[0, 100], [-1, 100], [1.5, 100], [NaN, 100], [1, 0], [1, -5], [1, NaN], [1, Infinity]] as const)
+    assert.throws(() => new BoundedMemo("test bad ceilings", entries, max, bytes), RangeError, `${entries} entries, ${max} bytes`);
+  const one = new BoundedMemo<number>("test one entry", 1, 10, bytes);
+  one.get("a", () => 1); one.get("b", () => 2);
+  assert.deepEqual([one.stats().entries, one.stats().evictions], [1, 1]);
+});
