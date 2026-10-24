@@ -14,7 +14,7 @@ import { pathToFileURL } from "node:url";
 // `heavy-check run`, and refuse (75) if the queue client can't be run.
 interface Facts { env: Record<string, string | undefined>; cgroup: string | null; job?: { cgroup: string | null; unit: string | null } | null;
   host?: string; sandboxTool?: boolean; queueState?: boolean }
-interface Admission { admitted: boolean; why: string; override?: string }
+interface Admission { admitted: boolean; why: string; override?: string; refuse?: boolean }
 interface Guard {
   admission(facts: Facts): Admission;
   routeArgs(argv: string[], spec: { cls?: string; machine?: string; env?: Record<string, string | undefined> }): { args: string[]; note: string };
