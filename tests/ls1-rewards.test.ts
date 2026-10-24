@@ -30,9 +30,13 @@ const reload = (s: GameState) => {
   assert.ok(text.ok, text.ok ? "" : text.error);
   return decodeSave(text.value);
 };
+/** The receipts a reloadable fixture needs for what `opened()` and `give` hand over:
+ * strict validation keeps equipment and modules to what was made. */
+const made = (s: GameState, ...recipes: string[]) => { for (const r of recipes) if (!s.knowledge.crafted.includes(r as never)) s.knowledge.crafted.push(r as never); };
 /** A deployed outpost at SPOTS.a: thermal (beside a vent) or cell-powered. */
 function outpost(power: "thermal" | "cells"): { s: GameState; id: string } {
   const { s } = opened();
+  made(s, "essential_tools", "outpost_kit_standard", "mod_locker", "mod_planter");
   const id = give(s, "outpost_kit_standard");
   swimTo(s, SPOTS.a);
   assert.equal(deployOutpost(s, s.systems, id, SPOTS.a, siteTable(power === "thermal" ? { ventDistance: 5 } : {})), null);
@@ -110,6 +114,7 @@ test("ping lens: the handheld ping reaches 60 m once crafted", () => {
 
 test("site caches: found on first reach, full, never a reserve cell; take-only; taken stays taken across reload; nothing refills", () => {
   const { s } = opened();
+  made(s, "essential_tools");
   assert.ok(!s.inventory.containers.some((c) => siteCacheOf(c.id)), "New Game holds no cache, so every item is the player's");
   assert.ok(interactions(s).some((x) => x.id === siteCacheContainerId("canopy_basket_bins")), "an unfound cache is still a place to go");
   for (const id of SITE_CACHE_IDS) {
@@ -161,6 +166,7 @@ test("site caches: found on first reach, full, never a reserve cell; take-only; 
 
 test("coded doors: an unplaced door takes no code; a wrong code costs nothing; the right one opens it for good", () => {
   const { s } = opened(), hatch = CODED_DOORS["island.cold_store_hatch"];
+  made(s, "essential_tools");
   assert.equal(enterCode(s, "island.cold_store_hatch", "4417").ok, false, "not in the world yet");
   hatch.placed = true; hatch.position = { x: -230, y: 24, z: 3 };
   try {

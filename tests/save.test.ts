@@ -218,7 +218,7 @@ test("a commit reuses the record it read or wrote: its slot equals a fresh page'
 test("unsupported local current is protected, even with a valid previous save", async () => {
   const lock = new TestWriterLock(),
     storage = new MemoryStorage();
-  const future = JSON.stringify({ ...sample(999), schemaVersion: 8 });
+  const future = JSON.stringify({ ...sample(999), schemaVersion: SAVE_SCHEMA_VERSION + 1 });
   storage.setItem(
     LOCAL_SAVE_KEY,
     JSON.stringify({
