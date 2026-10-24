@@ -293,7 +293,7 @@ export function stepSystems(s: GameState, events: GameEvent[]): void {
 function systemsNotice(e: SystemsEvent): GameEvent[] {
   if (e.type === "decoded") {
     const d = DECODABLES[e.completion.decodable], extra = [
-      ...(e.completion.blueprints.length ? ["new plans in your notebook"] : []),
+      ...(e.completion.fresh.length ? ["new plans in your notebook"] : []),
       ...(e.completion.beacons.length ? [`${e.completion.beacons.length} new beacon${e.completion.beacons.length === 1 ? "" : "s"} on the chart`] : []),
       ...(DECODE_LOGS[e.completion.decodable]?.length ? ["logs readable in the journal"] : []),
     ];
@@ -310,7 +310,8 @@ export function readLostSite(s: GameState, siteId: string): string {
   discoverSite(s.systems, siteId);
   const mine = (Object.keys(DECODABLES) as DecodableId[]).filter((d) => DECODABLES[d].site === siteId);
   const open = mine.filter((d) => !s.systems.decoded.includes(d));
-  const see = "see" in site ? `${site.see} ` : "";
+  // The plate (a sign, a stencil, a board) reads without a decoder (LS-1).
+  const see = `${site.see} “${site.plate}” `;
   return open.length
     ? `${site.label} · ${see}Its records are unreadable until decoded: ${open.map((d) => DECODABLES[d].label).join(", ")}. Start the decode at any powered decoder module.`
     : `${site.label} · decoded. ${mine.flatMap((d) => DECODE_LOGS[d] ?? []).join(" ")}`;

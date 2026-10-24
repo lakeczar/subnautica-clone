@@ -4,12 +4,13 @@
 import { FUTURE_BLUEPRINTS, MATERIALS, RECIPES, REGIONS, SOURCE_RENEWAL, SOURCES, TECH_RECORDS, techRecord } from "../../content/registry.js";
 import type { Recipe, RegionId } from "../../content/registry.js";
 import { SEEDS } from "../../content/systems/cultivation.js";
-import { DECODABLES, DECODE_MINUTES, LOST_SITES } from "../../content/systems/decodes.js";
+import { DECODABLES, DECODE_MINUTES, LOST_SITES, placedReveals } from "../../content/systems/decodes.js";
 import { SYS2_BLUEPRINTS } from "../../content/systems/items.js";
 import { storyNotebook } from "../storyLink.js";
 import type { NotebookView } from "../story/notebook.js";
 import type { GameState } from "../types.js";
-import { decodeViews } from "./decoder.js";
+import { decodeViews, doorCodes, markedSites } from "./decoder.js";
+import { readableNotes } from "./notes.js";
 import type { DecoderContext, DecodeStatus } from "./decoder.js";
 import { cropViews } from "./cultivation.js";
 import { labelOf } from "../inventory.js";
@@ -125,7 +126,7 @@ function techTab(s: GameState, sys: SystemsState): JournalTab {
 
 /** S5's notebook, flattened for browsing and search. The UI may still render
  * `FieldJournal.notebook` with ui/storyNotebook.ts. */
-function notebookTab(view: NotebookView): JournalTab {
+function notebookTab(view: NotebookView, sys: SystemsState): JournalTab {
   const questions = view.questions.map((q): JournalEntry => ({
     id: `question:${q.id}`, title: q.title, subtitle: q.answer ?? `${q.hypotheses.length} reading${q.hypotheses.length === 1 ? "" : "s"}`,
     lines: q.hypotheses.map((h) => `${h.status.replace("_", " ")} · ${h.text}`), tags: ["question"], status: q.answer ? "done" : "active",
@@ -136,13 +137,22 @@ function notebookTab(view: NotebookView): JournalTab {
   }));
   const journals = view.journals.map((j): JournalEntry => ({ id: `journal:${j.id}`, title: j.label, subtitle: "Personal record", lines: [j.text, ...j.context], tags: ["journal"], status: "known" }));
   const leads = view.leads.map((l): JournalEntry => ({ id: `lead:${l.id}`, title: l.region, subtitle: l.text, lines: l.hint ? [l.hint] : [], tags: ["lead", l.region], status: "active" }));
+  // LS-1: CB-2's found notes, and the door codes decoded records hold (so nothing is memorised).
+  const notes = readableNotes(sys).map((n): JournalEntry => ({
+    id: `note:${n.id}`, title: n.label, subtitle: `${n.author} · ${n.dated}`, lines: [n.text], tags: ["note", region(n.area === "hub_spur" ? "silt_basin" : n.area)], status: "known",
+  }));
+  const codes = doorCodes(sys).map((c): JournalEntry => ({
+    id: `code:${c.door}`, title: c.label, subtitle: `Code ${c.code.split("").join("-")}`, lines: [], tags: ["code"], status: "known",
+  }));
   return {
-    id: "notebook", label: "Notebook", count: questions.length + entries.length + journals.length,
+    id: "notebook", label: "Notebook", count: questions.length + entries.length + journals.length + notes.length + codes.length,
     sections: [
       { id: "questions", title: "Questions", entries: questions },
       { id: "leads", title: "Leads", entries: leads },
       { id: "findings", title: "Findings", entries: entries },
       { id: "journals", title: "Personal records", entries: journals },
+      { id: "notes", title: "Found notes", entries: notes },
+      { id: "codes", title: "Door codes", entries: codes },
     ].filter((sec) => sec.entries.length),
     empty: "Nothing recorded yet.",
   };
@@ -167,17 +177,23 @@ function decodesTab(s: GameState, sys: SystemsState, ctx: DecoderContext): Journ
     const def = DECODABLES[d];
     return {
       id: `decoded:${d}`, title: def.label, subtitle: "Decoded",
-      lines: [...def.reveals.map((r) => `Revealed ${r.label}`), ...def.blueprints.map((bp) => `Plans: ${blueprintLabel(bp)}`),
+      lines: [...placedReveals(d).map((r) => `Revealed ${r.label}`), ...def.blueprints.map((bp) => `Plans: ${blueprintLabel(bp)}`),
         ...(def.gates.length ? [`${def.gates.length} record${def.gates.length === 1 ? "" : "s"} now readable`] : [])],
       tags: [region(def.region)], status: "done",
     };
   });
+  // Seeing is not capturing: marked from afar or by a decoded map, logger not reached yet.
+  const marked = markedSites(sys).map((id): JournalEntry => ({
+    id: `marked:${id}`, title: LOST_SITES[id].label, subtitle: "Marked on the chart · reach its logger to capture the data",
+    lines: [], tags: [region(LOST_SITES[id].region)], status: "unknown",
+  }));
   return {
-    id: "decodes", label: "Decodes", count: running.length + waiting.length + done.length,
+    id: "decodes", label: "Decodes", count: running.length + waiting.length + done.length + marked.length,
     sections: [
       { id: "running", title: "In progress", entries: running },
       { id: "found", title: "Found, not decoded", entries: waiting },
       { id: "decoded", title: "Decoded", entries: done },
+      { id: "marked", title: "Marked, not captured", entries: marked },
     ].filter((sec) => sec.entries.length),
     empty: "Lost sites hold data a decoder can read.",
   };
@@ -201,7 +217,7 @@ export function buildJournal(s: GameState, sys: SystemsState, input: JournalInpu
       materialsTab(s, sys),
       { id: "creatures", label: "Creatures", count: creatures.length, sections: creatures.length ? [{ id: "seen", title: "Seen", entries: creatures }] : [], empty: "Creatures you scan or tag are logged here." },
       techTab(s, sys),
-      notebookTab(notebook),
+      notebookTab(notebook, sys),
       { id: "cycles", label: "Cycles", count: cycles.length, sections: cycles.length ? [{ id: "seen", title: "Seen", entries: cycles }] : [], empty: "Natural cycles appear here once you've seen one." },
       decodesTab(s, sys, input.decoder ?? {}),
     ],

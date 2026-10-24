@@ -9,6 +9,7 @@ import { CAMPAIGN_SOURCE_SITES } from "../content/campaign/index.js";
 import { CAMPAIGN_STEPS, FLEET_STRATEGIES, MATERIAL_SHELVES, SWIM_DEPTH } from "../content/story/strategies.js";
 import type { AnyBlueprint, CampaignStep, StepId, StrategyId } from "../content/story/strategies.js";
 import { OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../content/systems/hosts.js";
+import { MAIN_PATH_PLANS } from "../content/systems/decodes.js";
 import type { OutpostTier } from "../content/systems/hosts.js";
 import { planCampaign } from "./story/index.js";
 import type { CampaignModel, CampaignPlan, Shelves } from "./story/index.js";
@@ -103,8 +104,37 @@ export function registryModel(strategy: StrategyId): CampaignModel {
 export const planRegistryCampaign = (strategy: StrategyId): CampaignPlan =>
   planCampaign(strategy, { model: registryModel(strategy) });
 
-/** One outpost tier's plan on the route: the shallowest main-path record that
- * grants it and the first strategy step after which a diver reaches it. */
+/** One main-path plan on the route: the shallowest real record that grants it and
+ * the first strategy step after which a diver reaches it. Records only: a lost
+ * site's decoded copy never counts (LS-1). */
+export interface PlanStop {
+  readonly plan: string;
+  readonly record: string | null;
+  readonly depth: number;
+  /** Index into the strategy's steps; -1 before any step, null when unreachable. */
+  readonly after: number | null;
+}
+function planStops(strategy: StrategyId, plans: readonly string[]): PlanStop[] {
+  const order = FLEET_STRATEGIES[strategy].steps as readonly StepId[];
+  // Personal reach after each step: the deepest suit fitted so far.
+  const reach = order.map((_, i) => Math.max(SWIM_DEPTH, ...order.slice(0, i + 1)
+    .map((id) => (CAMPAIGN_STEPS[id] as CampaignStep).suit ?? 0)));
+  return plans.map((plan) => {
+    const found = Object.entries(REAL_GRANTS).filter(([, g]) => (g.grants as readonly string[]).includes(plan))
+      .sort(([, a], [, b]) => a.depth - b.depth)[0];
+    if (!found) return { plan, record: null, depth: Infinity, after: null };
+    const depth = found[1].depth, i = reach.findIndex((r) => r >= depth);
+    return { plan, record: found[0], depth, after: depth <= SWIM_DEPTH ? -1 : i < 0 ? null : i };
+  });
+}
+/** LS-1: every plan both routes depend on (`MAIN_PATH_PLANS`: the decoder, the three
+ * kits, planters) on this strategy's real route. */
+export const mainPathPlanRoute = (strategy: StrategyId): PlanStop[] => planStops(strategy, MAIN_PATH_PLANS);
+/** Problems with the main-path plans: one with no real record, or beyond every step. */
+export const mainPathPlanProblems = (strategy: StrategyId): string[] => mainPathPlanRoute(strategy).flatMap((p) =>
+  p.after === null ? [`${p.plan} ${p.record ? `at ${p.depth} m is beyond every ${strategy} step` : "has no main-path record"}`] : []);
+
+/** One outpost tier's plan on the route (the kit view of `planStops`). */
 export interface KitPlanStop {
   readonly tier: OutpostTier;
   readonly record: string | null;
@@ -115,18 +145,8 @@ export interface KitPlanStop {
 /** CB (C4): the main-path outpost-kit plans stay reachable in tier order. Lost-site
  * copies are optional extras and never count here. */
 export function kitPlanRoute(strategy: StrategyId): KitPlanStop[] {
-  const order = FLEET_STRATEGIES[strategy].steps as readonly StepId[];
-  // Personal reach after each step: the deepest suit fitted so far.
-  const reach = order.map((_, i) => Math.max(SWIM_DEPTH, ...order.slice(0, i + 1)
-    .map((id) => (CAMPAIGN_STEPS[id] as CampaignStep).suit ?? 0)));
-  return OUTPOST_TIER_ORDER.map((tier) => {
-    const bp = OUTPOST_TIERS[tier].bp;
-    const found = Object.entries(REAL_GRANTS).filter(([, g]) => (g.grants as readonly string[]).includes(bp))
-      .sort(([, a], [, b]) => a.depth - b.depth)[0];
-    if (!found) return { tier, record: null, depth: Infinity, after: null };
-    const depth = found[1].depth, i = reach.findIndex((r) => r >= depth);
-    return { tier, record: found[0], depth, after: depth <= SWIM_DEPTH ? -1 : i < 0 ? null : i };
-  });
+  const stops = planStops(strategy, OUTPOST_TIER_ORDER.map((tier) => OUTPOST_TIERS[tier].bp));
+  return OUTPOST_TIER_ORDER.map((tier, i) => ({ tier, record: stops[i]!.record, depth: stops[i]!.depth, after: stops[i]!.after }));
 }
 /** Problems with the kit route: a missing or unreachable plan, or tiers out of order. */
 export function kitPlanProblems(strategy: StrategyId): string[] {

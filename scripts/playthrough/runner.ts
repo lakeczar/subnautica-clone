@@ -17,6 +17,7 @@ export interface RunOptions extends PlayOptions {
 
 export async function runPhases(d: Driver, phases: readonly Phase[], o: RunOptions, slot = new SaveSlot(d.run.scenario)): Promise<RunRecord> {
   const t0 = performance.now();
+  d.decodesAllowed = o.decodes ?? true;
   let stopped: PhaseRecord["status"] | null = null;
   for (const phase of phases) {
     const record: PhaseRecord = {
@@ -47,6 +48,7 @@ export async function runPhases(d: Driver, phases: readonly Phase[], o: RunOptio
       if (problems.length) throw new Blocked(`${phase.id} finished without its outcome: ${problems.join("; ")}`);
       await slot.flushCaptures(d);
       await slot.milestone(d, phase.id);
+      for (const m of d.milestones) m(d, phase.id);
     } catch (error) {
       // A game refusal or trap is a finding; anything else is a harness bug, reported as such.
       record.status = "blocked";

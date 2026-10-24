@@ -24,7 +24,14 @@ export interface PlayOptions {
   readOptional: boolean;
   /** Find the story in reverse order wherever capability allows. */
   reverse: boolean;
+  /** Start decodes (LS-1). Off, the run is decode-free: the driver refuses any
+   * `start-decode`, and it ends with nothing decoding or decoded. Default on. */
+  decodes?: boolean;
 }
+/** LS-1: a decode-free run proves the main path needs no decode. */
+const decodeState = (d: Driver, decoding: boolean): boolean => decoding
+  ? d.state.systems.decodes.length > 0 || d.state.systems.decoded.length > 0
+  : d.state.systems.decodes.length === 0 && d.state.systems.decoded.length === 0;
 
 export interface Phase {
   id: string;
@@ -300,7 +307,7 @@ const firstItem = (d: Driver, kind: string): string => {
 const systems: Phase = {
   id: "systems", title: "Workshop records: outpost kit, decoder and planter; plating fitted; a lost site decoding",
   verify: all(crafted("outpost_kit_basic", "mod_decoder", "mod_planter", "plating_alloy"), mounted("creel", "plating_alloy"),
-    custom("no decode running or done", (d) => d.state.systems.decodes.length > 0 || d.state.systems.decoded.length > 0),
+    custom("the decode state does not match the run (decoding on: one running or done; off: none)", (d) => decodeState(d, d.decodesAllowed)),
     custom("nothing growing", (d) => d.state.systems.planters.length > 0)),
   missing: () => [],
   play(d) {
@@ -313,6 +320,12 @@ const systems: Phase = {
     d.command({ type: "install-module", vehicleId: creel.id, itemId: firstItem(d, "plating_alloy") });
     make(d, "mod_decoder", "workshop", regions);
     d.command({ type: "install-host-module", hostId: "island_workshop", socket: "s0", itemId: firstItem(d, "mod_decoder") });
+    // LS-1: a relay beside it keeps the decode running in the background while the
+    // bot works away from the workshop, as the relay plan on the same rack intends.
+    if (d.decodesAllowed) {
+      make(d, "mod_relay", "workshop", regions);
+      d.command({ type: "install-host-module", hostId: "island_workshop", socket: "s1", itemId: firstItem(d, "mod_relay") });
+    }
     make(d, "outpost_kit_basic", "pod", REEF);
     make(d, "mod_planter", "pod", ISLES);
     // A staple cutting from the nursery beside the pod, planted in the pod's own socket.
@@ -329,8 +342,10 @@ const systems: Phase = {
     if (!d.state.systems.found.includes("reef_pumphouse_log")) throw new Blocked("The pump house's log was not found from 10 m", where(d.state));
     fly(d, { id: "pump house return", source: "harness: local leg, swept", points: [...[...PUMPHOUSE_RUN].reverse(), { x: 20, y: -1.6, z: -21 }] });
     dockAndService(d, d.vehicle("dart")!);
-    enter(d, "workshop");
-    d.command({ type: "start-decode", hostId: "island_workshop", socket: "s0", decodable: "reef_pumphouse_log" });
+    if (d.decodesAllowed) {
+      enter(d, "workshop");
+      d.command({ type: "start-decode", hostId: "island_workshop", socket: "s0", decodable: "reef_pumphouse_log" });
+    }
   },
 };
 
@@ -354,7 +369,8 @@ const creatures: Phase = {
 };
 
 /** End of the refits: the staple cups harvested at the pod and the pump-house log
- * decoded at the workshop (waiting at the bench for whatever is left). */
+ * collected at the workshop. The relay kept it decoding in the background; any wait
+ * left is declared as a decode wait, which the pacing acceptance fails (LS-1). */
 function systemsPayoff(d: Driver): void {
   enter(d, "pod");
   // CR-1: the pod's fish trap has been catching in the background all along.
@@ -367,13 +383,14 @@ function systemsPayoff(d: Driver): void {
   }
   const crop = d.state.systems.planters[0];
   if (crop) {
-    d.waitFor("the staple cups to ripen", 400, (s) => (s.systems.planters[0]?.progress ?? 0) >= 360);
+    d.waitFor("the staple cups to ripen", 400, (s) => (s.systems.planters[0]?.progress ?? 0) >= 360, "growth:seed_staple_cup");
     const meals = d.count("meal", ["diver", "pod_locker"]);
     d.command({ type: "harvest", hostId: "home_pod", socket: "s0" });
     d.run.checks.push({ name: "staple cups harvested at the pod", ok: d.count("meal", ["diver", "pod_locker"]) > meals, detail: d.state.feedback });
   }
+  if (!d.decodesAllowed) return;
   enter(d, "workshop");
-  d.waitFor("the pump-house decode", 400, (s) => s.systems.decoded.includes("reef_pumphouse_log"));
+  d.waitFor("the pump-house decode", 400, (s) => s.systems.decoded.includes("reef_pumphouse_log"), "decode:reef_pumphouse_log");
   if (!d.state.knowledge.blueprints.includes("bp_small_fabricator")) throw new Blocked("The decode granted no field fabricator plan", where(d.state));
 }
 
@@ -482,7 +499,8 @@ export function carry(d: Driver, needs: Readonly<Partial<Record<ItemKind | "tagg
 const refits: Phase = {
   id: "refits", title: "Creel and Dart refits to 350 m, outer-crown mooring restored",
   verify: all(crafted("creel_350", "dart_350", "restore_canopy_stop"), hull("creel", 350), hull("dart", 350), facility("canopy_stop"),
-    custom("the pump-house log is not decoded", (d) => d.state.systems.decoded.includes("reef_pumphouse_log")),
+    custom("the pump-house log does not match the run (decoded when decoding, untouched when not)", (d) => d.decodesAllowed
+      ? d.state.systems.decoded.includes("reef_pumphouse_log") : decodeState(d, false)),
     custom("no staple cups harvested", (d) => d.run.checks.some((c) => c.name === "staple cups harvested at the pod" && c.ok))),
   missing: () => [],
   play(d) {
