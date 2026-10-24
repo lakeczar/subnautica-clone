@@ -122,7 +122,7 @@ test("CW-1: moving meshes share one frame budget for their lights: a frame moves
     lights.update(null, eye, 1, 0);
     const p = lights.stats.placing;
     assert.ok(p.moved <= 2048 + 32 * p.moving, `frame ${f}: ${p.moved} lights moved for ${p.moving} moving meshes`);
-    made = lights.stats.considered;
+    made = lights.stats.placed; // considered also counts the fixed Rift vents
   }
   assert.equal(made, MESHES * PER, "every moving light is made and sent within a few frames");
   lights.dispose(); scene.dispose(); engine.dispose();

@@ -213,7 +213,8 @@ test("CW-1: an eviction over the byte budget decides at once but disposes within
   }
   assert.equal(s.disposing, 0, `drained in ${frames} frames`);
   for (let f = 0; f < 50 && !s.settled; f++) s = h.frame(pod);
-  assert.ok(!s.overBudget && s.gpuBytes <= 8 * MiB, `within the shrunk share: ${s.gpuBytes}`);
+  // gpuBytes includes the external share (88 MiB): the whole budget is 96 MiB.
+  assert.ok(!s.overBudget && s.gpuBytes <= 96 * MiB, `within budget once freed: ${s.gpuBytes} B, over ${s.overBudget}, disposing ${s.disposing}, settled ${s.settled}`);
   h.residency.dispose();
   assert.equal(h.live.resident, 0, "dispose frees everything at once");
 });

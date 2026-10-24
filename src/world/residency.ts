@@ -379,7 +379,9 @@ export function createResidency(options: {
       const refused: RefusedUnit[] = [];
       const targets: typeof lastTargets = [];
       let demoted = 0, held = 0, cut = 0, full = false;
-      const sum: Bytes = { ...external };
+      // Art released but not yet disposed still holds its bytes: the frontier
+      // admits only what fits beside it (eviction treats it as gone already).
+      const sum: Bytes = { cpu: external.cpu + disposingBytes.cpu, gpu: external.gpu + disposingBytes.gpu };
       const room = share();
       // No share left (external owners take it all): nothing is admitted.
       const inShare = (c: Bytes): boolean => room.cpu > 0 && room.gpu > 0 && c.cpu <= room.cpu && c.gpu <= room.gpu;
