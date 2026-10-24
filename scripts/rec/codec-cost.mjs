@@ -22,7 +22,9 @@ if (!video || !out) { console.error("usage: codec-cost.mjs --video FILE.webm --o
 const frames = path.join(out, "frames");
 mkdirSync(frames, { recursive: true });
 // 72 pictures, 6 s of play at 12 fps: the content an encoder sees.
-execFileSync(findFfmpeg(), ["-hide_banner", "-loglevel", "error", "-i", video, "-t", "6", "-vf", "fps=12,scale=1280:720", "-y", path.join(frames, "%03d.png")]);
+// The system's ffmpeg when it has filters (Playwright's build only remuxes).
+const ff = (() => { try { execFileSync("ffmpeg", ["-hide_banner", "-filters"], { stdio: "ignore" }); return "ffmpeg"; } catch { return findFfmpeg(); } })();
+execFileSync(ff, ["-hide_banner", "-loglevel", "error", "-i", video, "-t", "6", "-vf", "fps=12,scale=1280:720", "-y", path.join(frames, "%03d.png")]);
 const files = readdirSync(frames).filter((f) => f.endsWith(".png")).sort();
 
 const CONFIGS = [
