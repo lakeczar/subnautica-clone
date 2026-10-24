@@ -326,15 +326,24 @@ for (const w of snapshot.worst.slice(0, 16)) {
 if (alloc) {
   // Self bytes by function over every kind's held steps (each run's app work included).
   type Node = { callFrame: { functionName: string; url: string; lineNumber: number }; selfSize: number; children: Node[] };
-  const self = new Map<string, number>(); let total = 0;
-  const walk = (n: Node): void => {
-    const f = n.callFrame, name = `${f.functionName || "(anon)"} ${path.basename(f.url)}:${f.lineNumber + 1}`;
-    total += n.selfSize; if (n.selfSize) self.set(name, (self.get(name) ?? 0) + n.selfSize);
-    for (const c of n.children) walk(c);
+  const self = new Map<string, number>(), callers = new Map<string, Map<string, number>>(); let total = 0;
+  const label = (n: Node): string => `${n.callFrame.functionName || "(anon)"} ${path.basename(n.callFrame.url)}:${n.callFrame.lineNumber + 1}`;
+  const walk = (n: Node, parent: string): void => {
+    const name = label(n);
+    total += n.selfSize;
+    if (n.selfSize) {
+      self.set(name, (self.get(name) ?? 0) + n.selfSize);
+      const by = callers.get(name) ?? callers.set(name, new Map()).get(name)!;
+      by.set(parent, (by.get(parent) ?? 0) + n.selfSize);
+    }
+    for (const c of n.children) walk(c, name);
   };
-  for (const p of allocProfiles) walk((p as unknown as { head: Node }).head);
+  for (const p of allocProfiles) walk((p as unknown as { head: Node }).head, "");
   console.log(`allocation: ${(total / allocSteps / 1024).toFixed(1)} KiB per step over ${allocSteps} held steps; by function:`);
-  for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 25)) console.log(`  ${(v / allocSteps / 1024).toFixed(2).padStart(6)} KiB  ${k}`);
+  for (const [k, v] of [...self].sort((a, b) => b[1] - a[1]).slice(0, 25)) {
+    const top = [...callers.get(k)!].sort((a, b) => b[1] - a[1]).slice(0, 3).map(([c, b]) => `${c} ${(b / allocSteps / 1024).toFixed(2)}`).join("; ");
+    console.log(`  ${(v / allocSteps / 1024).toFixed(2).padStart(6)} KiB  ${k}  ← ${top}`);
+  }
 }
 const json = value("--json");
 if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, timelineSize, snapshot, slow, gcs }, null, 1) + "\n");
