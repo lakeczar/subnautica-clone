@@ -1084,3 +1084,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Findings:** P2 the gate still clears frames by VM-wide or CPU-time heuristics, extends stale states and treats a futex as GPU evidence; P2 graphics loss drops entry readiness; P2 light recovery skips the current-actor safe-point recheck. Tour 1's 95.2 ms `regions` (`art.update`) frame may be game work (first-use JIT and the like); its "unsampled" verdict is correct (the sampler runs on the orchestration event loop). Canary: AMEND.
   - **Decisions:** fix R4-1/2/3; a sampler-reliability fix (a dedicated worker, coverage and heartbeat) instead of the co-located canary; one exclusive rerun of tour 1 and deep 2; compose root per Sol's integration section (6 conflicts, hazards into the registered table, rebake and verify, zero shell fallbacks), with the composed gate through the queue.
   - **If still unproven:** provisional integration with open measurement compromises (deep 2: Fleet host pinning; tour 1: the harness, with the `regions` frame left open as possible game work), then R5 on the composed candidate.
+- **PACE-1 plan revision 1 at `11e9c26e`:**
+  - **Evidence, not a shopping list:** a lattice-seal air housing at the Divide dock; empty "works staging power" cradles at the Rift; the Rift plan grant withdrawn; the bot's pre-budget deleted, so it reserves only for known recipes and seen clues.
+  - **Adverse cases:** A1 clue read (one visit), A2 lattice clue missed (one return), A3 core clue missed (one side trip).
+  - **41 min:** scoped as one estimate beside a crown scenario (25–30 min).
+  - **Carrier:** its fabrication is F9 in stage 2.
+  - **Lore rulings (coordinator):** the fixtures approved; the optional decoded line via LS-1; L14's lead moves from C07 to `district_controller` (the pod record becomes a post-reveal optional return), with a provenance check for saves holding L14.
+  - **Review:** a short Sol R2 to follow, after the lore fold-in.
