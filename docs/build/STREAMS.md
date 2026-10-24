@@ -1194,3 +1194,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Ranked:** (1) measurement hygiene rules now; (2) exclusive only for acceptance, with microbenchmarks on CPU time and allocations, duet A/Bs, and an exclusive preflight refusing compiles; (3) stored per-file heavy results; (4) the full heavy tier in the root gate on `--machine any`; (5) SCHED-5 drain windows and backfill; (6) caching and affected-test selection later.
   - **Owner decisions pending:** amend convention 9, approve SCHED-5, accept about +10 min per root gate.
 - **Fleet host reboot (option B) being scheduled:** the owner relays `/work/tmp/fleet-reboot-request.md` to fleet on the mac mini (pinning, any Unraid update, the 3090 passthrough unchanged, the three stopped VMs not started, the alickers tunnel, post-reboot steal and GPU checks, undo steps). The coordinator picks the window: after the CW-1 R5 and SCHED-3 R6 reviews report, and before the SCHED-3 install. Builders commit and push and the queue drains first. Everything on factory-worker (T3 included) stops during the reboot; afterwards, `task_status` every task.
+- **Asset debate, Opus side done** (`research/asset-pipeline-opus` `38d4052c`):
+  - **Pipeline:** Blender 5.2.3 LTS via `bpy` in an Option A session on alickers, over stdin/stdout through SSH (no TCP; MCP optional). The session is a sketchbook; shipped assets are rebuilt by clean queued jobs, deterministic on the same machine.
+  - **Into the game:** glTF is converted in the bake to the cel recipe form (no runtime loader; `@babylonjs/loaders` rejected).
+  - **GPUs:** Cycles CUDA works on the 4070; OpenGL needs `GALLIUM_DRIVER=d3d12`; the integrated GPU crashes Blender.
+  - **Bake-off and proof:** a three-tier bake-off; first proof an ENV-1 room kit.
+  - **Owner asks:** one install (`x11vnc novnc websockify xauth`); no paid tools or AI generation.
+  - **Round 2 cross-critique** dispatched to both sides; the coordinator decides after it.
