@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -92,9 +92,21 @@ try {
     meta: { machine, commit, chrome: g.chrome, mode, segment, judged, ticket: process.env.SILTWAKE_JOB_TICKET ?? null, save: path.basename(save), plan: arg("plan") ? path.basename(arg("plan")) : null, isolated: !flag("no-isolate") } });
   await rec?.mark(`travel starts (segment ${segment}, ${points.length} points)`);
   const deadline = Date.now() + seconds * 1000;
+  // --profile S: where the page's main-thread time goes over the first S seconds of travel (a CDP sampling profile).
+  const profileS = Number(arg("profile", 0));
+  if (profileS > 0) { await g.cdp.send("Profiler.enable"); await g.cdp.send("Profiler.setSamplingInterval", { interval: 200 }); await g.cdp.send("Profiler.start"); }
+  const profileEnd = profileS > 0 ? Date.now() + profileS * 1000 : 0;
+  let profiled = false;
+  const stopProfile = async () => {
+    if (!profileEnd || profiled) return;
+    profiled = true;
+    const { profile } = await g.cdp.send("Profiler.stop");
+    writeFileSync(path.join(out, "profile.json"), JSON.stringify(profileSummary(profile, profileS)));
+  };
   for (const [i, pt] of points.entries()) {
     if (i === 0) continue;
     if (Date.now() > deadline) break;
+    if (profileEnd && Date.now() > profileEnd) await stopProfile();
     const label = pt.cave ?? pt.view ?? `point ${i}`;
     let ok = false;
     try { ok = await goto(g, pt, { tol: pt.tol ?? (pt.cave ? 4 : 7), label, boost: !(pt.view || pt.tol), timeoutS: 100, stop: () => Date.now() > deadline }); }
@@ -103,6 +115,7 @@ try {
     if (pt.cave) { (ok ? result.reached : result.skipped).push(pt.cave); await rec?.mark(`${ok ? "at" : "short of"} ${pt.cave}`, { cave: pt.cave }); }
   }
   await releaseAll(g);
+  await stopProfile();
   const m1 = await metrics();
   result.travelS = Math.round((Date.now() - started) / 1000);
   const probe = await g.page.evaluate(() => ({ gaps: window.__recProbe.gaps, work: window.__recProbe.work, seconds: (performance.now() - window.__recProbe.since) / 1000 }));
@@ -137,3 +150,21 @@ if (!["off", "playtest"].includes(mode) && !flag("no-pack") && !exit) {
   catch (e) { log("pack failed", e.message); exit = 1; }
 }
 process.exit(exit);
+
+/** A sampling profile as self time per script file and function, ms per second of profile (GC and the browser's own work as their own rows). */
+function profileSummary(profile, seconds) {
+  const byId = new Map(profile.nodes.map((n) => [n.id, n]));
+  const self = new Map();
+  const dt = profile.timeDeltas ?? [];
+  for (let i = 0; i < profile.samples.length; i++) {
+    const n = byId.get(profile.samples[i]), cf = n?.callFrame ?? {};
+    const file = (cf.url ?? "").split("/").pop() || "(native)";
+    const key = `${file} ${cf.functionName || "(anonymous)"}`;
+    self.set(key, (self.get(key) ?? 0) + (dt[i] ?? 0) / 1000);
+  }
+  const wall = ((profile.endTime - profile.startTime) / 1e6) || seconds;
+  const rows = [...self.entries()].map(([k, ms]) => ({ fn: k, msPerS: +(ms / wall).toFixed(3) })).sort((a, b) => b.msPerS - a.msPerS);
+  const byFile = new Map();
+  for (const r of rows) { const f = r.fn.split(" ")[0]; byFile.set(f, +((byFile.get(f) ?? 0) + r.msPerS).toFixed(3)); }
+  return { seconds: +wall.toFixed(1), byFile: [...byFile.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25), top: rows.slice(0, 60) };
+}

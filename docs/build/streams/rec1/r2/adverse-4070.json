@@ -1,0 +1,183 @@
+{
+ "clock": {
+  "marks": [
+   {
+    "t": 2531,
+    "what": "restart, then a 1.5 s stall before the first picture"
+   },
+   {
+    "t": 6535.100000008941,
+    "what": "restart, then a 1.5 s stall after the first hand-over"
+   },
+   {
+    "t": 11042,
+    "what": "CPU throttled 6x"
+   },
+   {
+    "t": 13547.60000000894,
+    "what": "CPU throttle off"
+   },
+   {
+    "t": 18559.60000000894,
+    "what": "no frames (hidden-tab equivalent)"
+   },
+   {
+    "t": 21068.70000000298,
+    "what": "frames again"
+   }
+  ],
+  "visibility": [],
+  "hiddenSeen": "visible",
+  "codec": "V_VP9",
+  "undecoded": true,
+  "decoder": "ffmpeg",
+  "segments": [
+   {
+    "file": "video/000.webm",
+    "start": 600.9,
+    "end": 2035,
+    "frames": 17,
+    "barcodes": 17,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 600.9,
+    "lastT": 1983.9
+   },
+   {
+    "file": "video/001.webm",
+    "start": 2067.5,
+    "end": 2531,
+    "frames": 6,
+    "barcodes": 6,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 2067.5,
+    "lastT": 2484.5
+   },
+   {
+    "file": "video/002.webm",
+    "start": 2534.1,
+    "end": 4534,
+    "frames": 8,
+    "barcodes": 8,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 2534.1,
+    "lastT": 4517.1
+   },
+   {
+    "file": "video/003.webm",
+    "start": 4600.8,
+    "end": 6535,
+    "frames": 24,
+    "barcodes": 24,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 4600.8,
+    "lastT": 6517.8
+   },
+   {
+    "file": "video/005.webm",
+    "start": 6550.7,
+    "end": 8551,
+    "frames": 7,
+    "barcodes": 7,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 6550.7,
+    "lastT": 8483.7
+   },
+   {
+    "file": "video/006.webm",
+    "start": 8567.2,
+    "end": 10568,
+    "frames": 24,
+    "barcodes": 24,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 8567.2,
+    "lastT": 10484.2
+   },
+   {
+    "file": "video/007.webm",
+    "start": 10567.2,
+    "end": 12586,
+    "frames": 25,
+    "barcodes": 25,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 10567.2,
+    "lastT": 12567.2
+   },
+   {
+    "file": "video/008.webm",
+    "start": 12650.4,
+    "end": 14601,
+    "frames": 24,
+    "barcodes": 24,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 12650.4,
+    "lastT": 14567.4
+   },
+   {
+    "file": "video/009.webm",
+    "start": 14650.3,
+    "end": 17067,
+    "frames": 29,
+    "barcodes": 29,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 14650.3,
+    "lastT": 16983.3
+   },
+   {
+    "file": "video/010.webm",
+    "start": 17066.9,
+    "end": 21084,
+    "frames": 18,
+    "barcodes": 18,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 17066.9,
+    "lastT": 18483.9
+   },
+   {
+    "file": "video/011.webm",
+    "start": 21083.5,
+    "end": null,
+    "frames": 26,
+    "barcodes": 26,
+    "misdated": 0,
+    "firstBad": [],
+    "firstT": 21083.5,
+    "lastT": 23016.5
+   }
+  ],
+  "cutoff": 23072,
+  "lastT": 23016.5,
+  "reachesCutoff": true
+ },
+ "workers": {
+  "alive": 1,
+  "latestExportBytes": 2168
+ },
+ "timeline": {
+  "frameRows": 360000,
+  "memoryPoints": 288000,
+  "bytes": 507454,
+  "loadMs": 53,
+  "seekMs": 5,
+  "errors": []
+ },
+ "dpr2": {
+  "dpr": 2,
+  "stable": true,
+  "rows": [
+   "1712x360 1712x300 1712x80",
+   "1712x360 1712x300 1712x80"
+  ]
+ },
+ "errors": [],
+ "failed": []
+}
