@@ -5,8 +5,11 @@
 //   exclusive-unit.mjs remove SLICE DIR   remove the unit
 //
 // One operation at a time, and nothing external under the admission lock:
-// 1. The installer lock (<state>/install.lock, flock) for the whole operation,
-//    so install and removal never overlap. A dead installer releases it.
+// 1. The installer lock (<state>/install.lock, flock): install.sh takes it for
+//    its whole run, publication included, and hands it down as an open fd
+//    (SILTWAKE_INSTALL_LOCK_FD). This checks that the fd is that file and that
+//    it holds the lock; it takes no lock of its own. The lock ends with the
+//    last process holding the fd, so a dead installer releases it.
 // 2. A short transaction: refuse while a ticket runs (nothing paused); else set
 //    state.maintenance with this operation's identity (pid and a nonce). Then
 //    nothing is admitted (policy.mjs plan), queued tickets wait, and status
@@ -23,13 +26,13 @@
 //    failure after step 2 keeps it, with the reason and the recovery command;
 //    nothing can run on stale settings, and rerunning install.sh recovers.
 // Exit 0 done, 3 refused (busy; nothing paused), 4 incomplete (maintenance kept).
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
-import { readFileSync, renameSync, rmSync, mkdirSync, writeFileSync } from "node:fs";
+import { fstatSync, readFileSync, renameSync, rmSync, mkdirSync, statSync, writeFileSync } from "node:fs";
 import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { sliceLimits } from "./policy.mjs";
-import { alive, ensureDirs, flockFd, loadConfig, self, systemctlBounded, transaction, unitPopulation } from "./state.mjs";
+import { alive, ensureDirs, loadConfig, self, systemctlBounded, transaction, unitPopulation } from "./state.mjs";
 
 const QUERY_MS = 10000, GRACE_MS = 5000, RECOVER = "Recover: rerun scripts/heavy/install.sh";
 const [action, slice, dir] = process.argv.slice(2);
@@ -45,10 +48,14 @@ const expected = action === "remove"
   ? { CPUWeight: "[not set]", CPUQuotaPerSecUSec: "infinity", MemoryMax: "infinity", MemorySwapMax: "infinity" }
   : { CPUWeight: "10000", CPUQuotaPerSecUSec: `${w.cpuQuotaPct / 100}s`, MemoryMax: String(w.memoryMaxMiB * 1048576), MemorySwapMax: "0" };
 
-// 1. One installer at a time.
+// 1. One installer at a time: install.sh's lock, checked, never a second one.
 ensureDirs(cfg);
-const lock = flockFd(join(cfg.dir, "install.lock"), { wait: 600 });
-if (lock == null) { console.error(`not ${verb}: another install.sh is still running after 10 minutes`); process.exit(3); }
+const lockFd = Number(process.env.SILTWAKE_INSTALL_LOCK_FD), lockPath = join(cfg.dir, "install.lock");
+const holdsLock = () => {
+  try { const a = fstatSync(lockFd), b = statSync(lockPath); if (a.dev !== b.dev || a.ino !== b.ino) return false; } catch { return false; }
+  return spawnSync("flock", ["-n", "3"], { stdio: ["ignore", "ignore", "inherit", lockFd] }).status === 0; // our own open file: succeeds only if no one else holds it
+};
+if (!Number.isInteger(lockFd) || !holdsLock()) { console.error(`not ${verb}: exclusive-unit.mjs runs only under install.sh's installer lock (${lockPath})`); process.exit(2); }
 
 // 2. Pause admission, with this operation's identity.
 const op = randomBytes(8).toString("hex"), me = self();
