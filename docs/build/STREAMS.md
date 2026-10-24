@@ -850,3 +850,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - a timeline warning suppresses urgent hazard captions (player-facing);
     - a stale failure warning remains after repair.
   - **Fix plan:** an independent oracle, read snapshots, deterministic fault schedules, fast-tier seeds that kill the known mutants, and mutants kept as a heavy self-check.
+- **Hardware-encode research in** (`research/browser-hw-encode` `e212e70a`, pushed).
+  - **Windows 4070:** hardware AV1, H.264 or HEVC (no CPU fallback on Windows).
+  - **factory-worker:** no NVENC from Linux Chrome (nvidia-vaapi-driver is decode-only), so the approved 540p software path.
+  - **WSL2:** Mesa D3D12 VA-API H.264 is a real possible hardware path; probe `vainfo` first.
+  - **Capture:** direct `VideoFrame(canvas)` against the scaled bitmap, traced for readback.
+  - **Containers:** fMP4 for H.264/HEVC, WebM for VP8/VP9/AV1.
+  - Forwarded to REC-1 with its probes. The owner-PC probes are batched for one owner session.
