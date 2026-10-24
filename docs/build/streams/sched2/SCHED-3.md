@@ -65,6 +65,23 @@ STEW-2 is on root at `e136beb6` (R3 accepted, `899db9a1` on `review/stew-2-r3`),
   - **B44** (a STEW-2-shaped fixture with the real `local-guard.mjs`): a default `npm test` runs through the runner here, and the guard's `--require` is admitted inside the job. A machine-HOME `~/.npmrc` with `script-shell` never reaches npm (`CASE-DEFAULT`, exit 0). The same submission pinned to the 3090 runs as submitted, through npm, its `.npmrc` and the guard (19).
   - **Admission on alickers** can't be shown on the fake sandbox, whose host isn't alickers. It is checked on the real 4070: the runner running this repository's `test` there.
 
+- **Checks** at `6c736791`, all through the queue:
+  - **One `--class standard --machine 3090 --review` job** (ticket `261024-231518-4b16`):
+    - units **56/56**;
+    - B28 and B34–B44 **12/12**;
+    - SCHED-1 **23/23**;
+    - SCHED-2 **27/27**;
+    - SCHED-2b **44/44**.
+  - **Fast tier** on the 4070 (`npm test`, through STEW-2's guard, admitted there by the sandbox's identity; ticket `261024-231518-802e`): exit 0, 172 files.
+  - **The runner on the real 4070** (`node scripts/heavy/portable-run.mjs --script test`, ticket `261024-231518-d8d2`):
+    - it resolved the composed chain, `node scripts/local-guard.mjs --require npm run test:fast && node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast`;
+    - the guard's `--require` was admitted on alickers;
+    - the fast tier passed, 172 files, exit 0, with no npm.
+  - **Run history:** two earlier runs on the composition failed.
+    - **`f6bb07d5`, SCHED-1 test 13: a real regression,** fixed by `v1Scope` above. The whole-component match let a forged legacy nested call pass from inside another queue's v2 scope.
+    - **`f6bb07d5`, S27:** expected; it now compares the installed real `cgroup-scope.mjs`.
+    - **`d5f6bb70`:** a unit pinned the runner's allowlist without the new `SILTWAKE_SCHED_DIR`.
+
 ## R5 review responses (part 1: F1–F3 and follow-ups, before composing with STEW-2)
 
 Review `36018341` on `review/sched-3-r5`, by Sol on `7aa88a3d`: REQUEST CHANGES. The R4 cases pass. The coordinator's decisions:
