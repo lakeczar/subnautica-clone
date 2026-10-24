@@ -1003,6 +1003,8 @@ test("app: same-step disable retains the target with speech suppressed, while in
   f.renderer.lose(); assert.equal(injuryPort(f.view).damage, null);
   f.renderer.nativeRestore(); f.renderer.finishRestore();
   assert.equal(injuryPort(f.view).damage, null); assert.equal(f.view.screen, "menu");
+  // CW-1 R4-2: Resume waits for the restored view's fresh present (one frame) and its readiness (the next).
+  f.frames(2);
   f.view.actions.resume(); port.events([bite]); assert.ok(injuryPort(f.view).damage);
   // A reconstruction-ready callback must clear even without entered() or a
   // preceding loss callback in this diagnostic adapter.

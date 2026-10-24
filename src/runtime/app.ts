@@ -127,8 +127,10 @@ export class SiltwakeApp {
    * presentation, until its caves are admitted (or its rescue or refuge is
    * applied); only then is it shown or resumed. */
   /** CW-1 R3-3: readiness counts only from a present of the entered pose (`presents`
-   * at entry); `fallback` once moved to a safe pose; `failed` when even that stays unlit. */
-  private entryPending: { readonly generation: number; readonly since: number; readonly presents: number; readonly fallback: boolean; readonly failed: boolean } | null = null;
+   * at entry); `fallback` once moved to a safe pose; `failed` when even that stays unlit.
+   * R4-2: the wait survives graphics loss (restoration rebases `since` and `presents`),
+   * and a restoration of a live session waits the same way (`restore`) before Resume. */
+  private entryPending: { readonly generation: number; readonly since: number; readonly presents: number; readonly fallback: boolean; readonly failed: boolean; readonly restore: boolean } | null = null;
   /** A settle's unlit-cave fallback already applied for the current settle. */
   private settleFallback = false;
   /** The last frame's timestamp: admission's timers run on the frame clock. */
@@ -280,6 +282,7 @@ export class SiltwakeApp {
           this.pause("Graphics paused while the WebGL context is unavailable.");
         else {
           this.dirty = true;
+          this.awaitRestoredView();
           this.view.notify("Graphics restored. Resume when ready.", false, { channel: "system" });
         }
       });
@@ -712,7 +715,7 @@ export class SiltwakeApp {
     // CW-1 R1: the expedition stays behind the menu's loading presentation
     // (paused, busy, no HUD) until its caves are admitted: records installed,
     // admission clear, or a rescue or refuge applied. Usually that is now.
-    this.entryPending = { generation: this.sessionGeneration, since: this.frameAt, presents: this.renderer?.presents ?? 0, fallback: false, failed: false };
+    this.entryPending = { generation: this.sessionGeneration, since: this.frameAt, presents: this.renderer?.presents ?? 0, fallback: false, failed: false, restore: false };
     this.paused = true;
     this.clock.reset();
     this.view.showMenu(true, ENTRY_LOADING);
@@ -736,8 +739,10 @@ export class SiltwakeApp {
     // light never lands, the expedition moves to safe water (the remembered
     // open water, else the refuge) and waits again there; if even that stays
     // unlit, entry keeps the loading cover with a message. Never revealed unlit.
-    if (this.renderer && this.graphicsAvailable) {
+    if (this.renderer) {
       if (pending.failed) return;
+      // Graphics unavailable: keep waiting; restoration restarts the bound from a fresh present (R4-2).
+      if (!this.graphicsAvailable) return;
       const seen = this.renderer.presents > pending.presents;
       if (!seen || this.renderer.caveLightPending) {
         this.dirty = true;
@@ -755,15 +760,29 @@ export class SiltwakeApp {
     }
     this.entryPending = null;
     this.syncSessionUi();
-    this.finishEntry();
+    // A restored view of a live session: ready to Resume (it stays paused).
+    if (!pending.restore) this.finishEntry();
   }
 
-  /** Out of an unlit cave (CW-1 R3-3): to the remembered open water, else the refuge. */
+  /** Graphics restored (R4-2): the restored view must present this pose, lit, before the
+   * session is shown or resumed. An entry still waiting keeps its generation and fallback
+   * state and restarts its bound from a fresh present; a live session waits the same way.
+   * A failed entry stays failed (load another save, or Continue to try again). */
+  private awaitRestoredView(): void {
+    const pending = this.entryPending;
+    if (!this.renderer || !this.state || pending?.failed) return;
+    this.entryPending = pending
+      ? { ...pending, since: this.frameAt, presents: this.renderer.presents }
+      : { generation: this.sessionGeneration, since: this.frameAt, presents: this.renderer.presents, fallback: false, failed: false, restore: true };
+    this.syncSessionUi();
+  }
+
+  /** Out of an unlit cave (CW-1 R3-3): to the remembered open water if the current
+   * actor still fits there, else the refuge (the cave runtime's one choice, R4-3). */
   private toSafeWater(): void {
     const s = this.state;
     if (!s) return;
-    const back = this.caves.lastSafe;
-    this.session.state = relocateForCave(s, back ? { kind: "point", position: back } : { kind: "refuge" });
+    this.session.state = relocateForCave(s, this.caves.recoveryTarget());
     this.view.notify(UNLIT_MOVED, false, { channel: "system" });
     this.dirty = true;
   }

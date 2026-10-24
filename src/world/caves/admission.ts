@@ -64,9 +64,17 @@ export function createCaveRuntime(o: CaveRuntimeOptions) {
   // Clusters within reach of the actor: a grid query into a reused buffer (R2-4).
   const nearBuffer: number[] = [];
   const near = (box: Aabb): number => stream.clustersNear(box.min.x - reach, box.min.z - reach, box.max.x + reach, box.max.z + reach, nearBuffer);
+  /** Where a recovery sends the controlled actor now: the remembered safe pose
+   * if it is still clear for the current actor (it was checked for whoever held
+   * it; a larger craft boarded since may not fit), else the refuge (CW-1 R4-3). */
+  const recoveryTarget = (): CaveRelocation =>
+    lastSafe && o.clear(lastSafe) ? { kind: "point", position: { ...lastSafe } } : { kind: "refuge" };
   return {
     stats,
     get lastSafe(): Vec3 | null { return lastSafe; },
+    /** The one recovery choice, for admission's refuge and the app's unlit-cave
+     * recovery alike: the remembered safe pose rechecked for the current actor, else the refuge. */
+    recoveryTarget,
     /** A new expedition replaced the old one (New, import, Continue; not a
      * pause): forget the remembered safe pose and any running hold, so a
      * recovery only ever uses the new expedition's own poses or its refuge,
@@ -106,7 +114,7 @@ export function createCaveRuntime(o: CaveRuntimeOptions) {
       if (holdingSince < 0) holdingSince = now;
       if (now - holdingSince >= refugeAfter) {
         holdingSince = -1; stats.refuges++;
-        const back = lastSafe && o.clear(lastSafe) ? { kind: "point" as const, position: { ...lastSafe } } : { kind: "refuge" as const };
+        const back = recoveryTarget();
         return { holding: true, relocate: back, state: "refuge",
           message: back.kind === "point" ? "This cave could not load: you were returned to open water you passed."
             : "This cave could not load: you were returned to your refuge." };

@@ -8,11 +8,15 @@ import { completeOpening } from "../src/sim/progression.js";
 import { CAVE_SOURCES } from "../src/content/regions/caves.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { REST_BASES } from "../src/content/bases.js";
-import { setKitCaveRecords, surfaceHeight } from "../src/sim/world.js";
+import { gameWorld, setKitCaveRecords, SOLIDS, surfaceHeight } from "../src/sim/world.js";
+import { HULL_COLLIDERS } from "../src/content/registry.js";
+import { makeVehicle } from "../src/sim/state.js";
 import { liveKitCave, type KitCaveCollision } from "../src/world/caves/kitCollision.js";
 import { setGameCaveStore, type CaveStore } from "../src/render/caves/caveStore.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
-import type { GameState, Vec3 } from "../src/sim/types.js";
+import type { GameState, Vec3, WorldQueries } from "../src/sim/types.js";
+import { createCaveRuntime, type CaveRuntime } from "../src/world/caves/admission.js";
+import { actorBox } from "../src/sim/ribCollision.js";
 
 // CW-1 R1 and R2 at the app boundary: an entered expedition waits for its
 // caves behind the menu's loading presentation (never in play), and recovery
@@ -66,8 +70,9 @@ async function app(t: test.TestContext, seed: SaveEnvelope | null, store: CaveSt
   const view = GameView.current;
   t.after(() => { instance.dispose(); browser.restore(); setGameCaveStore(undefined); setKitCaveRecords(null); });
   browser.frames(2);
-  const state = (): GameState => (instance as unknown as { state: GameState }).state;
-  return { ...browser, view, state };
+  const inner = instance as unknown as { state: GameState; world: WorldQueries; caves: CaveRuntime };
+  const state = (): GameState => inner.state;
+  return { ...browser, view, state, world: inner.world, caves: inner.caves };
 }
 const near = (a: Vec3, b: Vec3): boolean => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z) < 1e-6;
 
@@ -301,5 +306,177 @@ test("R3-3: a settle that reaches its bound unlit moves back to the remembered o
   assert.ok(near(f.state().player.pose.position, open), "once, not every frame");
   r.settling = false; r.caveLightFailed = false;
   f.frames(5);
+  assert.equal(f.view.screen, "playing");
+});
+
+
+// CW-1 R4-3: light recovery uses the cave runtime's one recovery choice, rechecked for the current actor.
+const DIVER_FEET = { radius: 0.34, height: 0.95 };
+/** Open water beside a real world solid where a diver fits and a Dart does not, away from every cave. */
+function diverOnlyWater(world: WorldQueries): Vec3 {
+  for (const s of SOLIDS) for (const side of [-1, 1]) {
+    const p = { x: side < 0 ? s.min.x - 0.8 : s.max.x + 0.8, y: (s.min.y + s.max.y) / 2, z: (s.min.z + s.max.z) / 2 };
+    if (p.y >= -0.5 || CAVE_SOURCES.some(c => p.x > c.footprint.minX - 25 && p.x < c.footprint.maxX + 25 && p.z > c.footprint.minZ - 25 && p.z < c.footprint.maxZ + 25)) continue;
+    if (world.clearance(p, DIVER_FEET) && !world.clearance(p, HULL_COLLIDERS.dart)) return p;
+  }
+  throw new Error("no diver-only water beside the world's solids");
+}
+
+test("R4-3: open water remembered as a diver is refused for a Dart piloted since: light recovery goes to the refuge, never into the rock", async (t) => {
+  const open: Vec3 = { x: 1125, y: -100, z: -675 }, id = "reef_wrackhollow", cave = beside(id), pack = pendingStore();
+  pack.land([id]);
+  const f = await app(t, swimmingAt(open), pack.store);
+  f.view.actions.continueGame();
+  f.frames(10);
+  assert.equal(f.view.screen, "playing");
+  // Remembered as a diver: clear for the diver who held it.
+  const tight = diverOnlyWater(f.world);
+  f.state().player.pose.position = { ...tight };
+  f.frames(1);
+  assert.deepEqual(f.caves.lastSafe, tight, "remembered while swimming there");
+  // Then piloting a Dart beside a cave whose settle fails unlit.
+  const s = f.state(), v = makeVehicle("r4-dart", "dart", cave, "r4-dart-cargo");
+  s.fleet.vehicles.push(v);
+  s.inventory.containers.push({ id: v.cargoId, kind: "vehicle", ownerId: v.id, capacity: 32 });
+  s.player.controlledVehicleId = v.id; s.player.mode = "piloting"; s.player.pose.position = { ...cave };
+  assert.deepEqual(f.caves.recoveryTarget(), { kind: "refuge" }, "the remembered water does not fit the Dart");
+  const r = TestRenderer.current;
+  r.settling = true; r.caveLightFailed = true;
+  f.frames(1);
+  const after = f.state(), dart = after.fleet.vehicles.find(x => x.id === v.id)!;
+  assert.ok(!near(dart.pose.position, tight), "the Dart is not moved into the diver-only water");
+  assert.ok(f.world.clearance(dart.pose.position, HULL_COLLIDERS.dart) || near(dart.pose.position, cave), "the craft waits where it was left");
+  assert.equal(after.player.controlledVehicleId, null, "the refuge: the diver walks or swims from the base");
+  const wake = REST_BASES[after.player.refugeId].wake;
+  assert.ok(near(after.player.pose.position, wake), `at the refuge (${JSON.stringify(after.player.pose.position)})`);
+  // The same point stays the recovery choice for a diver.
+  assert.ok(f.world.clearance(tight, DIVER_FEET));
+});
+
+test("R4-3: the cave runtime's recovery choice is the remembered point only while it clears the current actor", () => {
+  let fits = true;
+  const rt = createCaveRuntime({ world: gameWorld(), canGenerate: () => true, clear: () => fits });
+  const open = { x: 1120, y: -100, z: -680 };
+  assert.equal(rt.update(actorBox(open, DIVER_FEET), open, open, 0).state, "clear");
+  assert.deepEqual(rt.recoveryTarget(), { kind: "point", position: open });
+  fits = false;
+  assert.deepEqual(rt.recoveryTarget(), { kind: "refuge" });
+  rt.reset();
+  fits = true;
+  assert.deepEqual(rt.recoveryTarget(), { kind: "refuge" }, "nothing remembered after a reset");
+});
+
+// CW-1 R4-2: graphics loss never drops the readiness wait; restoration needs a fresh, lit present.
+const READY = "Expedition ready. Resume when ready.";
+
+test("R4-2: graphics lost before the entered pose's first present: entry waits through the loss, then reveals only once lit", async (t) => {
+  const open: Vec3 = { x: 1140, y: -100, z: -660 }, pack = pendingStore();
+  pack.land([]);
+  const f = await app(t, swimmingAt(open), pack.store);
+  const r = TestRenderer.current;
+  let lit = false;
+  r.onPresent = (st) => { if (st) r.caveLightPending = !lit; };
+  f.view.actions.continueGame();
+  r.lose();
+  const before = r.presents;
+  f.frames(60 * 12); // longer than the 8 s bound: unavailability is not the cave's failure
+  assert.equal(r.presents, before, "nothing presented while graphics are unavailable");
+  assert.equal(f.view.screen, "menu");
+  assert.ok(near(f.state().player.pose.position, open), "no fallback move while graphics were unavailable");
+  r.nativeRestore(); r.finishRestore();
+  f.view.actions.resume();
+  assert.equal(f.view.screen, "menu", "Resume refused before the restored view presents");
+  f.frames(30);
+  f.view.actions.resume();
+  assert.equal(f.view.screen, "menu", "Resume refused while the entered pose is unlit");
+  assert.equal(f.state().tick, 300);
+  lit = true;
+  f.frames(2);
+  assert.equal(f.view.reason, READY, "entry finished, paused (the loss withdrew the automatic resume)");
+  f.view.actions.resume();
+  f.frames(1);
+  assert.equal(f.view.screen, "playing");
+  assert.equal(r.caveLightPending, false);
+  assert.ok(near(f.state().player.pose.position, open), "played from the entered pose");
+});
+
+test("R4-2: graphics lost after the first present, restored while still pending: no reveal or resume until a fresh lit present", async (t) => {
+  const open: Vec3 = { x: 1135, y: -100, z: -665 }, pack = pendingStore();
+  pack.land([]);
+  const f = await app(t, swimmingAt(open), pack.store);
+  const r = TestRenderer.current;
+  let lit = false;
+  r.onPresent = (st) => { if (st) r.caveLightPending = !lit; };
+  f.view.actions.continueGame();
+  f.frames(3);
+  assert.equal(f.view.screen, "menu");
+  assert.equal(r.caveLightPending, true, "the entered pose presented, unlit");
+  r.lose();
+  f.frames(1);
+  r.nativeRestore(); r.finishRestore();
+  // The pre-loss present is not this restored view's: lit before a fresh present still waits.
+  lit = true; r.caveLightPending = false;
+  f.view.actions.resume();
+  assert.equal(f.view.screen, "menu", "Resume refused before a fresh present");
+  lit = false;
+  for (let i = 0; i < 120; i++) {
+    f.frames(1);
+    f.view.actions.resume();
+    assert.equal(f.view.screen, "menu", `frame ${i}: never revealed or resumed unlit`);
+  }
+  assert.equal(f.state().tick, 300);
+  lit = true;
+  f.frames(2);
+  f.view.actions.resume();
+  f.frames(1);
+  assert.equal(f.view.screen, "playing");
+  assert.equal(r.caveLightPending, false);
+  assert.ok(near(f.state().player.pose.position, open), "the light landed within the restarted bound: no move");
+});
+
+test("R4-2: a live session restored with its cave light pending waits for it before Resume; the wait is bounded by the safe-water outcome", async (t) => {
+  const id = "canopy_root_arch", cave = beside(id), pack = pendingStore();
+  pack.land([id]);
+  const f = await app(t, swimmingAt(cave), pack.store);
+  const r = TestRenderer.current;
+  f.view.actions.continueGame();
+  f.frames(10);
+  assert.equal(f.view.screen, "playing");
+  const tick = f.state().tick;
+  // The restored context reset its uploads: unlit at the cave from now on, lit elsewhere.
+  r.lose();
+  r.onPresent = (st) => { if (st) r.caveLightPending = atPose(st, cave); };
+  r.nativeRestore(); r.finishRestore();
+  // Resume is tried every frame: it succeeds only once the restored view is lit, here after the bound's move.
+  let frames = 0;
+  for (;;) {
+    f.view.actions.resume();
+    if (f.view.screen === "playing") break;
+    assert.ok(frames < 60 * 20, "the wait is bounded");
+    assert.equal(f.state().tick, tick, "no simulation while waiting");
+    f.frames(1); frames++;
+  }
+  assert.ok(frames >= 60 * 8 - 2 && frames < 60 * 9 + 10, `resumed after the 8 s bound's move (${frames} frames)`);
+  const s = f.state(), wake = REST_BASES[s.player.refugeId].wake;
+  assert.ok(!atPose(s, cave), "never resumed at the unlit cave");
+  assert.ok(near(s.player.pose.position, wake) || near(s.player.pose.position, REST_BASES.home_pod.wake), "at the refuge: no open water was remembered beside the cave");
+  assert.ok(f.view.notices.some(n => /light could not be loaded in time/.test(n)), f.view.notices.join(" | "));
+  f.frames(1);
+  assert.equal(r.caveLightPending, false);
+});
+
+test("R4-2: a live session restored lit resumes once a fresh present is judged ready", async (t) => {
+  const open: Vec3 = { x: 1160, y: -100, z: -640 }, pack = pendingStore();
+  pack.land([]);
+  const f = await app(t, swimmingAt(open), pack.store);
+  const r = TestRenderer.current;
+  f.view.actions.continueGame();
+  f.frames(10);
+  r.lose(); r.nativeRestore(); r.finishRestore();
+  f.view.actions.resume();
+  assert.equal(f.view.screen, "menu", "not before the restored view presents");
+  f.frames(2); // one frame presents the restored view, the next judges it
+  f.view.actions.resume();
+  f.frames(1);
   assert.equal(f.view.screen, "playing");
 });
