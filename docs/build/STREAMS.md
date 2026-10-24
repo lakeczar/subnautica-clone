@@ -1212,3 +1212,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Ownership:** AP-1 (new) authors and converts; WK-1 the bake integration; the SCHED builder the session reservation (externally enforced).
   - **Order:** first a single module or prop end to end, then the owner's three-tier bake-off on one ENV-1 room.
   - **When:** the seam lands after WK-1 and CW-1, before wave B.
+- **REC-1 6 fps acceptance (`692c`):** +0.120 ms/frame (95% CI 0.015–0.224), not a pass; DISTURBED (faults during the build).
+  - **A 300 s periodic slowdown inside the job,** hitting both arms (frames 3.6–4.6 ms against a 2.9 median; job CPU 0.77→0.93 cores). It's probably game-side periodic work, not the recorder.
+  - **Coordinator:** cancelled the requeue `4e09` (reboot coming). Next: (b) diagnose the 300 s source on the 4070 (GC, app timers, harness rotation), routing any game finding to its owner; then one decisive duet acceptance after the reboot, with a pre-declared n, margin and exclusion rule, "inconclusive" allowed.
+  - `owner-check-serve.sh` works (`5803bae3`).
