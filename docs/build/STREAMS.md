@@ -1027,3 +1027,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Findings:** P1 npm config-file selectors and `~/.npmrc` change the command remotely; P2 the build-cache variables are missing; P3 local orphan recovery claims `ran:true` before launch.
   - **Decision (root fix):** stop extending blocklists. Registered commands run through an owned portable runner, with no npm in the path and a normalized allowlisted environment on **both** machines. A conservative intent check (any non-queue `SILTWAKE_*`, `NODE_*` or non-descriptive `npm_config_*`) keeps the job local, unchanged, with a reason. Recovery `ran` comes from the started marker.
   - **After acceptance:** install, then Sol's live canary.
+- **STEW-2 done at `e8764aa`:**
+  - **Changes:** `scripts/local-guard.mjs` on every CPU-heavy entry point (refuses with exit 75 while a 3090 exclusive is running or queued; allows inside a job or on alickers; a logged override; fails open); `gate.mjs --batch` routes fast, build and economy as one `--machine any` job when the 3090 is busy; `saves-export.sh` runs only queued jobs; heavy-tier timing files run last and serially, and unclassified clock readers are refused.
+  - **Checks:** fast 1,646/1,646; heavy 67 files.
+  - **Gaps:** a later-submitted exclusive isn't blocked (SCHED patch proposed: exclusives wait for local-run leases); bare `npx`/`node --test` unguarded; CA-3's flake came from a co-running 3090 job.
+  - **Review:** Sol R1 running (`siltwake-stew2-review-r1-sol-e8764aa`). The SCHED lease patch goes to SCHED-3 as a follow-up after SCHED-3 is accepted, to avoid churning its review.
