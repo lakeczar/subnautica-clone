@@ -1,5 +1,6 @@
 // Compile the production modules with npm test first. Prices/yields live ONLY in the registry.
 // Optional: --earned <retained-export.json> --out /tmp/siltwake-m2-a1/economy-result.json
+import "./local-guard-now.mjs"; // first: before the compiled modules load (STEW-2)
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { createHash } from "node:crypto";
@@ -13,9 +14,6 @@ import { disableVehicle, recoveryCommand, updateRecovery } from "../.test-build/
 import { createWorldQueries } from "../.test-build/src/sim/world.js";
 import { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } from "../.test-build/src/save/codec.js";
 import { validState } from "../.test-build/src/save/validation.js";
-import { guardLocalRun } from "./local-guard.mjs";
-
-guardLocalRun();
 
 const args = process.argv.slice(2), option = name => { const i = args.indexOf(name); return i < 0 ? null : args[i + 1]; };
 assert.ok(args.every((a, i) => i % 2 ? true : ["--earned", "--out"].includes(a)), "only --earned and --out are supported");

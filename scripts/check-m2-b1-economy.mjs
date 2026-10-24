@@ -2,6 +2,7 @@
 // yield and capacity comes from the registry and real commands. Positions are staged
 // (diagnostic), never ordinary input; ordinary routes and margins live in the browser report.
 // Optional: --out <result.json>
+import "./local-guard-now.mjs"; // first: before the compiled modules load (STEW-2)
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { CONTENT_VERSION, CREEL_BUILD_POSE, DART_BUILD_POSE, FRAME_ALLOY, ITEMS, MATERIALS, RECIPES, SOURCE_RENEWAL, SOURCES } from "../.test-build/src/content/registry.js";
@@ -16,9 +17,6 @@ import { personalLimit } from "../.test-build/src/sim/capabilities.js";
 import { createWorldQueries } from "../.test-build/src/sim/world.js";
 import { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } from "../.test-build/src/save/codec.js";
 import { validState } from "../.test-build/src/save/validation.js";
-import { guardLocalRun } from "./local-guard.mjs";
-
-guardLocalRun();
 
 const args = process.argv.slice(2), out = args[args.indexOf("--out") + 1];
 assert.ok(args.length === 0 || (args.length === 2 && args[0] === "--out"), "only --out is supported");

@@ -6,6 +6,7 @@
 //   3. runtime commands for the executable tiers: real collection at the late deposits
 //      (positions staged, as in B1's script) and the real suit/Creel refits 450 → 800.
 // Optional: --out <result.json>
+import "./local-guard-now.mjs"; // first: before the compiled modules load (STEW-2)
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { CONTENT_VERSION, MATERIALS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCES } from "../.test-build/src/content/registry.js";
@@ -21,9 +22,6 @@ import { personalLimit } from "../.test-build/src/sim/capabilities.js";
 import { createWorldQueries } from "../.test-build/src/sim/world.js";
 import { createEnvelope, decodeSave, encodeSave, SAVE_SCHEMA_VERSION } from "../.test-build/src/save/codec.js";
 import { validState } from "../.test-build/src/save/validation.js";
-import { guardLocalRun } from "./local-guard.mjs";
-
-guardLocalRun();
 
 const args = process.argv.slice(2), out = args[args.indexOf("--out") + 1];
 assert.ok(args.length === 0 || (args.length === 2 && args[0] === "--out"), "only --out is supported");

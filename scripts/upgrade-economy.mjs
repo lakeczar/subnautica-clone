@@ -8,11 +8,9 @@
 // stress view is repeated on what the campaign leaves after its required and
 // optional spend and a failed rescue.
 // Optional: --out <result.json>
+import "./local-guard-now.mjs"; // first: before the compiled modules load (STEW-2)
 import fs from "node:fs";
 import { fileURLToPath } from "node:url";
-import { guardLocalRun } from "./local-guard.mjs";
-
-guardLocalRun();
 
 const args = process.argv.slice(2), out = args[args.indexOf("--out") + 1];
 if (!(args.length === 0 || (args.length === 2 && args[0] === "--out"))) throw new Error("only --out is supported");

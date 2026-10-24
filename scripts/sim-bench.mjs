@@ -14,12 +14,10 @@
  * DIR is a compiled tree root (`.test-build`). Trees are interleaved round by
  * round, so host drift hits them alike. Numbers count only from
  * `heavy-check.sh --class exclusive` (docs/build/WORKER_RESOURCE_LIMITS.md). */
+import "./local-guard-now.mjs"; // first: before the compiled modules load (STEW-2)
 import fs from "node:fs";
 import path from "node:path";
 import { pathToFileURL } from "node:url";
-import { guardLocalRun } from "./local-guard.mjs";
-
-guardLocalRun();
 
 const args = process.argv.slice(2);
 const all = (flag) => args.flatMap((a, i) => a === flag ? [args[i + 1]] : []);

@@ -129,7 +129,9 @@ test("refused: one line naming the ticket and the queued form of the command, ex
 
 test("the guarded entry points refuse before they compile or run anything", () => {
   const dir = privateRoot(state({ q: exclusive("queued") }));
-  for (const argv of [["node", "scripts/test-build.mjs", "--typecheck"], ["node", "scripts/test-tier.mjs", "fast"], ["bash", "scripts/saves-build-at.sh", "HEAD", join(dir, "never")]]) {
+  for (const argv of [["node", "scripts/test-build.mjs", "--typecheck"], ["node", "scripts/test-tier.mjs", "fast"], ["bash", "scripts/saves-build-at.sh", "HEAD", join(dir, "never")],
+    // An economy script asks before its compiled .test-build modules even load.
+    ["node", "scripts/check-m1-economy.mjs"]]) {
     const t0 = Date.now(), r = spawnSync(argv[0]!, argv.slice(1), { encoding: "utf8", env: agentEnv(dir) });
     assert.equal(r.status, G.REFUSED_EXIT, `${argv.join(" ")}: ${r.stdout}${r.stderr}`);
     assert.match(r.stderr, /refused here: 3090 exclusive q is queued/, argv.join(" "));

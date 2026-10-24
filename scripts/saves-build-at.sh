@@ -11,7 +11,7 @@
 set -euo pipefail
 [[ $# == 2 ]] || { echo "usage: $0 SHA DIR" >&2; exit 2; }
 # A compile: not on factory-worker outside the queue while a 3090 exclusive is running or queued (STEW-2).
-node "$(dirname "$0")/local-guard.mjs" --lease-parent "scripts/saves-build-at.sh $1" || exit $?
+node "$(dirname "$0")/local-guard.mjs" --lease-parent "scripts/saves-build-at.sh $*" || exit $?
 repo="$(git rev-parse --show-toplevel)"
 sha="$(git -C "$repo" rev-parse --verify "$1^{commit}")"
 dir="$2"

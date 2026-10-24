@@ -1,4 +1,5 @@
 // Run after npm test (compiled production modules). Only the registry is runtime authority.
+import "./local-guard-now.mjs"; // first: before the compiled modules load (STEW-2)
 import assert from "node:assert/strict";
 import fs from "node:fs";
 import { CONTENT_VERSION, RECIPES, SOURCES, ITEMS, PLACES } from "../.test-build/src/content/registry.js";
@@ -9,9 +10,6 @@ import { available, fabricationContainers, materialStoragePreview, storeMaterial
 import { installModule } from "../.test-build/src/sim/modules.js";
 import { createWorldQueries } from "../.test-build/src/sim/world.js";
 import { validState } from "../.test-build/src/save/validation.js";
-import { guardLocalRun } from "./local-guard.mjs";
-
-guardLocalRun();
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const delta = JSON.parse(read("../docs/build/design/M1-PLAY-ECONOMY.json"));

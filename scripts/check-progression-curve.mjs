@@ -1,5 +1,6 @@
 // Run after npm test (compiled production modules). Derives the IMPLEMENTED part of the
 // acquisition curve from runtime rules only; planned/unbuilt rows live in PROGRESSION-CURVE.md.
+import "./local-guard-now.mjs"; // first: before the compiled modules load (STEW-2)
 import assert from "node:assert/strict";
 import { EVIDENCE, EVIDENCE_BLUEPRINTS, FUTURE_BLUEPRINTS, RECIPES, RENEWABLE_SOURCE_IDS, SOURCE_RENEWAL, SOURCES }
   from "../.test-build/src/content/registry.js";
@@ -13,9 +14,6 @@ import { advanceRenewal, renewalCap } from "../.test-build/src/sim/renewal.js";
 import { createGame } from "../.test-build/src/sim/state.js";
 import { FIXED_SECONDS } from "../.test-build/src/sim/clock.js";
 import { createWorldQueries } from "../.test-build/src/sim/world.js";
-import { guardLocalRun } from "./local-guard.mjs";
-
-guardLocalRun();
 
 const world = createWorldQueries(), ids = Object.keys(RECIPES);
 const opened = () => { const s = createGame(); completeOpening(s); return s; };
