@@ -1,3 +1,13 @@
+/** The one inventory authority (SIG-1 stage 0, steward F12): item sizes and
+ * labels, container capacity, stacking, adding, removing and spending.
+ * - **Spending** is a detached plan (`planSpend`) applied whole or not at all
+ *   (`applySpend`), so a preview and its command share one rule. Spend priority
+ *   is explicit (`SpendPriority`).
+ * - **Removing:** `removeQuantity` takes part of a stack; `takeInstance` lifts
+ *   one chosen item out whole, keeping its ID and charge (a cell fed to a hull,
+ *   a module socketed, a kit deployed); `restoreInstance` puts one back.
+ * - **Capacity:** `usedCapacity`, `freeCapacity` and `hasRoom` are the only CU
+ *   totals; everything else reads them or the size primitives (`cuOf`, `itemCu`). */
 import { CREEL_BUILD_POSE, DART_BUILD_POSE, HULLS, ITEMS, MATERIALS } from "../content/registry.js";
 import type { FabricationSite, ItemKind, MaterialId } from "../content/registry.js";
 import { CANOPY_STOP } from "../content/routes.js";
@@ -5,8 +15,7 @@ import { MOORING_SERVICE_RADIUS, SERVICE_MOORINGS, STOP_IDS, stopForSite, WORKIN
 import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
 import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
 import { FIXED_HOSTS, HOST_REACH, moduleOfItem } from "../content/systems/hosts.js";
-import { isSys2Item, SYS2_ITEMS } from "../content/systems/items.js";
-import { FAUNA_STACKABLE } from "../content/fauna/items.js";
+import { stackable } from "../content/systems/items.js";
 /** A beached Spindle's ramp reaches this far up the shore (C4). */
 export const SHORE_RAMP_REACH = 10;
 export const distance = (a: Vec3, b: Vec3): number =>
@@ -25,14 +34,23 @@ export function carrierCompartment(s: GameState, id: string): { host: VehicleSta
   return host && spec ? { host, accepts: spec.accepts } : null;
 }
 /** Pantry: meals. Fabrication: materials and tagged frames. Every other container takes anything. */
-export function containerAccepts(s: GameState, id: string, kind: ItemKind): boolean {
+export function containerAccepts(s: GameState, id: string, kind: string): boolean {
   const c = carrierCompartment(s, id);
   return !c || (c.accepts === "food" ? kind === "meal" : Object.hasOwn(MATERIALS, kind) || kind === "tagged_frame");
 }
+/** Carried size of one unit. An unknown kind weighs Infinity, so any room check fails closed. */
+export const cuOf = (kind: string): number => Object.hasOwn(ITEMS, kind) ? ITEMS[kind as ItemKind].cu : Infinity;
+export const labelOf = (kind: string): string => Object.hasOwn(ITEMS, kind) ? ITEMS[kind as ItemKind].label : kind;
+export const itemCu = (i: Pick<ItemStack, "kind" | "quantity">): number => cuOf(i.kind) * i.quantity;
 export function usedCapacity(s: GameState, containerId: string): number {
-  return s.inventory.items
-    .filter((i) => i.containerId === containerId && !i.fitted)
-    .reduce((n, i) => n + ITEMS[i.kind].cu * i.quantity, 0);
+  let n = 0;
+  for (const i of s.inventory.items) if (i.containerId === containerId && !i.fitted) n += itemCu(i);
+  return n;
+}
+/** Room left in a container; a missing container has none. */
+export function freeCapacity(s: GameState, containerId: string): number {
+  const c = s.inventory.containers.find((c) => c.id === containerId);
+  return c ? c.capacity - usedCapacity(s, containerId) : 0;
 }
 export function hasRoom(
   s: GameState,
@@ -42,6 +60,8 @@ export function hasRoom(
   const c = s.inventory.containers.find((c) => c.id === containerId);
   return !!c && usedCapacity(s, containerId) + cu <= c.capacity;
 }
+/** Adds to a matching stack for stackable kinds (same container, fitting and
+ * provenance, uncharged), otherwise a new instance. Cells start charged. */
 export function addItem(
   s: GameState,
   kind: ItemKind,
@@ -50,7 +70,7 @@ export function addItem(
   fitted: Fitting = null,
   provenance: ItemStack["provenance"] = "public",
 ): ItemStack {
-  const stack = s.inventory.items.find(
+  const stack = stackable(kind, MATERIALS) && s.inventory.items.find(
     (i) =>
       i.kind === kind &&
       i.containerId === containerId &&
@@ -58,20 +78,7 @@ export function addItem(
       i.provenance === provenance &&
       i.charge === null,
   );
-  if (
-    stack && ([
-      "structural_alloy",
-      "silica_glass",
-      "flex_membrane",
-      "conductive_crust",
-      "buoyant_resin",
-      "pressure_ceramic",
-      "thermal_core",
-      "brine_lattice",
-      "meal",
-      "tagged_frame",
-    ].includes(kind) || (isSys2Item(kind) && SYS2_ITEMS[kind].stack) || (FAUNA_STACKABLE as readonly string[]).includes(kind))
-  ) {
+  if (stack) {
     stack.quantity += quantity;
     return stack;
   }
@@ -89,8 +96,23 @@ export function addItem(
 }
 export function removeQuantity(s: GameState, item: ItemStack, n: number): void {
   item.quantity -= n;
-  if (item.quantity === 0)
+  if (item.quantity <= 0)
     s.inventory.items = s.inventory.items.filter((i) => i.id !== item.id);
+}
+/** Lifts one chosen item out of the inventory whole, keeping its ID, charge and
+ * provenance for its new owner (a hull's bio feed, a socket, a deployed outpost).
+ * Null when no such item exists; nothing changes then. */
+export function takeInstance(s: GameState, itemId: string): ItemStack | null {
+  const item = s.inventory.items.find((i) => i.id === itemId);
+  if (!item) return null;
+  s.inventory.items = s.inventory.items.filter((i) => i !== item);
+  return item;
+}
+/** Puts back one single-instance item (a module or kit) under its original ID. */
+export function restoreInstance(s: GameState, itemId: string, kind: string, containerId: string): ItemStack {
+  const item: ItemStack = { id: itemId, kind: kind as ItemKind, quantity: 1, containerId, fitted: null, charge: null, provenance: "public" };
+  s.inventory.items.push(item);
+  return item;
 }
 export const equipped = (s: GameState, kind: ItemKind): boolean =>
   s.inventory.items.some((i) => i.kind === kind && i.fitted !== null);
@@ -345,27 +367,69 @@ export function transfer(
   }
   return null;
 }
-export function spend(
-  s: GameState,
-  cost: Readonly<Partial<Record<ItemKind, number>>>,
-  containers: readonly string[],
-): void {
-  for (const [kind, n] of Object.entries(cost)) {
-    let left = n;
-    for (const i of [...s.inventory.items])
-      if (
-        i.kind === kind &&
-        !i.fitted &&
-        i.provenance === "public" &&
-        containers.includes(i.containerId)
-      ) {
-        const use = Math.min(left, i.quantity);
-        removeQuantity(s, i, use);
-        left -= use;
-        if (!left) break;
-      }
+/** One stack's share of a spend. */
+export interface SpendLine { itemId: string; kind: string; quantity: number; from: string }
+export interface SpendPlan { lines: SpendLine[]; missing: Record<string, number> }
+/** Which stacks a spend draws first, among the public, unfitted stacks in `containers`:
+ * - `listed`: container by container in the order given (systems, outposts, fauna:
+ *   each caller lists its own priority, such as the diver before a locker);
+ * - `oldest`: the oldest stack first, wherever it sits among the containers (the
+ *   fabricator benches and story repairs, B1's accepted bench rule). */
+export type SpendPriority = "listed" | "oldest";
+const spendable = (i: ItemStack, kind: string): boolean => i.kind === kind && !i.fitted && i.provenance === "public";
+/** A detached plan to pay `cost` from `containers`; `missing` lists any shortfall.
+ * Nothing changes until `applySpend`, so previews and refusals read the same plan. */
+export function planSpend(s: Readonly<GameState>, cost: Readonly<Record<string, number | undefined>>,
+  containers: readonly string[], priority: SpendPriority = "listed"): SpendPlan {
+  const lines: SpendLine[] = [], missing: Record<string, number> = {};
+  const take = (i: ItemStack, left: number): number => {
+    const use = Math.min(left, i.quantity);
+    lines.push({ itemId: i.id, kind: i.kind, quantity: use, from: i.containerId });
+    return left - use;
+  };
+  for (const [kind, need] of Object.entries(cost)) {
+    let left = need ?? 0;
+    if (priority === "oldest") {
+      for (const i of s.inventory.items)
+        if (left > 0 && spendable(i, kind) && containers.includes(i.containerId)) left = take(i, left);
+    } else
+      for (const c of containers)
+        for (const i of s.inventory.items)
+          if (left > 0 && spendable(i, kind) && i.containerId === c) left = take(i, left);
+    if (left > 0) missing[kind] = left;
+  }
+  return { lines, missing };
+}
+/** A plan that cannot be applied: a shortfall, or lines that no longer match the inventory. */
+export class SpendRefused extends Error {
+  constructor(readonly reason: "missing" | "stale", readonly detail: Readonly<Record<string, number>> | string) {
+    super(`spend refused (${reason}): ${typeof detail === "string" ? detail : costText(detail)}`);
   }
 }
+/** Applies a complete plan, all or nothing. An incomplete plan (any `missing`)
+ * or a stale one (a line whose stack is gone, changed, or short) is refused
+ * before anything is written. Callers refuse a shortfall themselves first, so a
+ * `SpendRefused` here is a logic error, never a partial payment. */
+export function applySpend(s: GameState, plan: Readonly<SpendPlan>): void {
+  if (Object.keys(plan.missing).length) throw new SpendRefused("missing", plan.missing);
+  const left = new Map<string, number>();
+  for (const l of plan.lines) {
+    const i = s.inventory.items.find((x) => x.id === l.itemId);
+    const have = left.get(l.itemId) ?? i?.quantity ?? 0;
+    if (!i || i.kind !== l.kind || i.containerId !== l.from || !spendable(i, l.kind) || !(l.quantity > 0) || have < l.quantity)
+      throw new SpendRefused("stale", l.itemId);
+    left.set(l.itemId, have - l.quantity);
+  }
+  for (const l of plan.lines) removeQuantity(s, s.inventory.items.find((i) => i.id === l.itemId)!, l.quantity);
+}
+/** CU a plan frees in one container. */
+export const freedBy = (plan: Pick<SpendPlan, "lines">, containerId: string): number =>
+  plan.lines.reduce((n, l) => l.from === containerId ? n + cuOf(l.kind) * l.quantity : n, 0);
+/** `hasRoom` as it will be once `plan` is applied. */
+export const hasRoomAfter = (s: GameState, plan: Pick<SpendPlan, "lines">, containerId: string, cu: number): boolean =>
+  hasRoom(s, containerId, cu - freedBy(plan, containerId));
+export const costText = (cost: Readonly<Record<string, number | undefined>>): string =>
+  Object.entries(cost).map(([k, n]) => `${n} × ${labelOf(k)}`).join(", ");
 export function available(
   s: GameState,
   kind: ItemKind,

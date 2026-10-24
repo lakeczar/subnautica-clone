@@ -7,7 +7,7 @@ import { sitePosition } from "../src/content/ecology/sites.js";
 import { RECIPES, type ItemKind } from "../src/content/registry.js";
 import { CueMapper } from "../src/audio/mapping.js";
 import { sceneFromState } from "../src/audio/scene.js";
-import { worldRegionAt } from "../src/render/regions.js";
+import { regionAtPosition } from "../src/content/regions/layout.js";
 import { addItem } from "../src/sim/inventory.js";
 import { craft } from "../src/sim/progression.js";
 import { at, saveable, world, WORKSHOP_BENCH } from "./b1-support.js";
@@ -35,7 +35,7 @@ test("COMPOSED: the split-chimney vent warns before harm; the fitted heat shroud
   // S6's mapper: an ecology warning becomes the positional warning call.
   const s = riftDiver(start), mapper = new CueMapper();
   const step = hold(s, 60 * 8);
-  const scene = sceneFromState(step.state, true, worldRegionAt);
+  const scene = sceneFromState(step.state, true, regionAtPosition);
   const cues = mapper.events(step.events, step.state, scene);
   assert.ok(cues.some((c) => c.cue === "alert.threat-call" && c.distance > 0), "a positional warning call at the animal");
 });

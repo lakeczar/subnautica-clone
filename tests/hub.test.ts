@@ -14,7 +14,7 @@ import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { addItem } from "../src/sim/inventory.js";
 import { completeOpening, craft, discover } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
-import { stepGame } from "../src/sim/step.js";
+import { stepGameInPlace } from "../src/sim/step.js";
 import type { GameCommand, GameEvent, GameState, Vec3 } from "../src/sim/types.js";
 import { gameWorld, hullClearance } from "../src/sim/world.js";
 import { BEACON, BEACON_PERIOD, beaconGlow, CROWN_RAY_LAP, CROWN_RAY_SPAN, crownRayPoses, MAST_LAMP, MAST_LAMP_PERIOD, mastLampGlow } from "../src/render/hubView.js";
@@ -203,9 +203,8 @@ test("ADVERSE: a Dart driven at boost along the whole spur, both ways, never cli
         if (Math.hypot(flat, dy) < 6) break;
         if (flat < best - 0.5) { best = flat; since = 0; } else assert.ok(++since < 60 * 20, `stalled at ${JSON.stringify(p)} toward ${JSON.stringify(target)}`);
         const yaw = wrap(Math.atan2(dx, -dz) - v.pose.yaw);
-        const out = stepGame(s, [{ type: "look", yawDelta: Math.max(-0.8, Math.min(0.8, yaw)), pitchDelta: -s.player.pose.pitch },
-          idleMove(Math.abs(yaw) < 0.5 ? 1 : 0.3, true, Math.max(-1, Math.min(1, dy / 4)))], world);
-        s = out.state; events.push(...out.events); steps++;
+        events.push(...stepGameInPlace(s, [{ type: "look", yawDelta: Math.max(-0.8, Math.min(0.8, yaw)), pitchDelta: -s.player.pose.pitch },
+          idleMove(Math.abs(yaw) < 0.5 ? 1 : 0.3, true, Math.max(-1, Math.min(1, dy / 4)))], world)); steps++;
       }
     }
     const v = s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId)!;
@@ -236,9 +235,10 @@ test("ADVERSE: a diver without power on the crown's summit always reaches air: o
   const start = { x: crown.x - 12, y: world.supportHeight(crown.x - 12, crown.z + 2, 0) + 0.6, z: crown.z + 2 };
   s0.player.pose.position = { ...start }; s0.player.mode = "swimming"; s0.player.velocity = { x: 0, y: 0, z: 0 };
   s0.player.vitals.oxygen = 25; s0.player.lamp = false;
-  let s = s0, steps = 0;
+  const s = structuredClone(s0);
+  let steps = 0;
   while (s.player.pose.position.y < -1.2 && steps < 60 * 120) {
-    s = stepGame(s, [{ type: "look", yawDelta: 0, pitchDelta: 0.9 - s.player.pose.pitch }, idleMove(0, false, 1)], world).state;
+    stepGameInPlace(s, [{ type: "look", yawDelta: 0, pitchDelta: 0.9 - s.player.pose.pitch }, idleMove(0, false, 1)], world);
     steps++;
   }
   assert.ok(s.player.pose.position.y >= -1.2, `surfaced: ${JSON.stringify(s.player.pose.position)}`);

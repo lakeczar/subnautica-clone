@@ -3,8 +3,8 @@
 import { completeOpening } from "../src/sim/progression.js";
 import { addItem } from "../src/sim/inventory.js";
 import { createGame } from "../src/sim/state.js";
+import type { ItemKind } from "../src/content/registry.js";
 import type { GameState, Vec3 } from "../src/sim/types.js";
-import { addStack } from "../src/sim/systems/ledger.js";
 import type { OutpostSiteQuery, SiteSample } from "../src/sim/systems/outposts.js";
 import { createSystems } from "../src/sim/systems/state.js";
 import type { SystemsState } from "../src/sim/systems/state.js";
@@ -27,10 +27,10 @@ export function opened(): { s: GameState; sys: SystemsState } {
 export function give(s: GameState, kind: string, quantity = 1, container = "diver"): string {
   if (kind.startsWith("mod_") || kind.startsWith("outpost_kit_") || kind === "bio_cell") {
     let last = "";
-    for (let n = 0; n < quantity; n++) last = addStack(s, kind, 1, container).id;
+    for (let n = 0; n < quantity; n++) last = addItem(s, kind as ItemKind, 1, container).id;
     return last;
   }
-  return addStack(s, kind, quantity, container).id;
+  return addItem(s, kind as ItemKind, quantity, container).id;
 }
 export function swimTo(s: GameState, p: Vec3): void {
   s.player.pose.position = { ...p };

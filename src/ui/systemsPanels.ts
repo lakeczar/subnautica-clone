@@ -34,14 +34,13 @@ import { surveyRange } from "../sim/systems/survey.js";
 import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
 import { currentObjective } from "../sim/objective.js";
 import type { GameState, WorldQueries } from "../sim/types.js";
-import { bearing, escapeHtml } from "./format.js";
+import { bearing, duration as mins, escapeHtml } from "./format.js";
 import type { CommandButton } from "./panels.js";
 
 type Group = (id: string, label: string, body: string, open?: boolean) => string;
 const esc = escapeHtml;
 const label = (kind: string): string => Object.hasOwn(ITEMS, kind) ? ITEMS[kind as keyof typeof ITEMS].label : kind.replaceAll("_", " ");
 const pct = (n: number): string => `${Math.round(n * 100)}%`;
-const mins = (s: number): string => s < 90 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`;
 
 // ---------------------------------------------------------------- Base
 export function basePanel(s: GameState, world: WorldQueries, button: CommandButton, group: Group): string {
@@ -97,7 +96,7 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
       }).join("");
       extra = `${charges}<div class="service-actions">${button("Pack up", { type: "pack-outpost", outpostId: outpost.id }, !!pack.refusal, pack.refusal ?? undefined)}${
         up.to ? button(`Upgrade to ${up.to}`, { type: "upgrade-outpost", outpostId: outpost.id }, !!up.refusal, up.refusal ?? undefined) : ""}</div>${
-        group(`pack:${outpost.id}`, "Pack preview", `<p>Spends ${pack.loss.map((l) => `${l.quantity} ${esc(label(l.kind))}`).join(", ") || "nothing"}. Moves ${pack.locker.length} locker stack${pack.locker.length === 1 ? "" : "s"} and ${pack.modules.length} module${pack.modules.length === 1 ? "" : "s"} to your hold (${pack.needCu} CU, ${pack.freeCu} free).</p>${pack.work.map((w) => `<p>${esc(w)}</p>`).join("")}`)}`;
+        group(`pack:${outpost.id}`, "Pack preview", `<p>Spends ${pack.loss.lines.map((l) => `${l.quantity} ${esc(label(l.kind))}`).join(", ") || "nothing"}. Moves ${pack.locker.length} locker stack${pack.locker.length === 1 ? "" : "s"} and ${pack.modules.length} module${pack.modules.length === 1 ? "" : "s"} to your hold (${pack.needCu} CU, ${pack.freeCu} free).</p>${pack.work.map((w) => `<p>${esc(w)}</p>`).join("")}`)}`;
     }
     // The carrier's charging dock: a socketed charger fills the berths from the carrier.
     if (host.kind === "carrier") {

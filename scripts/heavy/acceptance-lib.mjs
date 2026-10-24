@@ -7,6 +7,7 @@ import { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { alive } from "./state.mjs";
@@ -25,6 +26,14 @@ const contexts = [];
 after(() => {
   for (const c of contexts) for (const id of Object.keys(state(c).tickets ?? {})) hc(c, ["cancel", id]);
   spawnSync("systemctl", ["--user", "stop", SLICE], { stdio: "ignore" });
+  let reload = false;
+  for (const c of contexts) if (c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE) {
+    const name = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE, unit = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user", name);
+    spawnSync("systemctl", ["--user", "revert", name], { stdio: "ignore" });
+    spawnSync("systemctl", ["--user", "stop", name], { stdio: "ignore" });
+    if (existsSync(unit)) { rmSync(unit, { force: true }); reload = true; } // a runtime unit a private install.sh wrote
+  }
+  if (reload) spawnSync("systemctl", ["--user", "daemon-reload"], { stdio: "ignore" });
   if (!process.env.SCHED_KEEP) { spawnSync("chmod", ["-R", "u+w", ROOT]); rmSync(ROOT, { recursive: true, force: true }); } // staged outputs are read-only // SCHED_KEEP=1 keeps the evidence
 });
 
@@ -36,7 +45,8 @@ export function context(name, { mode = "normal", host = {}, config = null, slice
   writeFileSync(join(sched, "host-override.json"), JSON.stringify({ nproc: 6, memAvailableMiB: 12000, memFullAvg10: 0, ...host }));
   if (config) writeFileSync(join(sched, "config.json"), JSON.stringify(config));
   const env = { ...process.env, SILTWAKE_SCHED_DIR: sched, SILTWAKE_SCHED_LEGACY_LOCK: join(dir, "legacy.lock"),
-    SILTWAKE_SCHED_SLICE: slice, SILTWAKE_SCHED_UNIT_PREFIX: `sched1test-heavy-${n}`, SILTWAKE_SCHED_SUPERVISOR_PREFIX: `sched1test-sched-${n}` };
+    SILTWAKE_SCHED_SLICE: slice, SILTWAKE_SCHED_UNIT_PREFIX: `sched1test-heavy-${n}`, SILTWAKE_SCHED_SUPERVISOR_PREFIX: `sched1test-sched-${n}`,
+    SILTWAKE_SCHED_EXCLUSIVE_SLICE: `sched1testexcl${process.pid}x${n}.slice` }; // a private top-level exclusive slice (TST-16; set up by exclusiveSlice())
   for (const k of ["SILTWAKE_JOB_TICKET", "SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_GPU_LEASE", "HEAVY_MEMORY_MAX", "HEAVY_LOCK_WAIT"]) delete env[k];
   const c = { dir, sched, env, legacy: join(dir, "legacy.lock"), n };
   c.wt = (w) => { const p = join(dir, `wt-${w}`); mkdirSync(p, { recursive: true }); return p; };
@@ -185,4 +195,19 @@ exit "$status"
     direct: (script) => spawn("bash", ["-c", `cd ${repo} && siltwake-job --deadline 120 bash -c ${JSON.stringify(script)}`], { env: { ...c.env, HOME: join(f, "home"), PATH: `${join(f, "bin")}:${process.env.PATH}` }, stdio: "ignore" }),
   };
   return remote;
+}
+
+/**
+ * Sets up the context's private exclusive slice as install.sh's unit file
+ * would (TST-16): a fixed CPUWeight, no swap, a memory cap. Test setup only;
+ * the scheduler itself never sets a property on it.
+ */
+export async function exclusiveSlice(c, { weight = 10000, memoryMiB = null } = {}) {
+  const name = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
+  const { sliceLimits } = await import("./policy.mjs");
+  const { loadConfig } = await import("./state.mjs");
+  const w = sliceLimits(availableParallelism(), loadConfig(c.env)); // as install.sh writes the unit
+  const r = spawnSync("systemctl", ["--user", "set-property", "--runtime", name, `CPUWeight=${weight}`, `CPUQuota=${w.cpuQuotaPct}%`, `MemoryMax=${memoryMiB ?? w.memoryMaxMiB}M`, "MemorySwapMax=0"], { encoding: "utf8" });
+  assert.equal(r.status, 0, r.stderr);
+  return name;
 }

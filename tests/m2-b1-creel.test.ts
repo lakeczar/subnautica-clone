@@ -16,10 +16,11 @@ import { exposure, airSupply } from "../src/sim/survival.js";
 import type { GameCommand, GameEvent, GameState } from "../src/sim/types.js";
 import { hullClearance } from "../src/sim/world.js";
 import { at, creelFirst, creelOf, fund, parkCreel, pilotCreel, saveable, world, WORKSHOP_BENCH } from "./b1-support.js";
+import { play } from "./step-support.js";
 
 const idle: GameCommand = { type: "move", forward: 0, right: 0, vertical: 0, sprint: false };
 const run = (s: GameState, commands: GameCommand[], steps: number): GameState => {
-  for (let i = 0; i < steps; i++) s = stepGame(s, commands, world).state;
+  s = play(s, steps, commands, world);
   return s;
 };
 const stock = (s: GameState, id: keyof typeof SOURCES): number => s.world.resources.find((n) => n.id === id)!.stock;

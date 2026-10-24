@@ -1,3 +1,6 @@
+// FORK(biome-recipe-builder): a second Babylon-free RecipeBuilder beside
+// render/kit/recipe.ts; its box yaw mirrors the kit's (biome box(c, s, col, yaw) is
+// kit box(c, s, col, −yaw)); retire in WK-1's one builder seam (CORE-HELPERS).
 import type { MeshRecipe } from "../kit/types.js";
 
 /** Babylon-free mesh builder for chunk recipes. Faceted (flat-normal) parts

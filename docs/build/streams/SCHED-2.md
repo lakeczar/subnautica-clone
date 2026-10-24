@@ -250,7 +250,7 @@ Review: `7080616` on `review/sched-2a-r4`, on `4f572b5`, not accepted: three P2s
   - `tests/soak-measure.test.ts`: the hold observation over CW-1's real states, booleans, absent, null, unknown and wrong types, through CW-1's actual record shape and the `#ocean` poll; tagged and untagged gaps.
   - `tests/soak-runner.test.ts`, R4-F1: the real frames provider with CW-1's records. Clear passes, one `loading` frame fails, a missing or `null` field is unproven.
   - R4-F2: a `loading` poll only inside save checks, with no per-frame record, fails and stops at the first lap.
-  - R4-F3: the **real recorder** in Node under an rAF shim, with real event-loop stalls. A 120 ms GC pause before, during and after save ticks is never an autosave hitch (those intervals are incomplete); a 150 ms game pause outside any window, in a save's interval, fails the dwell.
+  - R4-F3: the **real recorder** in Node under an rAF shim. Since TST-16b, the shim delivers frames itself on a virtual clock at fixed points in the sampling loop, and stalls advance that clock: it flaked under host load with real timers and `performance.now()`. A 120 ms GC pause before, during and after save ticks is never an autosave hitch (those intervals are incomplete); a 150 ms game pause outside any window, in a save's interval, fails the dwell.
 
 ## R3 review responses
 
@@ -476,4 +476,4 @@ This is not the real tour. It's a 4-point surface swim loop by the start pod (`/
 4. Check that `status` shows the slice "as wanted", and watch the ledger for `unleased-gpu` events. Per-stream drivers run outside the queue will fail with the guard's message; point their owners to `--class gpu`.
 5. Paste the new "How to run a heavy job" section into briefs. The new pieces are the stall and heartbeat, `--snapshot`, exit 3 and 123, exclusive turns, and soaks.
 
-Rollback: `install.sh` from the previous root commit re-points `current` (versions are immutable), or `echo serial > /work/tmp/siltwake-sched/mode`.
+Rollback: `install.sh` from the previous root commit re-points `current` (versions are immutable), or `echo serial > /work/tmp/siltwake-sched/mode`. TST-16's exclusive slice needs no cleanup: older versions never place jobs there (see [TST-16](sched2/TST-16.md)).

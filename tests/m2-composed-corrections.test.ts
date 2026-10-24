@@ -1,3 +1,4 @@
+// Scope (STEW-1, F25): the real app, clock, session, codec, repository and save wiring, with presentation and input replaced by tests/app-loader.ts and renderer readiness set directly (tests/app-browser-support.ts). These tests cannot prove rendered readiness, physical input or GPU behaviour; that is browser evidence (scripts/rec).
 import test from "node:test";
 import assert from "node:assert/strict";
 import { register } from "node:module";

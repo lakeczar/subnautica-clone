@@ -1,3 +1,6 @@
+// FORK(legacy-terrain): the four B1-era art owners and their handover map, which
+// still own the accepted opening terrain's residency. Art only: the semantic
+// region is regionAtPoint (content/regions/layout.ts). Kept until TER-09 (CORE-HELPERS).
 import { REGIONS, type RegionId } from "../content/registry.js";
 import { ROUTE_REGIONS } from "../content/routes.js";
 import { terrainHeight } from "../sim/world.js";

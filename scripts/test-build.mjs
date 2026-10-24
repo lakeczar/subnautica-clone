@@ -65,8 +65,11 @@ const missingTests = () => readdirSync(join(root, "tests")).filter((f) => f.ends
 
 if (args.has("--clean")) { rmSync(build, { recursive: true, force: true }); restoreMarker(); }
 const jobs = [compileTests()];
-if (args.has("--typecheck"))
+if (args.has("--typecheck")) {
   jobs.push(run("typecheck", ["--noEmit", "--incremental", "--tsBuildInfoFile", join(build, "typecheck.tsbuildinfo")]));
+  // Sim and content with no DOM library (STEW-1): a browser global there fails here.
+  jobs.push(run("headless typecheck", ["-p", "tsconfig.headless.json", "--incremental", "--tsBuildInfoFile", join(build, "headless.tsbuildinfo")]));
+}
 let ok = (await Promise.all(jobs)).every(Boolean);
 if (ok && existsSync(build)) {
   const removed = prune();

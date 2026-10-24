@@ -5,15 +5,16 @@ import { FUTURE_BLUEPRINTS, MATERIALS, RECIPES, REGIONS, SOURCE_RENEWAL, SOURCES
 import type { Recipe, RegionId } from "../../content/registry.js";
 import { SEEDS } from "../../content/systems/cultivation.js";
 import { DECODABLES, DECODE_MINUTES, LOST_SITES } from "../../content/systems/decodes.js";
-import { SYS2_BLUEPRINTS, SYS2_RECIPES } from "../../content/systems/items.js";
+import { SYS2_BLUEPRINTS } from "../../content/systems/items.js";
 import { storyNotebook } from "../storyLink.js";
 import type { NotebookView } from "../story/notebook.js";
 import type { GameState } from "../types.js";
 import { decodeViews } from "./decoder.js";
 import type { DecoderContext, DecodeStatus } from "./decoder.js";
 import { cropViews } from "./cultivation.js";
-import { labelOf } from "./ledger.js";
+import { labelOf } from "../inventory.js";
 import type { SystemsState } from "./state.js";
+import { FIXED_SECONDS, formatDuration as minutes } from "../clock.js";
 
 export type JournalTabId = "materials" | "creatures" | "tech" | "notebook" | "cycles" | "decodes";
 export interface JournalEntry {
@@ -46,11 +47,11 @@ export interface JournalInput {
 }
 
 const region = (id: string): string => Object.hasOwn(REGIONS, id) ? REGIONS[id as RegionId].label : id;
-const minutes = (seconds: number): string => seconds < 90 ? `${Math.round(seconds)} s` : `${Math.round(seconds / 60)} min`;
 const BLUEPRINT_LABELS: Readonly<Record<string, string>> = { ...FUTURE_BLUEPRINTS, ...SYS2_BLUEPRINTS };
 const blueprintLabel = (id: string): string => BLUEPRINT_LABELS[id] ?? id.replace(/^bp_/, "").replaceAll("_", " ");
 type AnyRecipe = Pick<Recipe, "label" | "cost" | "site"> & { bp: string; output: string };
-const ALL_RECIPES: Readonly<Record<string, AnyRecipe>> = { ...RECIPES, ...SYS2_RECIPES };
+/** The composed registry is the one recipe authority (SYS-2's recipes included). */
+const ALL_RECIPES: Readonly<Record<string, AnyRecipe>> = RECIPES;
 
 function knownRecipes(s: GameState): [string, AnyRecipe][] {
   const bps = s.knowledge.blueprints as readonly string[];
@@ -69,7 +70,7 @@ function materialsTab(s: GameState, sys: SystemsState): JournalTab {
     const sites = scanned.filter((id) => SOURCES[id].item === kind).map((id) => {
       const src = SOURCES[id], node = s.world.resources.find((r) => r.id === id);
       const rule = Object.hasOwn(SOURCE_RENEWAL, id) ? SOURCE_RENEWAL[id as keyof typeof SOURCE_RENEWAL] : null;
-      const regrowth = rule ? `regrows ${rule.quantity} every ${minutes(rule.intervalSteps / 60)} up to ${src.stock}` : node && node.stock + node.reserve > 0 ? "finite" : "exhausted";
+      const regrowth = rule ? `regrows ${rule.quantity} every ${minutes(rule.intervalSteps * FIXED_SECONDS)} up to ${src.stock}` : node && node.stock + node.reserve > 0 ? "finite" : "exhausted";
       return `${src.label} · ${region(src.region)} · ${node?.stock ?? 0} ready · ${node?.reserve ?? 0} reserve · ${regrowth}`;
     });
     const count = s.inventory.items.filter((i) => i.kind === kind).reduce((n, i) => n + i.quantity, 0);

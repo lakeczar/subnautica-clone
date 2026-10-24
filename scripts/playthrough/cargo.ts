@@ -3,9 +3,7 @@
  * move first checks that the game itself reports both containers locally
  * accessible, so the harness never attempts a remote transfer; a lost item (not
  * where the ledger says) is reported as a harness error at once. */
-import { ITEMS } from "../../src/content/registry.js";
-import type { ItemKind } from "../../src/content/registry.js";
-import { containerAccessible } from "../../src/sim/inventory.js";
+import { containerAccessible, cuOf, itemCu } from "../../src/sim/inventory.js";
 import { reach } from "./actions.js";
 import { carrier, enterCarrier, exitCarrier } from "./carrierplay.js";
 import { Blocked, Driver, where } from "./driver.js";
@@ -17,8 +15,8 @@ export interface Cargo {
   readonly stock: Readonly<Record<string, number>>;
 }
 export const cargoCu = (d: Driver, c: Cargo): number =>
-  c.ids.reduce((n, id) => n + ITEMS[itemOf(d, id).kind].cu * itemOf(d, id).quantity, 0) +
-  Object.entries(c.stock).reduce((n, [k, q]) => n + ITEMS[k as ItemKind].cu * q, 0);
+  c.ids.reduce((n, id) => n + itemCu(itemOf(d, id)), 0) +
+  Object.entries(c.stock).reduce((n, [k, q]) => n + cuOf(k) * q, 0);
 
 function itemOf(d: Driver, id: string) {
   const i = d.state.inventory.items.find((x) => x.id === id);
@@ -62,13 +60,13 @@ export function loads(d: Driver, c: Cargo, cu: number): Cargo[] {
   let cur = { ids: [] as string[], stock: {} as Record<string, number> }, used = 0;
   const flush = (): void => { if (cur.ids.length || Object.keys(cur.stock).length) out.push(cur); cur = { ids: [], stock: {} }; used = 0; };
   for (const id of c.ids) {
-    const size = ITEMS[itemOf(d, id).kind].cu * itemOf(d, id).quantity;
+    const size = itemCu(itemOf(d, id));
     if (size > cu) throw new Blocked(`Item ${id} (${size} CU) exceeds a ${cu} CU load`, where(d.state));
     if (used + size > cu) flush();
     cur.ids.push(id); used += size;
   }
   for (const [kind, n] of Object.entries(c.stock)) {
-    const unit = ITEMS[kind as ItemKind].cu;
+    const unit = cuOf(kind);
     for (let q = 0; q < n; q++) {
       if (used + unit > cu) flush();
       cur.stock[kind] = (cur.stock[kind] ?? 0) + 1; used += unit;

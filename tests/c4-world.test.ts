@@ -24,6 +24,7 @@ import { CAVE_INDEX_CELL, createCaveWorldQueries, createWorldQueries, gameWorld,
   type Solid } from "../src/sim/world.js";
 import { at, creelFirst, parkCreel, pilotCreel } from "./b1-support.js";
 import { drive } from "./journey-support.js";
+import { play } from "./step-support.js";
 
 const world = gameWorld();
 const fanvault = caveDef("fanvault", worldFloor), footprint = fanvault.replacementFootprints[0]!;
@@ -120,8 +121,8 @@ test("the swim cliff guard reads support: a diver on the north mouth's sill swim
   let s = diverAt({ x: mouth.center.x, y: sill + 0.4, z: mouth.center.z - 3 });
   s.player.pose.yaw = Math.PI; // facing +Z: north, out of the mouth
   const start = { ...s.player.pose.position };
-  for (let i = 0; i < 360; i++) s = stepGame(s, [{ type: "look", yawDelta: 0, pitchDelta: 0 },
-    { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], world).state;
+  s = play(s, 360, [{ type: "look", yawDelta: 0, pitchDelta: 0 },
+    { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], world);
   const p = s.player.pose.position;
   assert.ok(p.z > footprint.maxZ + 3, `the diver crossed the footprint edge onto the shelf: ${JSON.stringify(start)} → ${JSON.stringify(p)}`);
   assert.ok(world.clearance(p, DIVER));
@@ -136,8 +137,8 @@ test("the swim cliff guard consults support only: a heightfield that disagrees w
   const disagreeing = { ...world, groundHeight: (x: number, z: number) => z < edge ? start.y + 14 : world.groundHeight(x, z) };
   let s = diverAt(start);
   s.player.pose.yaw = 0; // facing -Z, toward the raised heightfield
-  for (let i = 0; i < 180; i++) s = stepGame(s, [{ type: "look", yawDelta: 0, pitchDelta: 0 },
-    { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], disagreeing).state;
+  s = play(s, 180, [{ type: "look", yawDelta: 0, pitchDelta: 0 },
+    { type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], disagreeing);
   assert.ok(start.z - s.player.pose.position.z > 6, `swam past the heightfield step: ${JSON.stringify(s.player.pose.position)}`);
 });
 
@@ -324,7 +325,7 @@ test("drain follows the drive: a stopped powered hull keeps station in the race 
   const p = along(0.4, 2);
   let s = creelIn(p, 0);
   const before = s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId)!.charge;
-  for (let i = 0; i < 60 * 3; i++) s = stepGame(s, idle(), world).state;
+  s = play(s, 60 * 3, idle(), world);
   const held = s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId)!;
   const moved = Math.hypot(held.pose.position.x - p.x, held.pose.position.z - p.z);
   assert.ok(moved < 0.5, `station keeping holds the Creel (${moved.toFixed(2)} m)`);
@@ -333,7 +334,7 @@ test("drain follows the drive: a stopped powered hull keeps station in the race 
   // Flat: nothing holds it, and drifting is not billed as cruising.
   let flat = creelIn(p, 0);
   flat.fleet.vehicles.find(x => x.id === flat.player.controlledVehicleId)!.charge = 0;
-  for (let i = 0; i < 60 * 3; i++) flat = stepGame(flat, idle(), world).state;
+  flat = play(flat, 60 * 3, idle(), world);
   const v = flat.fleet.vehicles.find(x => x.id === flat.player.controlledVehicleId)!;
   assert.ok(Math.hypot(v.pose.position.x - p.x, v.pose.position.z - p.z) > 1, "an unpowered hull drifts");
   assert.equal(v.charge, 0);

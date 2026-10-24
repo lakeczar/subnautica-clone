@@ -1,3 +1,4 @@
+// Scope (STEW-1, F25): the real app, clock, session, codec, repository and save wiring, with presentation and input replaced by tests/app-loader.ts and renderer readiness set directly (tests/app-browser-support.ts). These tests cannot prove rendered readiness, physical input or GPU behaviour; that is browser evidence (scripts/rec).
 /** UX-1 R1 (R2): replacing the expedition, even with a save of the current tick,
  * inherits no head look or rudder: the first paused render is level and the hull
  * holds its heading once play resumes. Through the real app, input and codec. */

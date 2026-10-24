@@ -4,6 +4,7 @@ import { createStory } from "../sim/story/index.js";
 import { createEcology } from "../sim/ecology/ecology.js";
 import { BERTH_LOCAL, carrierCompartmentContainers, emptySockets, localToWorld } from "../sim/carrier.js";
 import { ITEMS } from "../content/registry.js";
+import { usedCapacity } from "../sim/inventory.js";
 import { record } from "./validation.js";
 
 /** Content-roster entries every schema 5 save contains: New Game's rosters when
@@ -115,8 +116,9 @@ function addNewFields(state: GameState, template: GameState): { ok: true; value:
     if (!record(v) || v.hull !== "hearthline") continue;
     const hold = containers.find((c) => record(c) && c.id === v.cargoId);
     if (!hold || hold.capacity !== SCHEMA5_CARRIER_HOLD_CU) continue;
-    const used = (inv.items as GameState["inventory"]["items"]).filter((i) => record(i) && i.containerId === hold.id && !i.fitted)
-      .reduce((n, i) => n + (Object.hasOwn(ITEMS, i.kind) ? ITEMS[i.kind].cu * i.quantity : 0), 0);
+    // The authority's total over the known items (strict validation refuses the rest after).
+    const known = (inv.items as unknown[]).filter((i) => record(i) && typeof i.kind === "string" && Object.hasOwn(ITEMS, i.kind));
+    const used = usedCapacity({ inventory: { items: known } } as unknown as GameState, hold.id);
     const split = carrierCompartmentContainers(v), stores = SCHEMA5_CARRIER_HOLD_CU - split.reduce((n, c) => n + c.capacity, 0);
     if (used > stores)
       return { ok: false, error: `This carrier hold holds ${used} CU, more than its ${stores} CU stores. Move cargo out in the build that wrote it. Nothing was loaded.` };

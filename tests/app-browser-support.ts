@@ -1,3 +1,5 @@
+// Stands in for the renderer, view and input in the app tests (loaded by tests/app-loader.ts); not a test file itself.
+// Readiness is set directly here, so the app tests prove session and save wiring, never rendered readiness, physical input or GPU behaviour.
 import type { GameCommand, GameState, NoticeOptions, Vec3 } from "../src/sim/types.js";
 import type { SaveSlot } from "../src/save/repository.js";
 export { deliberateExit, controlHasFocus, textEntryHasFocus } from "../src/runtime/input.js";

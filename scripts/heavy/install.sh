@@ -10,6 +10,19 @@
 #   scripts/heavy/install.sh --slice         also install the user slice unit
 #                                            (per-user config: coordinator approval)
 #   scripts/heavy/install.sh --uninstall     remove `current`: every shim falls back to v1
+#                                            (the exclusive slice's unit stays: inert without jobs)
+#   scripts/heavy/install.sh --remove-exclusive-slice   remove that unit too; refuses
+#                                            while a ticket runs, stops incomplete if the slice holds processes
+#
+# Every install also writes the exclusive slice's unit file once (TST-16):
+# siltwake_exclusive.slice, a top-level user slice with a fixed CPUWeight and
+# the heavy slice's memory, swap and CPU caps. Exclusive jobs run there, so
+# their CPU priority lasts exactly as long as their processes; nothing is set
+# at runtime. Older versions never place jobs there, so rolling back needs no
+# cleanup. Uninstall leaves the unit (it does nothing without jobs); removing it
+# is a separate step. Both go through exclusive-unit.mjs: one installer at a
+# time (install.lock), admission paused (maintenance) while systemd changes, and
+# resumed only by that operation's own verified result.
 #   scripts/heavy/install.sh --gpu-guard     wrap every Playwright Chrome binary so a GPU
 #                                            launch needs the GPU lease (chrome-guard.sh);
 #                                            per-user change: coordinator approval
@@ -22,18 +35,37 @@ src=$(cd "$(dirname "$0")" && pwd)
 home="${SILTWAKE_SCHED_HOME:-$HOME/.local/share/siltwake-sched}"
 dir="${SILTWAKE_SCHED_DIR:-/work/tmp/siltwake-sched}"
 slice_name="${SILTWAKE_SCHED_SLICE:-siltwake-heavy.slice}"
+# The exclusive slice: production (the shared loader decides, by directory
+# identity) writes the real unit to the user's unit directory; a private state
+# directory (tests) only one its environment names, as a runtime unit (gone at
+# reboot).
+if [[ -n "${SILTWAKE_SCHED_EXCLUSIVE_SLICE:-}" ]]; then excl="$SILTWAKE_SCHED_EXCLUSIVE_SLICE" excl_dir="${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/systemd/user"
+elif [[ $(SILTWAKE_SCHED_DIR="$dir" node --input-type=module -e 'const { loadConfig } = await import(process.argv[1]); console.log(loadConfig().production ? 1 : 0)' "$src/state.mjs") == 1 ]]; then excl=siltwake_exclusive.slice excl_dir="$HOME/.config/systemd/user"
+else excl="" excl_dir=""; fi
 pw="${SILTWAKE_PLAYWRIGHT_DIR:-$HOME/.cache/ms-playwright}"
-mode="" slice=0 uninstall=0 guard=""
+mode="" slice=0 uninstall=0 guard="" remove_excl=0
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --mode) mode="$2"; shift 2 ;;
     --slice) slice=1; shift ;;
     --uninstall) uninstall=1; shift ;;
+    --remove-exclusive-slice) remove_excl=1; shift ;;
     --gpu-guard) guard=on; shift ;;
     --gpu-guard-remove) guard=off; shift ;;
-    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--uninstall]" >&2; exit 2 ;;
+    *) echo "usage: $0 [--mode serial|normal] [--slice] [--gpu-guard|--gpu-guard-remove] [--uninstall] [--remove-exclusive-slice]" >&2; exit 2 ;;
   esac
 done
+
+# One installer at a time (TST-16b): every change below, from the exclusive
+# slice's unit through publication (the immutable version, `current`, mode,
+# slice and guard), runs under <state>/install.lock, held on fd 9 by this
+# script and the processes it starts, so a second install.sh waits for the
+# whole run. exclusive-unit.mjs checks it holds this lock and takes no other.
+# It is not the admission lock (state.lock): admission never waits for systemd.
+mkdir -p "$dir"
+exec 9>>"$dir/install.lock"
+flock -w 600 9 || { echo "another install.sh is still running after 10 minutes; nothing changed" >&2; exit 3; }
+export SILTWAKE_INSTALL_LOCK_FD=9
 
 # Playwright's Chrome binaries (full and headless shell), real ELF files or
 # ones already wrapped.
@@ -48,10 +80,18 @@ fi
 if [[ $uninstall == 1 ]]; then
   rm -f "$home/current"
   echo "heavy-check v2 uninstalled: shims fall back to v1. State in $dir is kept."
+  [[ -n $excl && -f "$excl_dir/$excl" ]] && echo "$excl stays (inert without jobs); remove it with --remove-exclusive-slice"
   exit 0
 fi
 
-files=(policy.mjs state.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
+if [[ $remove_excl == 1 ]]; then
+  [[ -n $excl ]] || { echo "no exclusive slice for this state"; exit 0; }
+  # Admission paused (maintenance) while systemd changes; verified (exclusive-unit.mjs).
+  SILTWAKE_SCHED_DIR="$dir" node "$src/exclusive-unit.mjs" remove "$excl" "$excl_dir"
+  exit $?
+fi
+
+files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
   remote.mjs remote-holder.mjs lane-run.sh)
 # The remote lane's transport (SCHED-2b) is scripts/alickers-job.sh; each
 # version carries its own copy, so a running remote ticket keeps its transport.
@@ -61,7 +101,7 @@ transport="$src/../alickers-job.sh"
 # `current`, so installing an older scheduler (a rollback) or uninstalling it
 # leaves the guard enforcing (R1-F5). A lease names a ticket's grant, which
 # SCHED-1 and SCHED-2 write alike.
-guard_files=(gpu-lease.mjs state.mjs policy.mjs snapshot.mjs)
+guard_files=(gpu-lease.mjs state.mjs contention.mjs policy.mjs snapshot.mjs)
 install_guard() {
   local gv
   gv=$(cd "$src" && cat "${guard_files[@]}" | sha256sum | cut -c1-12)
@@ -75,6 +115,18 @@ install_guard() {
   ln -sfn "$gv" "$home/guard/current.tmp"
   mv -T "$home/guard/current.tmp" "$home/guard/current"
 }
+# The exclusive slice's unit (TST-16), written once: a fixed CPUWeight, and the
+# heavy slice's caps for this machine (policy sliceLimits), so moving an
+# exclusive job here escapes no aggregate limit. Changed only when systemd's
+# view differs, never under a measurement: under the installer lock, admission
+# is paused (maintenance, owned by this operation) while systemd reloads, and
+# resumes only once its properties are verified (exclusive-unit.mjs). Before
+# anything else is switched: a refusal (3) or an incomplete update (4) changes
+# nothing else.
+if [[ -n $excl ]]; then
+  SILTWAKE_SCHED_DIR="$dir" node "$src/exclusive-unit.mjs" write "$excl" "$excl_dir" || exit $?
+fi
+
 version=$(cd "$src" && cat "${files[@]}" "$transport" | sha256sum | cut -c1-12)
 if [[ ! -d "$home/$version" ]]; then
   [[ -d "$home/$version.tmp" ]] && chmod -R u+w "$home/$version.tmp" && rm -rf "$home/$version.tmp"
@@ -89,6 +141,7 @@ mv -T "$home/current.tmp" "$home/current"
 
 mkdir -p "$dir/jobs"
 [[ -f "$dir/protocol" ]] || echo 1 >"$dir/protocol"
+
 [[ -f "$dir/mode" ]] || echo serial >"$dir/mode"
 if [[ -n "$mode" ]]; then
   [[ "$mode" == serial || "$mode" == normal ]] || { echo "mode must be serial or normal" >&2; exit 2; }
