@@ -33,7 +33,13 @@
 import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
-import ts from "typescript";
+import { guardLocalRun } from "./local-guard.mjs";
+
+const main = process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+// As a command it is admitted before the TypeScript compiler loads (STEW-2); imported (by
+// its tests) it just loads.
+if (main) guardLocalRun({ cls: "quick" });
+const { default: ts } = await import("typescript");
 
 export const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -329,7 +335,7 @@ export function repositoryFiles(root = ROOT) {
   return files;
 }
 
-if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
+if (main) {
   const t0 = performance.now(), quiet = process.argv.includes("--quiet");
   const { failures, notes, report } = analyse(repositoryFiles());
   const ms = Math.round(performance.now() - t0);

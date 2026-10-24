@@ -1,14 +1,19 @@
 // Run after npm test (compiled production modules). Only the registry is runtime authority.
 import assert from "node:assert/strict";
 import fs from "node:fs";
-import { CONTENT_VERSION, RECIPES, SOURCES, ITEMS, PLACES } from "../.test-build/src/content/registry.js";
-import { LEGACY_TERRAIN_SOURCE_IDS } from "../.test-build/src/content/routes.js";
-import { createGame } from "../.test-build/src/sim/state.js";
-import { collect, completeOpening, craft, discover, toggleBuoy } from "../.test-build/src/sim/progression.js";
-import { available, fabricationContainers, materialStoragePreview, storeMaterials, transfer, usedCapacity } from "../.test-build/src/sim/inventory.js";
-import { installModule } from "../.test-build/src/sim/modules.js";
-import { createWorldQueries } from "../.test-build/src/sim/world.js";
-import { validState } from "../.test-build/src/save/validation.js";
+import { guardLocalRun } from "./local-guard.mjs";
+
+// On factory-worker, only inside a heavy-check job (STEW-2), and admitted before the
+// compiled modules load. Routed, the job compiles them first.
+guardLocalRun({ cls: "quick", before: "node scripts/test-build.mjs" });
+const { CONTENT_VERSION, RECIPES, SOURCES, ITEMS, PLACES } = await import("../.test-build/src/content/registry.js");
+const { LEGACY_TERRAIN_SOURCE_IDS } = await import("../.test-build/src/content/routes.js");
+const { createGame } = await import("../.test-build/src/sim/state.js");
+const { collect, completeOpening, craft, discover, toggleBuoy } = await import("../.test-build/src/sim/progression.js");
+const { available, fabricationContainers, materialStoragePreview, storeMaterials, transfer, usedCapacity } = await import("../.test-build/src/sim/inventory.js");
+const { installModule } = await import("../.test-build/src/sim/modules.js");
+const { createWorldQueries } = await import("../.test-build/src/sim/world.js");
+const { validState } = await import("../.test-build/src/save/validation.js");
 
 const read = (path) => fs.readFileSync(new URL(path, import.meta.url), "utf8");
 const delta = JSON.parse(read("../docs/build/design/M1-PLAY-ECONOMY.json"));

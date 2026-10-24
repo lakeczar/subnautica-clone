@@ -63,9 +63,11 @@ echo "$unit pid=$$ cwd=$PWD started=$(date -u +%FT%TZ) cmd=$*" >"$lock.owner"
 
 # v1 is exclusive, so the job holds the one GPU too. Delegate=yes lets the heavy
 # test runner give each test file its own child cgroup inside this scope
-# (scripts/heavy-containment.mjs, TT-1).
+# (scripts/heavy-containment.mjs, TT-1). SILTWAKE_HEAVY_SCOPE names this exact
+# scope: the local-run guard (scripts/local-guard.mjs) admits a guarded command
+# under this lock only inside it (STEW-2).
 status=0
-SILTWAKE_HEAVY_LOCK_HELD=1 SILTWAKE_HEAVY_CGROUP=delegated SILTWAKE_GPU_LEASE="v1-$$" systemd-run --user --scope --quiet --unit="$unit" \
+SILTWAKE_HEAVY_LOCK_HELD=1 SILTWAKE_HEAVY_SCOPE="$unit" SILTWAKE_HEAVY_CGROUP=delegated SILTWAKE_GPU_LEASE="v1-$$" systemd-run --user --scope --quiet --unit="$unit" \
   -p MemoryHigh="$(( ${max%G} * 1024 * 85 / 100 ))M" -p MemoryMax="$max" -p MemorySwapMax=0 -p Delegate=yes \
   timeout --kill-after=10s "${deadline}s" "$@" || status=$?
 : >"$lock.owner"
