@@ -1058,3 +1058,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Overall:** 7 of 9 judged segments pass.
   - **R4 proposal:** a co-located vCPU-following canary.
   - **Review:** Sol R4 running (`siltwake-cw1-review-r4-sol-a431d25`).
+- **SCHED-3 R4** (Sol on `194dcdc8`, report on `review/sched-3-r4` `f8378439`): REQUEST CHANGES.
+  - **Findings:** P1 the resolver accepts non-literal npm heads (`VAR=1 npm`, `env npm`, `/usr/bin/npm`, `npx`), newline collapse and npm options; P2 a spoofable `npm_lifecycle_event` exception.
+  - **Decisions:** a closed runner grammar (`node <path> args` and recursively expanded `npm test`/`npm run X`, joined by `&&`; anything else runs here); delete the lifecycle exception; `test:heavy` balances via an explicit `--machine any` in `package.json`. R5 is the install decision.
