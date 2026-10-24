@@ -1,6 +1,6 @@
 import { LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import { LOST_SITE_CACHES, siteCacheContainerId } from "../content/systems/lostSites.js";
-import { SITE_CACHE_IDS } from "./systems/siteCaches.js";
+import { SITE_CACHE_IDS, siteCacheFound } from "./systems/siteCaches.js";
 import { isSeed, SEEDS } from "../content/systems/cultivation.js";
 import type { FabricationSite } from "../content/registry.js";
 import { HOST_REACH, moduleOfItem } from "../content/systems/hosts.js";
