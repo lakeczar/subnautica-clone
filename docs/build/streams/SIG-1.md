@@ -254,3 +254,11 @@ Every catalogue upgrade now has a recipe, and none is inert. Each is felt in pla
 - **Browser, only the changed visuals** (`aa47e24f`, RTX 4070 Laptop through ANGLE and D3D12, the `creel-arm` and `mantle` scenarios, 0 page errors). Two images, `/work/tmp/261024-051825-df56/sig1-4070/`:
   - **Does a cut report its result?** `03-creel-arm-cut-aboard.jpg`: the toast "Cutting arm · +3 Conductive crust", with the hold at 4 → 7 CU and the charge at 96%.
   - **Does the drone start in clear water?** `05-mantle-drone-view.jpg`: the drone's camera opens in open water at the Basin frame stack, and its first scan is reported.
+
+### R2 fixes (Sol `review/sig-1-stage1-r2`, request changes; code `fb8a5d59`)
+- **R2-1:** hull hardware art is keyed by its fitting's contents (each module's item ID and kind, in fitting order), not by item IDs alone, which repeat across saves. Loading another valid save with a different fitting rebuilds the art. There's no per-frame profile and no new index.
+- **R2-2:** hardware builds within 240 m and is released only past 260 m, so a hull at the edge doesn't churn.
+- **Regressions** (`tests/field-kit.heavy.test.ts`):
+  - two consecutive saves with the same hull and item IDs but different fittings rebuild the art and dispose the old;
+  - a hull moved through 239, 241, 250, 255 and 241 m keeps the same art, which is released at 265 m.
+- **Checks** (`fb8a5d59`, RTX 4070 Laptop): `npm test` **1,475/1,475**; the field-kit NullEngine test passes.
