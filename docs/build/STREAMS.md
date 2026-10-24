@@ -1223,3 +1223,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Next:** the fixes, then a fresh affected review and the coordinator gate. The steady-60 acceptance stays withheld.
 - **SCHED-3 R6** (Sol on `f0d41605`, report on `review/sched-3-r6` `03764202`, with STEW-2-aware canary steps): one P1. Equivalent guard-path spellings (`./scripts/…`, `scripts/./…`, `scripts//…`) bypass the alias, so npm is reachable. Fix after the reboot: normalise paths before the guard check, plus regressions; then R7 is the install decision.
 - **Reboot pause started (about 00:00Z):** all builders told to commit, push, cancel tickets and write resume notes. SCHED-3 paused at `f25d89d2`; CW-1 paused at `a68374e7` (R5-2, 3 and 5 done). Coordinator resume note: `/work/tmp/coordinator-resume.md`.
+- **Ready for the reboot (23:59Z):** all six builders paused and pushed (SCHED-3 `f25d89d2`, CW-1 `a68374e7`, ENV-1 `df7371c1`, PACE-1 `54631001`, REC-1 `f7d26fde`, LS-1 `bbd37bd3`); the queue is empty; root is clean.
+  - **REC-1 finding added to the fleet request:** a 5-minute wall-clock host disturbance (hh:m1:55–m2:30, hh:m6:50–m7:30).
+  - **Owner:** sends `/work/tmp/fleet-reboot-request.md` to fleet.
