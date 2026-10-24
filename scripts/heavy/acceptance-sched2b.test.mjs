@@ -41,7 +41,7 @@ const commit = (dir, file, text) => { writeFileSync(join(dir, file), text); git(
 test("B1: an any job runs on alickers at its commit; the worktree stays free; an evidence pack comes back whole", async () => {
   const c = await lane("any-remote");
   const head = commit(c.repoDir, "make-pack.sh", "mkdir -p pack/shots; echo one > pack/shots/a.png; echo summary > pack/summary.md; echo result > single.json\n");
-  const id = submit(c, c.repoDir, "--class", "playthrough", "--artifact", "pack", "--artifact", "single.json", "--", "sh", "-c", "sh make-pack.sh; echo ran-on-$(hostname)-in-$(git rev-parse HEAD); sleep 2");
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--artifact", "pack", "--artifact", "single.json", "--", "sh", "-c", "sh make-pack.sh; echo ran-on-$(hostname)-in-$(git rev-parse HEAD); sleep 2");
   await running(c, id);
   // A remote job takes nothing here, not even the worktree.
   const local = submit(c, c.repoDir, "--class", "quick", "--", "true");
@@ -71,7 +71,7 @@ test("B2: paused alickers: a 4070 job waits (remote-paused) and runs when it res
   const c = await lane("paused");
   c.fake.pause(true);
   const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "sh", "-c", "echo on-the-4070");
-  const a = submit(c, c.wt("other"), "--class", "playthrough", "--", "sh", "-c", "echo here");
+  const a = submit(c, c.wt("other"), "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "echo here");
   await until("paused seen", () => blockedBy(c, g) === "remote-paused", 20000);
   assert.equal(waitFor(c, a).code, 0);
   assert.equal(result(c, a).remote, undefined);
@@ -94,7 +94,7 @@ test("B3: paused after dispatch (its 75 comes before 'testing'): an any job fall
   const healthUp = () => writeFileSync(join(c.sched, "remote.json"), JSON.stringify({ state: "up", at: Date.now() + 3600000, failures: 0 }));
   healthUp();
   c.fake.pause(true);
-  const a = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "echo ran-somewhere; exit 75");
+  const a = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "echo ran-somewhere; exit 75");
   const w = waitFor(c, a);
   assert.equal(w.code, 75, "the job's own 75, after it ran here, is the job's");
   const r = result(c, a);
@@ -117,7 +117,7 @@ test("B4: unreachable: a 4070 job waits (remote-down), any runs here; dirty tree
   c.fake.unreachable(true);
   const g = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "true");
   await until("down seen", () => blockedBy(c, g) === "remote-down", 30000);
-  const a = submit(c, c.wt("a"), "--class", "playthrough", "--", "true");
+  const a = submit(c, c.wt("a"), "--class", "playthrough", "--machine", "any", "--", "true");
   assert.equal(waitFor(c, a).code, 0);
   assert.equal(result(c, a).remote, undefined);
   hc(c, ["cancel", g]);
@@ -138,12 +138,12 @@ test("B4: unreachable: a 4070 job waits (remote-down), any runs here; dirty tree
 
 test("B5: stall detection on alickers: silence stops it (123) once it has started; relayed heartbeats keep a quiet job alive", async () => {
   const c = await lane("stall");
-  const s = submit(c, c.repoDir, "--class", "playthrough", "--stall", "4", "--", "sh", "-c", "echo started; sleep 60");
+  const s = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--stall", "4", "--", "sh", "-c", "echo started; sleep 60");
   const w = waitFor(c, s);
   assert.equal(w.code, 123, w.err);
   assert.equal(result(c, s).stopReason, "stalled");
   assert.match(log(c, s), /stalled: no output and no heartbeat from the sandbox/);
-  const beat = submit(c, c.repoDir, "--class", "playthrough", "--stall", "4", "--", "sh", "-c", "for i in 1 2 3 4 5 6 7 8; do touch \"$SILTWAKE_JOB_HEARTBEAT\"; sleep 1; done; echo done");
+  const beat = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--stall", "4", "--", "sh", "-c", "for i in 1 2 3 4 5 6 7 8; do touch \"$SILTWAKE_JOB_HEARTBEAT\"; sleep 1; done; echo done");
   const wb = waitFor(c, beat);
   assert.equal(wb.code, 0, wb.err);
   assert.doesNotMatch(log(c, beat), /stalled/);
@@ -163,7 +163,7 @@ test("B6: memory.high throttling on alickers is reported after the notice window
   if (spawnSync("python3", ["-c", "1"]).status !== 0) { t.skip("no python3"); return; }
   const c = await lane("throttle");
   c.env.FAKE_MEMORY_HIGH = "96M";
-  const id = submit(c, c.repoDir, "--class", "playthrough", "--stall", "10", "--", "python3", "-c",
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--stall", "10", "--", "python3", "-c",
     "import time\nkeep=bytearray(140<<20)\nwhile True:\n  b=bytearray(8<<20); print('working', flush=True); time.sleep(0.2)");
   const w = waitFor(c, id);
   assert.equal(w.code, 123, w.err);
@@ -175,7 +175,7 @@ test("B6: memory.high throttling on alickers is reported after the notice window
 
 test("B7: cancel stops a running remote job on the sandbox; a cancel while it waits for the sandbox's lock means it never runs", async () => {
   const c = await lane("cancel");
-  const id = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "while :; do echo .; sleep 0.5; done");
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "while :; do echo .; sleep 0.5; done");
   await until("started remotely", () => existsSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid")) && log(c, id).includes("alickers-job: testing"), 30000);
   const [pid, start] = readFileSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid"), "utf8").trim().split(" ").map(Number);
   hc(c, ["cancel", id]);
@@ -200,7 +200,7 @@ test("B7: cancel stops a running remote job on the sandbox; a cancel while it wa
 
 test("B8 (R1-F3): the remote holder SIGKILLed while a quiet job runs (and a quiet detached descendant): recovery stops it there, keeping the slot until then", async () => {
   const c = await lane("holder-dies");
-  const id = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "(sleep 120 &); sleep 120");
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "(sleep 120 &); sleep 120");
   await until("started remotely", () => existsSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid")) && log(c, id).includes("testing"), 30000);
   const [pid, start] = readFileSync(join(c.fake.dir, "lane", "jobs", id, "a1", "pid"), "utf8").trim().split(" ").map(Number);
   const tk = await holderOf(c, id);
@@ -234,9 +234,9 @@ test("B9: a soak takes alickers first and yields it to a waiting 4070 job; while
 
 test("B10: a remote job's own exit codes pass through after 'testing'; units and leftovers are clean", async () => {
   const c = await lane("codes");
-  const a = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "exit 7");
+  const a = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "exit 7");
   assert.equal(waitFor(c, a).code, 7);
-  const b = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "exit 255");
+  const b = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "exit 255");
   const wb = waitFor(c, b);
   assert.equal(wb.code, 255, `a 255 after testing with the tested line is the job's: ${JSON.stringify(result(c, b))} ${log(c, b)}`);
   assert.equal(result(c, b).fellBack, undefined);
@@ -258,7 +258,7 @@ test("B11: private state without a remote never reaches a sandbox; a recovery st
   const cfg = loadConfig(c.env);
   assert.equal(remoteConfig(cfg).enabled, false);
   assert.match(readHealth(cfg).detail, /private state without a remote/);
-  const a = submit(c, c.repo("r"), "--class", "playthrough", "--", "true");
+  const a = submit(c, c.repo("r"), "--class", "playthrough", "--machine", "any", "--", "true");
   assert.equal(waitFor(c, a).code, 0);
   assert.equal(result(c, a).remote, undefined);
   assert.match(hc(c, ["status"]).out, /alickers \(second worker\): off \(private state without a remote/);
@@ -275,7 +275,7 @@ test("B12 (R1-F1): a direct caller waiting on the sandbox's lock changes commits
   const c = await lane("direct-race");
   const head = commit(c.repoDir, "make.sh", "mkdir -p pack; echo ORIGINAL > pack/result\n");
   c.fake.flag("slow-fetch", true); // the fetch starts only after the other job has run
-  const id = submit(c, c.repoDir, "--class", "playthrough", "--artifact", "pack", "--", "sh", "-c", "sh make.sh; sleep 1");
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--artifact", "pack", "--", "sh", "-c", "sh make.sh; sleep 1");
   await until("started remotely", () => log(c, id).includes("alickers-job: testing"), 30000);
   // Another agent's direct job, queued on the same lock: another commit, the same output name.
   const other = c.fake.direct(`git checkout -q --detach ${c.head} && mkdir -p pack && echo OTHER-JOB > pack/result && sleep 4 && cat pack/result > other-saw.txt`);
@@ -297,7 +297,7 @@ test("B13 (R1-F2): control comes from the receipt, never from output: marker-sha
   const npm = (code) => c.fake.npm(`s=$(git rev-parse HEAD); echo "alickers-job: testing $s on fake" >&2; echo "alickers-job: tested $s exit 0" >&2; exit ${code}`);
   for (const code of [1, 75, 255]) {
     lockChange(); npm(code);
-    const id = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "echo the-payload-ran");
+    const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "echo the-payload-ran");
     const w = waitFor(c, id);
     const r = result(c, id);
     assert.equal(r.remote, undefined, `npm ${code}: a setup failure is not a remote success (${w.err})`);
@@ -314,7 +314,7 @@ test("B13 (R1-F2): control comes from the receipt, never from output: marker-sha
   c.fake.npm(null);
   // A job whose own output looks like the transport's lines: its own code stands.
   lockChange(); c.fake.npm("exit 0");
-  const j = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", `echo "alickers-job: tested ${sha()} exit 0"; echo "alickers-job: testing x"; exit 7`);
+  const j = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", `echo "alickers-job: tested ${sha()} exit 0"; echo "alickers-job: testing x"; exit 7`);
   const wj = waitFor(c, j);
   assert.equal(wj.code, 7);
   assert.equal(result(c, j).remote, true);
@@ -371,7 +371,7 @@ test("B17 (R1-F7): a stalled artifact transfer is bounded and cancellable; the s
   const c = await lane("stall-fetch");
   commit(c.repoDir, "make.sh", "mkdir -p pack; echo data > pack/a\n");
   c.fake.flag("stall-fetch", true);
-  const id = submit(c, c.repoDir, "--class", "playthrough", "--artifact", "pack", "--", "sh", "make.sh");
+  const id = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--artifact", "pack", "--", "sh", "make.sh");
   const t0 = Date.now();
   const w = waitFor(c, id);
   assert.ok(Date.now() - t0 < 30000, "bounded");
@@ -379,7 +379,7 @@ test("B17 (R1-F7): a stalled artifact transfer is bounded and cancellable; the s
   assert.match(result(c, id).artifacts[0].error, /transfer aborted: no data for 3 s; staged copy kept at .*\/a1\/stage\/pack/);
   assert.equal(readFileSync(join(c.fake.dir, "lane", "jobs", id, "a1", "stage", "pack", "a"), "utf8"), "data\n");
   // Cancelled while the transfer hangs: it ends promptly, with the transfer aborted.
-  const id2 = submit(c, c.repoDir, "--class", "playthrough", "--artifact", "pack", "--", "sh", "make.sh");
+  const id2 = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--artifact", "pack", "--", "sh", "make.sh");
   await until("fetching", () => log(c, id2).includes("alickers-job: tested") , 30000);
   await sleep(500);
   const t1 = Date.now();
@@ -412,7 +412,7 @@ exit ${code}`);
   assert.equal(existsSync(join(c.fake.repo, "payload-ran")), false, "the payload never ran");
   // An any job reruns here instead.
   commit(c.repoDir, "package-lock.json", '{"v":2}\n'); forge(1);
-  const a = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "echo ran-here");
+  const a = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "echo ran-here");
   assert.equal(waitFor(c, a).code, 0);
   assert.equal(result(c, a).remote, undefined);
   assert.match(result(c, a).fellBack.reason, /not valid/);
@@ -443,7 +443,7 @@ test("B19 (R2-F1): a truncated receipt, or one whose exit the transport contradi
   assert.equal(wx.code, 70, wx.err);
   assert.deepEqual([rx.evidence.bound, rx.evidence.transportExit, rx.evidence.receiptExit], [false, 0, 7]);
   assert.match(rx.label, /the receipt says exit 7, the transport exited 0/);
-  const a = submit(c, c.repoDir, "--class", "playthrough", "--", "sh", "-c", "exit 7");
+  const a = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "exit 7");
   assert.equal(waitFor(c, a).code, 7);
   assert.equal(result(c, a).remote, undefined, "an any job reruns here");
   c.fake.flag("exit-zero", false);

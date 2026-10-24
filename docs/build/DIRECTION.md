@@ -80,7 +80,7 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
 
   Until the lane exists, builders may call `scripts/alickers-job.sh` directly.
 - **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive` on the 3090.
-  - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. Results from the 4070 are labelled indicative.
+  - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. That declares the job portable: its outputs come back with `--artifact` (SCHED-3). An undeclared job runs on the 3090. Results from the 4070 are labelled indicative.
   - Pin a job to one machine only when the question needs that machine (e.g. factory-worker's host pauses, or a 4070 player-floor check).
 - **Evidence:**
   - Functional results count from either machine, bound to the exact SHA tested.

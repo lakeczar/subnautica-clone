@@ -2,7 +2,9 @@
 // LC large-cave lab on the RTX 3090 (run through scripts/heavy-check.sh; one
 // GPU job at a time):
 //
-//   scripts/heavy-check.sh --deadline 900 node tools/large-cave-lab.gpu.mjs <port> <outdir> [shots|measure|drive|all]
+//   scripts/heavy-check.sh --class gpu --machine 3090 --deadline 900 node tools/large-cave-lab.gpu.mjs <port> <outdir> [shots|measure|drive|all]
+//
+// Pinned to the 3090 (SCHED-3): it loads Playwright and Chrome from this machine's paths and needs the GPU lease, so it isn't portable to alickers.
 //
 // Serves the repo with Vite on a task-owned loopback port and launches a
 // task-owned headless Chrome on ANGLE GL-EGL. Needs a bake

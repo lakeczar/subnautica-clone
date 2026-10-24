@@ -86,13 +86,17 @@ Options:
 
 | Tag | Default for | Where it runs |
 | --- | --- | --- |
-| `any` | `standard`, `gpu`, `playthrough`, `heavy-suite` (SCHED-3) | alickers when its one slot is free; otherwise here at once (never waits for it). One that can't go to alickers (below) is routed to `3090` at submit, with the reason |
+| `any` | `standard`, `gpu`, `playthrough`, `heavy-suite` (SCHED-3) | alickers when its one slot is free; otherwise here at once (never waits for it). Only a job declared portable goes to alickers; any other is routed to `3090` at submit, with the reason (below) |
 | `3090` | `quick` (the express slot), `bake` (local artifacts), `exclusive` (always 3090) | here only |
 | `4070` | (ask for it) | alickers only. It waits through pauses and outages until its queue timeout, and is never faked here |
 | `soak` | `soak` | alickers first. It runs here only while alickers is paused or unreachable |
 
-- **Balance (SCHED-3; DIRECTION, "Balance the two GPUs"):** submit without `--machine` unless the question needs a machine; the queue sends the job to whichever frees first. Only acceptance numbers are `--class exclusive` on the 3090. An explicit `--machine` always wins.
-  - **Routed here:** an `any` job that can't go to alickers (the remote lane is off; not a git tree; uncommitted changes; a local path outside the worktree; reading `.test-build*` or `dist`; or a command that only builds, such as `npm run build`: "build output must stay here") runs on the 3090. `submit` prints `runs here (factory-worker), not on alickers: <reason>` once; the ticket and result record it (`goal.routed`); `status` marks it `3090^` (`here^` once running) with a `^ <ticket>: any, routed here: <reason>` line; the final line says so.
+- **Balance (SCHED-3; DIRECTION, "Balance the two GPUs"):** only acceptance numbers are `--class exclusive` on the 3090. Everything else may run on either machine, but **portability is declared, never inferred**: a command line can't show what a script imports, reads from the environment or writes.
+  - **Declared portable:** a registered command we own that compiles and consumes its builds inside the job and writes nothing the caller needs back (`npm test`, `npm run test:fast`, the heavy tier's own queued command, `npm run playthrough [-- --jobs N --quiet]`), or a caller's explicit `--machine any|4070`. With an explicit machine, the caller vouches for the job: it must be self-contained (no local inputs, no build output from outside the job), and everything it writes that's needed afterwards must be an `--artifact`; a remote artifact lands in `/work/tmp/<ticket>/<name>` (the result's `artifacts[].local`), never back in the worktree. **To balance your own driver:** `$H --class gpu --machine any --artifact <outdir> -- node <driver> <outdir>`, and read the outputs from the returned location.
+  - **Everything else is routed to the 3090** at submit, with the reason printed once (`runs here (factory-worker), not on alickers: <reason>`), kept on the ticket and the result (`goal.routed`), shown by `status` (`3090^`, `here^` once running, and a `^ <ticket>: any, routed here: <reason>` line) and in the final line. Reasons: `portability not declared: pass --machine any and --artifact for its outputs`; the remote lane is off; not a git tree; uncommitted changes; a local path outside the worktree; reading `.test-build*` or `dist`; or a command that only builds (`npm run build`, `npm run test:build`, `vite build`, `node scripts/test-build.mjs`) with no `--artifact` for its output (`dist`, `.test-build`): `build output must stay here`. With `--artifact dist`, `--machine any|4070 -- npm run build` runs there and `dist` comes back whole. An explicit `--machine 4070` is refused for any of these reasons. An `--artifact` alone isn't a declaration; on a job routed here, a relative one is where it wrote it.
+  - **A fast tier through the queue may run on alickers:** it doesn't refresh this worktree's `.test-build`, so compile here before running anything that reads it (the economy scripts do).
+  - **Pinned 3090 drivers:** the GPU tools that load Playwright and Chrome from this machine's paths (`tools/large-cave-lab.gpu.mjs`, `tools/cave-deep-shots.mjs`, `tools/cave-gpu-check.mjs`) and the stream drivers that use local servers or prebuilt dists (CA-2, POI-1, W2, ATM-1) say `--machine 3090` in their headers.
+  - **A ticket that never ran** (cancelled or expired while queued, or lost before admission) keeps its goal and route; its result has `ran: false` and `planned`, and its final line says `never ran; planned for …`, never `on …`.
   - **`--snapshot`** needs no rule of its own: alickers runs the submit-time commit, which is the snapshot of a clean tree; a dirty tree is routed here.
 - **Only a commit goes to alickers.** A dirty tree, or a command that names a local path outside the worktree (`/work/...`, `/tmp/...`; inputs would be missing, outputs left behind), runs here, and `--machine 4070` is refused with the reason. Put inputs in the commit. Declare outputs with `--artifact`:
   - a relative path is in the job's directory in the sandbox checkout; an absolute path is on the sandbox;
@@ -129,7 +133,7 @@ The output streams as it runs. You are woken when the job ends, so keep working 
 **Codex agents** (no background wake-ups):
 
 ```sh
-T=$($H submit --class gpu -- node my-play.mjs)   # prints a ticket at once
+T=$($H submit --class gpu --machine any --artifact out -- node my-play.mjs out)   # prints a ticket at once; out comes back to the result's artifacts[].local
 $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
 ```
 
