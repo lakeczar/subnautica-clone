@@ -1,19 +1,21 @@
 # Asset pipeline: the Opus position
 
-Research for the owner's asset-pipeline question and the structured debate. By Opus 5.5, 2026-10-24. I wrote it independently: I didn't read the Sol report (`research/asset-pipeline`) before committing this. It contains no spoilers. Probe scripts are in [`asset-pipeline-opus/probe/`](asset-pipeline-opus/probe/), and their raw output is in `/work/tmp/asset-research-opus/` on factory-worker.
+Research for the owner's asset-pipeline question and the structured debate. By Opus 5.5, 2026-10-24. I wrote it independently: I didn't read the Sol report (`research/asset-pipeline`) before committing this. It contains no spoilers. Probe scripts are in [`asset-pipeline-opus/probe/`](asset-pipeline-opus/probe/), and their raw output is on factory-worker in `/work/tmp/asset-research-opus/`, `/work/tmp/261024-223122-4faf/` and `/work/tmp/261024-231804-d229/` (alickers).
 
 **Inputs read:** AGENTS, STATUS, DIRECTION, GAME-DIRECTION, OPENING-DESIGN, STARTING-ISLAND-DESIGN, 01-platform, WORKER_RESOURCE_LIMITS, the alickers handoff, and the render and world code (`materials.ts`, `kit/*`, `biomes/terrainCodec.ts`, `geometryCache.ts`, `lighting/*`, `creatures/kit.ts`, `fleet/*`, `world/residency.ts`). I looked at two current screenshots: ATM-1 reef at 10 m, and the M2 carrier helm.
 
 ## The answer in one paragraph
 
 Use **Blender 5.2 LTS, driven by Opus through `bpy`**, in the owner's **Option A** setup:
-- **Where Blender runs:** a long-lived Blender session inside the alickers Linux sandbox, on a private virtual display, holding a queue **session reservation** on the 4070.
+- **Where Blender runs:** a long-lived Blender session inside the alickers Linux sandbox, holding a queue **session reservation** on the 4070. It gets a private virtual display when its UI is wanted.
+- **GPU:** OpenGL on the 4070 through Mesa D3D12, and Cycles on CUDA. Both are probed and work.
 - **How agents reach it:** agents stay on factory-worker and drive it over the existing SSH lane.
 - **No TCP port anywhere:** the channel is **stdio over SSH**. An MCP facade is optional, and if used it speaks the same channel.
 
 **The session is the sketchbook; a clean batch job is the print.**
 - The scripts and a shared Siltwake kit library in the repo are the source of truth.
-- Every committed asset is rebuilt from committed scripts by a fresh `blender -b --factory-startup` job, and must come out byte-identical. The probe proved that's achievable.
+- Every committed asset is rebuilt from committed scripts by a fresh `blender -b --factory-startup` job.
+- The rebuild must give an identical quantised pack. The probe found byte-identical GLBs on one machine, and differences across CPUs only in the last float bits, which quantisation removes.
 - So no state that exists only in a session ever ships.
 
 **Into the game:** Blender exports glTF. A **Node bake step**, which joins WK-1's bake, converts it into the game's **existing** quantised mesh-pack form (`MeshRecipe` and `TemplateRecipe`, as the terrain codec already does). So the game keeps one cel material, one residency system, and no runtime glTF loader or decoder.
@@ -64,7 +66,7 @@ These facts shape every option below, so they come first.
   - The "sandbox" describes itself as "isn't really a sandbox, more guidance".
   - blender.org warns that it "will execute LLM generated code in Blender without any guards in place" and recommends a VM [1].
   - On factory-worker, which many agents share, any local process could run Python as the Blender user through that port.
-- **Screenshot tools need a GUI window,** which a headless agent doesn't have.
+- **Screenshot tools need a GUI window.** Under Option A that's Blender's UI on Xvfb, where the probe's window capture came back black (§5.3).
 
 **Community `blender-mcp`** (ahujasid, renamed `mcp-for-blender` in September 2026, MIT, about 32k stars).
 - **Same model:** a TCP socket on 9876 with arbitrary code execution.
@@ -77,6 +79,8 @@ These facts shape every option below, so they come first.
 - EEVEE's first-frame shader compile cost 29 s in the probe (§1.2);
 - the agent can poke at a scene ("which faces are over budget?") without rebuilding it.
 
+The flip side is session-only state, so a clean batch "print" from committed scripts is the only thing that ships (§4).
+
 So keep the session and **replace the transport:**
 - **No TCP listener on factory-worker.** Factory-worker is shared by many agents, and any local process could reach a forwarded port. Neither MCP server authenticates.
 - **The channel is stdio over SSH** (§5.2): the client runs `ssh siltwake-alickers …`, and Blender's driver reads requests on stdin.
@@ -85,7 +89,7 @@ So keep the session and **replace the transport:**
 - **Avoid the community server** (the advisory, and the asset-store and AI integrations).
 - **The official server's doc-search tools** (`search_api_docs`) help with the `bpy` API either way.
 
-### 1.2 Plain headless Blender `bpy`: the recommendation (probed)
+### 1.2 Headless Blender `bpy` (probed): the engine under both the session and the prints
 
 I downloaded the portable **Blender 5.2.3 LTS** tarball (sha256 checked against blender.org) into `/work/tmp/asset-research-opus/` and ran the probe through `heavy-check` (`--review`). The probe is `probe/probe_bpy.py`:
 - It builds a sealed instrument canister from code: a lathed body, banded seams, a handle and bolts.
@@ -102,7 +106,7 @@ I downloaded the portable **Blender 5.2.3 LTS** tarball (sha256 checked against 
 | Queue cost | 24 CPU-s and a 1.4 GiB peak (cold, with tar extraction); 55 CPU-s and 850 MiB for all three engines |
 | Geometry | 2,480 triangles fine and 620 coarse |
 | GLB size | 307 KB plain, 80 KB Draco (float32, UV and two colour sets; 5 primitives per mesh) |
-| Determinism | **Byte-identical GLB** (plain and Draco) from two separate Blender processes on the same input |
+| Determinism | **Byte-identical GLB** (plain and Draco) from two separate Blender processes on the same machine. Across machines, positions differ only in the last float bits (§5.3), and match after quantisation |
 | `COLOR_0` | Exported as normalised `UNSIGNED_SHORT`, **clamped to 0–1**, so cel classes (>1, <0) can't travel in it |
 | Custom attributes | Exported only when the name starts with `_` (exporter option text: "when starting with underscore") [6]. The first run used a plain name and lost it; the second exported `_SILTWAKE_CLASS` |
 | Meshopt | The 5.2 exporter has `export_meshopt_compression_enable` (EXT or KHR) and ships a meshopt bridge library |
@@ -290,7 +294,7 @@ scripts/assets/                    Node bake: glTF → quantised recipe packs + 
      - the exporter version;
      - the source licence and inputs (CC0 URL and hash, if any).
   2. **Bake** (Node, in WK-1's bake): GLB to content-addressed packs, plus metrics and budget checks.
-- **The gate stays cheap:** it checks that each committed GLB's recorded script and kit hashes match the files in the tree. That's a staleness check with no Blender, so `npm run gate` is unchanged in cost. A periodic queued job rebuilds every asset in Blender and requires byte-identical GLBs.
+- **The gate stays cheap:** it checks that each committed GLB's recorded script and kit hashes match the files in the tree. That's a staleness check with no Blender, so `npm run gate` is unchanged in cost. A periodic queued job rebuilds every asset in Blender and requires **identical quantised packs**. GLBs are byte-identical only on the same machine (§5.3).
 - **Licence:** every manifest entry has `licence` (`original`, `CC0-1.0`, …) and `source`. The bake refuses entries without them, and `docs/CREDITS.md` is generated from the manifest.
 - **Per-category budgets:** **proposals, to be set by MEM-1's measurements.** Triangles are listed; vertices are about 3× triangles for flat shading.
 
@@ -324,13 +328,13 @@ scripts/assets/                    Node bake: glTF → quantised recipe packs + 
 | Agents, coordinator, logins, git commits | factory-worker | Unchanged. Agents never log in to alickers interactively |
 | Session client (`tools/assets/session.mjs`, plus an optional MCP facade) | factory-worker | Opens the lease, then speaks one stdio channel over the existing SSH lane (`~/.ssh/siltwake.conf`, ControlMaster), and fetches result files back into the worktree |
 | Session driver (`tools/blender/session/driver.py`) | alickers, inside one `siltwake-job` scope | A long-lived Blender reading line-delimited JSON requests on stdin: `exec` (script text), `build <asset>`, `render <preset>`, `summary`, `screenshot`, `export`. It replies with JSON and paths. No socket |
-| Virtual display | alickers, same scope | A private `Xvfb -displayfd -nolisten tcp -auth <file>`, only when Blender runs with its UI (viewport screenshots, owner viewing). Pure background mode needs no display (proved on the 3090) |
+| Virtual display | alickers, same scope | A private `Xvfb -displayfd -nolisten tcp -auth <file>`, only when Blender runs with its UI (viewport work, owner viewing). Pure background mode needs no display. OpenGL reaches the 4070 only with `GALLIUM_DRIVER=d3d12` and the adapter named (§5.3, [24]) |
 | Scratch checkout | alickers `/work/scratch/asset-sessions/<lease>/` | Built from a git bundle of the agent's commit, the same transport `alickers-job.sh` uses. **The shared test checkout `/work/repos/subnautica-clone` is never touched.** Removed when the lease closes, except the last 3 sessions' logs |
 | Owner viewer (optional) | alickers, same scope | `x11vnc -viewonly -localhost -rfbauth` on the session's display, plus `websockify`/noVNC on localhost. The owner opens it through an SSH tunnel, or from Windows via WSL's localhost forwarding if that is enabled. View-only; agents never use it |
 
 **What agents see:** the same as locally, with transfer latency:
 - JSON metrics and scene summaries arrive in the reply;
-- PNGs (renders, contact sheets, viewport screenshots) are copied back into `/work/tmp/asset-session/<lease>/`, or into the worktree when they're evidence.
+- PNGs (renders, contact sheets, and viewport screenshots once §5.3's gap is closed) are copied back into `/work/tmp/asset-session/<lease>/`, or into the worktree when they're evidence.
 
 **Uncommitted script edits travel inside the request** (the `exec`/`build` payload carries the script text). The scratch checkout only supplies the kit library and palette at the lease's base commit, and a `sync` request refreshes them from a new bundle.
 
@@ -368,7 +372,14 @@ scripts/assets/                    Node bake: glTF → quantised recipe packs + 
 
 ### 5.3 Probe of the GPU paths (both machines)
 
-`probe/gpu_matrix.sh` was sent to both machines through `heavy-check` (`--class gpu`, `--review`). It was committed at `718a6342` for alickers; the 3090 copy was identical.
+`probe/gpu_matrix.sh` was sent to alickers through `heavy-check` (`--class gpu --machine 4070 --review`), committed at `718a6342`.
+
+The factory-worker column comes from three sources:
+- the first two probe jobs (`261024-221738-fb21` and `261024-221852-4870`);
+- the matrix's GPU-context step, which finished before that job hit its 3 GiB cap. The cap was hit because Blender was unpacked into tmpfs `/tmp`, which counts as job memory. Future jobs unpack to disk;
+- one direct check: `ldconfig -p` shows no `libcuda`.
+
+I cancelled the full 3090 rerun to spare a queue that was 12 jobs deep.
 - **Environment:** it records the GPU devices, the WSL libraries, tools, the relevant packages and `ldd` gaps.
 - **Display:** it starts a private Xvfb (`-nolisten tcp`) and runs `glxinfo -B` under Mesa's D3D12 adapter selector for NVIDIA, Intel and AMD [21].
 - **Blender:** it downloads Blender 5.2.3 (sha256-checked) into a private temporary directory that it deletes afterwards. It then runs:
@@ -377,7 +388,52 @@ scripts/assets/                    Node bake: glTF → quantised recipe packs + 
   - EEVEE in background mode and under Xvfb;
   - Workbench.
 
-PROBE-RESULTS-PLACEHOLDER
+**Results.** factory-worker is Debian 13 with an RTX 3090 (driver 550) and an i5-12400 VM. alickers is WSL2 with an RTX 4070 Laptop (projected driver 595.58) and an i9-14900HX, on ticket `261024-223122-4faf` at `718a6342`. Artifacts: `/work/tmp/261024-223122-4faf/asset-probe-4070/`.
+
+| Path | factory-worker (3090) | alickers (4070, WSL2) |
+| --- | --- | --- |
+| Blender runtime libraries (`ldd`) | none missing | none missing |
+| EEVEE in `-b`, no display | **Hardware:** EGL on `NVIDIA GeForce RTX 3090`, GL 4.6 | **Software:** `llvmpipe` (Mesa's default Gallium choice), GL 4.5 |
+| Under private Xvfb (`GALLIUM_DRIVER` unset) | not run (the job was cancelled for queue load) | `llvmpipe` for every adapter name: NVIDIA, Intel and AMD |
+| Small renders on the software path (768×320) | — | EEVEE 4.1 s, Workbench 0.4 s per line-up: fine for contact sheets, too slow for heavy scenes |
+| Cycles CUDA | **None:** factory-worker has no `libcuda.so` userspace library, only the GL driver | **Works:** `NVIDIA GeForce RTX 4070 Laptop GPU` |
+| Cycles at 1536×640, 128 samples | — | CPU (6 threads) 10.2 s; **CUDA 1.3 s** (about 8×) |
+| Cycles OptiX | none | **none listed,** although `libnvoptix.so.1` is projected under `/usr/lib/wsl/lib` |
+| GLB determinism | identical across processes and engines | identical across processes, engines and CPU, CUDA and OptiX runs |
+| Across machines | GLB float positions differ by ≤ 7.5×10⁻⁹ m (last-bit CPU math); identical after 1 mm quantisation | ← |
+| Already installed | Xvfb, Mesa 25.0, X libraries | Xvfb, `mesa-utils` (`glxinfo`, `eglinfo`), `vulkaninfo`, Mesa 25.2.8, X libraries |
+
+**Follow-up with Mesa's D3D12 driver selected** (`GALLIUM_DRIVER=d3d12`; ticket `261024-231804-d229` at `be807b34`; artifacts `/work/tmp/261024-231804-d229/asset-probe-4070-gl/`):
+
+| Path | Result on alickers |
+| --- | --- |
+| `glxinfo` under Xvfb, adapter `NVIDIA` | **`D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU)`, accelerated, GL 4.6** |
+| `eglinfo` surfaceless (no display), adapter `NVIDIA` | the same 4070 renderer for GL core, compat and ES |
+| Blender `-b` (no display) and under Xvfb | GPU context on the 4070, GL 4.6. Blender labels the vendor "Microsoft Corporation" and the device type "SOFTWARE", but the renderer string is the 4070 |
+| EEVEE line-up under Xvfb on D3D12 | 6.2 s, then 5.9 s. That's *slower* than llvmpipe's 2.7 s on this tiny scene: translation overhead and compile dominate. Hardware pays off for heavy scenes and UI interactivity, not 2.5k-triangle contact sheets |
+| Blender **with its UI** on Xvfb, D3D12 | starts on the 4070 and runs Python timers. **But its own window screenshot (`screen.screenshot`) came back black** (open gap, below) |
+| Cycles OptiX | `OptiX initialization failed with error code 7805` = `OPTIX_ERROR_ENTRY_SYMBOL_NOT_FOUND` [23]: the projected WSL OptiX library lacks an entry point Blender needs. CUDA works, so OptiX isn't needed |
+| **Integrated GPU** | **Visible:** `D3D12 (Intel(R) UHD Graphics)`, accelerated, but **only GL 4.1.** Blender (which needs 4.3) segfaulted on it. Unmatched adapter names (`AMD`, `Microsoft`) silently fell back to the Intel adapter, which confirms the handoff's warning: always name the adapter and check the renderer string |
+| Vulkan | `llvmpipe` only (no Dozen): irrelevant to Blender's GL backend |
+
+**Open gap: UI screenshots.**
+- **Two candidate causes:**
+  - the capture ran before the window's first redraw;
+  - front-buffer readback doesn't work on the D3D12-on-Xvfb presentation path.
+- **The first driver build must test** a later capture, Blender's viewport render (`render.opengl`), and an X-level grab (`xwd`, or what the x11vnc viewer shows).
+- **Until then, agents' images come from renders** (Cycles CUDA, EEVEE, Workbench) and offscreen GPU draws, which all work. Option A does not depend on window screenshots.
+
+**What this means for Option A:**
+- **Cycles on CUDA works on the 4070 today,** about 8× faster than 6 CPU threads. It's the engine for contact sheets, AO bakes and turntables.
+- **EEVEE, Workbench and the Blender UI** run on the 4070 once the session's environment sets `GALLIUM_DRIVER=d3d12` and `MESA_D3D12_DEFAULT_ADAPTER_NAME="NVIDIA GeForce RTX 4070 Laptop GPU"`. The driver must also check that the renderer string names the 4070, and refuse to start otherwise.
+- **The virtual display is optional.** Surfaceless EGL reaches the 4070 too, so Xvfb is needed only for Blender's UI (owner viewing, viewport work).
+- **Nothing extra to install for rendering:** Xvfb, `mesa-utils`, Mesa 25.2.8 and the X libraries are already there.
+- **For the later integrated preset:** the laptop's **Intel UHD Graphics is reachable inside WSL** through D3D12 (GL 4.1). Whether Chrome's ANGLE gives WebGL2 on it is untested; that's one GPU-probe run with the adapter name changed. If it does, it's a free, low-end integrated stand-in.
+- **Determinism, refined:**
+  - prints are byte-identical on one machine;
+  - across machines, the bake's **quantised pack** is the canonical artefact, and the staleness or rebuild check compares packs, not GLBs;
+  - a vertex sitting exactly on a 1 mm rounding boundary could still flip. The check reports any difference over one quantum as a failure, and one quantum as noise.
+- **The 3090** is a good batch-render fallback for EEVEE (hardware EGL), but not for GPU Cycles unless fleet adds the CUDA userspace library. That isn't needed: Cycles CPU is seconds at contact-sheet size.
 
 ---
 
@@ -400,7 +456,7 @@ PROBE-RESULTS-PLACEHOLDER
 
 **What the owner sees:**
 1. **A fixed-view contact sheet:** 4 views (the doorway reveal, the work corner, lamp-only in the dark, and through a window from outside) × T0, T1, T2, T3 at matched camera, time and depth. That's one 4×4 sheet, captured on the 4070 so it's the player-class picture.
-2. **A short clip,** 20–30 s per tier: the same scripted swim through the airlock and around the room, recorded inside Linux on alickers (createImageBitmap capture, never 2D readback of the canvas).
+2. **A short clip,** 20–30 s per tier: the same scripted swim through the airlock and around the room, recorded inside Linux on alickers (createImageBitmap capture, never 2D readback of the canvas). It's a `4070` job, so it runs between Blender sessions, or pre-empts one at the coordinator's call (§5.2).
 3. **Hands on:** a preview build where the owner presses the tier key while playing in their own browser. **Feel** is best judged this way.
 4. **Questions:** three only. Which tier reads best at a glance? Which feels most like Siltwake? Is T3's extra worth a shader change?
 
@@ -417,29 +473,54 @@ PROBE-RESULTS-PLACEHOLDER
 
 | Ask | Why | Priority |
 | --- | --- | --- |
-| **Approve a pinned portable Blender** (5.2.3 LTS, sha256 above) as a project tool on both workers: unpacked once under a job-owned cache path, never system-wide | Every option here needs it; no sudo needed | **Essential** |
-| **Approve alickers as the default asset worker** for `--machine 4070` and `any` asset jobs, under the existing pause, best-effort and one-job rules | Keeps the 3090 free for exclusive measurements; the 4070 is the player-class GPU for captures | **Essential** |
-| **Judge the proof bake-off:** a 4×4 contact sheet, three short clips, three questions, about 15 minutes | Taste is the owner's call; it decides T1, T2 or T3 per category | **Essential** |
-| **A style reference board:** 8–15 images of "this is the lift I want" (games, film, real objects), or approval of one I assemble from cited sources | Makes "above today's look" concrete before agents encode it | Nice-to-have (high value) |
-| **One-time install on alickers, only if the probe shows a gap** (§5 lists exact packages; Xvfb, Mesa 25.2.8 and X libraries are already there per the handoff) | `glxinfo` (`mesa-utils`) for adapter checks | Nice-to-have |
-| **Confirm whether the laptop's integrated GPU may be enabled** in Windows for WSL (no change unless the owner wants it) | A free stand-in for the later integrated-graphics preset, if WSL can see it | Nice-to-have |
+| **Run one install command on alickers** (below) | Option A's scratch and tools roots, the display cookie tool and the optional viewer. Xvfb and Mesa are already there, and the sandbox has no sudo | **Essential** (the viewer packages are optional) |
+| **Approve a pinned portable Blender** (5.2.3 LTS, sha256 `78486c01…a918eec`), unpacked once into a user-owned tools directory on each worker (`/work/tools/blender-5.2.3/`), never system-wide | Every option needs it; the probe already ran it on both workers with no missing libraries | **Essential** |
+| **Session reservation terms:** a session may hold alickers for up to 4 h, released after 20 min idle. `any` jobs go to factory-worker meanwhile, `4070` jobs wait, and the coordinator may pre-empt a session for pre-playtest 4070 checks | Option A's long sessions versus the 4070 player-floor checks | **Essential** (a decision, not a purchase) |
+| **Judge the proof bake-off:** a 4×4 contact sheet, three short clips, a tier key in a preview build, three questions, about 15 minutes | Taste is the owner's call; it decides T1, T2 or T3 per category | **Essential** |
+| **A style reference board:** 8–15 images of "this is the lift I want", or approval of one I assemble from cited sources | Makes "above today's look" concrete before agents encode it | Nice-to-have (high value) |
+| **Opening the view-only viewer** when curious (noVNC in a browser through an SSH tunnel or WSL localhost forwarding) | Watching an agent's Blender session live | Nice-to-have |
+| **Keep the laptop in its hybrid GPU mode** (don't switch the MUX to discrete-only), so the Intel UHD stays visible in WSL | The probe found it exposed through D3D12 (GL 4.1): a free stand-in device for the later integrated-graphics preset, once a WebGL2 check passes | Nice-to-have |
 | Paid tools or AI services | **None requested** (§1.6) | — |
+
+**The install command** (run once by the owner, inside the alickers Ubuntu sandbox, from an admin shell):
+
+```sh
+sudo apt-get update && sudo apt-get install -y --no-install-recommends \
+  x11vnc novnc websockify xauth && \
+  sudo install -d -o worker -g worker /work/scratch /work/tools
+```
+
+- **Already installed** per the probe (`xvfb`, `mesa-utils`, Mesa 25.2.8 with D3D12, the X client libraries): the command doesn't touch them.
+- **Blender runs with nothing extra:** it ran in background mode, under Xvfb and with its UI, with no missing libraries. `xauth` is only for the display's cookie file.
+- **Viewer packages:** `x11vnc`, `novnc` and `websockify` serve only the owner's view-only viewer. Drop them if it isn't wanted.
+- **No NVIDIA Linux driver or CUDA toolkit:** the Windows driver projects `libcuda` and `libnvoptix` into `/usr/lib/wsl/lib`, and NVIDIA says not to install a Linux display driver in WSL [20].
 
 ---
 
 ## 8. Recommendation, timing and the first proof
 
 **Recommendation:**
-- **Authoring:** scripted headless Blender with a shared kit library, converted in the bake into the existing cel recipe form, with no runtime loader.
+- **Authoring:** Opus drives Blender 5.2 LTS through `bpy`:
+  - **interactively** in an Option A session on alickers (stdio over SSH, with an optional MCP facade and no TCP port);
+  - every shipped asset is **printed** by a clean batch job from committed scripts.
+- **Into the game:** the glTF output is converted in the bake into the existing cel recipe form, with no runtime loader.
 - **TypeScript stays** for world-derived art.
 - **Textures:** none in phase 1; one optional decal atlas later, if the bake-off earns it.
-- **Compute:** queued jobs on alickers, falling back to factory-worker.
-- **No MCP and no AI generation.**
+- **GPU paths on alickers:**
+  - Cycles on CUDA (works today);
+  - EEVEE, Workbench and the UI on Mesa D3D12 with `GALLIUM_DRIVER=d3d12` (§5.3);
+  - llvmpipe only as the fallback.
+- **No AI generation.**
 
 **Timing:**
-1. **Now (alongside WK-1, new files only): AP-1 stage A.** The pinned Blender runner, kit library v0, style guide v0, the glTF-to-recipe converter with metrics, and the asset viewer. It touches no shared roots, so it runs in parallel without conflict.
+1. **Now (alongside WK-1, new files only):**
+   - **AP-1 stage A:** the pinned Blender runner, kit library v0, style guide v0, the glTF-to-recipe converter with metrics, and the asset viewer;
+   - **in parallel:** the session driver and client (`tools/blender/session/`, `tools/assets/session.mjs`);
+   - **SCHED:** a small change adding `heavy-check session open/close` with lease, idle, max-duration, yield and ledger (§5.2).
+
+   None of these touch the game's shared roots. The owner's install command and Blender approval go first, and take minutes.
 2. **The proof bake-off,** as soon as stage A works (in the viewer, then in a sandbox interior). The owner judges it.
-3. **AP-1 stage B, after WK-1 merges:** the converter joins WK-1's bake (content-addressed packs and residency), collider proxies go to COL-1 stage B shapes, and the gate gets the staleness check.
+3. **AP-1 stage B, after WK-1 merges:** the converter joins WK-1's bake (content-addressed packs and residency), collider proxies go to COL-1 stage B shapes, and the gate gets the pack staleness check.
 4. **Content wave B** (ENV-1 interiors, lost sites, creatures) authors through the pipeline, at the tier the owner chose per category.
 5. **The atmosphere pass** then lights finished assets rather than prototypes.
 
@@ -457,9 +538,9 @@ PROBE-RESULTS-PLACEHOLDER
 1. **Taste (the gate):** in the bake-off, the owner judges the chosen tier clearly above T0 and coherent with existing Siltwake art. One view shows it beside existing art.
 2. **Same engine:** it renders with the production cel material, depth light, the lamp in the dark, local lights from its lamp, and contour ink, with no new material (T3 adds one reviewed sampler only).
 3. **Budgets:** within §4's room budget (≤ 120k visible triangles, ≤ 30 draws). GPU bytes are in the residency ledger. On the 3090 at 1080p (exclusive), the room view holds 60 fps with the measured delta reported. A 4070 check is attached.
-4. **Reproducible:** from a clean checkout, the author job rebuilds byte-identical GLBs and the bake rebuilds identical packs. The build needs no Blender. Provenance and licence are complete.
+4. **Reproducible:** from a clean checkout, a batch print (not the session) rebuilds the GLBs, and the bake rebuilds identical packs on either worker. The build needs no Blender. Provenance and licence are complete.
 5. **Collision:** authored proxies give a conservative cover that blocks no route (COL-1 rules). The fit report has no issues.
-6. **Loop speed:** one script-to-contact-sheet iteration takes under about 30 s of job time on either worker.
+6. **Loop speed:** in an alickers session, one script-to-contact-sheet round trip takes under about 15 s, including the SSH transfer. As a batch job on either worker it takes under about 30 s.
 7. **Style is encoded:** a second, fresh Opus agent adds one new prop from the style guide and kit alone, and the taste reviewer can't pick it out as foreign.
 
 ---
@@ -488,3 +569,5 @@ PROBE-RESULTS-PLACEHOLDER
 20. NVIDIA CUDA on WSL user guide: https://docs.nvidia.com/cuda/wsl-user-guide/index.html
 21. Microsoft WSLg, GPU selection: https://github.com/microsoft/wslg/wiki/GPU-selection-in-WSLg
 22. `@babylonjs/loaders` 9.31.0 and `@babylonjs/core` 9.31.0 package sources (inspected locally: `glTF/2.0/glTFLoader.pure.js`, `Meshes/Compression/*`, `Misc/khronosTextureContainer2.js`)
+23. NVIDIA OptiX `optix_types.h` error codes: https://github.com/NVIDIA/optix-dev/blob/main/include/optix_types.h
+24. alickers sandbox handoff and WSL2 GPU research (factory-worker: `/work/tmp/siltwake-alickers-handoff/SANDBOX-HANDOFF.md`, `research/wsl2-gpu.md`)
