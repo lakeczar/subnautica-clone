@@ -185,7 +185,8 @@ Every catalogue upgrade now has a recipe, and none is inert. Each is felt in pla
   - the plan-set expectations.
 
   The guard passes with both import cycles exactly at their allowances; the new sim modules joined no cycle.
-- **Economy:** all six scripts exit 0.
+- **Economy:** all six scripts exit 0 (rerun at `9b260b75`).
+- **`npm run test:heavy`** (`9b260b75`, queued and run on factory-worker because alickers was busy): **465/465**, 0 failures. heavy-check also reported "3 processes OOM-killed inside the job by a sub-limit". The log names no failed or retried file, so I can't attribute them; I'm listing them here rather than dropping them.
 - **Playthrough** (`14a7234e`, RTX 4070 Laptop on alickers): 8/8 complete, equal to stage 0 as above.
 - **3090 browser check, keys only** (`0267e513`; task-owned Chrome on ANGLE GL-EGL, RTX 3090; `docs/build/streams/sig1/play.mjs`; 0 page errors). Saves are derived from the shared library's earned carrier-route save (`carrier-deep`, b54bfd92, bridged), with the upgrades rule-staged as paid (`tests/sig-1-support.ts`; the Spindle is staged, since no route builds one):
   - **Dart:** the sonar flares the Fanvault openings at 120–180 m, and 8 chart beacons are marked; tagging the reef nursery files it at 40 m.
