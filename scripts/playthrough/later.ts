@@ -16,10 +16,11 @@ import { WORKS_TEXT } from "../../src/content/story/works.js";
 import type { WorksAction } from "../../src/content/story/works.js";
 import { createStory } from "../../src/sim/story/state.js";
 import { worksAction } from "../../src/sim/story/works.js";
-import { interactions } from "../../src/sim/progression.js";
+import { interactions, recipeSites } from "../../src/sim/progression.js";
+import { available, containerAccessible } from "../../src/sim/inventory.js";
 import { hullClearance, sweptHullClearance } from "../../src/sim/world.js";
 import { CARRIER_LAYOUT, LAUNCH_LOCAL, launchPoint, localToWorld } from "../../src/sim/carrier.js";
-import { SERVICE_MOORINGS } from "../../src/content/stops.js";
+import { SERVICE_MOORINGS, WORKING_STOPS } from "../../src/content/stops.js";
 import type { GameCommand, Vec3, VehicleState } from "../../src/sim/types.js";
 import { board, craft, gather, interact, leaveCraft, move, procure, reach, unload, eatIfHungry } from "./actions.js";
 import { campaignSite, need, s2Route, worksFace, worksFaceId } from "./content.js";
@@ -27,10 +28,12 @@ import type { Missing } from "./content.js";
 import { Blocked, Driver, where } from "./driver.js";
 import { carry, dockAndService, make, stowHold } from "./live.js";
 import type { Phase, PlayOptions } from "./live.js";
-import { enter } from "./nav.js";
+import { atWorkshop, enter, inPod } from "./nav.js";
 import { pressButton } from "./ui.js";
 import { fly, pilotTo } from "./routes.js";
-import { route, travel } from "./travel.js";
+import { dist, route, travel } from "./travel.js";
+import { addStock, costOf, describe, isEmpty, planExpedition, shortfall } from "./stock.js";
+import type { Plannable, Reservation, Stock } from "./stock.js";
 import { carrier, carrierIn, carrierOut, enterCarrier, exitCarrier, walkAboard } from "./carrierplay.js";
 import { cargoCu, ferryFromCarrier, ferryToCarrier, loads, moveCargo } from "./cargo.js";
 import type { Cargo } from "./cargo.js";
@@ -61,14 +64,102 @@ function followS2(d: Driver, id: string, reverse = false): void {
   const path = reverse ? [...r.path].reverse() : [...r.path];
   fly(d, { id: `${id}${reverse ? " (back)" : ""}`, source: `S2 ${id}, ${r.profile} profile`, points: path.map((p) => ({ ...p })) });
 }
-/** Long later phases (C3): eat at the workshop and carry three meals; eat()
- * reaches the diver hold anywhere, and followS2 eats between legs. */
-export function provision(d: Driver): void {
-  ashoreFromCarrier(d);
-  enter(d, "workshop");
+/** At home: ashore near the workshop or the pod, or aboard the carrier moored at the yard. */
+function atHome(d: Driver): boolean {
+  const h = d.vehicle("hearthline"), p = d.state.player.pose.position;
+  if (h && (d.state.player.controlledVehicleId === h.id || d.state.player.interiorId === h.id))
+    return Math.hypot(h.pose.position.x - WORKING_STOPS.stack_yard.work.x, h.pose.position.z - WORKING_STOPS.stack_yard.work.z) < 120;
+  return atWorkshop(d) || inPod(d) || Math.hypot(p.x - 10, p.z + 35) < 120;
+}
+/** PACE-1 R1: eat where you are, and carry `meals`. At home that is the workshop and its
+ * crops, as before; away it is the diver hold, the craft piloted and the carrier's
+ * stores when aboard. A phase never begins with a trip home to eat; followS2 eats
+ * between legs. */
+export function provision(d: Driver, meals = 3): void {
+  if (atHome(d)) {
+    ashoreFromCarrier(d);
+    enter(d, "workshop");
+    eatIfHungry(d, 70);
+    procure(d, { meal: 3 }, "workshop", ISLES);
+    carry(d, { meal: 3 });
+    return;
+  }
   eatIfHungry(d, 70);
-  procure(d, { meal: 3 }, "workshop", ISLES);
-  carry(d, { meal: 3 });
+  const h = d.vehicle("hearthline"), v = d.state.player.controlledVehicleId ? d.occupied() : null;
+  const from = [...(v ? [v.cargoId] : []), ...(h && d.state.player.interiorId === h.id ? [h.cargoId] : [])];
+  for (const c of from) {
+    const short = meals - d.count("meal", ["diver"]);
+    if (short > 0 && containerAccessible(d.state, c)) move(d, "meal", Math.min(short, d.count("meal", [c])), c, "diver");
+  }
+}
+
+/** PACE-1 R2: what an expedition will consume of `items`, from the recipes the bot
+ * knows it will make and the clues it has read (never a plan it doesn't hold). */
+function planned(d: Driver, make: readonly Plannable[], items?: readonly string[], extra?: readonly Reservation[]): Stock {
+  return planExpedition({ recipes: make, blueprints: d.state.knowledge.blueprints, seen: d.state.knowledge.scans,
+    ...(items ? { items } : {}), ...(extra ? { extra } : {}) }).needs;
+}
+/** The recipes of `ids` not yet made: a plan stops reserving for work already done. */
+const toMake = <T extends Plannable>(d: Driver, ids: readonly T[]): T[] => ids.filter((id) => !d.crafted(id));
+/** Materials found only beyond the Basin: gathered where they lie, never stocked at home. */
+const FRONTIER = ["pressure_ceramic", "thermal_core", "brine_lattice"];
+const COMMONS = (s: Stock): string[] => Object.keys(s).filter((k) => !FRONTIER.includes(k));
+
+/** The facility a fabrication site needs restored before its bench runs. */
+const SITE_FACILITY: Readonly<Record<string, string | null>> = {
+  island_workshop: "island_workshop", crown_station: "crown_dock", rift_station: "rift_station", divide_dock: "divide_dock",
+  canopy_stop: "canopy_stop", pod_fabricator: "pod_fabricator", home_pod: null, stack_yard: null, meridian_office: null,
+};
+/** The nearest source of `item` with exposed stock, and how far it is. */
+function nearestStock(d: Driver, item: string): string {
+  const p = d.state.player.pose.position;
+  const best = (Object.keys(SOURCES) as SourceId[])
+    .filter((id) => SOURCES[id].item === item && (d.state.world.resources.find((n) => n.id === id)?.stock ?? 0) > 0)
+    .map((id) => ({ id, m: dist(p, SOURCES[id].position) })).sort((a, b) => a.m - b.m)[0];
+  return best ? `${best.id} ${Math.round(best.m)} m` : "none with exposed stock";
+}
+/** PACE-1 R9: log why the bot travels back, from the game's own authorities: where each
+ * recipe runs (`recipeSites`, and whether that site is restored) and, per material,
+ * what the holds in reach (`available` over `bins`) hold against the nearest source
+ * with stock. `kind`: forced (only behind), chosen (a purposeful trip) or pending (a
+ * coordinator-deferred change). The run notes keep every line. */
+function logReturn(d: Driver, kind: "forced" | "chosen" | "pending", label: string, make: readonly Plannable[], bins: readonly string[]): void {
+  const lines = make.map((id) => {
+    const at = Object.hasOwn(RECIPES, id)
+      ? recipeSites(id as RecipeId).map((s) => `${s}${SITE_FACILITY[s] && !d.facility(SITE_FACILITY[s]!) ? " (not restored)" : ""}`).join(" or ")
+      : `its own site (${STORY_RECIPES[id as keyof typeof STORY_RECIPES].site})`;
+    const lacking = Object.entries(costOf(id)).flatMap(([k, n]) => {
+      const have = available(d.state, k as ItemKind, [...bins]);
+      return have >= (n ?? 0) ? [] : [`${k} ${have}/${n} in reach, nearest ${nearestStock(d, k)}`];
+    });
+    return `${id}: made at ${at}${lacking.length ? `; ${lacking.join("; ")}` : ""}`;
+  });
+  d.run.notes.push(`return ${kind} (${d.phase}, tick ${d.state.tick}): ${label}${lines.length ? `. ${lines.join(" | ")}` : ""}`);
+}
+/** The holds the diver can draw on from here: the diver, the craft piloted or moored
+ * close by, and the carrier's stores when aboard or beside it. */
+function binsHere(d: Driver): string[] {
+  const p = d.state.player.pose.position;
+  return ["diver", ...d.state.fleet.vehicles.filter((v) => !v.berth && dist(v.pose.position, p) < 40).map((v) => v.cargoId)];
+}
+/** PACE-1 scenario A/B measurement: ticks from the last district record to the first
+ * works step, by the bot's clock (active and idle). The timeline gives the play time. */
+const marks = new WeakMap<Driver, Record<string, number>>();
+function mark(d: Driver, label: string): void {
+  const m = marks.get(d) ?? {};
+  marks.set(d, m);
+  if (m[label] !== undefined) return;
+  m[label] = d.state.tick;
+  if (label === "first works step" && m["last district record"] !== undefined)
+    d.run.notes.push(`scenario A (workshop return${d.run.strategy === "creel" ? "" : ", by carrier"}): ` +
+      `${((d.state.tick - m["last district record"]!) / 3600).toFixed(1)} min from the last district record to the first works step`);
+}
+/** The charge (%) below which the craft tops up at the shelf before the district's deep
+ * legs: the terraces, the gate hall and the far records can take 60% of a charge. */
+const DISTRICT_CHARGE = 85;
+/** PACE-1 R7: charge when the next legs need it, not at every stop passed. */
+function topUp(d: Driver, site: string, below = 60): void {
+  if ((d.occupied()?.charge ?? 100) < below) chargeCraftAt(d, site);
 }
 /** Home from the carrier at the yard: service it at the stop, then ride the Creel
  * moored beside it back to the workshop slip. */
@@ -290,25 +381,44 @@ const rift = (strategy: "creel" | "carrier"): Phase => ({
     followS2(d, "route.basin.rift");
     siteCraft(d, "rift_station", "restore_rift_station");
     story(d, "rift_station_ledger", o);
-    // Ceramic: suit 450 P4, Creel 450 P6, Creel 800 P8, suit 800 P4 (carrier: Hearthline 550 P10, Mantle P8).
-    harvest(d, "rift_ceramic_lip_north", 12);
+    // PACE-1 R2: ceramic for the refits the ledger and earlier plans have shown (Creel:
+    // suits and Creel to 450 and 800; carrier: suits, the 550 m refit and the Mantle),
+    // never for a plan not read. R6: sort a lip's reserve before looking farther.
+    const ceramic = planned(d, strategy === "creel" ? ["suit_450", "creel_450", "creel_800", "suit_800"]
+      : ["suit_450", "hearthline_550", "mantle_base", "suit_800"], ["pressure_ceramic"]).pressure_ceramic ?? 0;
+    const lip = (id: SourceId): void => {
+      const want = ceramic - d.count("pressure_ceramic");
+      if (want > 0) harvest(d, id, want, { sort: true });
+    };
+    const exposed = (id: SourceId): number => d.state.world.resources.find((n) => n.id === id)?.stock ?? 0;
+    // Exposed stock first on both lips; the sorted reserve only for what is still short.
+    if (ceramic - d.count("pressure_ceramic") > 0) harvest(d, "rift_ceramic_lip_north", Math.min(exposed("rift_ceramic_lip_north"), ceramic - d.count("pressure_ceramic")));
     followS2(d, "route.rift.ceramic");
-    harvest(d, "rift_ceramic_lip_south", 12);
+    lip("rift_ceramic_lip_south");
     followS2(d, "route.rift.ceramic", true);
+    lip("rift_ceramic_lip_north");
     // Core: suit 450 K1, Creel 450 K2, Creel 800 K3, suit 800 K1, power assembly K2
     // (carrier: keel K2, Mantle K4). C4 (CB): the shoulder's inclusions are too thin;
     // the first workable core is the 350 m lower ledge below it.
+    // PACE-1: this core count still includes the power assembly's 2 before its plan is
+    // read. It stays until LS-1 1a merges and the tour gathers its own core
+    // (coordinator, 2026-10-24); the stage-1 figures are labelled "B4 and core pending".
     harvest(d, "rift_core_lower_north", 10, { sort: true });
     if (strategy === "creel") {
-      // C4: the restored station does the 450 m refits, and the forward outpost at the
-      // anchorage charges the Creel and holds the Divide stock: no trip home between.
+      // C4: the restored station does the 450 m refits; the forward outpost at the
+      // anchorage charges the Creel.
       for (const recipe of ["suit_450", "creel_450"] as const) siteCraft(d, "rift_station", recipe);
       followS2(d, "route.basin.rift", true);
-      // The Creel holds 5 m above the ledge: the locker hands straight into its hold.
-      atForwardBase(d, "take the Divide stock and charge", (id) => {
-        const hold = d.vehicle("creel")!.cargoId;
-        for (const [kind, n] of Object.entries(DIVIDE_STOCK) as [ItemKind, number][]) move(d, kind, n, `${id}_locker`, hold);
-      });
+      // PACE-1 R2 and R9: the ledger has just shown the Divide dock's restoration. Its
+      // common materials were not stocked before the plan was read, and lattice aside
+      // they don't lie this side of home: back for them, saying why.
+      const dock = planned(d, ["restore_divide_stop"]);
+      const short = shortfall(Object.fromEntries(COMMONS(dock).map((k) => [k, dock[k]])), (k) => available(d.state, k as ItemKind, binsHere(d)));
+      atForwardBase(d, "charge", () => {});
+      if (!isEmpty(short)) {
+        logReturn(d, "forced", `the Divide dock's restoration, read at the Rift ledger, needs ${describe(short)} from behind`, ["restore_divide_stop"], binsHere(d));
+        homeAndUnload(d, [["route.basin.legacy_anchorage", true]]);
+      }
       return;
     }
     // HUB-2: the crown's bench refits the suit from the moored Creel's hold, and its
@@ -339,22 +449,21 @@ function stageCrown(d: Driver): void {
 /** The forward base (C4, independent route): a basic outpost on the Basin
  * anchorage ledge where the Rift and Divide routes part. */
 const FORWARD_BASE = { x: 360, y: -245.4, z: -430 } as const;
-const DIVIDE_STOCK = { structural_alloy: 3, silica_glass: 3, conductive_crust: 3 } as const;
 /** Packing a basic outpost spends one alloy on its anchor seals; it waits in the locker. */
 const PACK_SEAL = { structural_alloy: 1 } as const;
 const forwardBase = (d: Driver): string | null => d.state.systems.outposts.find((o) => Math.hypot(o.position.x - FORWARD_BASE.x, o.position.z - FORWARD_BASE.z) < 6)?.id ?? null;
-/** At the workshop: the kit, two charged cells, the Divide dock's stock, the Rift
- * station's restoration and the 450 m refits' common materials go into the moored
- * Creel's hold. */
+/** At the workshop: the kit, two charged cells, the anchor seal, and the common
+ * materials of the Rift work the bot holds plans for (the station's restoration and
+ * the 450 m refits) go into the moored Creel's hold. PACE-1 R2: no Divide stock; its
+ * plan is read at the Rift. */
 function stageForwardBase(d: Driver): void {
   const creel = d.vehicle("creel")!;
   if (d.count("reserve_cell", [creel.cargoId, "pod_locker", "diver"]) < 2) make(d, "reserve_cells", "pod", ISLES);
   enter(d, "pod");
   unload(d, "pod_locker", "diver", ["outpost_kit_basic", "reserve_cell"]);
-  const refits: Record<string, number> = { ...DIVIDE_STOCK, structural_alloy: DIVIDE_STOCK.structural_alloy + PACK_SEAL.structural_alloy };
-  for (const r of ["restore_rift_station", "suit_450", "creel_450"] as const)
-    for (const [k, n] of Object.entries(RECIPES[r].cost as Record<string, number>))
-      if (k !== "pressure_ceramic" && k !== "thermal_core") refits[k] = (refits[k] ?? 0) + n;
+  const plan = planned(d, ["restore_rift_station", "suit_450", "creel_450"], undefined,
+    [{ why: "the forward outpost's anchor seal", item: "structural_alloy", quantity: PACK_SEAL.structural_alloy }]);
+  const refits = Object.fromEntries(COMMONS(plan).map((k) => [k, plan[k]!])) as Record<string, number>;
   stockUp(d, refits);
   enter(d, "workshop");
   unload(d, "diver", creel.cargoId, ["outpost_kit_basic", "reserve_cell"]);
@@ -382,9 +491,9 @@ function deployForwardBase(d: Driver): void {
     travel(d, route("to the anchorage ledge", "diver", "local swim, played", [{ ...FORWARD_BASE, y: FORWARD_BASE.y + 1, tolerance: 1 }]));
     const kit = d.state.inventory.items.find((i) => i.kind === "outpost_kit_basic" && i.containerId === "diver")!;
     d.command({ type: "deploy-outpost", itemId: kit.id, name: "Anchorage" });
-    // The Creel holds 5 m above: its hold hands the cells and the Divide stock to the locker.
+    // The Creel holds 5 m above: its hold hands the cells and the anchor seal to the locker.
     const hold = d.vehicle("creel")!.cargoId;
-    for (const [kind, n] of [["reserve_cell", 2], ...Object.entries({ ...DIVIDE_STOCK, structural_alloy: DIVIDE_STOCK.structural_alloy + PACK_SEAL.structural_alloy })] as [ItemKind, number][])
+    for (const [kind, n] of [["reserve_cell", 2], ...Object.entries(PACK_SEAL)] as [ItemKind, number][])
       if (move(d, kind, n, hold, `${kit.id}_locker`) < n) throw new Blocked(`The Creel hold lacks ${kind} for the forward outpost`, where(d.state));
   });
 }
@@ -402,39 +511,51 @@ const divide: Phase = {
     ...plans(d, "bp_deep_service", "C07", "rift_station_ledger"),
   ],
   play(d, o) {
-    // C4: from the forward outpost (the Divide stock already in the diver hold), or from home.
+    // C4: from the forward outpost, or from home with the dock's common materials
+    // (PACE-1 R2: the plan read at the Rift ledger, carried now).
     const forward = forwardBase(d) !== null && Math.hypot(d.state.player.pose.position.x - FORWARD_BASE.x, d.state.player.pose.position.z - FORWARD_BASE.z) < 40;
-    if (!forward) carryFromWorkshop(d, DIVIDE_STOCK);
+    const dock = planned(d, ["restore_divide_stop"]), dockCommons = Object.fromEntries(COMMONS(dock).map((k) => [k, dock[k]!]));
+    if (!forward) { stockUp(d, dockCommons); carryFromWorkshop(d, dockCommons); }
     boardCraft(d, "creel");
     if (!forward) {
       fly(d, "creel_out");
       fly(d, "basin_outbound");
       followS2(d, "route.basin.legacy_anchorage");
+      // The forward outpost on the anchorage ledge charges the Creel on its way past.
+      if (forwardBase(d)) atForwardBase(d, "charge", () => {});
     }
     followS2(d, "route.basin.divide");
-    // Lattice: Creel 800 L5, suit 800 L4, the dock L2, air assembly L2.
+    // PACE-1 R2: lattice for the plans held (the dock, Creel 800, suit 800), not for
+    // the air assembly, whose plan is read only in the district (Sol R1 F1).
+    const lattice = (): number => (planned(d, toMake(d, ["restore_divide_stop", "creel_800", "suit_800"]), ["brine_lattice"]).brine_lattice ?? 0) - d.count("brine_lattice");
     followS2(d, "route.divide.lattice_west");
-    harvest(d, "divide_lattice_ledge_west", 8);
+    if (lattice() > 0) harvest(d, "divide_lattice_ledge_west", lattice());
     followS2(d, "route.divide.lattice_west", true);
     followS2(d, "route.divide.lattice_east");
-    harvest(d, "divide_lattice_ledge_east", 8);
+    if (lattice() > 0) harvest(d, "divide_lattice_ledge_east", lattice());
     followS2(d, "route.divide.lattice_east", true);
     story(d, "C07", o);
     story(d, "ren_access_log", o);
     // The ledges' two crystals restore the dock first: its stock leaves the hold and
     // the dock services the Creel before the flank.
     siteCraft(d, "divide_dock", "restore_divide_stop");
+    // PACE-1 R3: the turbine hall's recorder is about 70 m from the dock.
+    story(d, "C12", o);
     // C4 (CB): the ledges hold one rinsed crystal each; workable lattice lines the
     // 450 m east flank, north of the brine field. From the dock, back to the lee first.
     pilotTo(d, "back to the lee", DIVIDE_LEE);
     followS2(d, "route.divide.lattice_east");
     pilotTo(d, "over the north flank", DIVIDE_FLANK_PARK);
-    harvest(d, "divide_lattice_flank_north", 14, { sort: true });
+    if (lattice() > 0) harvest(d, "divide_lattice_flank_north", lattice(), { sort: true });
     pilotTo(d, "back to the east ledge", DIVIDE_EAST_LEDGE);
     followS2(d, "route.divide.lattice_east", true);
+    topUp(d, "divide.lee_mooring", 75);
     followS2(d, "route.basin.divide", true);
     // Packed on the way home: the kit keeps its identity for the next frontier.
     if (forwardBase(d)) atForwardBase(d, "pack it", (id) => { d.command({ type: "pack-outpost", outpostId: id, to: "diver" }); });
+    // PACE-1 B4 (pending): the restored dock offers both refits, but the library's
+    // `creel@divide` branches need this phase to end at home (coordinator, 2026-10-24).
+    logReturn(d, "pending", "the 800 m refits at the workshop: B4 waits for LS-1 1a's merge and the branch moves", ["creel_800", "suit_800"], binsHere(d));
     homeAndUnload(d, [["route.basin.legacy_anchorage", true]]);
     make(d, "creel_800" as RecipeId, "workshop", ISLES);
     make(d, "suit_800" as RecipeId, "workshop", ISLES);
@@ -455,17 +576,10 @@ const deepRecords = (strategy: Strategy): Phase => ({
   ],
   play(d, o) {
     provision(d);
-    // Surface run to the headland shelter in the Dart.
-    boardCraft(d, "dart");
-    fly(d, "dart_out");
-    followS2(d, "route.isles.workshop_stack");
-    followS2(d, "route.isles.stack_headland");
-    story(d, "C11", o);
-    story(d, "mara_last_page", o);
-    followS2(d, "route.isles.stack_headland", true);
-    followS2(d, "route.isles.workshop_stack", true);
-    fly(d, "dart_home");
-    dockAndService(d, d.vehicle("dart")!);
+    // PACE-1: the carrier route reads the shelter on its yard visit; the Dart goes only while it's unread.
+    if (!d.knows("C11")) headlandRun(d, o);
+    // PACE-1 R3: the Creel route reads C12 at the Divide dock, 70 m from the recorder.
+    if (d.knows("C12")) return;
     if (need.story("C12").length) { d.deferred.push("C12"); return; }
     const depth = -hostAt(d, "C12").y;
     const hull = sortieHull(d, strategy, depth);
@@ -479,14 +593,42 @@ const deepRecords = (strategy: Strategy): Phase => ({
       chargeCraftAt(d, "divide.lee_mooring");
       homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
     } else {
-      carrierTo(d, CARRIER_TO_DIVIDE);
+      rideAboard(d);
+      carrierTo(d, legsFrom(d, CARRIER_TO_DIVIDE));
       launchMantle(d);
       story(d, "C12", o);
       mantleHome(d);
-      carrierHome(d, CARRIER_TO_DIVIDE);
+      // PACE-1 R4: the carrier stays forward; the district is its next group of sorties.
     }
   },
 });
+/** PACE-1 R1: the carrier leaves home for the district, so meals ride in its stores and
+ * no phase begins with a trip home to eat. */
+function rideAboard(d: Driver): void {
+  const creel = d.vehicle("creel")!;
+  enter(d, "workshop");
+  const wild = (Object.keys(SOURCES) as SourceId[]).filter((id) => SOURCES[id].item === "meal" && ISLES.includes(SOURCES[id].region))
+    .reduce((n, id) => n + (d.state.world.resources.find((r) => r.id === id)?.stock ?? 0), 0);
+  const want = Math.min(6, wild) - d.count("meal", ["workshop_locker"]);
+  if (want > 0) procure(d, { meal: want }, "workshop", ISLES);
+  enter(d, "workshop");
+  const meals = Math.min(6, d.count("meal", ["workshop_locker"]));
+  move(d, "meal", meals, "workshop_locker", creel.cargoId);
+  boardHearthlineWith(d, { ids: [], stock: { meal: meals } });
+}
+/** Surface run to the headland shelter in the Dart (C11 and the optional last page). */
+function headlandRun(d: Driver, o: PlayOptions): void {
+  boardCraft(d, "dart");
+  fly(d, "dart_out");
+  followS2(d, "route.isles.workshop_stack");
+  followS2(d, "route.isles.stack_headland");
+  story(d, "C11", o);
+  story(d, "mara_last_page", o);
+  followS2(d, "route.isles.stack_headland", true);
+  followS2(d, "route.isles.workshop_stack", true);
+  fly(d, "dart_home");
+  dockAndService(d, d.vehicle("dart")!);
+}
 
 /** The hull a strategy sends to work at `depth`: the Creel on its route, the Mantle
  * (from the carrier) on the carrier route; each must be rated for the depth. */
@@ -499,15 +641,22 @@ export function sortieHull(d: Driver, strategy: Strategy, depth: number): "creel
 }
 const CARRIER_TO_DIVIDE = ["route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"] as const;
 const CARRIER_TO_SHELF = [...CARRIER_TO_DIVIDE, "route.divide.meridian_broad"] as const;
+/** The legs of `legs` still ahead of the carrier: from the one passing nearest it.
+ * `reverse`: the same for the way back. */
+function legsFrom(d: Driver, legs: readonly string[], reverse = false): string[] {
+  const at = carrier(d).pose.position, order = reverse ? [...legs].reverse() : [...legs];
+  let best = 0, near = Infinity;
+  order.forEach((id, i) => {
+    const m = Math.min(...s2Route(id).path.map((q) => dist(q, at)));
+    if (m < near) { near = m; best = i; }
+  });
+  return order.slice(best);
+}
 function carrierTo(d: Driver, legs: readonly string[]): void {
   boardCraft(d, "hearthline");
   for (const id of legs) followS2(d, id);
   d.command({ type: "carrier", action: "station-keep" });
   d.command({ type: "carrier", action: "leave-helm" });
-}
-function carrierHome(d: Driver, legs: readonly string[]): void {
-  boardCraft(d, "hearthline");
-  for (const id of [...legs].reverse()) followS2(d, id, true);
 }
 /** The Mantle back into its medium berth from the vestibule side. */
 function mantleHome(d: Driver): void {
@@ -540,6 +689,7 @@ function mantleHome(d: Driver): void {
 const worksCommand = (action: string): GameCommand => ({ type: "works", action } as unknown as GameCommand);
 const resolutionCommand = (action: "begin" | "complete"): GameCommand => ({ type: "resolution", action } as unknown as GameCommand);
 function worksStep(d: Driver, action: string): void {
+  mark(d, "first works step");
   const before = JSON.stringify(d.state.story.works);
   const r = d.command(worksCommand(action), { allowRefusal: true });
   if (!r.ok) throw new Blocked(`Works ${action} refused: ${r.message}`, where(d.state));
@@ -562,12 +712,13 @@ function toMeridian(d: Driver, strategy: Strategy): void {
     fly(d, "basin_outbound");
     followS2(d, "route.basin.legacy_anchorage");
     followS2(d, "route.basin.divide");
-    // C3: S2's moorings charge; top up before the service ledge and the terraces.
-    chargeCraftAt(d, "divide.lee_mooring");
+    // C3: S2's moorings charge; top up before the service ledge and the terraces
+    // (PACE-1 R7: when the charge is short of the district's legs).
+    topUp(d, "divide.lee_mooring", 75);
     followS2(d, "route.divide.service_ledge");
     return;
   }
-  carrierTo(d, CARRIER_TO_SHELF);
+  carrierTo(d, legsFrom(d, CARRIER_TO_SHELF));
   launchMantle(d);
 }
 function launchMantle(d: Driver): void {
@@ -577,16 +728,12 @@ function launchMantle(d: Driver): void {
   d.command({ type: "carrier", action: "leave-interior" });
   boardCraft(d, "mantle");
 }
-function fromMeridian(d: Driver, strategy: Strategy): void {
-  if (strategy === "creel") {
-    chargeCraftAt(d, "meridian.staging_shelf");
-    followS2(d, "route.divide.service_ledge", true);
-    chargeCraftAt(d, "divide.lee_mooring");
-    homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
-    return;
-  }
-  mantleHome(d);
-  carrierHome(d, CARRIER_TO_SHELF);
+/** The Creel home from the district, charged for the 3 km on the way (R7). */
+function creelHomeFromDistrict(d: Driver): void {
+  topUp(d, "meridian.staging_shelf", 90);
+  followS2(d, "route.divide.service_ledge", true);
+  topUp(d, "divide.lee_mooring", 70);
+  homeAndUnload(d, [["route.basin.divide", true], ["route.basin.legacy_anchorage", true]]);
 }
 
 const meridian = (strategy: Strategy): Phase => ({
@@ -605,7 +752,7 @@ const meridian = (strategy: Strategy): Phase => ({
       // The gate hall and service window lie 170 m below the terraces: charge at the
       // shelf, then fly S2's terrace route down (and back up before leaving).
       if (strategy === "creel" && deep.has(id) && !down) {
-        chargeCraftAt(d, "meridian.staging_shelf");
+        topUp(d, "meridian.staging_shelf", DISTRICT_CHARGE);
         followS2(d, "route.meridian.terraces");
         down = true;
       } else if (strategy === "creel" && !deep.has(id) && down) {
@@ -615,7 +762,11 @@ const meridian = (strategy: Strategy): Phase => ({
       story(d, id, o);
     }
     if (down) followS2(d, "route.meridian.terraces", true);
-    fromMeridian(d, strategy);
+    mark(d, "last district record");
+    if (strategy === "creel") topUp(d, "meridian.staging_shelf", DISTRICT_CHARGE);
+    // PACE-1: the works follow from here; the Creel stays at the district and the Mantle
+    // returns to the carrier at the shelf.
+    if (strategy === "carrier") mantleHome(d);
   },
 });
 
@@ -663,9 +814,11 @@ function worksVisit(d: Driver, actions: readonly WorksAction[], take: Cargo): vo
     if (first) moveCargo(d, first, v.cargoId, "diver");
     reach(d, host);
     for (const action of actions) {
+      // PACE-1 R5: the galleries drain (5,400 active steps) while the diver restores
+      // the hall; only what is left of the drain is waited out before opening.
+      if (action === "open" && d.state.story.works.gate === "equalizing")
+        d.waitFor("the gate to equalize", 100, (s) => s.story.works.gate === "equalized", "works:equalize");
       worksStep(d, action);
-      // 5,400 active steps; the panel shows progress while the diver waits in reach.
-      if (action === "equalize") d.waitFor("the gate to equalize", 100, (s) => s.story.works.gate === "equalized", "works:equalize");
     }
     for (const id of take.ids)
       if (d.state.inventory.items.some((i) => i.id === id)) throw new Blocked(`The works did not consume assembly ${id}`, where(d.state));
@@ -680,10 +833,15 @@ const worksMissing = (): Missing[] => [
 ];
 /** Craft the two assemblies and stock the hall and food restorations, then load all
  * of it into the moored Creel's hold at the workshop bench (both containers local).
+ * PACE-1 R2: one gathering pass for the assemblies' common materials and `also` (the pod
+ * buffer's), crafted as soon as they are in; then one for the hall and food stock.
  * Returns the tracked cargo: assembly instance IDs and stock quantities. */
-export function stageWorksCargo(d: Driver): Cargo {
+export function stageWorksCargo(d: Driver, also: Stock = {}): Cargo {
   const creel = d.vehicle("creel");
   if (!creel) throw new Blocked("No Creel to carry the works cargo", where(d.state));
+  const assemblyCost = planned(d, ["service_power_assembly", "service_air_assembly"]);
+  const batch = addStock(Object.fromEntries(COMMONS(assemblyCost).map((k) => [k, assemblyCost[k]])), also);
+  stockUp(d, batch as Record<string, number>);
   const ids: string[] = [];
   for (const recipe of ["service_power_assembly", "service_air_assembly"] as const) {
     // The 6 CU output lands in the diver hold: travel light, then stow it in the
@@ -697,7 +855,8 @@ export function stageWorksCargo(d: Driver): Cargo {
     ids.push(made.id);
     moveCargo(d, { ids: [made.id], stock: {} }, "diver", creel.cargoId);
   }
-  stockUp(d, HALL_STOCK);
+  // The hall's stock with `also` still reserved, so loading the one never takes the other.
+  stockUp(d, addStock({ ...HALL_STOCK }, also) as Record<string, number>);
   enter(d, "workshop");
   const cargo: Cargo = { ids, stock: { ...HALL_STOCK } };
   const stockCu = cargoCu(d, { ids: [], stock: cargo.stock });
@@ -706,50 +865,87 @@ export function stageWorksCargo(d: Driver): Cargo {
   moveCargo(d, cargo, "workshop_locker", creel.cargoId);
   return cargo;
 }
-/** The works by strategy. Creel: one trip, the rack holds all 42 CU. Carrier: the Creel
- * ferries the cargo to the carrier at the yard (diver loads through the vestibule into
- * the stores); at the shelf each Mantle trip is loaded from the stores through the
- * vestibule after its launch, and fits the Mantle's free hold. */
+/** PACE-1 B2: the dispatch buffer's plan came at C07; fit it at the pod on the first
+ * visit home after it, and read the record it unlocks. */
+function fitPodBuffer(d: Driver, gather = true): void {
+  if (!d.crafted("pod_buffer")) {
+    // Crust grows on the Canopy and Basin fins, not the isles: gathered as any stock is, then
+    // carried. `gather` false: the stock is already batched in the locker, and the moored
+    // Creel's hold is loaded for the works (stockUp would stow it).
+    if (gather) stockUp(d, costOf("pod_buffer") as Record<string, number>);
+    carryFromWorkshop(d, costOf("pod_buffer") as Record<string, number>);
+    make(d, "pod_buffer", "pod", ["refuge_reef", "island_chain"]);
+  }
+  enter(d, "pod");
+  if (!d.knows("C14")) { interact(d, "C14"); if (!d.knows("C14")) throw new Blocked("C14 recorded nothing", where(d.state)); }
+}
+/** The works by strategy, after the district's records (PACE-1):
+ * - Both routes return home: the two assemblies are made only at the workshop or the
+ *   crown, and their common materials lie only behind. The crown is no nearer in
+ *   practice: the 8 glass the works take lie only on the isles by now (scenario B, R9).
+ * - Creel (scenario A): lattice from the Divide's east flank on the way, the workshop for
+ *   the assemblies and stock, the pod buffer fitted while home; one Creel trip with all 42 CU.
+ * - Carrier: lattice from the carrier over the flank, the carrier to the yard (R4: home
+ *   is the group of sorties now), the Creel ferries the cargo aboard, back to the shelf,
+ *   and each Mantle trip is loaded from the stores.
+ * - R5: power, air, isolate and start equalizing; the hall and the food bay while the
+ *   galleries drain; then open and route power. The craft waits at the gate hall, by the
+ *   service window, for the ending. */
 const works = (strategy: Strategy): Phase => ({
   id: "works", title: "The return-gate works: power, air, isolate, equalize, open; hall, food, turbine power",
   verify: custom("the works are incomplete (gate open, hall, food, hall power)", (d) => { const w = d.state.story.works; return w.gate === "open" && w.hall && w.food && w.hallPower; }),
   missing: worksMissing,
-  play(d) {
+  play(d, o) {
     provision(d);
-    const cargo = stageWorksCargo(d);
-    const assemblies: Cargo = { ids: cargo.ids, stock: {} }, stock: Cargo = { ids: [], stock: cargo.stock };
-    const gate: WorksAction[] = ["install_power", "install_air", "isolate", "equalize", "open"];
+    const fabricate: Plannable[] = ["service_power_assembly", "service_air_assembly"];
+    const gate1: WorksAction[] = ["install_power", "install_air", "isolate", "equalize"];
     const hall: WorksAction[] = ["restore_hall", "restore_food"];
-    // The gate hall lies 170 m below the upper hall: down S2's terrace route and back
-    // up for each gate visit (route power needs the hall restored first).
-    const atGate = (visit: () => void): void => {
-      chargeCraftAt(d, "meridian.staging_shelf");
-      followS2(d, "route.meridian.terraces");
-      visit();
-      followS2(d, "route.meridian.terraces", true);
-    };
+    const gate2: WorksAction[] = ["open", "route_power"];
+    const none: Cargo = { ids: [], stock: {} };
+    // The gate hall lies 170 m below the upper hall: down S2's terrace route for each gate visit.
+    const down = (): void => { topUp(d, "meridian.staging_shelf", DISTRICT_CHARGE); followS2(d, "route.meridian.terraces"); };
+    const up = (): void => followS2(d, "route.meridian.terraces", true);
+    // R2: the air assembly's lattice was not stocked before its plan was read here.
+    const lattice = (): number => (planned(d, ["service_air_assembly"], ["brine_lattice"]).brine_lattice ?? 0) - d.count("brine_lattice");
     if (strategy === "creel") {
+      logReturn(d, "forced", "the works' two assemblies are made only behind the Divide, from common materials that lie only behind", fabricate, binsHere(d));
+      if (lattice() > 0) { pilotTo(d, "over the north flank", DIVIDE_FLANK_PARK); harvest(d, "divide_lattice_flank_north", lattice(), { sort: true }); }
+      creelHomeFromDistrict(d);
+      const cargo = stageWorksCargo(d, d.crafted("pod_buffer") ? {} : costOf("pod_buffer"));
+      fitPodBuffer(d, false);
+      if (!d.knows("C11")) headlandRun(d, o);
+      const assemblies: Cargo = { ids: cargo.ids, stock: {} }, stock: Cargo = { ids: [], stock: cargo.stock };
       toMeridian(d, "creel");
-      atGate(() => worksVisit(d, gate, assemblies));
+      down(); worksVisit(d, gate1, assemblies); up();
       worksVisit(d, hall, stock);
-      atGate(() => worksVisit(d, ["route_power"], { ids: [], stock: {} }));
-      fromMeridian(d, "creel");
+      down(); worksVisit(d, gate2, none);
       return;
     }
-    // Ferry to the carrier at the yard, then sail it to the district shelf.
+    logReturn(d, "forced", "the works' two assemblies are made only behind the Divide (the restored crown is no nearer for the isles' glass), from common materials that lie only behind", fabricate, [...binsHere(d), carrier(d).cargoId]);
+    boardCraft(d, "hearthline");
+    // Held above the flank at the station carrier-deep used (400 m), and the suit dives the rest.
+    if (lattice() > 0) carrierHarvest(d, "divide_lattice_flank_north", lattice(), { sort: true, above: 400 });
+    if (lattice() > 0) carrierHarvest(d, "divide_lattice_flank_south", lattice(), { sort: true, above: 400 });
+    for (const id of legsFrom(d, CARRIER_TO_SHELF, true)) followS2(d, id, true);
+    // The air assembly's lattice rode home in the stores: ashore with the diver to the bench.
+    const air = planned(d, ["service_air_assembly"], ["brine_lattice"]).brine_lattice ?? 0;
+    move(d, "brine_lattice", Math.min(air, d.count("brine_lattice", [carrier(d).cargoId])), carrier(d).cargoId, "diver");
+    ashoreFromCarrier(d);
+    const cargo = stageWorksCargo(d);
     boardCraft(d, "creel");
     fly(d, "creel_out");
     followS2(d, "route.isles.workshop_stack");
     deliverToCarrier(d, cargo, "stack_yard");
     carrierIn(d);
     carrierTo(d, CARRIER_TO_SHELF);
+    const assemblies: Cargo = { ids: cargo.ids, stock: {} }, stock: Cargo = { ids: [], stock: cargo.stock };
     const mantle = d.vehicle("mantle")!;
     const together = cargoCu(d, cargo) <= d.freeCu(mantle.cargoId);
     const trips: [Cargo, () => void][] = together
-      ? [[cargo, () => { atGate(() => worksVisit(d, gate, assemblies)); worksVisit(d, hall, stock); atGate(() => worksVisit(d, ["route_power"], { ids: [], stock: {} })); }]]
-      : [[assemblies, () => atGate(() => worksVisit(d, gate, assemblies))],
-        [stock, () => { worksVisit(d, hall, stock); atGate(() => worksVisit(d, ["route_power"], { ids: [], stock: {} })); }]];
-    for (const [items, visit] of trips) {
+      ? [[cargo, () => { down(); worksVisit(d, gate1, assemblies); up(); worksVisit(d, hall, stock); down(); worksVisit(d, gate2, none); }]]
+      : [[assemblies, () => { down(); worksVisit(d, gate1, assemblies); up(); }],
+        [stock, () => { worksVisit(d, hall, stock); down(); worksVisit(d, gate2, none); }]];
+    trips.forEach(([items, visit], i) => {
       if (cargoCu(d, items) > d.freeCu(mantle.cargoId))
         throw new Blocked(`The Mantle hold has ${d.freeCu(mantle.cargoId)} CU free; this trip needs ${cargoCu(d, items)} CU`, where(d.state));
       d.command({ type: "carrier", action: "launch", vehicleId: mantle.id });
@@ -757,9 +953,8 @@ const works = (strategy: Strategy): Phase => ({
       ferryFromCarrier(d, mantle.id, items);
       exitCarrierToBoard(d, mantle.id);
       visit();
-      mantleHome(d);
-    }
-    carrierHome(d, CARRIER_TO_SHELF);
+      if (i < trips.length - 1) mantleHome(d);
+    });
   },
 });
 /** From the helm of the supply Creel near the carrier: moor beside it, clear of every
@@ -781,25 +976,24 @@ function exitCarrierToBoard(d: Driver, vehicleId: string): void {
 }
 
 const ending = (strategy: Strategy): Phase => ({
-  id: "ending", title: "Pod buffer and C14, then the district controller's resolution",
+  id: "ending", title: "The district controller's resolution, after the works (the pod buffer and C14 on the way)",
   verify: all(crafted("pod_buffer"), known("C14"), custom("the resolution is not complete", (d) => d.state.story.resolution.phase === "complete")),
   missing: () => [
     ...recipes("pod_buffer"),
     ...stories({ readOptional: true, reverse: false }, "C14", "district_controller"),
   ],
   play(d, o) {
-    // The buffer's crust comes from the workshop stock; the pod bench takes the diver load.
-    ashoreFromCarrier(d);
-    // Crust grows back slowly on the isles; the 800 m suit takes the Canopy fins too (C3).
-    stockUp(d, RECIPES.pod_buffer.cost as Record<string, number>);
-    carryFromWorkshop(d, RECIPES.pod_buffer.cost as Record<string, number>);
-    make(d, "pod_buffer", "pod", ["refuge_reef", "island_chain"]);
-    enter(d, "pod");
-    if (!d.knows("C14")) { interact(d, "C14"); if (!d.knows("C14")) throw new Blocked("C14 recorded nothing", where(d.state)); }
-    toMeridian(d, strategy);
-    chargeCraftAt(d, "meridian.staging_shelf");
-    followS2(d, "route.meridian.terraces");
-    sortie(d, hostAt(d, "district_controller"), "resolution", () => {
+    // PACE-1: the ending follows the works in the same visit. The craft waits at the gate
+    // hall, beside the service window; a run resumed elsewhere goes down first.
+    if (!d.crafted("pod_buffer") || !d.knows("C14")) { ashoreFromCarrier(d); fitPodBuffer(d); }
+    const at = hostAt(d, "district_controller"), p = d.state.player.pose.position;
+    if (Math.hypot(p.x - at.x, p.z - at.z) > 300) {
+      toMeridian(d, strategy);
+      topUp(d, "meridian.staging_shelf");
+      followS2(d, "route.meridian.terraces");
+    }
+    if (!d.state.player.controlledVehicleId) { const v = d.vehicle(strategy === "creel" ? "creel" : "mantle")!; reach(d, v.id); board(d, v.id); }
+    sortie(d, at, "resolution", () => {
       reach(d, "district_controller");
       for (const a of ["begin", "complete"] as const) {
         const r = d.command(resolutionCommand(a), { allowRefusal: true });
@@ -825,9 +1019,12 @@ const hearthline: Phase = {
   ],
   play(d) {
     // Keel F2 A16 R6 (58 CU) and fit-out A6 G8 M8 C8 R4 (46 CU): one Creel rack load each.
+    // PACE-1 R2: the two stages' 104 CU don't fit the workshop locker together, so a
+    // player gathers one stage at a time here (storage is limited by design).
     for (const recipe of ["hearthline_keel", "hearthline_base"]) {
       const cost = RECIPES[recipe as RecipeId].cost as Record<string, number>;
       stockUp(d, cost);
+      enter(d, "workshop");
       const hold = d.vehicle("creel")!.cargoId;
       for (const [kind, n] of Object.entries(cost)) move(d, kind as ItemKind, n - d.count(kind as ItemKind, [hold]), "workshop_locker", hold);
       boardCraft(d, "creel");
@@ -877,14 +1074,15 @@ function chargeAtMooring(d: Driver, site: string): void {
   d.command({ type: "carrier", action: "helm" }); // releases station keeping
 }
 /** Lattice from the 400 m carrier: hold station above the ledge and work it by suit. */
-function carrierHarvest(d: Driver, id: string, want: number, options: { sort?: boolean } = {}): void {
-  // Within the carrier's rating: a deeper deposit is a suit dive from 395 m.
-  const at = SOURCES[id as SourceId].position, rating = carrier(d).rating;
+function carrierHarvest(d: Driver, id: string, want: number, options: { sort?: boolean; above?: number } = {}): void {
+  // Within the carrier's rating: a deeper deposit is a suit dive from 395 m. `above`: hold
+  // no deeper than this station even when the rating allows (the terrain round a ledge).
+  const at = SOURCES[id as SourceId].position, rating = Math.min(carrier(d).rating, options.above ?? Infinity);
   pilotTo(d, `carrier above ${id}`, parkNear(d, { ...at, y: Math.max(at.y, -(rating - 5) - 5) }));
   // A diver load per trip out of the vestibule, stowed in the stores between.
   for (let got = 0, trip = 0; trip < 6 && got < want; trip++) {
     carrierOut(d);
-    const n = gather(d, id as SourceId, want - got, options);
+    const n = gather(d, id as SourceId, want - got, { sort: options.sort ?? false });
     carrierIn(d);
     if (!n) break;
     got += n;
@@ -947,7 +1145,7 @@ const carrierDeep: Phase = {
     ...routes("route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"),
     ...sites("divide.lee_mooring", "isles.stack_yard"),
   ],
-  play(d) {
+  play(d, o) {
     provision(d);
     // The yard's refit and Mantle are paid from the carrier stores, which the yard
     // bench reaches while the carrier is moored there. Stock all but the Divide lattice
@@ -958,7 +1156,11 @@ const carrierDeep: Phase = {
         if (kind !== "brine_lattice") yardCost[kind] = (yardCost[kind] ?? 0) + n;
     const ceramic = [...YARD_RECIPES, "suit_800" as const].reduce((n, r) => n + ((RECIPES[r].cost as Record<string, number>).pressure_ceramic ?? 0), 0);
     const held = d.count("pressure_ceramic", ["workshop_locker", "diver", ...d.state.fleet.vehicles.map((v) => v.cargoId)]);
-    if (held < ceramic) seamTrip(d, ceramic - held);
+    // R6 falls through: the lips' sortable reserve is spent, so the deep seam, saying why.
+    if (held < ceramic) {
+      logReturn(d, "forced", `the yard's refit and Mantle need ${ceramic - held} more ceramic than the Rift lips still hold, sorted reserve included`, ["hearthline_550", "mantle_base"], binsHere(d));
+      seamTrip(d, ceramic - held);
+    }
     const hold = carrier(d).cargoId, creel = d.vehicle("creel")!;
     const ferry: Record<string, number> = {};
     for (const [kind, n] of Object.entries(yardCost)) {
@@ -972,17 +1174,19 @@ const carrierDeep: Phase = {
     }
     boardCraft(d, "hearthline");
     for (const id of ["route.isles.canopy_east", "route.canopy_east.basin", "route.basin.divide"]) { eatIfHungry(d); followS2(d, id); }
-    // Lattice: Hearthline 550 L6, Mantle L5, suit 800 L4, air assembly L2. S2's ledge
-    // routes are medium-profile; the carrier flies swept local legs from the lee mooring
-    // to hold station above each ledge.
+    // Lattice: Hearthline 550 L6, Mantle L5, suit 800 L4 (PACE-1 R2: the plans held;
+    // not the air assembly's, read only in the district). S2's ledge routes are
+    // medium-profile; the carrier flies swept local legs from the lee mooring to hold
+    // station above each ledge.
+    const lattice = (): number => (planned(d, toMake(d, ["hearthline_550", "mantle_base", "suit_800"]), ["brine_lattice"]).brine_lattice ?? 0) - d.count("brine_lattice");
     const lee = { x: 560, y: -390, z: -1120 };
     chargeAtMooring(d, "divide.lee_mooring");
-    carrierHarvest(d, "divide_lattice_ledge_west", 10);
+    if (lattice() > 0) carrierHarvest(d, "divide_lattice_ledge_west", lattice());
     pilotTo(d, "back to the lee mooring", lee);
-    carrierHarvest(d, "divide_lattice_ledge_east", 10);
+    if (lattice() > 0) carrierHarvest(d, "divide_lattice_ledge_east", lattice());
     // C4 (CB): the ledges hold one rinsed crystal each. Workable lattice lines the
     // 450 m east flank, below the carrier's 400 m: the 450 m suit dives to it.
-    carrierHarvest(d, "divide_lattice_flank_north", 18, { sort: true });
+    if (lattice() > 0) carrierHarvest(d, "divide_lattice_flank_north", lattice(), { sort: true });
     pilotTo(d, "back to the lee mooring", lee);
     if (need.story("C07").length) d.deferred.push("C07");
     else {
@@ -1009,16 +1213,19 @@ const carrierDeep: Phase = {
     mantleHome(d);
     if (!d.vehicle("mantle")!.berth) throw new Blocked(`The Mantle is not berthed in the Hearthline: ${d.state.feedback}`, where(d.state));
     // The suit refit is a workshop recipe: carry its Divide stock home in the diver hold
-    // and ride the Creel back from beside the carrier.
-    // Only the lattice is not at the workshop: the suit's and the works' air assembly's.
-    const stores = carrier(d).cargoId, lattice = (RECIPES.suit_800.cost as Record<string, number>).brine_lattice! +
-      (STORY_RECIPES.service_air_assembly.cost as Record<string, number>).brine_lattice!;
-    if (d.freeCu("diver") < lattice * ITEMS.brine_lattice.cu) move(d, "meal", d.count("meal", ["diver"]), "diver", stores);
+    // and ride the Creel back from beside the carrier. Only its lattice is not at the workshop.
+    const stores = carrier(d).cargoId, suitLattice = (RECIPES.suit_800.cost as Record<string, number>).brine_lattice!;
+    if (d.freeCu("diver") < suitLattice * ITEMS.brine_lattice.cu) move(d, "meal", d.count("meal", ["diver"]), "diver", stores);
     const room = Math.floor(d.freeCu("diver") / ITEMS.brine_lattice.cu);
-    if (room < lattice) throw new Blocked(`The diver hold takes ${room} of the ${lattice} lattice for the workshop: ${d.state.inventory.items.filter((i) => i.containerId === "diver").map((i) => `${i.kind} ${i.quantity}`).join(", ")}`, where(d.state));
-    move(d, "brine_lattice", Math.min(lattice, d.count("brine_lattice", [stores])), stores, "diver");
+    if (room < suitLattice) throw new Blocked(`The diver hold takes ${room} of the ${suitLattice} lattice for the workshop: ${d.state.inventory.items.filter((i) => i.containerId === "diver").map((i) => `${i.kind} ${i.quantity}`).join(", ")}`, where(d.state));
+    move(d, "brine_lattice", Math.min(suitLattice, d.count("brine_lattice", [stores])), stores, "diver");
+    logReturn(d, "chosen", "the 550 m refit and the Mantle are yard work, and the 800 m suit is a workshop refit", ["hearthline_550", "mantle_base", "suit_800"], [...binsHere(d), stores]);
     ashoreFromCarrier(d);
     make(d, "suit_800" as RecipeId, "workshop", ISLES);
+    // PACE-1 B2: the pod buffer's plan came at C07; this is the first visit home since.
+    fitPodBuffer(d);
+    // The headland shelter, read on this visit home (the Creel route reads it on its own).
+    if (!d.knows("C11")) headlandRun(d, o);
   },
 };
 
