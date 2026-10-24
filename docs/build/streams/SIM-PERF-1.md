@@ -36,7 +36,7 @@ Every slow step was re-executed from its own pre-step state (`--verify`), or its
 - **The step meter and harness** (above), and the driver's optional `DriverObserver.before`.
 
 ## Evidence
-Each result names the SHA it ran at. "Before" is `a35da972` (root plus the step meter only; `probe/sim-perf-1-before` carries the same harness). Timings from alickers (RTX 4070 Laptop, a shared desktop host) and factory-worker shared runs are indicative; 3090 exclusive numbers are below.
+Each result names the SHA it ran at. "Before" is `a35da972` (root plus the step meter only; `probe/sim-perf-1-base` carries the same harness, without the warm-up its source lacks). Timings from alickers (RTX 4070 Laptop, a shared desktop host) and factory-worker shared runs are indicative; 3090 exclusive numbers are below.
 
 **Determinism (final code `36dabcf3` against root `168a5084`, alickers):**
 - **The differential** (`scripts/sim-differential.sh 168a5084`; root's own compiled simulation fed every scenario's real command stream beside this one): all 8 scenarios identical, 4.19 M ticks and 2,518 commands, 72,420 state checks, every tick's events and 1,225 timeline checks (1,821 s).
@@ -71,6 +71,10 @@ Phases over 1 ms, before → after: threat 2,423 → off the list; autosave 2,25
 - **Determinism:** no saved field, outcome or ledger changes (below).
 
 ## Compromises and follow-ups
+- **Terrain sampling** is now the largest per-step CPU and allocation: about 1 ms of a 1.1 ms step in the Brine Divide, and about 15 KiB of the 76 KiB a step (`sampleAuthored`, `fbm`, `seaStack`, `hypot`). Root fix: SIM-1's filed baked or cached height lookup for the sim's world queries (M; the world stream).
+- **The systems host views** are still rebuilt for each reader (`hostById`, `listHosts`); only the power drain's every-step rebuild of every host is gone. Root fix: an explicit revision on systems, facility, fleet and docking state, bumped by every writer and persisted or rebuilt on load (M; a systems stream, with a schema note).
+- **Cycle sight lines:** each cycle field near the player casts a sight line of up to 40 m every step (p99 0.4–0.6 ms there), most of it terrain sampling (above).
+- **COL-1's debt:** CW-1's kit cave clusters allocate about 18 MiB each (18k boxes as objects); headless, unstreamed builds drive collections of up to 75 ms. COL-1 stage B owns the collider.
 - **The play timeline's save (SIM-1b's motivating number).** Every 600 ticks the app serialises the whole timeline export and writes it to localStorage. At the full rotation window (20 sealed chunks, about 20k events, 2.7 M characters) the serialisation alone is **13–21 ms in Node** on factory-worker, before the browser's write of about 5 MB; a chunk seal or rotation costs up to 3.8 ms. It grows linearly with the session (1.7 ms at 2k events, 5.8 ms at 10k). The bot's timelines never reach it (212 events in 3.2 h of play), so only a human session shows it. Root fix: SIM-1b's incremental journal (assigned to its builder; no interim here, by the coordinator's decision).
 
 ## Missing evidence
