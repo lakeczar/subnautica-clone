@@ -751,3 +751,5 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **TST-16 ACCEPTED** (R11, Sol `a9196eec` on `review/tst-16-r11`), safe to install live via the canonical state path once the lane is idle. Merged locally at `f5a1170f`; scripts/heavy is identical to the reviewed code. The root gate is running on the 4070.
   - **Install plan:** after CW-1's window, once the lane is idle, run the full SCHED suites at the merged root, then install, then the boosted CW-1 comparison for fleet.
   - **Follow-up TST-16b:** P3-F1 (publication under the installer lock), P3-F2 (production path identity), plus the soak-runner R4-F3 flake.
+- **TST-16 MERGED** to root `f5a1170f` and pushed (gate on the 4070, ticket 261024-004258-e7cf: 1,427/1,427, build, 5 economy scripts). Not installed yet: CW-1's series is still running at 00:53Z.
+- **STEW-1 done at `bdaef84`** (R5 fixes, code `d2617b1`): JSON must exist; symlinks under src fail; the scope is documented. All merge trees pass, including REC-1. The gate passed 10/10 on the 4070. Final Sol R6 running (`siltwake-stew1-review-r6-sol-bdaef84`).
