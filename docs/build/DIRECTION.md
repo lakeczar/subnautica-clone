@@ -79,6 +79,9 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - `soak`: alickers first.
 
   Until the lane exists, builders may call `scripts/alickers-job.sh` directly.
+- **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive` on the 3090.
+  - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. Results from the 4070 are labelled indicative.
+  - Pin a job to one machine only when the question needs that machine (e.g. factory-worker's host pauses, or a 4070 player-floor check).
 - **Evidence:**
   - Functional results count from either machine, bound to the exact SHA tested.
   - 3090 exclusive numbers are the target.
