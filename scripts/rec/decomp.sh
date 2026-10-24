@@ -17,7 +17,7 @@ save=$(node -e 'const p=require(require("path").resolve(process.argv[1]));consol
 echo "save: $kind $(node -e 'const p=require(require("path").resolve(process.argv[1]));console.log(p.commit ?? "", p.path ?? p.file)' "$out/save.json")"
 run() { local name="$1"; shift
   node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack \
-    --rec playtest --hold "$secs" --alternate 10 --out "$out/$name" "$@" 2>&1 | grep -E 'probe|Error|refused' | cut -c1-200
+    --rec playtest --hold "$secs" --alternate 10 --out "$out/$name" "$@" 2>&1 | grep --line-buffered -E 'probe|window|Error|refused' | cut -c1-200
   echo "$name: $(node -e 'const r=require(require("path").resolve(process.argv[1])).probe.alternation;console.log(JSON.stringify({pairs:r.pairs,mean:r.mean,lo:r.lo,hi:r.hi}))' "$out/$name/run.json" 2>/dev/null || echo failed)"
 }
 # VARIANTS (env): which to run, space-separated; default all of the first decomposition.
@@ -33,7 +33,7 @@ for v in ${VARIANTS:-telemetry capture-bitmap capture-frame vp9-bitmap vp8-bitma
     vp8-bitmap) run "$v" --codec vp8 ;;
     h264-bitmap) run "$v" --codec h264 ;;
     vp8-frame) run "$v" --codec vp8 --capture frame ;;
-    bench-sample) node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack --rec playtest --video off --hold 5 --bench-sample --out "$out/$v" 2>&1 | grep -E 'bench-sample|Error' ;;
+    bench-sample) node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack --rec playtest --video off --hold 5 --bench-sample --out "$out/$v" 2>&1 | grep --line-buffered -E 'bench-sample|Error' ;;
     *) echo "unknown variant $v" ;;
   esac
 done
