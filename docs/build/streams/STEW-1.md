@@ -195,6 +195,7 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
 - **A symlink alias hid the real layer** (the coordinator's decision: don't resolve, refuse).
   - Any symlink anywhere under `src/`, file or directory, fails with one rule (`symlink: … is a symlink; src holds real files only`). The collector never reads through a link, and one outside `src` is ignored. `src` has none today.
 - **Scope, stated** in the guard's header and in CORE-HELPERS: a fail-closed regression rail over honest repository code, not a sandbox against deliberately adversarial constructions (the headless typecheck and review cover those).
+- **R5 evidence:** `npm run gate -- --machine 4070` at `d2617b1`: exit 0, all 10 steps. Both receipts are bound to `d2617b1b28` on the RTX 4070, with `--review` and a clean waiter: bake `261024-003246-7176`, and playthrough `261024-003707-06fa` (8 of 8 complete, no blockers). `npm test`: 1,420 of 1,420; guard about 0.9 s.
 - **What fails today: nothing.** Root and the merge trees of CW-1, REC-1, COL-1, SIM-1 and TST-16 with this branch pass; REC-1 has resolved its driver since R4.
 - **Test** (disk-backed): a missing JSON import fails and an existing one passes; a file symlink and a directory symlink under `src` each fail; a link in `tools/` is ignored and never read.
 
