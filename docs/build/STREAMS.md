@@ -1166,3 +1166,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Done:** the handoff has the R4 response, the r14 table and the provisional-integration compromises.
   - **The r14 tour rerun:** it found one streaming frame that is ours (`lightPlace` 52 ms).
   - **Pending:** the composed heavy-peak A/B (`ce36`, queued for CPU). The coordinator is watching it and will wake CW-1 when it finishes.
+- **PACE-1 stage 1 interim at `272d149b`** (code `43645268`): a stock planner (reserves only for held plans and seen clues), routing rules R1–R9 (pre-budgets deleted, ceramic sorted at the Rift lips, C12 read at the dock, the carrier kept forward, the pod buffer early) and the R9 trip-reason log.
+  - **Figures:** Creel play 203.7→163.5 bot-min, longest gap 50.6→23.6; carrier 372.5→290.9, 94.2→61.6.
+  - **Findings:** crown return B isn't cheaper (no glass near the crown); the Divide dock's glass only exists on the isles; diver-only gathering is the carrier's main cost (stage 2's district sources fix it).
+  - **Next:** finish on root (it was built on LS-1's pre-merge head): branch moves, B4, the core pre-budget, and pacing rows rewritten (the carrier gap that grows is disclosed). Then one review.
