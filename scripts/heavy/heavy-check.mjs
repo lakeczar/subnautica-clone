@@ -28,11 +28,11 @@ import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, 
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
+import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
 import { buildOnly, builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
-  alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
+  alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState, terminalRecord,
   reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
 } from "./state.mjs";
 
@@ -123,22 +123,25 @@ async function submit(opts, command, { quiet = false } = {}) {
   if (opts.snapshot && !tree.head) fail("--snapshot needs a git worktree");
   // The second worker runs a commit (SCHED-2b): only a clean tree can go, and
   // only a command that names nothing outside it but its declared --artifact
-  // outputs. An `any` job that can't go is routed to the 3090 with the reason
-  // (SCHED-3; a --snapshot is a clean tree's commit, so it needs no rule of its
-  // own); a `soak` job runs here; a `4070` job is refused.
+  // outputs, and doesn't only build an output that wouldn't come back. Then
+  // (SCHED-3) an `any` job goes there only if it's declared portable: a
+  // registered command, or the caller's own --machine. Otherwise it is routed
+  // to the 3090 with the reason (a --snapshot is a clean tree's commit, so it
+  // needs no rule of its own); a `soak` job runs here; a `4070` job is refused.
   const lane = remoteConfig(cfg);
-  const external = externalPaths(command, worktree, opts.artifacts ?? []), built = builtOutputs(command), builds = buildOnly(command);
+  const external = externalPaths(command, worktree, opts.artifacts ?? []), built = builtOutputs(command), builds = buildOnly(command, opts.artifacts ?? []);
   const why = !lane.enabled ? `the remote lane is off (${readHealth(cfg).detail})` : !tree.head ? "not a git tree"
     : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)`
     : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …`
-    : builds ? `it only builds (${builds}): build output must stay here` : null;
-  const routed = resolveMachine(req.goal.machine, why);
+    : builds ? `it only builds (${builds.command}) and declares no --artifact ${builds.output}: build output must stay here` : null;
+  const routed = resolveMachine(req.goal.machine, why, { explicit: opts.machine != null, portable: portableCommand(command) });
   if (routed.error) fail(`refused: ${routed.error}`);
   const machine = req.goal.machine = routed.machine;
   if (routed.routed) req.goal.routed = routed.routed;
   req.goal.remoteOk = machine !== "3090" && !why;
-  if (why && (routed.routed || machine === "soak")) say(`runs here (factory-worker), not on alickers: ${why}`);
-  for (const a of opts.artifacts ?? []) if (machine === "3090" || !req.goal.remoteOk) { if (!a.startsWith("/")) fail(`--artifact ${a}: a job running here needs an absolute path`); }
+  if (routed.routed || (why && machine === "soak")) say(`runs here (factory-worker), not on alickers: ${routed.routed?.reason ?? why}`);
+  // A routed job's relative --artifact is where it writes it here, as for an `any` job run here.
+  for (const a of opts.artifacts ?? []) if ((machine === "3090" && !routed.routed) || (machine !== "3090" && !req.goal.remoteOk)) { if (!a.startsWith("/")) fail(`--artifact ${a}: a job running here needs an absolute path`); }
   const id = newTicket();
   const key = coalesceKey({ worktree, cwd, argv: command, class: cls, cpus: opts.cpus, memMiB: opts.memMiB, review: opts.review, head: tree.head, dirty: tree.dirty, snapshot: opts.snapshot, gpu: opts.gpu, machine: opts.machine, artifacts: opts.artifacts });
   const dir = jobDir(cfg, id);
@@ -303,7 +306,8 @@ function finalLine(e) {
       ? `WARNING tree changed: submitted ${tr(e.head, e.dirty)}, tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`
       : `tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`);
   }
-  parts.push(`on ${e.machine ?? MACHINE_LABELS.local}${e.goal?.routed ? ` (any, routed here: ${e.goal.routed.reason})` : ""}`);
+  const route = e.goal?.routed ? ` (any, routed here: ${e.goal.routed.reason})` : "";
+  parts.push(e.ran === false ? `never ran; planned for ${e.planned}${route}` : `on ${e.machine ?? MACHINE_LABELS.local}${route}`);
   if (e.artifacts?.length) parts.push(`artifacts: ${e.artifacts.map((a) => a.local ?? `${a.remote ?? a.path} (${a.error ?? "here"})`).join(", ")}`);
   if (e.gpuShared) parts.push(`GPU shared outside the lease with pid ${e.gpuShared.map((u) => u.pid).join(", ")}`);
   if (e.context?.v === 2) {
@@ -387,7 +391,7 @@ async function cancelCmd(args) {
     if (!t) return { result: existsSync(join(jobDir(cfg, id), "exit.json")) ? "finished" : "unknown" };
     if (t.state === "running") { writeFileSync(join(jobDir(cfg, id), "cancelled"), ""); return { result: { running: t.unit } }; }
     delete state.tickets[id];
-    writeJsonAtomic(join(jobDir(cfg, id), "exit.json"), { ticket: id, code: 75, label: "cancelled while queued", endedAt: Date.now() });
+    writeJsonAtomic(join(jobDir(cfg, id), "exit.json"), terminalRecord(t, { code: 75, label: "cancelled while queued" }));
     ledger(cfg, { event: "cancelled", ticket: id, worktree: t.worktree, class: t.req.class, waitedS: Math.round((Date.now() - t.submittedAt) / 1000) });
     if (alive(t.supervisor)) process.kill(t.supervisor.pid, "SIGTERM");
     return { changed: true, result: "removed" };

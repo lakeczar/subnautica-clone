@@ -15,7 +15,7 @@ import { availableParallelism } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { unmeasuredContext } from "./contention.mjs";
-import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
+import { DEFAULTS, MACHINE_LABELS, PROTOCOL, plannedFor, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 
 export const PRODUCTION_DIR = "/work/tmp/siltwake-sched";
@@ -401,8 +401,9 @@ export function reconcile(cfg, state) {
       ...(request.snapshot ? { snapshot: { root: request.snapshot.root, kept: Boolean(dropSnapshot(request.snapshot.root, request.snapshot.status)) } } : {}),
     };
     const exitFile = join(dir, "exit.json");
-    if (!existsSync(exitFile)) writeJsonAtomic(exitFile, { ticket: t.id, class: t.req.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ...identity, ...result });
-    ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...result });
+    const { notRun, ...outcome } = result;
+    if (!existsSync(exitFile)) writeJsonAtomic(exitFile, terminalRecord(t, { ...identity, ...outcome }, { ran: t.state === "running" && !notRun }));
+    ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...outcome });
     if (t.state === "running" && t.req.exclusive) state.lastExclusiveEnd = Date.now();
     delete state.tickets[t.id];
     changed = true;
@@ -410,11 +411,27 @@ export function reconcile(cfg, state) {
   return changed;
 }
 
+/**
+ * The result record of a ticket the queue ends itself (SCHED-3 R1-F3):
+ * cancelled or expired while queued, or recovered after its supervisor or
+ * holder died. It keeps the frozen goal (machine tag and route). A ticket that
+ * never ran gets `ran: false` and `planned`, never `machine`; one that ran
+ * here gets `machine`. `fields` are the code, label and the rest.
+ */
+export function terminalRecord(t, fields, { ran = false } = {}) {
+  const goal = t.goal ?? null;
+  return {
+    ticket: t.id, class: t.req?.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), goal,
+    ...(ran ? { machine: MACHINE_LABELS.local, machineTag: goal?.machine ?? null } : { ran: false, planned: plannedFor(goal) }),
+    ...fields,
+  };
+}
+
 /** The result of a job whose supervisor died, from what the in-scope wrapper
  * left. Counters nobody could read are null with a reason in `unavailable`,
  * never 0: a missing count is not proof that no OOM happened (R5 P3). */
 function orphanResult(dir, t) {
-  if (existsSync(join(dir, "not-started"))) return { code: 75, label: "cancelled before start; the command did not run" };
+  if (existsSync(join(dir, "not-started"))) return { code: 75, label: "cancelled before start; the command did not run", notRun: true };
   if (existsSync(join(dir, "cancelled"))) return { code: 75, label: "cancelled", stopReason: "cancelled" };
   const stats = readStats(dir);
   const facts = t.unit ? unitFacts(t.unit) : {};
@@ -425,7 +442,7 @@ function orphanResult(dir, t) {
     const unavailable = { oomKills: "the in-scope wrapper recorded no stats (killed with the job)", ...(oomLocal ? {} : { reservationOom: "no observer saw the scope's memory.events.local" }) };
     if (oomLocal) return { code: 137, label: oomLabel, stopReason: "oom", reservationOom: true, oomEvidence: "memory.events.local (holder watch, before it died)", oomKills: null, peakMiB, unavailable };
     return { code: 137, label: t.holder ? "killed: its holder died and the job did not finish" : "not started: its supervisor died during the handoff",
-      stopReason: "killed", reservationOom: null, oomKills: null, peakMiB, unavailable };
+      ...(t.holder ? {} : { notRun: true }), stopReason: "killed", reservationOom: null, oomKills: null, peakMiB, unavailable };
   }
   const code = Number(stats.rc), oom = Number(stats.oom_local ?? 0) > 0 && code !== 0;
   // The wrapper records whether the scope was stopped around it (BindsTo= after

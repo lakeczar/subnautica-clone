@@ -11,7 +11,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readdirSync, readFileSync, readlinkSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { alive, procStart, scopePopulated } from "./state.mjs";
-import { blockedBy, context, fakeSandbox, hc, here, holderOf, killOwned, result, running, scopeActive, sleep, submit, until } from "./acceptance-lib.mjs";
+import { blockedBy, context, done, fakeSandbox, hc, here, holderOf, host, killOwned, result, running, scopeActive, sleep, state, submit, until } from "./acceptance-lib.mjs";
 
 const fast = { minStallS: 1, soakYieldS: 3 };
 const log = (c, id) => readFileSync(join(c.sched, "jobs", id, "output.log"), "utf8");
@@ -726,60 +726,75 @@ test("B27 (R3): release-remote frees a ticket held by a sandbox that's gone: rec
 
 // SCHED-3 ---------------------------------------------------------------------
 
-test("B28 (SCHED-3): standard and gpu jobs go to alickers by default; one that can't (dirty, local paths, build output, build-only, lane off) is routed here with its reason at submit, on the ticket, in status and in the result; explicit tags win; quick stays here", async () => {
+/** Commits files into the context's repo (the fake sandbox fetches commits from it). */
+const commitFiles = (c, files) => {
+  for (const [file, body] of Object.entries(files)) { mkdirSync(join(c.repoDir, file, ".."), { recursive: true }); writeFileSync(join(c.repoDir, file), body); }
+  git(c.repoDir, "add", "."); git(c.repoDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "fixture");
+};
+const ticketOf = (c, id) => state(c).tickets[id] ?? result(c, id);
+const UNDECLARED = /portability not declared: pass --machine any and --artifact for its outputs/;
+
+test("B28 (SCHED-3, R1): a default any goes to alickers only for a registered command; an unregistered one is routed here (portability not declared), as are dirty trees, local paths and build output; the reason is printed, kept on the ticket, in status and the result; explicit tags win; quick stays here", async () => {
   const c = await lane("balance");
-  // The default: a clean standard and a clean gpu job run on the 4070, tagged any.
-  for (const cls of ["standard", "gpu"]) {
-    const s = hc(c, ["submit", "--class", cls, "--", "sh", "-c", "echo balanced"], { cwd: c.repoDir });
-    assert.equal(s.code, 0, s.err);
-    assert.doesNotMatch(s.err, /runs here/);
-    const id = s.out.trim();
-    assert.equal(waitFor(c, id).code, 0);
-    const r = result(c, id);
-    assert.deepEqual([cls, r.remote, r.machine, r.machineTag, r.goal.routed], [cls, true, REMOTE, "any", undefined]);
-  }
+  // .test-build is ignored, as in the repo: a running local job's .heavy-job marker lives there.
+  commitFiles(c, { ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "echo fast-tier-ran" } }) + "\n" });
+  // Registered (the fast tier): default any, to the 4070, unrouted, no "runs here" line.
+  const s = hc(c, ["submit", "--class", "standard", "--", "npm", "test"], { cwd: c.repoDir });
+  assert.equal(s.code, 0, s.err);
+  assert.doesNotMatch(s.err, /runs here/);
+  assert.equal(waitFor(c, s.out.trim()).code, 0);
+  assert.deepEqual([result(c, s.out.trim()).remote, result(c, s.out.trim()).machineTag, result(c, s.out.trim()).goal.routed], [true, "any", undefined]);
+  // Declared by the caller (--machine any): to the 4070 too.
+  const d0 = submit(c, c.repoDir, "--class", "gpu", "--machine", "any", "--", "sh", "-c", "echo declared");
+  assert.equal(waitFor(c, d0).code, 0);
+  assert.deepEqual([result(c, d0).remote, result(c, d0).machineTag], [true, "any"]);
   // quick keeps the express slot here; an explicit 3090 stays here unrouted.
   for (const args of [["--class", "quick"], ["--class", "standard", "--machine", "3090"]]) {
-    const s = hc(c, ["submit", ...args, "--", "true"], { cwd: c.repoDir });
-    assert.doesNotMatch(s.err, /runs here/);
-    assert.equal(waitFor(c, s.out.trim()).code, 0);
-    const r = result(c, s.out.trim());
+    const q = hc(c, ["submit", ...args, "--", "true"], { cwd: c.repoDir });
+    assert.doesNotMatch(q.err, /runs here/);
+    assert.equal(waitFor(c, q.out.trim()).code, 0);
+    const r = result(c, q.out.trim());
     assert.deepEqual([args.join(" "), r.remote, r.machineTag, r.goal.routed], [args.join(" "), undefined, "3090", undefined]);
   }
-  // Each reason a job can't go: routed to the 3090, printed once at submit, recorded.
-  const hold = submit(c, c.repoDir, "--class", "quick", "--machine", "3090", "--", "sh", "-c", "echo started; sleep 15"); // holds the worktree, so the next one stays queued
-  await until("hold started", () => log(c, hold).includes("started"), 30000); // before the tree changes: its holder checks the tree at the start
-  writeFileSync(join(c.repoDir, "file.txt"), "dirty\n");
-  const d = hc(c, ["submit", "--class", "standard", "--", "true"], { cwd: c.repoDir });
-  assert.equal(d.code, 0, d.err);
-  const dirty = d.out.trim();
-  assert.equal(d.err.match(/runs here \(factory-worker\), not on alickers: uncommitted changes \(alickers runs a commit\)\n/g)?.length, 1);
-  const tk = JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets[dirty];
-  assert.deepEqual([tk.goal.machine, tk.goal.remoteOk, tk.goal.routed], ["3090", false, { from: "any", reason: "uncommitted changes (alickers runs a commit)" }]);
+  // Unregistered and undeclared: routed here, printed once, recorded; status while it waits for its worktree.
+  const hold = submit(c, c.repoDir, "--class", "quick", "--machine", "3090", "--", "sh", "-c", "echo started; sleep 15");
+  await until("hold started", () => log(c, hold).includes("started"), 30000); // before anything changes the tree: its holder checks it at the start
+  const u = hc(c, ["submit", "--class", "standard", "--", "sh", "-c", "echo opaque"], { cwd: c.repoDir });
+  assert.equal(u.code, 0, u.err);
+  const opaque = u.out.trim();
+  assert.equal(u.err.match(/runs here \(factory-worker\), not on alickers: portability not declared: pass --machine any and --artifact for its outputs\n/g)?.length, 1, u.err);
+  const tk = state(c).tickets[opaque];
+  assert.deepEqual([tk.goal.machine, tk.goal.remoteOk, tk.goal.routed.from], ["3090", false, "any"]);
+  assert.match(tk.goal.routed.reason, UNDECLARED);
   const st = hc(c, ["status"]).out;
-  assert.match(st, new RegExp(`${dirty}\\s+\\S+\\s+standard\\s+3090\\^\\s+queued`), st);
-  assert.match(st, new RegExp(`^\\^ ${dirty}: any, routed here: uncommitted changes \\(alickers runs a commit\\)$`, "m"));
-  const w = waitFor(c, dirty);
+  assert.match(st, new RegExp(`${opaque}\\s+\\S+\\s+standard\\s+3090\\^\\s+queued`), st);
+  assert.match(st, new RegExp(`^\\^ ${opaque}: any, routed here: portability not declared`, "m"));
+  const w = waitFor(c, opaque);
   assert.equal(w.code, 0, w.err);
-  assert.match(w.err, /on RTX 3090 \(factory-worker\) \(any, routed here: uncommitted changes/);
-  assert.deepEqual([result(c, dirty).remote, result(c, dirty).goal.routed.reason], [undefined, "uncommitted changes (alickers runs a commit)"]);
-  // An explicit 4070 is refused for the same reason, never routed.
+  assert.match(w.err, /on RTX 3090 \(factory-worker\) \(any, routed here: portability not declared/);
+  assert.equal(result(c, opaque).remote, undefined);
+  // A dirty tree: routed with that reason (also for a registered command); an explicit 4070 is refused.
+  writeFileSync(join(c.repoDir, "file.txt"), "dirty\n");
+  const d = hc(c, ["submit", "--class", "standard", "--queue-timeout", "2", "--", "npm", "test"], { cwd: c.repoDir });
+  assert.match(d.err, /runs here \(factory-worker\), not on alickers: uncommitted changes \(alickers runs a commit\)/);
+  assert.equal(ticketOf(c, d.out.trim()).goal.routed.reason, "uncommitted changes (alickers runs a commit)");
+  hc(c, ["cancel", d.out.trim()]);
   const g = hc(c, ["submit", "--class", "gpu", "--machine", "4070", "--", "true"], { cwd: c.repoDir });
   assert.equal(g.code, 2);
   assert.match(g.err, /refused: --machine 4070 runs on alickers, but uncommitted changes/);
   git(c.repoDir, "checkout", "-q", "--", "file.txt");
+  // Declared, but naming a local path or reading build output: routed with that reason.
   for (const [argv, reason] of [
     [["node", "/work/tmp/some-local-input.mjs"], /it names local paths alickers lacks: \/work\/tmp\/some-local-input\.mjs/],
     [["node", ".test-build/x.js"], /it reads build output a commit lacks \(\.test-build\)/],
-    [["sh", "-c", "npm run build"], /it only builds \(npm run build\): build output must stay here/],
   ]) {
-    const s = hc(c, ["submit", "--class", "gpu", "--queue-timeout", "1", "--", ...argv], { cwd: c.repoDir });
-    assert.equal(s.code, 0, s.err);
-    assert.match(s.err, new RegExp(`runs here \\(factory-worker\\), not on alickers: ${reason.source}`));
-    const id = s.out.trim(), t = JSON.parse(readFileSync(join(c.sched, "state.json"), "utf8")).tickets[id] ?? result(c, id);
+    const x = hc(c, ["submit", "--class", "gpu", "--machine", "any", "--queue-timeout", "2", "--", ...argv], { cwd: c.repoDir });
+    assert.equal(x.code, 0, x.err);
+    assert.match(x.err, new RegExp(`runs here \\(factory-worker\\), not on alickers: ${reason.source}`));
+    const t = ticketOf(c, x.out.trim());
     assert.equal(t.goal.machine, "3090");
     assert.match(t.goal.routed.reason, reason);
-    hc(c, ["cancel", id]);
+    hc(c, ["cancel", x.out.trim()]);
   }
 });
 
@@ -790,4 +805,105 @@ test("B29 (SCHED-3): private state without a remote: a default standard job is r
   assert.match(s.err, /runs here \(factory-worker\), not on alickers: the remote lane is off \(private state without a remote/);
   assert.equal(waitFor(c, s.out.trim()).code, 0);
   assert.match(result(c, s.out.trim()).goal.routed.reason, /^the remote lane is off/);
+});
+
+test("B30 (SCHED-3 R1-F1, Sol's R1): an opaque script that writes a local output stays here by default and its output is here; declared with --machine any and --artifact, it runs on the 4070 and its output comes back", async () => {
+  const c = await lane("opaque-output");
+  commitFiles(c, {
+    ".gitignore": "local-results/\n",
+    "scripts/write-local.mjs": "import {mkdirSync,writeFileSync} from 'node:fs'; mkdirSync('local-results',{recursive:true}); writeFileSync('local-results/result.json',JSON.stringify({cwd:process.cwd()})); console.log('wrote');\n",
+  });
+  const s = hc(c, ["submit", "--class", "gpu", "--", "node", "scripts/write-local.mjs"], { cwd: c.repoDir });
+  assert.equal(s.code, 0, s.err);
+  assert.match(s.err, UNDECLARED);
+  const id = s.out.trim();
+  assert.equal(waitFor(c, id).code, 0);
+  assert.deepEqual([result(c, id).remote, result(c, id).goal.machine], [undefined, "3090"]);
+  assert.ok(existsSync(join(c.repoDir, "local-results", "result.json")), "the output is where the caller expects it");
+  assert.equal(existsSync(join(c.fake.repo, "local-results", "result.json")), false, "nothing was left on the sandbox");
+  // The caller's declaration: on the 4070, and the declared output comes back.
+  const dec = submit(c, c.repoDir, "--class", "gpu", "--machine", "any", "--artifact", "local-results", "--", "node", "scripts/write-local.mjs");
+  assert.equal(waitFor(c, dec).code, 0);
+  assert.equal(result(c, dec).remote, true);
+  assert.ok(existsSync(join(c.dir, "artifacts", dec, "local-results", "result.json")));
+});
+
+test("B31 (SCHED-3 R1-F1/F2, Sol's R2): a build by default stays here, so a later local read sees it fresh; a build-only job with no declared output stays here even when the caller asks for any", async () => {
+  const c = await lane("build-then-local");
+  commitFiles(c, {
+    ".gitignore": ".test-build/\ndist/\n",
+    "package.json": JSON.stringify({ name: "fixture", private: true, type: "module", scripts: { "test:build": "node scripts/test-build.mjs", build: "node scripts/build.mjs" } }) + "\n",
+    "scripts/test-build.mjs": "import {mkdirSync,writeFileSync} from 'node:fs'; mkdirSync('.test-build',{recursive:true}); writeFileSync('.test-build/version.txt','FRESH'); console.log('built FRESH');\n",
+    "scripts/build.mjs": "import {mkdirSync,writeFileSync} from 'node:fs'; mkdirSync('dist',{recursive:true}); writeFileSync('dist/version.txt','FRESH'); console.log('built dist FRESH');\n",
+  });
+  mkdirSync(join(c.repoDir, ".test-build"), { recursive: true });
+  writeFileSync(join(c.repoDir, ".test-build", "version.txt"), "STALE");
+  const b = hc(c, ["submit", "--", "npm", "run", "test:build"], { cwd: c.repoDir });
+  assert.match(b.err, /not on alickers: it only builds \(npm run test:build\) and declares no --artifact \.test-build: build output must stay here/);
+  assert.equal(waitFor(c, b.out.trim()).code, 0);
+  assert.equal(result(c, b.out.trim()).remote, undefined);
+  assert.equal(readFileSync(join(c.repoDir, ".test-build", "version.txt"), "utf8"), "FRESH", "built here");
+  const read = submit(c, c.repoDir, "--class", "exclusive", "--", "node", "-e", "console.log(require('node:fs').readFileSync('.test-build/version.txt','utf8'))");
+  assert.equal(waitFor(c, read).code, 0);
+  assert.match(log(c, read), /FRESH/);
+  // `&& true` without a declaration stays here too (it isn't registered).
+  const tailed = hc(c, ["submit", "--", "sh", "-c", "npm run build && true"], { cwd: c.repoDir });
+  assert.match(tailed.err, UNDECLARED);
+  assert.equal(waitFor(c, tailed.out.trim()).code, 0);
+  assert.equal(readFileSync(join(c.repoDir, "dist", "version.txt"), "utf8"), "FRESH");
+  // Declared any, build only, no --artifact for its output: here, with the build reason.
+  const any = hc(c, ["submit", "--machine", "any", "--", "npm", "run", "build"], { cwd: c.repoDir });
+  assert.equal(any.code, 0, any.err);
+  assert.match(any.err, /not on alickers: it only builds \(npm run build\) and declares no --artifact dist: build output must stay here/);
+  assert.equal(waitFor(c, any.out.trim()).code, 0);
+  assert.equal(result(c, any.out.trim()).remote, undefined);
+});
+
+test("B32 (SCHED-3 R1-F2, Sol's R7): a build whose output is declared runs on the 4070 again and its whole dist comes back; an explicit 4070 build without one is refused", async () => {
+  const c = await lane("declared-build-output");
+  commitFiles(c, {
+    ".gitignore": "dist/\n",
+    "package.json": JSON.stringify({ name: "fixture", private: true, type: "module", scripts: { build: "node scripts/build.mjs" } }) + "\n",
+    "scripts/build.mjs": "import {mkdirSync,writeFileSync} from 'node:fs'; mkdirSync('dist',{recursive:true}); writeFileSync('dist/version.txt','FRESH'); console.log('built FRESH');\n",
+  });
+  const x = submit(c, c.repoDir, "--class", "standard", "--machine", "4070", "--artifact", "dist", "--", "npm", "run", "build");
+  assert.equal(waitFor(c, x).code, 0);
+  assert.equal(result(c, x).remote, true);
+  assert.equal(readFileSync(join(c.dir, "artifacts", x, "dist", "version.txt"), "utf8"), "FRESH");
+  const no = hc(c, ["submit", "--class", "standard", "--machine", "4070", "--", "npm", "run", "build"], { cwd: c.repoDir });
+  assert.equal(no.code, 2);
+  assert.match(no.err, /refused: --machine 4070 runs on alickers, but it only builds \(npm run build\) and declares no --artifact dist: build output must stay here/);
+  // An --artifact without --machine isn't a declaration: routed here, where its relative artifact is where it wrote it.
+  const im = hc(c, ["submit", "--class", "standard", "--artifact", "dist", "--", "npm", "run", "build"], { cwd: c.repoDir });
+  assert.equal(im.code, 0, im.err);
+  assert.match(im.err, UNDECLARED);
+  assert.equal(waitFor(c, im.out.trim()).code, 0);
+  assert.deepEqual([result(c, im.out.trim()).remote, result(c, im.out.trim()).artifacts[0].local], [undefined, join(c.repoDir, "dist")]);
+});
+
+test("B33 (SCHED-3 R1-F3, Sol's R3): a routed ticket cancelled, expired or lost while queued keeps its goal and route; its final line says it never ran and what it was planned for", async () => {
+  const c = context("routed-terminal");
+  c.repoDir = c.repo("r");
+  host(c, { memAvailableMiB: 1000 }); // the host brake: nothing is admitted
+  const check = (id, label) => {
+    const r = result(c, id);
+    assert.match(r.label, label);
+    assert.deepEqual([r.ran, r.planned, r.machine, r.goal.machine, r.goal.routed.from], [false, "RTX 3090 (factory-worker)", undefined, "3090", "any"]);
+    assert.match(r.goal.routed.reason, /^the remote lane is off/);
+    const w = hc(c, ["wait", id]);
+    assert.match(w.err, /never ran; planned for RTX 3090 \(factory-worker\) \(any, routed here: the remote lane is off/);
+    assert.doesNotMatch(w.err, /; on RTX 3090/);
+  };
+  const cancelled = submit(c, c.repoDir, "--class", "standard", "--", "true");
+  assert.match(hc(c, ["status"]).out, /3090\^/);
+  assert.equal(hc(c, ["cancel", cancelled]).code, 0);
+  check(cancelled, /cancelled while queued/);
+  const expired = submit(c, c.repoDir, "--class", "standard", "--queue-timeout", "1", "--", "false");
+  await done(c, expired, 30000);
+  check(expired, /expired/);
+  const lost = submit(c, c.repoDir, "--class", "standard", "--", "sleep", "1");
+  await until("its supervisor waits", () => state(c).tickets[lost]?.supervisor, 10000);
+  killOwned(state(c).tickets[lost].supervisor);
+  await until("recovered", () => { hc(c, ["status"]); return result(c, lost); }, 30000);
+  check(lost, /supervisor died before admission/);
 });

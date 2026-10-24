@@ -61,19 +61,48 @@ export const MACHINES = ["any", "3090", "4070", "soak"];
 const LOCAL_CLASSES = new Set(["quick", "bake", "exclusive"]);
 export const defaultMachine = (cls) => (cls === "soak" ? "soak" : LOCAL_CLASSES.has(cls) ? "3090" : "any");
 
+// Portability is declared, never inferred (SCHED-3 R1-F1): a command's argv
+// can't show what its scripts import, read from the environment or write. An
+// `any` job goes to alickers only if its command is one of ours proven
+// self-contained (it compiles and consumes its builds inside the job, writes
+// nothing the caller needs back, and a suite or the gate runs it there), or
+// its caller asked for `--machine any|4070` and so declares it, with its
+// outputs as --artifact. Add a command here only once a suite proves it.
+const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+const PORTABLE = [
+  { name: "the fast tier", match: (a) => same(a, ["npm", "test"]) || same(a, ["npm", "run", "test:fast"]) },
+  // test:heavy's own queued command (package.json); `npm run test:heavy` queues itself.
+  { name: "the heavy tier", match: (a) => same(a, ["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]) },
+  // The gate's playthrough (scripts/gate.mjs): it compiles first and writes nothing back.
+  { name: "the playthrough", match: (a) => same(a.slice(0, 3), ["npm", "run", "playthrough"]) &&
+    (a.length === 3 || (a[3] === "--" && a.slice(4).every((x, i, r) => x === "--quiet" || x === "--jobs" || (r[i - 1] === "--jobs" && /^\d+$/.test(x))))) },
+];
+/** The registered portable command `argv` is, by name, or null. */
+export const portableCommand = (argv) => PORTABLE.find((p) => p.match(argv.map(String)))?.name ?? null;
+export const UNDECLARED = "portability not declared: pass --machine any and --artifact for its outputs";
+
 /**
- * The machine a request resolves to, given `why` it can't run on alickers
- * (null if it can): an `any` request that can't goes to the 3090, recording
- * why (`routed`, on the ticket and its result); a `4070` request that can't is
- * refused; every other tag stands (`soak` runs here by its own rule).
+ * The machine a request resolves to. `why`: a reason it can't run on alickers
+ * (the lane's eligibility), or null. `explicit`: the caller passed --machine.
+ * `portable`: the command is registered (portableCommand).
+ * - with a reason, `any` goes to the 3090, recording why (`routed`, on the
+ *   ticket and its result), and `4070` is refused;
+ * - an `any` the caller didn't ask for, on an unregistered command, goes to
+ *   the 3090 too (UNDECLARED);
+ * - every other tag stands (`soak` runs here by its own rule).
  * Returns { machine, routed? } or { error }.
  */
-export function resolveMachine(machine, why) {
-  if (!why) return { machine };
-  if (machine === "4070") return { error: `--machine 4070 runs on alickers, but ${why}` };
-  if (machine === "any") return { machine: "3090", routed: { from: "any", reason: why } };
+export function resolveMachine(machine, why, { explicit, portable }) {
+  if (why) {
+    if (machine === "4070") return { error: `--machine 4070 runs on alickers, but ${why}` };
+    if (machine === "any") return { machine: "3090", routed: { from: "any", reason: why } };
+    return { machine };
+  }
+  if (machine === "any" && !explicit && !portable) return { machine: "3090", routed: { from: "any", reason: UNDECLARED } };
   return { machine };
 }
+/** What a ticket that never ran was planned for (its result's `planned`; R1-F3). */
+export const plannedFor = (goal) => ({ any: "any machine", "3090": "RTX 3090 (factory-worker)", "4070": "RTX 4070 Laptop (alickers)", soak: "alickers first (soak)" })[goal?.machine] ?? "RTX 3090 (factory-worker)";
 export const MACHINE_LABELS = Object.freeze({
   local: "RTX 3090 (factory-worker)",
   remote: "RTX 4070 Laptop (alickers, shared desktop host)",

@@ -13,7 +13,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { flockFd, readJson, writeJsonAtomic } from "./state.mjs";
 
@@ -333,13 +333,29 @@ export function builtOutputs(argv) {
   return [...new Set(argv.flatMap((t) => [...String(t).matchAll(/(?:^|[\s=:'"(/])(\.test-build[^\s/'";)]*|dist)(?=\/|$|[\s'";)])/g)].map((m) => m[1])))];
 }
 
-/** A command that only builds (`npm run build`, `vite build`, `node
- * scripts/test-build.mjs`, nothing after it): its output in this worktree is
- * the point, and a commit run on alickers would bring none back. A build
- * followed by the work that reads it (`npm run build && …`) can go. */
-export function buildOnly(argv) {
-  const text = argv.join(" ").replace(/^(?:ba)?sh -c\s+/, "").trim();
-  return /^(?:npm run build|npx vite build|vite build|node scripts\/test-build\.mjs)(?:\s+[^;&|]*)?$/.test(text) ? text.split(/\s+/).slice(0, 3).join(" ") : null;
+// A command that only builds, and what it builds (SCHED-3 R1-F2).
+const BUILDS = [
+  [["npm", "run", "build"], "dist"], [["npx", "vite", "build"], "dist"], [["vite", "build"], "dist"],
+  [["npm", "run", "test:build"], ".test-build"], [["node", "scripts/test-build.mjs"], ".test-build"],
+];
+/**
+ * A command that only builds, run where its output doesn't come back: its
+ * output in this worktree is the point. Returns { command, output } when no
+ * --artifact covers the output, else null. A build followed by other work, or
+ * one whose output is declared (`--artifact dist`, fetched back whole), can go.
+ * One command line only: `sh -c` with a separator or a newline is more than a build.
+ */
+export function buildOnly(argv, artifacts = []) {
+  let words = argv.map(String);
+  if (/^(?:ba)?sh$/.test(words[0] ?? "") && words[1] === "-c" && words.length === 3) {
+    if (/[;&|\n`$(]/.test(words[2])) return null;
+    words = words[2].trim().split(/\s+/);
+  }
+  const hit = BUILDS.find(([cmd]) => cmd.every((w, i) => words[i] === w)); // its own options after it change nothing
+  if (!hit) return null;
+  const [cmd, output] = hit;
+  const declared = artifacts.some((a) => !isAbsolute(a) && [".", output].includes(normalize(a).replace(/\/$/, "")));
+  return declared ? null : { command: cmd.join(" "), output };
 }
 
 /**

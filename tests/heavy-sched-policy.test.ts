@@ -376,21 +376,45 @@ test("machine tags (SCHED-3): any by default, except quick, bake and exclusive (
 });
 
 test("routing (SCHED-3): an any request that can't run on alickers goes to the 3090 with the reason; 4070 is refused; 3090 and soak stand", () => {
-  const why = "uncommitted changes (alickers runs a commit)";
-  assert.deepEqual(P.resolveMachine("any", null), { machine: "any" });
-  assert.deepEqual(P.resolveMachine("any", why), { machine: "3090", routed: { from: "any", reason: why } });
-  assert.deepEqual(P.resolveMachine("3090", why), { machine: "3090" }, "no routing record for a job that asked for here");
-  assert.deepEqual(P.resolveMachine("soak", why), { machine: "soak" }, "soak keeps its own rule");
-  assert.match(P.resolveMachine("4070", why).error, /--machine 4070 runs on alickers, but uncommitted changes/);
-  assert.deepEqual(P.resolveMachine("4070", null), { machine: "4070" });
+  const why = "uncommitted changes (alickers runs a commit)", declared = { explicit: true, portable: null };
+  assert.deepEqual(P.resolveMachine("any", null, declared), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("any", why, declared), { machine: "3090", routed: { from: "any", reason: why } });
+  assert.deepEqual(P.resolveMachine("3090", why, declared), { machine: "3090" }, "no routing record for a job that asked for here");
+  assert.deepEqual(P.resolveMachine("soak", why, declared), { machine: "soak" }, "soak keeps its own rule");
+  assert.match(P.resolveMachine("4070", why, declared).error, /--machine 4070 runs on alickers, but uncommitted changes/);
+  assert.deepEqual(P.resolveMachine("4070", null, declared), { machine: "4070" });
 });
 
-test("build-only commands stay here (their output is the point); a build followed by its use can go", async () => {
+test("portability is declared (SCHED-3 R1-F1): a default any goes to alickers only for a registered command; an explicit --machine is the caller's declaration", () => {
+  const und = { explicit: false, portable: null };
+  assert.deepEqual(P.resolveMachine("any", null, und), { machine: "3090", routed: { from: "any", reason: P.UNDECLARED } });
+  assert.match(P.UNDECLARED, /portability not declared: pass --machine any and --artifact for its outputs/);
+  assert.deepEqual(P.resolveMachine("any", null, { explicit: false, portable: "the fast tier" }), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("any", null, { explicit: true, portable: null }), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("soak", null, und), { machine: "soak" });
+  // The registry: exact commands only (Sol R1's R6 commands included).
+  for (const argv of [["npm", "test"], ["npm", "run", "test:fast"], ["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"],
+    ["npm", "run", "playthrough"], ["npm", "run", "playthrough", "--", "--jobs", "3", "--quiet"]])
+    assert.ok(P.portableCommand(argv), argv.join(" "));
+  for (const argv of [["node", "scripts/write-local.mjs"], ["node", "tools/cave-gpu-check.mjs"], ["node", "tools/cave-deep-shots.mjs"], ["node", "tools/large-cave-lab.gpu.mjs"],
+    ["node", "scripts/build-wrapper.mjs"], ["sh", "-c", 'cat "$REVIEW_INPUT"'], ["sh", "-c", 'printf done > "$REVIEW_OUTPUT"'], ["npm", "run", "test:build"],
+    ["npm", "run", "build"], ["sh", "-c", "npm run build && true"], ["sh", "-c", "npm test && cp x /tmp"],
+    ["npm", "run", "playthrough", "--", "--jobs", "3", "--json", "pt.json"], ["npm", "run", "test:heavy"], ["node", "scripts/check-m1-economy.mjs"]])
+    assert.equal(P.portableCommand(argv), null, argv.join(" "));
+});
+
+test("build-only commands stay here unless an --artifact brings their output back (SCHED-3 R1-F2); one command line only", async () => {
   const R = await import(pathToFileURL(resolve("scripts/heavy/remote.mjs")).href);
-  for (const argv of [["npm", "run", "build"], ["sh", "-c", "npm run build"], ["npx", "vite", "build", "--mode", "production"], ["node", "scripts/test-build.mjs", "--typecheck"]])
+  assert.deepEqual(R.buildOnly(["npm", "run", "build"]), { command: "npm run build", output: "dist" });
+  assert.deepEqual(R.buildOnly(["npm", "run", "test:build"]), { command: "npm run test:build", output: ".test-build" });
+  for (const argv of [["sh", "-c", "npm run build"], ["npx", "vite", "build", "--mode", "production"], ["node", "scripts/test-build.mjs", "--typecheck"]])
     assert.ok(R.buildOnly(argv), argv.join(" "));
-  for (const argv of [["npm", "test"], ["sh", "-c", "npm run build && node scripts/check-dist.mjs"], ["sh", "-c", "node scripts/test-build.mjs; node scripts/test-tier.mjs heavy"], ["npm", "run", "build:terrain"], ["npm", "run", "playthrough"]])
-    assert.equal(R.buildOnly(argv), null, argv.join(" "));
+  for (const art of [["dist"], ["./dist/"], ["."]]) assert.equal(R.buildOnly(["npm", "run", "build"], art), null, `--artifact ${art}`);
+  assert.ok(R.buildOnly(["npm", "run", "build"], ["dist/sub"]), "part of the output doesn't bring it back");
+  assert.ok(R.buildOnly(["npm", "run", "test:build"], ["dist"]), "another output doesn't either");
+  for (const argv of [["npm", "test"], ["sh", "-c", "npm run build && node scripts/check-dist.mjs"], ["sh", "-c", "npm run build\nnode scripts/use-build.mjs"],
+    ["sh", "-c", "node scripts/test-build.mjs; node scripts/test-tier.mjs heavy"], ["npm", "run", "build:terrain"], ["npm", "run", "playthrough"]])
+    assert.equal(R.buildOnly(argv), null, JSON.stringify(argv));
 });
 
 const remote = (state: string) => idle({ remote: { state } });
