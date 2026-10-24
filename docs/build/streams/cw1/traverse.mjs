@@ -33,9 +33,12 @@ const GPU = new RegExp(process.env.CW1_GPU ?? "RTX 3090");
 const { chromium } = require("playwright-core");
 const [dist, planFile, saveFile, segArg, out, port] = process.argv.slice(2);
 const segment = Number(segArg), plan = JSON.parse(readFileSync(planFile, "utf8")), points = plan.segments[segment];
-// CW1_REENTER=cave,... (R3-3): at those stops, save (F5), pause (Escape) and Continue by
-// ordinary input, then record the entry: how long the cover stayed, whether the cave's light
-// was bound at the reveal, and a screenshot. Frames behind the cover are reported apart.
+// CW1_REENTER=cave,... (R3-3): at those stops, re-enter the expedition at its pose by ordinary
+// input: save (F5), pause (Escape), export the save (the menu's Export button: a download),
+// import that file (the import button's file chooser) and accept, the same entry path as
+// Continue (which the menu hides while a session runs). Then record the entry: how long the
+// cover stayed, whether the cave's light was bound at the reveal, and a screenshot. Frames
+// behind the cover are reported apart.
 const REENTER = new Set((process.env.CW1_REENTER ?? "").split(",").filter(Boolean));
 let reenterPending = 0;
 /** Re-enter the expedition at the current pose through the menu (ordinary input). */
@@ -44,9 +47,12 @@ async function reenter(cave) {
   const stream = () => page.evaluate(() => document.querySelector("#ocean").siltwakeCaveStream?.() ?? {});
   await page.keyboard.press("F5"); await page.waitForTimeout(800);
   await page.keyboard.press("Escape"); await page.waitForTimeout(400);
+  const [download] = await Promise.all([page.waitForEvent("download", { timeout: 15000 }), page.locator("#export-game").click()]);
+  const file = path.join(out, `reenter-${cave}.json`);
+  await download.saveAs(file);
   const before = await stream(), t0 = performance.now();
-  await page.locator("#continue").click();
-  await page.waitForTimeout(200);
+  await page.locator("#import-file").setInputFiles(file);
+  await page.waitForTimeout(300);
   if (await page.locator("#confirmation").isVisible().catch(() => false)) await page.locator("#confirm-accept").click();
   // Covered until the HUD shows (the expedition plays) or 20 s.
   let revealed = false, at = null, covered = 0;
@@ -105,7 +111,7 @@ function keepTraced(e) {
   if (GC_SLICE.test(e.name) && e.dur > 0) traced.gc.push({ ts: e.ts, dur: e.dur, name: e.name, tid: e.tid });
   if (process.env.CW1_TRACE && e.dur > 4000) traced.slices.push({ ts: e.ts, dur: e.dur, name: e.name, cat: e.cat, pid: e.pid, tid: e.tid, args: JSON.stringify(e.args ?? {}).slice(0, 160) });
 }
-let trace = null;
+let trace = null, host = null;
 const browser = await chromium.launch({ executablePath: CHROME, headless: true, timeout: 30000,
   ...(process.env.CW1_CHROME ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}),
   args: [...(process.env.CW1_CHROME ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", "--cw1-traverse"] });
@@ -348,7 +354,7 @@ try {
   // own thread), always on: the frame gate needs both (a VM pause stalls the canary; only a
   // runnable renderer, or one waiting on the GPU process, can be delayed by steal; CW-1 R3-1).
   // SIMPERF_HOST=1 adds the GPU process's NVIDIA shader-cache settings.
-  const host = new Worker(new URL("./simperf-host-worker.mjs", import.meta.url));
+  host = new Worker(new URL("./simperf-host-worker.mjs", import.meta.url));
   if (sched.pid) host.postMessage(sched.pid);
   if (process.env.SIMPERF_HOST && sched.gpu) try {
     result.gpuEnv = readFileSync(`/proc/${sched.gpu}/environ`, "utf8").split("\0").filter(v => v.startsWith("__GL_"));
@@ -599,6 +605,8 @@ try {
   result.gate ??= { pass: false, failures: ["the run did not finish"] };
 } finally {
   trace?.abandon();
+  // A live worker thread keeps Node from exiting: on an error path it would hang the job.
+  await host?.terminate().catch(() => {});
   delete result.slices;
   writeFileSync(path.join(out, `segment-${segment}.json`), JSON.stringify(result, null, 1));
   writeFileSync(path.join(out, `segment-${segment}.log`), log.join("\n"));
