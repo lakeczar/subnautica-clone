@@ -81,7 +81,7 @@ Task-owned headless Chrome, ANGLE GL-EGL, **1920×1080**, the built game (`dist`
 | Frames over 34 ms in streaming parts | **18** (gate: 0); before R1, 24 in 56 min |
 | Cave stops reached | tour 66 of 67 (Isles surf cave stopped 78 m short); deep: 11 of 15, below |
 | Queue context | 8 of the 9 runs were labelled `DISTURBED` (CPU PSI up to 7–80%) despite the exclusive window; segment 6 ran quiet (PSI ≤0.56%) |
-| Known overlaps | REC-1's local work overlapped tour segment 0 (`npm test` and reruns, about 22:40–22:44 UTC) and segment 4 (a typecheck and test build, about 23:33–23:35 UTC). Both are `DISTURBED` and are rerun in the clean remeasure |
+| Known overlaps | REC-1's local work overlapped tour segment 0 (`npm test` and reruns, about 22:40–22:44 UTC) and segment 4 (a typecheck and test build, about 23:33–23:35 UTC). Both are `DISTURBED` and are rerun in the clean remeasure. The TST-16 builder's unit tests (about 1 s of CPU at 00:10:23 UTC) overlapped segment 7's load; there was no long frame within 15 s of it, so the segment is kept |
 
 **Deep caves, cold approaches.** The Creel's runs flew 1–2 km from the hub at travel speed and reached the Basin buried hut, all eight Divide caves, and the Meridian footing void, window gallery and spire footing: 11 of 15. The Meridian east four (culvert north, escarp pocket, terrace crack, escarp culvert) were not reached, for two reasons:
 - **Air:** the Creel's air ran out about 13 minutes into a dive. The HUD notice is "Oxygen exhausted. You recovered at Splitspine workshop" (`runs/r1-deep/*.log`). That is the game's rule, not a hold.
