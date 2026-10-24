@@ -1,0 +1,6 @@
+test:heavy summary (peak: the file's whole process tree, cgroup containment)
+  regions-bake.heavy.test.js             33.5 s  peak  1530 MiB / 8000 MiB  ok
+  col1-art.heavy.test.js                111.1 s  peak  1213 MiB / 8000 MiB  ok
+  timeline-model.heavy.test.js          334.8 s  peak  1197 MiB / 8000 MiB  ok
+  terrain-borders.heavy.test.js           9.1 s  peak   475 MiB / 8000 MiB  ok
+  regions-stream.heavy.test.js           12.7 s  peak   822 MiB / 8000 MiB  ok

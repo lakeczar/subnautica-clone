@@ -1,5 +1,5 @@
 {
-  "comment": "Peak RSS budgets (MiB) per heavy test process. Healthy peaks measured 2026-10-20; budget is about 1.25x peak, rounded up. A file over budget fails. TT-1 (2026-10-22): world-stream peaked at 1286 MiB with three heavy files running at once (1216 MiB alone at root), and caves-reef-isles-retreat at 1009 MiB alone at root (98% of 1024), so both were raised. Budgets cover each file's whole process tree (TT-1 R1-1): regions-bake's terrain bake runs in child processes and peaks at 1469 MiB as a tree (2026-10-22), so it gets 1920.",
+  "comment": "Peak RSS budgets (MiB) per heavy test process. Healthy peaks measured 2026-10-20; budget is about 1.25x peak, rounded up. A file over budget fails. TT-1 (2026-10-22): world-stream peaked at 1286 MiB with three heavy files running at once (1216 MiB alone at root), and caves-reef-isles-retreat at 1009 MiB alone at root (98% of 1024), so both were raised. Budgets cover each file's whole process tree (TT-1 R1-1): regions-bake's terrain bake runs in child processes and peaks at 1469 MiB as a tree (2026-10-22), so it gets 1920. CW-1 after COL-1 (2026-10-24, factory-worker, same job, root 732fe59c vs composed): terrain-borders 475 -> 1,023-1,166 MiB and regions-stream 822 -> 982-1,025 MiB with all 55 caves' COL-1 shells, so 1536 and 1280. col1-art (1,213 at root) and timeline-model (1,197 at root) were already over 1024 at root and are left to their owners.",
   "defaultMiB": 1024,
   "files": {
     "caves-reef-isles-retreat.heavy.test.ts": 1280,
@@ -9,7 +9,9 @@
     "renewal-render.heavy.test.ts": 1280,
     "world-stream.heavy.test.ts": 1536,
     "cw1-caves.heavy.test.ts": 1536,
-    "cw1-bake.heavy.test.ts": 1536
+    "cw1-bake.heavy.test.ts": 1536,
+    "terrain-borders.heavy.test.ts": 1536,
+    "regions-stream.heavy.test.ts": 1280
   },
   "exclusive": [
     "caves-canopy-basin.heavy.test.ts",

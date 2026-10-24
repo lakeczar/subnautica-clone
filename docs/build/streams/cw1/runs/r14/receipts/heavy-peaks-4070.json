@@ -1,0 +1,68 @@
+{
+ "ticket": "261024-221730-60b0",
+ "code": 0,
+ "label": null,
+ "stopReason": null,
+ "class": "heavy-suite",
+ "review": false,
+ "tokens": 0,
+ "memMiB": 3072,
+ "gpu": false,
+ "express": false,
+ "exclusive": false,
+ "machine": "RTX 4070 Laptop (alickers, shared desktop host)",
+ "machineTag": "4070",
+ "remote": true,
+ "attempts": 1,
+ "mode": "normal",
+ "worktree": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "cwd": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "argv": [
+  "sh",
+  "-c",
+  "node scripts/test-build.mjs && SILTWAKE_HEAVY_BUDGET_MIB=8000 node scripts/test-tier.mjs heavy > heavy-out-4070.txt 2>&1; rc=$?; tail -70 heavy-out-4070.txt; exit $rc"
+ ],
+ "submittedAt": 1792880250256,
+ "admittedAt": 1792880765633,
+ "endedAt": 1792882083375,
+ "ranS": 1317.7,
+ "peakMiB": null,
+ "cpuS": null,
+ "unavailable": {
+  "peakMiB": "measured by the sandbox's siltwake-job, not reported over the lane",
+  "cpuS": "the same"
+ },
+ "goal": {
+  "v": 2,
+  "limitS": 14400,
+  "explicitDeadline": false,
+  "ceilingS": 14400,
+  "stallS": 900,
+  "soak": false,
+  "snapshot": false,
+  "machine": "4070",
+  "remoteOk": true
+ },
+ "head": "f95254476426febcd3261a0bfb38efabad193e3e",
+ "dirty": "clean",
+ "headAtAdmit": "f95254476426febcd3261a0bfb38efabad193e3e",
+ "dirtyAtAdmit": "clean",
+ "changedTree": false,
+ "changedDuringRun": false,
+ "evidence": {
+  "commit": "f95254476426febcd3261a0bfb38efabad193e3e",
+  "bound": true,
+  "why": null,
+  "snapshot": false,
+  "machine": "RTX 4070 Laptop (alickers, shared desktop host)",
+  "dirtyAtAdmit": "clean",
+  "changedDuringRun": false
+ },
+ "artifacts": [
+  {
+   "remote": "heavy-out-4070.txt",
+   "local": "/work/tmp/261024-221730-60b0/heavy-out-4070.txt",
+   "bytes": 107622
+  }
+ ]
+}
