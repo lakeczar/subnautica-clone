@@ -1178,3 +1178,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Probe:** a read-only Linux-side probe is queued (`8117`). The coordinator corrected it: no runtime-assembled `/mnt` path to slip past the lane's guard.
   - **Shaders:** the 4070 gate judges warmed frames and records first-use shader compiles.
 - **Owner (2026-10-24): reading the Windows laptop is allowed, read-only** (SCHED-4b option 1). New **`docs/build/ALICKERS-LEDGER.md`** records every laptop change (fleet's baseline plus ours) with undo and redo steps; the owner decides undos. Rule added to `WORKER_RESOURCE_LIMITS.md`.
+- **CW-1 R4 response done at `42786dc4`** (pushed by the coordinator):
+  - **Fixes:** root `732fe59c` composed (6 conflicts); R4-1/2/3 fixed; a sampler worker; contiguous-block bake workers (2,233→1,365 MiB); a fresh verified rebake `ca0b7fb1` with provenance checks; zero shell fallbacks.
+  - **Composed checks:** fast, economy, playthrough 8/8; heavy assertions pass, with budgets attributed by a root/composed A/B (`col1-art` and `timeline-model` are already over at root because the **root gate doesn't run the heavy tier**; `terrain-borders` and `regions-stream` budgets raised; `regions-bake` is over on the 4070, open for TT-1).
+  - **r14 exclusive:** tour 1 PASS (nothing excused); deep 2 FAIL (49.9 ms `lightPlace`; canary stalled 48.9 ms; renderer 0.2 ms) → carried as a provisional compromise. 8/9 proven. Also a 93 ms on-CPU render frame in deep 2 (game work).
+  - **Review:** Sol R5 running (`siltwake-cw1-review-r5-sol-42786dc`), deciding ACCEPT, provisional or changes.
+- **Process gap found:** `npm run gate` does not run the heavy tier, so root-side budget overruns go unseen. This goes to the test-efficiency debate and the STEW owner (decide whether the gate runs the heavy tier, or a tracked nightly does).
