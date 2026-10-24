@@ -37,6 +37,8 @@ import { PALETTE as P } from "./palette.js";
 export const BUILD_DISTANCE = 160;
 export const DROP_DISTANCE = 240;
 const FIXED_HOST_IDS = Object.keys(FIXED_HOSTS) as FixedHostId[];
+/** Fitted hardware is released only past this, 20 m beyond where it builds. */
+const HARDWARE_RELEASE = DROP_DISTANCE + 20;
 /** The sweep's front travels at this speed; each contact flares for FLARE_SECONDS. */
 const PULSE_SPEED = 120, FLARE_SECONDS = 12, MAX_FLARES = 8;
 
@@ -160,6 +162,13 @@ function rackKey(s: GameState, id: FixedHostId): string {
 // ---------------------------------------------------------------- hull hardware
 type Hardware = "sonar" | "tagger" | "cutting_arm" | "grapple" | "drop_pod" | "deck_crane" | "salvage_clamp" | "scout_drone";
 const TOOL_HARDWARE = ["cutting_arm", "grapple", "drop_pod", "deck_crane", "salvage_clamp"] as const;
+/** What a hull is fitted with, by contents (item ID and kind, in fitting order): item IDs
+ * repeat across saves, so a loaded save with another fitting never reuses the old art. */
+function fittingKey(s: GameState, v: VehicleState): string {
+  let key = v.hull;
+  for (const id of v.modules) key += `|${id}:${s.inventory.items.find((i) => i.id === id)?.kind ?? ""}`;
+  return key;
+}
 /** The signature hardware a hull's fitting shows. Called only when its fitting changes. */
 function hardwareOf(s: GameState, v: VehicleState): Hardware[] {
   const p = vehicleProfile(s, v), out: Hardware[] = [];
@@ -310,8 +319,10 @@ export function createFieldKit(scene: Scene, cel: ShaderMaterial): FieldKitLayer
           if (!current(id, key)) store(id, key, make(id, (b) => { rackArt(b, s!, host); }));
         }
         for (const v of s!.fleet.vehicles) {
-          if (v.berth || !v.modules.length || dist(v.pose.position, camera) > DROP_DISTANCE) continue;
-          const id = `hardware.${v.id}`, key = `${v.hull}|${v.modules.join(",")}`;
+          const id = `hardware.${v.id}`;
+          // Hysteresis: built within DROP_DISTANCE, kept until HARDWARE_RELEASE, so a hull at the edge never churns.
+          if (v.berth || !v.modules.length || dist(v.pose.position, camera) > (built.has(id) ? HARDWARE_RELEASE : DROP_DISTANCE)) continue;
+          const key = fittingKey(s!, v);
           let m = current(id, key);
           if (!m) {
             const kinds = hardwareOf(s!, v);

@@ -58,6 +58,27 @@ test("field kit: outposts and their modules build near the camera, rebuild on ch
     assert.equal(kit.lineMeshes, 1);
     kit.update(null, near);
     assert.equal(kit.lineMeshes, 0, "unloading releases every line");
+    // R2-1: two valid saves in a row, the same hull and item IDs, different fittings: the art follows the fitting.
+    const fitted = (kind: "mantle_drone_bay" | "mantle_salvage_clamp") => {
+      const g = structuredClone(s), h = g.fleet.vehicles.find((x) => x.id === m.id)!;
+      g.inventory.items.find((i) => i.id === h.modules[0])!.kind = kind;
+      return g;
+    };
+    kit.update(fitted("mantle_drone_bay"), near);
+    const first = scene.getMeshByName(`hardware.${m.id}`)!;
+    kit.update(fitted("mantle_salvage_clamp"), near);
+    const second = scene.getMeshByName(`hardware.${m.id}`)!;
+    assert.notEqual(second, first, "another fitting, under the same IDs: rebuilt");
+    assert.ok(first.isDisposed());
+    // R2-2: around the release distance the art is kept, not rebuilt.
+    const edge = (d: number) => ({ x: m.pose.position.x + d, y: m.pose.position.y, z: m.pose.position.z });
+    const clamp = fitted("mantle_salvage_clamp");
+    kit.update(clamp, edge(239));
+    const kept = scene.getMeshByName(`hardware.${m.id}`)!;
+    for (const d of [241, 250, 239, 255, 241]) { kit.update(clamp, edge(d)); assert.equal(scene.getMeshByName(`hardware.${m.id}`), kept, `kept at ${d} m`); }
+    kit.update(clamp, edge(265));
+    assert.equal(scene.getMeshByName(`hardware.${m.id}`), null, "released past 260 m");
+    kit.update(s, near);
     assert.equal(scene.materials.length, materials + 8, "the cel material and eight flares' (no per-frame materials)");
     kit.dispose();
     assert.deepEqual([scene.meshes.length, scene.geometries.length, scene.materials.length], before, "disposed clean");
