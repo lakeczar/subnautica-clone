@@ -107,7 +107,10 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
     - an ok commit's `seq` is the recorder's, and its notes reload at once;
     - an expedition the store held before a commit and lost after it is reported dropped.
   - **Scale:** 24 fixed seeds in the fast tier (`timeline-model.test.ts`), and 2,000 sequences of 40 steps in the heavy tier (`timeline-model.heavy.test.ts`, `SILTWAKE_TIMELINE_SEQUENCES` to change). A failure prints its seed and the last 25 steps; `SILTWAKE_TIMELINE_SEED=<seed>` reruns one.
-  - **Findings during development:** one, in the harness's own drop accounting (a session lost to a corrupted v1 record isn't a commit's drop).
+  - **Findings during development:**
+    - **The store (seed 66769815):** a repair staged a chunk under a number the old journal still named, though that key itself was gone, so a crash image could pair the old journal with the repair's content. Staging now also avoids every number the old journal names. A targeted regression was added.
+    - **The harness** (its own drop accounting): an expedition lost to a corrupted v1 record isn't a commit's drop.
+  - **Runs:** 2,000 sequences pass at `d75de411` (156 s on factory-worker via the queue). `SILTWAKE_TIMELINE_SEED_BASE` selects another seed range for exploration.
 - **Cancelled:** the 4070 gate tickets submitted at `5314f3ef` were still queued when R1 landed, and were cancelled so a changed tree couldn't run them locally. The gate is rerun at the R1 head.
 
 ## What changed

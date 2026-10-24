@@ -5,11 +5,13 @@ import assert from "node:assert/strict";
 import { runModel } from "./timeline-model-support.js";
 
 const COUNT = Number(process.env.SILTWAKE_TIMELINE_SEQUENCES ?? 2000);
+/** Another seed range, for exploratory runs. */
+const BASE = Number(process.env.SILTWAKE_TIMELINE_SEED_BASE ?? 1_000_003);
 
 test(`the timeline journal keeps its invariants over ${COUNT} seeded fault sequences`, async () => {
   const failures: string[] = [];
   for (let i = 0; i < COUNT && failures.length < 5; i++) {
-    const r = await runModel(1_000_003 + i * 104_729, 40);
+    const r = await runModel(BASE + i * 104_729, 40);
     if (!r.ok) failures.push(`seed ${r.seed}: ${r.failure}\n${r.log.slice(-25).join("\n")}`);
   }
   assert.deepEqual(failures, []);
