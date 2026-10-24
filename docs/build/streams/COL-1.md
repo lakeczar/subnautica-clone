@@ -25,7 +25,13 @@ With equal boundaries, the faces' summed winding equals the region's everywhere.
 
   Tests and tools that set no store build live as their oracle and aren't counted.
 - **Tested** (`regions-bake.test.ts`): a decoded chunk leaves the count unchanged; a missing file adds exactly one and logs one line. The mutant that doesn't count fails it.
-- **A normal production build never reaches it:** this is pending the 3090 traversal (tickets `261024-130411-46ed`, `261024-130411-ccc2`), which counts every shell build in the page on a fresh-bake build of CW-1 + COL-1.
+- **A normal production build never reaches it,** **measured: zero shell builds** in two of CW-1's traversal segments on the 3090 (exclusive). They ran CW-1's harness at `6ca73311` on a fresh production build of CW-1 + COL-1 R7 (scratch commit `bc9964e1`, never pushed), with a counter on every shell build in the page. Results are in [`col1/traverse/`](col1/traverse/).
+  - **Deep segment 12** (meridian_culvert_north, ticket `261024-130411-46ed`): 0 shell builds at load or in travel; 592 frames, none over 33 ms; gate pass.
+  - **Main-tour segment 1** (Lantern grotto, Apron hollow, Step arch, Glimmer crack, Crown shaft and four Basin caves, ticket `261024-130411-ccc2`): 0 shell builds at load or in travel; 26,382 frames.
+    - 7 frames are over 33 ms: 6 classed host (stolen time) and 1 clean, with no work attributed to streaming. The gate passes.
+    - The only unsliced cave build is CW-1's collision-cluster admission at load, 8.1 ms, not a shell.
+  - **Both receipts are marked DISTURBED** (CPU wait; hypervisor steal 5.09%). So the counts are evidence, but the frame times aren't performance claims.
+  - **That build predates R8's fallback counter.** Zero shell builds rules out a live build of any chunk that touches a cave; a fallback on a cave-free chunk would not show in these runs.
 - **No new provenance mechanism:** CW-1's manifest source-hash refusal is the authority, so on merge its refused bake simply lands in this counted path.
 - **Production compromise:** whenever terrain assets fail to load or are refused, each affected chunk is built on the main thread, unsliced. Each cave shell in it is one synchronous build. R7 made the shell build about 1.2–1.6× slower (crown shaft fine 1.23 → 1.80 s uncached, local, indicative), so a refused or missing bake near a large cave is a visible hitch.
   - **Root fix:** WK-1's sliced or worker builder for the fallback, with shells baked as packs (conventions 4 and 5). **S–M**, owned by WK-1.
@@ -158,10 +164,7 @@ Two survive:
 
   That's about 1.2–1.6× in all, coarse alike. It falls on bake time (`npm run build`, tests through the build cache) and on that fallback, which R8 counts and records as a production compromise.
 - **Root fix:** WK-1's offline pack pipeline, with shells baked and loaded as packs, and the live builder sliced or in a worker for the fallback (conventions 4 and 5). **S–M.**
-- **Measured confirmation: pending.** Two of CW-1's traversal segments are queued on the 3090 (exclusive, tickets `261024-130411-46ed` and `261024-130411-ccc2`). They run CW-1's harness at `6ca73311`, with per-vCPU steal and host/mixed/clean frame classes, on a production build of CW-1 + this branch that counts every shell build in the page.
-  - **The segments:** deep segment 12 (meridian_culvert_north) and main-tour segment 1 (the hub caves).
-  - **What should show:** zero shell builds during travel. Any long frame in a cave stream is judged by its remainder after steal.
-  - A first ticket (`261023-220354-37d3`) was rejected because the tree changed before admission; it never ran.
+- **Measured confirmation:** see *R8 response*: zero shell builds in two 3090 traversal segments.
 
 **Performance conventions:** this is build-time work: no per-frame allocation, no hot path, Babylon-free (convention 5). `caveFloor`'s memo now has an owner, a 6 MiB bound and an eviction rule: it starts over past 2¹⁷ points, which changes no answer since it's exact (convention 8). It has a fast test. Registering it in a cache ledger waits for STEW-1's ledger.
 
