@@ -11,6 +11,9 @@
  *     file in `dir` as it stands at this point in the queue (nothing appended later
  *     is in it, and nothing modifies `out` afterwards).
  *   { op: "barrier", id } → { barrier: id } once everything before it has been acknowledged or refused.
+ *   { op: "remove", ... } also answers { absent } (already gone) or { refused, error } (another tab or worker holds it: nothing was freed).
+ *   { op: "release", dir, id } → { released: id }: the directory's open handles closed (a stopped recording; export reopens them).
+ *   Any operation that throws is answered { opFailed: op, error } (with its request's reply key when it has one); the queue goes on.
  *
  * Video (WebCodecs, one segment file at a time, see webm.ts):
  *   { op: "video-open", dir, file, width, height, fps, bitrate } → { videoOpened: file, codec } or { videoError }
@@ -37,6 +40,7 @@ type Message =
   | { op: "remove"; dir: string; file: string | null; id: number }
   | { op: "export"; dir: string; out: string; id: number }
   | { op: "barrier"; id: number }
+  | { op: "release"; dir: string; id: number }
   | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number }
   | { op: "video-frame"; t: number; bitmap?: ImageBitmap }
   | { op: "video-flush"; id: number }
@@ -173,11 +177,14 @@ function videoFrame(m: Extract<Message, { op: "video-frame" }>): void {
   const picture = lastPicture;
   // Times only go forward; a segment's first picture is always kept (its key frame and its origin).
   const behind = encoder !== null && encoder.encodeQueueSize > ENCODE_QUEUE_MAX && seg !== null && seg.frames > 0;
-  if (!encoder || encoder.state !== "configured" || !seg || seg.broken || !picture || m.t <= lastT || behind) { scope.postMessage({ videoFrame: 1, kept: false }); return; }
+  // A refused picture is reported with its time and why: the main thread keeps it as a gap in the video (R3-3).
+  const why = !encoder || encoder.state !== "configured" ? "no encoder" : !seg || seg.broken ? "no segment to write" : !picture ? "no picture yet"
+    : m.t <= lastT ? "out of order" : behind ? "the encoder was behind" : null;
+  if (why || !encoder || !seg) { scope.postMessage({ videoFrame: 1, kept: false, t: m.t, why }); return; }
   lastT = m.t;
   // The segment's origin is its first encoded picture's page time: the main thread dates the file by it.
   if (seg.origin === null) { seg.origin = m.t; scope.postMessage({ videoOrigin: seg.file, t: m.t }); }
-  const frame = new VideoFrame(picture, { timestamp: Math.round(m.t * 1000) });
+  const frame = new VideoFrame(picture!, { timestamp: Math.round(m.t * 1000) });
   try { encoder.encode(frame, { keyFrame: seg.frames % KEY_EVERY === 0 }); } finally { frame.close(); }
   seg.frames++;
   scope.postMessage({ videoFrame: 1, kept: true });
@@ -199,46 +206,69 @@ async function videoClose(m: Extract<Message, { op: "video-close" }>): Promise<v
     firstMs: seg?.origin ?? -1, lastMs: seg && seg.origin !== null ? seg.origin + seg.clusters.lastMs : -1 });
 }
 
+/** The reply each request expects: a failed operation still answers it, with the error, so nothing waits forever (R3-1). */
+const REPLY_KEY: Partial<Record<Message["op"], string>> = { barrier: "barrier", export: "exported", remove: "removed", release: "released", "video-flush": "videoFlushed", "video-close": "videoClosed" };
+const errorText = (error: unknown): string => (error instanceof Error ? error.message : String(error));
+
+/** A video operation threw: its input and the encoder are closed, the segment
+ * written so far is kept, and the main thread is told (it ends the video). */
+function videoFailed(error: unknown): void {
+  const seg = segment;
+  if (seg) { seg.broken = true; try { seg.clusters.flush(); } catch { /* the file keeps what it has */ } }
+  try { encoder?.close(); } catch { /* closed */ }
+  encoder = null; encoderSize = "";
+  lastPicture?.close(); lastPicture = null;
+  scope.postMessage({ videoError: errorText(error) });
+}
+
+async function handleMessage(m: Message): Promise<void> {
+  if (m.op === "video-frame") videoFrame(m);
+  else if (m.op === "append" || m.op === "put") {
+    const bytes = new Uint8Array(m.data);
+    try {
+      const h = await handle(m.dir, m.file);
+      if (m.op === "put") h.truncate(0);
+      h.write(bytes, { at: h.getSize() });
+      h.flush();
+      // Pictures are written once: release their handles at once.
+      if (m.file.startsWith("snapshots/")) { h.close(); handles.delete(`${m.dir}/${m.file}`); }
+      scope.postMessage({ ack: bytes.length, file: m.file });
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : "";
+      scope.postMessage({ failed: m.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: errorText(error) });
+    }
+  } else if (m.op === "barrier") scope.postMessage({ barrier: m.id });
+  else if (m.op === "release") { release(m.dir); scope.postMessage({ released: m.id }); }
+  else if (m.op === "video-open") await videoOpen(m);
+  else if (m.op === "video-flush") { await drain(); segment?.clusters.flush(); scope.postMessage({ videoFlushed: m.id }); }
+  else if (m.op === "video-close") await videoClose(m);
+  else if (m.op === "remove") {
+    // Space is only credited for a deletion that happened (R3-2): an absent file is fine; a refused one (another tab or worker holds it) is reported as refused.
+    const target = m.file ? `${m.dir}/${m.file}` : m.dir;
+    release(target);
+    try {
+      const parts = target.split("/"), parent = await directory(parts.slice(0, -1).join("/"), false);
+      await parent.removeEntry(parts.at(-1)!, { recursive: true });
+      scope.postMessage({ removed: m.id });
+    } catch (error) {
+      const name = error instanceof DOMException ? error.name : error instanceof Error ? error.name : "";
+      if (name === "NotFoundError") scope.postMessage({ removed: m.id, absent: true });
+      else scope.postMessage({ removed: m.id, refused: name || "Error", error: errorText(error) });
+    }
+  } else {
+    try { scope.postMessage({ exported: m.id, bytes: await exportZip(m.dir, m.out) }); }
+    catch (error) { scope.postMessage({ exported: m.id, error: errorText(error) }); }
+  }
+}
+
 scope.onmessage = (e) => {
   const m = e.data;
-  // Video frames go through the same queue: a frame after a segment's close and the next one's open belongs to the new one.
-  if (m.op === "video-frame") { queue = queue.then(() => videoFrame(m)); return; }
-  queue = queue.then(async () => {
-    if (m.op === "append" || m.op === "put") {
-      const bytes = new Uint8Array(m.data);
-      try {
-        const h = await handle(m.dir, m.file);
-        if (m.op === "put") h.truncate(0);
-        h.write(bytes, { at: h.getSize() });
-        h.flush();
-        // Pictures are written once: release their handles at once.
-        if (m.file.startsWith("snapshots/")) { h.close(); handles.delete(`${m.dir}/${m.file}`); }
-        scope.postMessage({ ack: bytes.length, file: m.file });
-      } catch (error) {
-        const name = error instanceof DOMException ? error.name : "";
-        scope.postMessage({ failed: m.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: error instanceof Error ? error.message : String(error) });
-      }
-    } else if (m.op === "barrier") {
-      scope.postMessage({ barrier: m.id });
-    } else if (m.op === "video-open") {
-      await videoOpen(m);
-    } else if (m.op === "video-flush") {
-      await drain();
-      segment?.clusters.flush();
-      scope.postMessage({ videoFlushed: m.id });
-    } else if (m.op === "video-close") {
-      await videoClose(m);
-    } else if (m.op === "remove") {
-      try {
-        const target = m.file ? `${m.dir}/${m.file}` : m.dir;
-        release(target);
-        const parts = target.split("/"), parent = await directory(parts.slice(0, -1).join("/"), false);
-        await parent.removeEntry(parts.at(-1)!, { recursive: true });
-      } catch { /* already gone */ }
-      scope.postMessage({ removed: m.id });
-    } else {
-      try { scope.postMessage({ exported: m.id, bytes: await exportZip(m.dir, m.out) }); }
-      catch (error) { scope.postMessage({ exported: m.id, error: error instanceof Error ? error.message : String(error) }); }
-    }
+  // One queue, strictly in order (a frame after a segment's close and the next
+  // one's open belongs to the new one). A failing operation is contained: it is
+  // reported, its request answered with the error, and the queue goes on (R3-1).
+  queue = queue.then(() => handleMessage(m)).catch((error) => {
+    if (m.op.startsWith("video")) videoFailed(error);
+    const key = REPLY_KEY[m.op];
+    scope.postMessage({ opFailed: m.op, error: errorText(error), ...(key && "id" in m ? { [key]: m.id } : {}) });
   });
 };

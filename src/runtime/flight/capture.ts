@@ -50,6 +50,12 @@ const VIDEO_INFLIGHT_MAX = 3;
 const BACKLOG_HIGH = 32 * 1024 ** 2, BACKLOG_LOW = 8 * 1024 ** 2;
 /** An export stays out of the budget's reach this long after it is written: the download reads it (R2-1). */
 const EXPORT_GRACE_MS = 120_000;
+/** No frame for this long is a "still" stretch in the video's ledger (a stall, or a hidden tab). */
+const STILL_GAP_MS = 250;
+/** Gap records kept (beyond, only the counts grow). */
+const VIDEO_GAPS_MAX = 5000;
+/** Recordings this page still holds (the running one and the latest completed, exportable): another capture's budget never removes them (R3-2). */
+const liveSessions = new Set<string>();
 /** A worker request (a flush, a barrier, a segment's close) answered by then, or given up as failed. */
 const REQUEST_TIMEOUT_MS = 15_000;
 
@@ -57,6 +63,8 @@ export interface FlightBuild { content: string; bake: string; commit: string }
 type Video = {
   segment: { file: string; index: number; start: number | null; began: number; width: number; height: number };
   next: number; frames: number; inflight: number; capturing: number; skipped: number; lastSent: number; paused: boolean;
+  /** The page time of the last picture the encoder took: what a gap holds. */
+  lastKept?: number;
 };
 type SegmentRecord = { file: string; start: number | null; end: number | null; width: number; height: number };
 /** What a recording knows it lost, persisted in its header (R2-2). */
@@ -72,12 +80,20 @@ interface Ledger {
   stopped: { t: number; why: string } | null;
   /** An export copy written over the budget, and by how much (it is transient: EXPORT_GRACE_MS). */
   exportOver: { at: string; bytes: number }[];
+  /** Removals the browser refused (another tab or worker holds the file): nothing was freed (R3-2). */
+  removalRefused: { session: string; file: string | null; bytes: number; why: string }[];
+  /** Stretches of the video without a fresh picture (R3-3), page ms: `lost` (pictures drawn but not
+   * captured: the main thread or the encoder was behind, or the encoder failed) or `still` (no frame
+   * was drawn at all: a stall, or the tab hidden). The file holds the last picture through them. */
+  videoGaps: { from: number; to: number; kind: "lost" | "still"; why: string; pictures: number; heldFrom: number | null }[];
+  /** Pictures not captured, by where: skipped on the main thread, refused by the encoder. Kept after Off. */
+  videoDrops: { skipped: number; refused: number };
 }
 type WorkerReply = {
   ack?: number; file?: string; failed?: string; bytes?: number; quota?: boolean; error?: string; video?: boolean;
   removed?: number; exported?: number; barrier?: number; videoFlushed?: number; videoClosed?: number;
   videoFrame?: number; kept?: boolean; videoOpened?: string; codec?: string; videoError?: string; wrote?: string; videoOrigin?: string; t?: number;
-  frames?: number; firstMs?: number; lastMs?: number;
+  frames?: number; firstMs?: number; lastMs?: number; why?: string; absent?: boolean; refused?: string; opFailed?: string; released?: number;
 };
 
 export class FlightCapture {
@@ -125,7 +141,9 @@ export class FlightCapture {
     const gl = canvas.getContext("webgl2");
     const info = gl?.getExtension("WEBGL_debug_renderer_info");
     const script = document.querySelector<HTMLScriptElement>("script[type=module][src]")?.src ?? "";
-    this.ledger = { budgetBytes: this.budget, lost: [], ringLost: { frames: 0, samples: 0, events: 0, snapshots: 0 }, removedOlder: [], stopped: null, exportOver: [] };
+    this.ledger = { budgetBytes: this.budget, lost: [], ringLost: { frames: 0, samples: 0, events: 0, snapshots: 0 }, removedOlder: [], stopped: null, exportOver: [],
+      removalRefused: [], videoGaps: [], videoDrops: { skipped: 0, refused: 0 } };
+    liveSessions.add(this.session);
     this.header = {
       format: FLIGHT_FORMAT, version: FLIGHT_VERSION, mode, session: this.session, startedAt: started.toISOString(),
       pageOrigin: performance.timeOrigin, frameColumns: FRAME_COLUMNS, holdCodes: HOLD_CODES,
@@ -194,7 +212,7 @@ export class FlightCapture {
       // Under load the video skips frames, never the game.
       if (now >= v.next) {
         v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
-        if (v.inflight + v.capturing >= VIDEO_INFLIGHT_MAX) v.skipped++;
+        if (v.inflight + v.capturing >= VIDEO_INFLIGHT_MAX) { v.skipped++; this.ledger.videoDrops.skipped++; this.videoGap(now, "lost", "the video was behind on the main thread", v.lastKept ?? v.lastSent); }
         else {
           const seg = v.segment;
           v.capturing++;
@@ -225,7 +243,8 @@ export class FlightCapture {
     const v = this.video;
     if (v && !v.paused && v.frames > 0 && v.capturing === 0 && now >= v.next) {
       v.next = Math.max(v.next + 1000 / VIDEO_FPS, now - 1000 / VIDEO_FPS);
-      if (v.inflight >= VIDEO_INFLIGHT_MAX) v.skipped++; else this.sendFrame(v, now);
+      if (v.inflight >= VIDEO_INFLIGHT_MAX) { v.skipped++; this.ledger.videoDrops.skipped++; this.videoGap(now, "lost", "the video was behind on the main thread", v.lastKept ?? v.lastSent); }
+      else this.sendFrame(v, now);
     }
     const at = performance.now();
     this.recorder.charge(at - start, "video");
@@ -238,11 +257,22 @@ export class FlightCapture {
   private sendFrame(v: Video, t: number, bitmap?: ImageBitmap): void {
     const s = this.spool;
     if (!s || t <= v.lastSent) { bitmap?.close(); return; }
+    // No frame drawn at all for a while (a stall, or the tab hidden): the screen held too; the file holds its last picture (R3-3).
+    if (Number.isFinite(v.lastSent) && t - v.lastSent > STILL_GAP_MS) this.videoGap(v.lastSent + 1000 / VIDEO_FPS, "still", "no frame was drawn (a stall, or the tab hidden)", v.lastSent, t);
     v.lastSent = t;
     v.inflight++;
     v.frames++;
     s.worker.postMessage({ op: "video-frame", t, ...(bitmap ? { bitmap } : {}) }, bitmap ? [bitmap] : []);
   }
+
+  /** A stretch without a fresh picture, merged with the last one of its kind when they touch (R3-3). */
+  private videoGap(t: number, kind: "lost" | "still", why: string, heldFrom: number, to = t): void {
+    const gaps = this.ledger.videoGaps, last = gaps.at(-1);
+    if (last && last.kind === kind && last.why === why && t - last.to <= 2 * (1000 / VIDEO_FPS)) { last.to = Math.round(to); last.pictures += kind === "lost" ? 1 : 0; }
+    else if (gaps.length < VIDEO_GAPS_MAX) gaps.push({ from: Math.round(t), to: Math.round(to), kind, why, pictures: kind === "lost" ? 1 : 0, heldFrom: Number.isFinite(heldFrom) ? Math.round(heldFrom) : null });
+    this.ledgerChanged = true;
+  }
+  private ledgerChanged = false;
 
   /** The game canvas scaled to `width`, keeping its aspect (both even, as encoders want). */
   private scaled(width: number): { width: number; height: number } {
@@ -262,9 +292,12 @@ export class FlightCapture {
     // Bounded when nobody drains it (a driver that never reads): the oldest states go.
     for (const old of this.snapState.keys()) { if (this.snapState.size <= 4 * SNAPSHOT_MEMORY) break; this.snapState.delete(old); }
     void this.track(createImageBitmap(this.canvas, { resizeWidth: size.width, resizeHeight: size.height, resizeQuality: "low" }).then((bitmap) => {
+      const t0 = performance.now();
       const out = new OffscreenCanvas(bitmap.width, bitmap.height);
       out.getContext("bitmaprenderer")!.transferFromImageBitmap(bitmap);
-      return out.convertToBlob({ type: "image/jpeg", quality: 0.72 });
+      const blob = out.convertToBlob({ type: "image/jpeg", quality: 0.72 });
+      this.recorder.charge(performance.now() - t0, "snapshot");
+      return blob;
     }).then((blob) => {
       const t0 = performance.now();
       this.blobs.set(snap.seq, blob);
@@ -440,6 +473,13 @@ export class FlightCapture {
     if (m.failed !== undefined) this.writeFailed(m.failed, m.bytes ?? 0, m.quota === true, m.error ?? "", m.video === true);
     if (m.wrote !== undefined) { const f = this.stored.get(m.wrote); if (f) f.bytes += m.bytes ?? 0; }
     if (m.videoFrame !== undefined && this.video) this.video.inflight = Math.max(0, this.video.inflight - 1);
+    if (m.videoFrame !== undefined && m.kept === false && m.t !== undefined && m.why !== "out of order") {
+      this.ledger.videoDrops.refused++;
+      this.videoGap(m.t, "lost", m.why === "the encoder was behind" ? "the encoder was behind" : `the encoder took no picture (${m.why})`, this.video?.lastKept ?? NaN);
+    }
+    if (m.videoFrame !== undefined && m.kept === true && this.video && m.t !== undefined) this.video.lastKept = m.t;
+    if (m.opFailed !== undefined && !m.opFailed.startsWith("video"))
+      this.recorder.event("warning", `warning: the spool's ${m.opFailed} failed (${(m.error ?? "").slice(0, 120)})`, { snapshot: false });
     if (m.videoOrigin !== undefined) {
       // The segment's time 0 is its first encoded picture's page time, as the worker stamped it (R2-7).
       const seg = this.segments.find((x) => x.file === m.videoOrigin);
@@ -447,10 +487,14 @@ export class FlightCapture {
     }
     if (m.videoOpened !== undefined && m.codec && this.codec !== m.codec) { this.codec = m.codec; this.videoHeader(); }
     if (m.videoError !== undefined && this.video) {
+      // The video ends here; what came after is lost, and the ledger says so (R3-1).
+      const v = this.video;
+      this.ledger.lost.push({ file: v.segment.file, bytes: 0, why: `the video encoder failed (${m.videoError.slice(0, 120)}); no video after this moment` });
+      this.videoGap(performance.now(), "lost", "the video encoder failed", v.lastKept ?? NaN);
       this.recorder.event("warning", `warning: the video encoder failed (${m.videoError.slice(0, 120)}); recording without video`, { snapshot: false });
       this.setVideo(false, "the encoder failed");
     }
-    const id = m.removed ?? m.exported ?? m.barrier ?? m.videoFlushed ?? m.videoClosed;
+    const id = m.removed ?? m.exported ?? m.barrier ?? m.videoFlushed ?? m.videoClosed ?? m.released;
     if (id !== undefined) { s.waiters.get(id)?.(m); s.waiters.delete(id); }
     this.backpressure();
   }
@@ -528,47 +572,78 @@ export class FlightCapture {
   }
   private total(): number { return [...this.stored.values(), ...this.older].reduce((a, f) => a + f.bytes, 0); }
 
-  /** Keeps every recording within the budget (retention.ts), reporting what went (R1-S2, R2-1). */
+  /** Keeps every recording within the budget (retention.ts), reporting what went (R1-S2, R2-1, R3-2). */
   private retain(): void {
     const s = this.spool;
     if (!s || this.disposed) return;
-    // The latest export is out of reach for its grace period (its download reads it); after that it is the first to go.
-    const grace = this.latestExport && performance.now() < this.latestExport.until ? this.latestExport.file : null;
-    const files = [...this.stored.values(), ...this.older.filter((x) => !(x.kind === "export" && x.file === grace))];
-    const active = [this.video?.segment.file ?? "", ...this.finishing, "header.json", "frames.ndjson", "samples.ndjson", "events.ndjson", "snapshots.ndjson"];
-    const plan = planRetention(files, this.session, active, this.budget);
-    this.apply(plan);
+    const plan = planRetention(this.retainable(), this.session, this.activeFiles(), this.budget, (f) => this.pinned(f));
+    void this.apply(plan);
     if (!plan.overAfter) return;
+    const held = this.ledger.removalRefused.reduce((a, r) => a + r.bytes, 0);
+    const holding = held ? ` (${Math.round(held / 1048576)} MiB of older recordings could not be removed: in use elsewhere)` : "";
     if (this.video) {
-      this.recorder.event("warning", "warning: the recording's own telemetry and pictures fill the storage budget; video stopped", { snapshot: false });
+      this.recorder.event("warning", `warning: the recording's own telemetry and pictures fill the storage budget${holding}; video stopped`, { snapshot: false });
       this.setVideo(false, "the storage budget is full");
-    } else if (!this.finishing.size && !this.stopped) {
+    } else if (!this.finishing.size && !this.removing.size && !this.stopped) {
       // Nothing left to remove but this recording's telemetry (R2-1): stop
       // here, with a durable fact, rather than grow past the budget.
-      const why = `this recording's telemetry fills the storage budget (${Math.round(this.budget / 1048576)} MiB); recording stopped`;
+      const why = `this recording's telemetry fills the storage budget (${Math.round(this.budget / 1048576)} MiB)${holding}; recording stopped`;
       this.ledger.stopped = { t: Math.round(performance.now()), why };
       this.ledger.lost.push({ file: null, bytes: 0, why: `nothing after this moment was recorded: ${why}` });
       this.recorder.event("warning", `warning: ${why}`, { snapshot: false });
       this.stop("recording stopped: the storage budget is full");
     }
   }
-  /** Carries out a plan; every removal is in the ledger and the event log (R2-2). */
-  private apply(plan: RetentionPlan): void {
-    const s = this.spool!;
+  /** Everything the budget counts, less what is being removed right now (credited only once the worker confirms it). */
+  private retainable(): StoredFile[] {
+    // The latest export is out of reach for its grace period (its download reads it); after that it is the first to go.
+    const grace = this.latestExport && performance.now() < this.latestExport.until ? this.latestExport.file : null;
+    return [...this.stored.values(), ...this.older.filter((x) => !(x.kind === "export" && x.file === grace))]
+      .filter((f) => !this.removing.has(`${f.session}/${f.file}`) && !this.removing.has(`${f.session}/`));
+  }
+  private activeFiles(): string[] {
+    return [this.video?.segment.file ?? "", ...this.finishing, "header.json", "frames.ndjson", "samples.ndjson", "events.ndjson", "snapshots.ndjson"];
+  }
+  /** Never chosen for removal: another recording this page still holds exportable, or a file whose removal was refused. */
+  private pinned(f: StoredFile): boolean {
+    return (f.session !== this.session && liveSessions.has(f.session)) || this.refused.has(`${f.session}/${f.file}`) || this.refused.has(`${f.session}/`);
+  }
+  /** Removals in flight and refused, by session/file ("session/" for a whole recording). */
+  private readonly removing = new Set<string>();
+  private readonly refused = new Set<string>();
+  /** Carries out a plan. Space is credited and the removal recorded only when the
+   * worker confirms it; a refused removal is recorded as refused and pinned (R3-2). */
+  private apply(plan: RetentionPlan): Promise<unknown> {
+    const done: Promise<unknown>[] = [];
     for (const r of plan.remove) {
+      const key = `${r.session}/${r.file ?? ""}`;
+      if (this.removing.has(key) || this.refused.has(key)) continue;
+      this.removing.add(key);
       const exported = r.session.startsWith("export:");
-      s.worker.postMessage({ op: "remove", id: ++s.seq, ...(exported ? { dir: EXPORT_ROOT, file: r.file } : { dir: `${SPOOL_ROOT}/${r.session}`, file: r.file }) });
-      if (r.session === this.session && r.file) {
-        this.stored.delete(r.file);
-        this.ledger.lost.push({ file: r.file, bytes: r.bytes, why: r.why });
-        this.recorder.event("warning", `warning: ${r.why}: ${r.file} removed`, { snapshot: false, detail: { ...r } });
-      } else {
-        this.older = this.older.filter((f) => !(f.session === r.session && (r.file === null || f.file === r.file)));
-        if (this.latestExport && exported && r.file === this.latestExport.file) this.latestExport = null;
-        this.ledger.removedOlder.push({ session: r.session, file: r.file, bytes: r.bytes, why: r.why });
-        this.recorder.event("session", `${r.why}: ${r.session}${r.file ? `/${r.file}` : ""} removed (${Math.round(r.bytes / 1024)} KiB)`, { snapshot: false, detail: { ...r } });
-      }
+      done.push(this.track(this.request({ op: "remove", ...(exported ? { dir: EXPORT_ROOT, file: r.file } : { dir: `${SPOOL_ROOT}/${r.session}`, file: r.file }) }).then((reply) => {
+        this.removing.delete(key);
+        if (reply.refused || reply.error) {
+          this.refused.add(key);
+          this.ledger.removalRefused.push({ session: r.session, file: r.file, bytes: r.bytes, why: `${r.why}: removal refused (${reply.refused ?? reply.error}); nothing was freed` });
+          this.recorder.event("warning", `warning: could not remove ${r.session}${r.file ? `/${r.file}` : ""} (${reply.refused ?? reply.error}): it is in use elsewhere; its space is still counted`, { snapshot: false });
+          this.ledgerChanged = true;
+          this.retain();
+          return;
+        }
+        if (r.session === this.session && r.file) {
+          this.stored.delete(r.file);
+          this.ledger.lost.push({ file: r.file, bytes: r.bytes, why: r.why });
+          this.recorder.event("warning", `warning: ${r.why}: ${r.file} removed`, { snapshot: false, detail: { ...r } });
+        } else {
+          this.older = this.older.filter((f) => !(f.session === r.session && (r.file === null || f.file === r.file)));
+          if (this.latestExport && exported && r.file === this.latestExport.file) this.latestExport = null;
+          this.ledger.removedOlder.push({ session: r.session, file: r.file, bytes: r.bytes, why: reply.absent ? `${r.why} (already gone)` : r.why });
+          this.recorder.event("session", `${r.why}: ${r.session}${r.file ? `/${r.file}` : ""} removed (${Math.round(r.bytes / 1024)} KiB)`, { snapshot: false, detail: { ...r } });
+        }
+        this.ledgerChanged = true;
+      })));
     }
+    return Promise.all(done);
   }
   /** The header as it stands (it learns the video's segments and the ledger as they change). */
   private putHeader(): void { this.post("header.json", JSON.stringify(this.header, null, 1), "put", "telemetry"); }
@@ -595,6 +670,7 @@ export class FlightCapture {
     if (frames.rows.length) this.post("frames.ndjson", frames.rows.map((row) => JSON.stringify(row)).join("\n") + "\n");
     if (samples.items.length) this.post("samples.ndjson", samples.items.map((x) => JSON.stringify(x)).join("\n") + "\n");
     if (events.items.length) this.post("events.ndjson", events.items.map((x) => JSON.stringify(x)).join("\n") + "\n");
+    if (this.ledgerChanged && !anyLost) { this.ledgerChanged = false; this.putHeader(); }
     if (anyLost) {
       const text = Object.entries(lostNow).filter(([, n]) => n > 0).map(([k, n]) => `${n} ${k}`).join(", ");
       this.post("events.ndjson", `${JSON.stringify({ seq: 0, t: now, kind: "warning", text: `warning: ${text} were overwritten in memory before the spool read them`, detail: { lost: lostNow } })}\n`);
@@ -647,22 +723,18 @@ export class FlightCapture {
     for (const snap of this.waiting.filter((x) => x.t <= cutoff)) this.post("snapshots.ndjson", `${JSON.stringify({ ...snap, missing: "still encoding at this export" })}\n`);
     await this.settleInflight(SNAPSHOT_WAIT_MS);
     await this.request({ op: "barrier" });
-    // Room for the copy (R2-1): older recordings and exports make way first;
-    // this recording's own data never does. What is still over is recorded.
-    const s = this.spool, sessionBytes = [...this.stored.values()].reduce((a, f) => a + f.bytes, 0);
-    for (const f of this.older.filter((x) => x.kind === "export")) {
-      s.worker.postMessage({ op: "remove", id: ++s.seq, dir: EXPORT_ROOT, file: f.file });
-      this.ledger.removedOlder.push({ session: f.session, file: f.file, bytes: f.bytes, why: "an earlier export (a copy), replaced by this one" });
-    }
-    this.older = this.older.filter((x) => x.kind !== "export");
-    const room = planRetention([...this.stored.values(), ...this.older], this.session, [...this.stored.keys()], this.budget - sessionBytes);
-    this.apply(room);
-    const over = room.totalAfter + sessionBytes - this.budget;
+    // Room for the copy (R2-1): earlier exports (copies) go, then older
+    // recordings make way; this recording's own data never does. Removals are
+    // confirmed before the space counts (R3-2); what is still over is recorded.
+    const sessionBytes = [...this.stored.values()].reduce((a, f) => a + f.bytes, 0);
+    await this.apply({ remove: this.older.filter((x) => x.kind === "export").map((f) => ({ session: f.session, file: f.file, bytes: f.bytes, why: "an earlier export (a copy), replaced by this one" })), totalAfter: 0, overAfter: false });
+    await this.apply(planRetention(this.retainable(), this.session, [...this.stored.keys()], this.budget - sessionBytes, (f) => this.pinned(f)));
+    const over = this.retainable().reduce((a, f) => a + f.bytes, 0) + sessionBytes - this.budget;
     if (over > 0) {
       this.ledger.exportOver.push({ at: new Date().toISOString(), bytes: over });
       this.recorder.event("warning", `warning: the export copy goes ${Math.round(over / 1048576)} MiB over the storage budget until it is downloaded`, { snapshot: false });
     }
-    this.header.exported = { at: new Date().toISOString(), cutoff: Math.round(cutoff), overhead: this.recorder.overhead(), videoFrames: this.video?.frames ?? 0, videoSkipped: this.video?.skipped ?? 0 };
+    this.header.exported = { at: new Date().toISOString(), cutoff: Math.round(cutoff), overhead: this.recorder.overhead(), videoFrames: this.video?.frames ?? 0 };
     const lostBefore = this.ledger.lost.length;
     this.putHeader();
     const out = `${EXPORT_ROOT}/${name}`;
@@ -673,6 +745,8 @@ export class FlightCapture {
     if (this.ledger.lost.slice(lostBefore).some((l) => l.file === "header.json")) throw new Error("the recording's header could not be written; export again");
     this.older.push({ session: `export:${name}`, file: name, bytes: result.bytes ?? 0, kind: "export" });
     this.latestExport = { file: name, until: performance.now() + EXPORT_GRACE_MS };
+    // A stopped recording lets go of its files again once exported (R3-2): the export reopens them when it needs them.
+    if (this.stopped) await this.request({ op: "release", dir: `${SPOOL_ROOT}/${this.session}` });
     const file = await (await (await navigator.storage.getDirectory()).getDirectoryHandle(EXPORT_ROOT)).getFileHandle(name);
     return { blob: await file.getFile(), name };
   }
@@ -719,6 +793,8 @@ export class FlightCapture {
     this.flush(performance.now(), true, true);
     await this.settleInflight(SNAPSHOT_WAIT_MS);
     this.putHeader();
+    // Its files are let go (R3-2): another tab's or recording's budget can then remove what it must; an export reopens them.
+    await this.request({ op: "release", dir: `${SPOOL_ROOT}/${this.session}` });
   }
 
   /** A superseded recording (R2-5): once it is finished and no export is
@@ -729,6 +805,7 @@ export class FlightCapture {
     await this.exporting;
     await this.settleInflight(REQUEST_TIMEOUT_MS);
     this.disposed = true;
+    liveSessions.delete(this.session);
     const s = this.spool;
     this.spool = null;
     for (const resolve of s?.waiters.values() ?? []) resolve({ error: "retired" });

@@ -177,7 +177,7 @@ export function analyse(r, t = THRESHOLDS, facts = {}) {
   check("recording complete", integrity.problems.length ? "partial" : integrity.known ? "pass" : "missing",
     integrity.problems.length ? integrity.problems.join("; ") : integrity.known ? integrity.note : "no record of what was drained or spooled");
   const segs = videoSegments(header), v = header.video;
-  const video = videoCoverage(segs, facts.videoSeconds, t0, t0 + durationS * 1000);
+  const video = videoCoverage(segs, facts.videoSeconds, t0, t0 + durationS * 1000, header.retention?.videoGaps ?? []);
   check("video", v?.missing || v?.error ? "missing" : !segs.length ? (v ? "missing" : "absent") : video.status, v?.missing ?? v?.error
     ?? (!segs.length ? (v ? "the header names no video with a start" : "off (an exclusive performance run keeps snapshots only)") : video.note));
   check("frame times judged", judged ? "pass" : "unproven", judged ? "exclusive run" : "shared run: frame times are recorded, not performance evidence");
@@ -238,6 +238,16 @@ export function integrityOf(r, events) {
   for (const l of ledger?.lost ?? []) problems.push(`${l.file ?? "the recording"}${l.bytes ? ` (${Math.round(l.bytes / 1024)} KiB)` : ""}: ${l.why}`);
   if (ledger?.removedOlder?.length) notes.push(`${ledger.removedOlder.length} files of older recordings removed for the storage budget (their history, not this recording)`);
   for (const x of ledger?.exportOver ?? []) notes.push(`an export copy went ${Math.round(x.bytes / 1048576)} MiB over the budget while it was downloaded`);
+  for (const x of ledger?.removalRefused ?? []) notes.push(`${x.session}${x.file ? `/${x.file}` : ""} could not be removed (in use elsewhere): ${Math.round(x.bytes / 1048576)} MiB still counted`);
+  // Pictures drawn but never captured (R3-3): the video holds an older picture through them.
+  const lostGaps = (ledger?.videoGaps ?? []).filter((g) => g.kind === "lost");
+  if (lostGaps.length) {
+    const pictures = lostGaps.reduce((n, g) => n + g.pictures, 0), seconds = lostGaps.reduce((n, g) => n + (g.to - g.from) / 1000 + 1 / 12, 0);
+    const why = [...new Set(lostGaps.map((g) => g.why))].slice(0, 3).join("; ");
+    problems.push(`${pictures} video pictures not captured in ${lostGaps.length} stretch${lostGaps.length === 1 ? "" : "es"} (${seconds.toFixed(1)} s: ${why}); the video holds an older picture there`);
+  }
+  const still = (ledger?.videoGaps ?? []).filter((g) => g.kind === "still");
+  if (still.length) notes.push(`${still.length} stretch${still.length === 1 ? "" : "es"} with no frame drawn (a stall or a hidden tab): the video holds the last picture, as the screen did`);
   const rowsLost = r.events.filter((e) => e.kind === "warning" && /frame rows were lost/.test(e.text));
   if (rowsLost.length && !ledger?.ringLost) problems.push(rowsLost.map((e) => e.text.replace(/^warning: /, "")).join("; "));
   // Every picture the index names that is not on disk, and every event (up to an export's cutoff: later ones may still be encoding) pointing at a picture not in the index.
@@ -255,7 +265,7 @@ export function integrityOf(r, events) {
 }
 
 /** How much of the measured window the video files cover (R1-F4): from their real durations, never the header alone. */
-export function videoCoverage(segs, seconds, from, to) {
+export function videoCoverage(segs, seconds, from, to, gaps = []) {
   if (!segs.length) return { status: "absent", note: "no video", covered: 0 };
   if (!seconds) return { status: "unproven", note: `${segs.length} video file(s) named; their durations were not read`, covered: null };
   let covered = 0;
@@ -266,9 +276,14 @@ export function videoCoverage(segs, seconds, from, to) {
     const a = Math.max(from, s.start), b = Math.min(to, s.start + d * 1000);
     if (b > a) covered += b - a;
   }
+  // A file's span is not all fresh pictures (R3-3): stretches the recorder could not capture are subtracted.
+  let unpictured = 0;
+  for (const g of gaps.filter((x) => x.kind === "lost")) { const a = Math.max(from, g.from), b = Math.min(to, g.to + 1000 / 12); if (b > a) unpictured += b - a; }
+  covered = Math.max(0, covered - unpictured);
   const share = to > from ? covered / (to - from) : 0;
   if (missing.length) return { status: "missing", note: `${missing.length} of ${segs.length} video files absent or unreadable (${missing.slice(0, 2).join(", ")})`, covered: share };
-  return { status: share >= 0.9 ? "pass" : "partial", note: `${segs.length} file(s) cover ${Math.round(share * 100)}% of the measured window`, covered: share };
+  const without = unpictured ? `; ${(unpictured / 1000).toFixed(1)} s without a fresh picture (not captured)` : "";
+  return { status: share >= 0.9 && !unpictured ? "pass" : "partial", note: `${segs.length} file(s) cover ${Math.round(share * 100)}% of the measured window with fresh pictures${without}`, covered: share };
 }
 
 /**

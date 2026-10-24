@@ -47,7 +47,9 @@ export function timelineHtml(r, a) {
   const videos = segs.map((x) => ({ src: inline ? `data:video/webm;base64,${readFileSync(path.join(r.rec, x.file)).toString("base64")}` : `recording/${x.file}`,
     start: (x.start - t0) / 1000, end: x.end != null ? (x.end - t0) / 1000 : null }));
   const hasVideo = videos.length > 0;
-  const data = { fr, mem, events, spans, videos, end: +a.durationS.toFixed(1), colors: SERIES, pace: PACE, ink: INK };
+  // Stretches without a fresh picture (R3-3): marked on the chart, and named over the video when the cursor is in one.
+  const gaps = (h.retention?.videoGaps ?? []).map((g) => [s(g.from), s(g.to + 1000 / 12), g.kind, g.heldFrom != null ? s(g.heldFrom) : null]);
+  const data = { fr, mem, events, spans, videos, gaps, end: +a.durationS.toFixed(1), colors: SERIES, pace: PACE, ink: INK };
   const title = `${h.machine?.label ?? ""} · ${h.gpuDevice?.name ?? h.gpu?.renderer ?? ""} · ${(h.commit ?? h.build?.commit ?? "").slice(0, 10)} · ${a.verdict.status}`;
   return `<!doctype html><html lang=en><meta charset=utf-8><title>Siltwake run timeline · ${esc(title)}</title>
 <style>
@@ -55,7 +57,7 @@ export function timelineHtml(r, a) {
 body{margin:0;font:13px/1.4 system-ui,sans-serif;background:var(--surface);color:var(--ink)}
 header{padding:10px 16px;border-bottom:1px solid var(--grid)} header b{font-size:15px}
 main{display:grid;grid-template-columns:minmax(480px,1fr) 380px;gap:12px;padding:12px 16px}
-video{width:100%;background:#000;aspect-ratio:16/9} .novideo{display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;background:#111;color:#aaa}
+video{width:100%;background:#000;aspect-ratio:16/9} .vw{position:relative} #held{position:absolute;left:0;right:0;top:8px;text-align:center;font:600 13px system-ui;color:#ffd166;text-shadow:0 0 4px #000,0 0 4px #000;display:none;pointer-events:none} .novideo{display:flex;align-items:center;justify-content:center;aspect-ratio:16/9;background:#111;color:#aaa}
 canvas{width:100%;display:block;cursor:crosshair;border:1px solid var(--grid);margin-top:8px}
 #ev{height:calc(100vh - 120px);overflow:auto;border:1px solid var(--grid)} #ev div{padding:3px 8px;border-bottom:1px solid var(--grid);cursor:pointer}
 #ev div:hover,#ev div.on{background:#eef3fa} #ev i{color:var(--muted);font-style:normal;margin-right:6px} #ev b{font-weight:600;margin-right:4px}
@@ -64,7 +66,7 @@ canvas{width:100%;display:block;cursor:crosshair;border:1px solid var(--grid);ma
 </style>
 <header><b>Run timeline</b> · ${esc(title)} · ${esc(h.run?.startedAt ?? h.startedAt ?? "")}</header>
 <main><section>
-${hasVideo ? `<video id=v controls preload=metadata></video>` : `<div class=novideo>No video in this run (an exclusive performance run keeps snapshots only)</div>`}
+${hasVideo ? `<div class=vw><video id=v controls preload=metadata></video><div id=held></div></div>` : `<div class=novideo>No video in this run (an exclusive performance run keeps snapshots only)</div>`}
 <div class=legend id=lf></div><canvas id=cf data-h=180></canvas>
 <div class=legend id=lm></div><canvas id=cm data-h=150></canvas>
 <div class=legend id=lp></div><canvas id=cp data-h=40></canvas>
@@ -86,17 +88,20 @@ function columns(g,pts){const n=Math.max(1,Math.round(g.w-L-R)),col=new Float64A
 function line(g,top,pts){const col=columns(g,pts),x=g.x;let open=false;x.beginPath();for(let i=0;i<col.length;i++){if(col[i]<0)continue;const px=L+i+0.5,py=Y(g,top,col[i]);open?x.lineTo(px,py):x.moveTo(px,py);open=true}x.stroke()}
 function nearest(pts,s){let lo=0,hi=pts.length-1;if(hi<0)return [0,0];while(lo<hi){const m=(lo+hi)>>1;pts[m][0]<s?lo=m+1:hi=m}return lo>0&&Math.abs(pts[lo-1][0]-s)<Math.abs(pts[lo][0]-s)?pts[lo-1]:pts[lo]}
 function drawFrames(){const g=setup(document.getElementById("cf")),top=Math.min(250,maxOf(D.fr,50)*1.05);axes(g,top," ms");const x=g.x;
+ for(const [a,b,k] of D.gaps){x.fillStyle=k==="lost"?"rgba(214,120,0,.22)":"rgba(120,120,120,.18)";x.fillRect(X(g,a),10,Math.max(1,X(g,b)-X(g,a)),g.h-24)}
  x.strokeStyle="#c62f2f";x.setLineDash([4,3]);x.beginPath();x.moveTo(L,Y(g,top,33));x.lineTo(g.w-R,Y(g,top,33));x.stroke();x.setLineDash([]);
  x.strokeStyle=D.colors[0];x.lineWidth=1.5;line(g,top,D.fr);
  x.fillStyle=D.ink.primary;x.font="10px system-ui";for(const e of D.events) if(e.a){const px=X(g,e.s);x.fillRect(px-0.5,g.h-14,1,6);if(e.k==="long-frame"||e.k==="hold"||e.k==="error")x.fillText(e.a,px-8,12)}
- cursorLine(g);document.getElementById("lf").innerHTML='<span><i style="background:'+D.colors[0]+'"></i>frame time (worst per 100 ms)</span><span><i style="background:#c62f2f"></i>33 ms</span>'}
+ cursorLine(g);document.getElementById("lf").innerHTML='<span><i style="background:'+D.colors[0]+'"></i>frame time (worst per bin)</span><span><i style="background:#c62f2f"></i>33 ms</span>'+(D.gaps.length?'<span><i style="background:rgba(214,120,0,.5)"></i>no picture captured</span><span><i style="background:rgba(120,120,120,.4)"></i>nothing drawn</span>':'')}
 function drawMem(){const g=setup(document.getElementById("cm")),peak=D.mem.reduce((m,s)=>maxOf(s.pts,m),-Infinity),top=(peak>0?peak:100)*1.1;axes(g,top,"");const x=g.x;
  D.mem.forEach((m,i)=>{x.strokeStyle=D.colors[i];x.lineWidth=2;line(g,top,m.pts)});
  cursorLine(g);document.getElementById("lm").innerHTML="Memory (MiB): "+D.mem.map((m,i)=>'<span><i style="background:'+D.colors[i]+'"></i>'+m.label+"</span>").join("")}
 function drawPace(){const g=setup(document.getElementById("cp")),x=g.x;x.fillStyle=D.ink.surface;x.fillRect(0,0,g.w,g.h);for(const [a,b,c] of D.spans){x.fillStyle=D.pace[c];x.fillRect(X(g,a),4,Math.max(0.5,X(g,b)-X(g,a)),20)}
  cursorLine(g);document.getElementById("lp").innerHTML="Activity: "+Object.entries(D.pace).map(([k,c])=>'<span><i style="background:'+c+'"></i>'+k+"</span>").join("")}
 function cursorLine(g){g.x.strokeStyle=D.ink.primary;g.x.lineWidth=1;g.x.beginPath();g.x.moveTo(X(g,cursor),0);g.x.lineTo(X(g,cursor),g.h);g.x.stroke()}
-function draw(){drawFrames();drawMem();drawPace()}
+function heldBanner(){const el=document.getElementById("held");if(!el)return;const gp=D.gaps.find(([a,b])=>cursor>=a&&cursor<b);
+ el.style.display=gp?"block":"none";if(gp)el.textContent=(gp[2]==="lost"?"No picture here (not captured)":"Nothing drawn here")+(gp[3]!=null?": the video holds the picture from "+fmt(gp[3]):"")}
+function draw(){drawFrames();drawMem();drawPace();heldBanner()}
 // Segments play in turn; a seek loads the one that holds the moment.
 let segI=-1;
 function segFor(s){let i=-1;D.videos.forEach((v,k)=>{if(v.start<=s)i=k});return Math.max(0,i)}

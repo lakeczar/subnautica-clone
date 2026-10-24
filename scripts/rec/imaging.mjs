@@ -63,6 +63,7 @@ export function extractFrames(video, from, seconds, fps, w, h) {
  * A frame strip: tiles in a grid, each with its label burned in, the event's
  * own tile outlined. tiles: [{ file, lines: [string, string], mark }].
  */
+/** A strip of tiles: each { file, lines, mark?, held? } (`held`: the picture is not of this moment, and says so, R3-3). */
 export async function composeStrip(page, { title, tiles, cols, tileW, tileH, out, quality = 72 }) {
   const html = `<!doctype html><meta charset=utf-8><style>
     body{margin:0;background:#0b1418;font:11px/1.25 system-ui,sans-serif;color:#d7e4e8}
@@ -74,7 +75,9 @@ export async function composeStrip(page, { title, tiles, cols, tileW, tileH, out
     .t img{display:block;width:${tileW}px;height:${tileH}px;object-fit:contain;background:#000}
     .l{position:absolute;left:0;right:0;bottom:0;padding:1px 3px;background:rgba(0,0,0,.62);font:9.5px/1.15 ui-monospace,monospace;color:#fff;white-space:nowrap;overflow:hidden}
     .none{display:flex;align-items:center;justify-content:center;color:#678;height:100%}
-  </style><div id=s><h1>${esc(title)}</h1><div class=g>${tiles.map((t) => `<div class="t${t.mark ? " m" : ""}">${t.file ? `<img src="${dataUrl(t.file)}">` : `<div class=none>no frame</div>`}<div class=l>${t.lines.map(esc).join("<br>")}</div></div>`).join("")}</div></div>`;
+    .t.held img{opacity:.35;filter:grayscale(1)}
+    .h{position:absolute;top:28%;left:2px;right:2px;text-align:center;font:600 10.5px/1.2 system-ui,sans-serif;color:#ffd166;text-shadow:0 0 3px #000,0 0 3px #000}
+  </style><div id=s><h1>${esc(title)}</h1><div class=g>${tiles.map((t) => `<div class="t${t.mark ? " m" : ""}${t.held ? " held" : ""}">${t.file ? `<img src="${dataUrl(t.file)}">` : `<div class=none>no frame</div>`}${t.held ? `<div class=h>${esc(t.held)}</div>` : ""}<div class=l>${t.lines.map(esc).join("<br>")}</div></div>`).join("")}</div></div>`;
   await page.setContent(html, { waitUntil: "load" });
   const box = await page.locator("#s").boundingBox();
   await page.setViewportSize({ width: Math.ceil(box.width) + 2, height: Math.ceil(box.height) + 2 });

@@ -49,7 +49,8 @@ export async function strip(r, a, page, { title, out, center = null, from, to, f
       const tiles = x.frames.map((fr) => ({ file: fr.file, pt: v.start + fr.vt * 1000 }));
       if (!tiles.length) return null;
       const mark = center == null ? -1 : tiles.reduce((bi, tl, i) => (Math.abs(tl.pt - center) < Math.abs(tiles[bi].pt - center) ? i : bi), 0);
-      await composeStrip(page, { title, cols: g.cols, tileW: g.tileW, tileH: g.tileH, out, tiles: tiles.map((tl, i) => ({ file: tl.file, lines: label(tl.pt), mark: i === mark })) });
+      await composeStrip(page, { title, cols: g.cols, tileW: g.tileW, tileH: g.tileH, out,
+        tiles: tiles.map((tl, i) => ({ file: tl.file, lines: label(tl.pt), mark: i === mark, held: heldNote(r.header, tl.pt, a.t0) })) });
       return { source: "video", frames: tiles.length };
     } finally { x.cleanup(); }
   }
@@ -63,6 +64,13 @@ export async function strip(r, a, page, { title, out, center = null, from, to, f
   await composeStrip(page, { title: `${title} (snapshots: ${segs.length ? "the video has no frames here" : "no video in this run"})`, cols: g.cols, tileW: g.tileW, tileH: g.tileH, out,
     tiles: near.map((s, i) => ({ file: path.join(r.rec, s.file), lines: label(s.t), mark: center != null && i === best })) });
   return { source: "snapshots", frames: near.length };
+}
+/** A tile inside a stretch the recorder could not picture (R3-3): it shows the last capture, and says so. */
+export function heldNote(header, pt, t0) {
+  const gap = (header.retention?.videoGaps ?? []).find((g) => pt >= g.from - 1 && pt < g.to + 1000 / 12);
+  if (!gap) return null;
+  const from = gap.heldFrom != null ? ` · held from ${((gap.heldFrom - t0) / 1000).toFixed(2)}s` : "";
+  return `${gap.kind === "lost" ? "NO PICTURE (not captured)" : "NOTHING DRAWN"}${from}`;
 }
 function nearestFrame(frames, pt) {
   let lo = 0, hi = frames.length - 1;

@@ -25,6 +25,7 @@ import { hostname } from "node:os";
 import path from "node:path";
 import { spawnSync } from "node:child_process";
 import { Blocked, goto, openGame, releaseAll } from "../soak/browser.mjs";
+import { processCpu } from "../soak/probe.mjs";
 import { gpuInfo, startRecording } from "./record.mjs";
 
 const args = process.argv.slice(2);
@@ -94,6 +95,8 @@ try {
   await g.page.evaluate(() => window.__recProbe.reset());
   const metrics = async () => Object.fromEntries((await g.cdp.send("Performance.getMetrics")).metrics.map((m) => [m.name, m.value]));
   const m0 = await metrics();
+  // Beyond the main thread: CPU of this browser's renderer (every thread: the spool worker, the encoder) and GPU processes over the same window.
+  const cpu0 = processCpu(g.browserPid);
   // Off, and an owner's playtest (it records itself, unread by any driver): nothing drains it.
   const rec = mode === "off" || mode === "playtest" ? null : await startRecording({ page: g.page, cdp: g.cdp, pid: g.browserPid, out, video: videoOn, gpuBaseline: gpu0,
     meta: { machine, commit, chrome: g.chrome, mode, segment, judged, ticket: process.env.SILTWAKE_JOB_TICKET ?? null, save: path.basename(save), plan: arg("plan") ? path.basename(arg("plan")) : null, isolated: !flag("no-isolate") } });
@@ -125,6 +128,7 @@ try {
   await releaseAll(g);
   await stopProfile();
   const m1 = await metrics();
+  const cpu1 = processCpu(g.browserPid);
   result.travelS = Math.round((Date.now() - started) / 1000);
   const probe = await g.page.evaluate(() => ({ gaps: window.__recProbe.gaps, work: window.__recProbe.work, seconds: (performance.now() - window.__recProbe.since) / 1000 }));
   const q = (xs, f) => { const s = [...xs].sort((a, b) => a - b); return s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(2) : null; };
@@ -136,7 +140,9 @@ try {
     over33: probe.gaps.filter((x) => x > 33.4).length,
     // Inclusive main-thread time per frame: all tasks, and the script share of them.
     mainThread: { taskMsPerFrame: per("TaskDuration"), scriptMsPerFrame: per("ScriptDuration"), taskMsPerSecond: perSecond("TaskDuration"),
-      heapMiBEnd: m1.JSHeapUsedSize ? +(m1.JSHeapUsedSize / 1048576).toFixed(1) : null } };
+      heapMiBEnd: m1.JSHeapUsedSize ? +(m1.JSHeapUsedSize / 1048576).toFixed(1) : null },
+    // ms of CPU per measured second, all threads: renderer process (page, workers, media), GPU process, the browser's whole tree.
+    processCpu: probe.seconds > 0 ? Object.fromEntries(Object.keys(cpu1).map((k) => [`${k}MsPerS`, +(((cpu1[k] - cpu0[k]) * 1000) / probe.seconds).toFixed(1)])) : null };
   writeFileSync(path.join(out, "probe.json"), JSON.stringify({ gaps: probe.gaps.map((x) => +x.toFixed(2)), work: probe.work.map((w) => +w.toFixed(3)), metrics: { start: m0, end: m1 } }));
   if (rec) result.header = await rec.stop({ reached: result.reached, skipped: result.skipped, probe: result.probe, pageErrors: g.errors.length });
   else if (mode === "playtest") result.recorderOverhead = await g.page.evaluate(() => window.__siltwake.recorder?.overhead() ?? null);

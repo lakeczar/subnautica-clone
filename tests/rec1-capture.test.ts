@@ -14,10 +14,15 @@ type Msg = { op: string; id?: number; dir?: string; file?: string | null; data?:
 class FakeWorker {
   static alive = new Set<FakeWorker>();
   static refuse: ((m: Msg) => { quota: boolean } | null) | null = null;
+  /** A removal the "browser" refuses (another tab holds the file). */
+  static refuseRemove: ((m: Msg) => boolean) | null = null;
+  /** The encoder's answer to each video frame: kept, or refused with why; "throw" fails the operation. */
+  static videoAnswer: ((m: Msg & { t?: number }) => "kept" | "throw" | string) | null = null;
   readonly posted: Msg[] = [];
   readonly files = new Map<string, string>();
   readonly exports: Map<string, string>[] = [];
   onmessage: ((e: { data: unknown }) => void) | null = null;
+  private origin = false;
   private chain = Promise.resolve();
   constructor() { FakeWorker.alive.add(this); }
   terminate(): void { FakeWorker.alive.delete(this); }
@@ -33,7 +38,15 @@ class FakeWorker {
       if (refused) { this.reply({ failed: m.file, bytes, quota: refused.quota, error: "refused by the test" }); return; }
       this.files.set(m.file!, (m.op === "put" ? "" : this.files.get(m.file!) ?? "") + text);
       this.reply({ ack: bytes, file: m.file });
-    } else if (m.op === "remove") this.reply({ removed: m.id });
+    } else if (m.op === "remove") this.reply(FakeWorker.refuseRemove?.(m) ? { removed: m.id, refused: "NoModificationAllowedError", error: "in use" } : { removed: m.id });
+    else if (m.op === "release") this.reply({ released: m.id });
+    else if (m.op === "video-open") this.reply({ videoOpened: m.file, codec: "V_VP9" });
+    else if (m.op === "video-frame") {
+      const t = (m as Msg & { t: number }).t, answer = FakeWorker.videoAnswer?.(m as Msg & { t: number }) ?? "kept";
+      if (answer === "throw") { this.reply({ videoError: "OperationError: the encoder threw" }); this.reply({ opFailed: "video-frame", error: "the encoder threw" }); }
+      else if (answer === "kept") { if (!this.origin) { this.origin = true; this.reply({ videoOrigin: "video/000.webm", t }); } this.reply({ videoFrame: 1, kept: true, t }); }
+      else this.reply({ videoFrame: 1, kept: false, t, why: answer });
+    }
     else if (m.op === "barrier") this.reply({ barrier: m.id });
     else if (m.op === "export") { this.exports.push(new Map(this.files)); this.reply({ exported: m.id, bytes: [...this.files.values()].reduce((a, x) => a + x.length, 0) }); }
     else if (m.op === "video-flush") this.reply({ videoFlushed: m.id });
@@ -67,17 +80,18 @@ function browser(search = ""): void {
     screen: { width: 1280, height: 720 }, devicePixelRatio: 1, crossOriginIsolated: false,
     addEventListener: () => {}, Worker: FakeWorker,
     createImageBitmap: async () => ({ width: 480, height: 270, close() {} }),
+    VideoEncoder: class {}, VideoFrame: class {},
     OffscreenCanvas: class { getContext() { return { transferFromImageBitmap() {} }; } convertToBlob() { return new Promise<Blob>((resolve, reject) => encodings.push({ resolve, reject })); } },
   });
 }
 const canvas = { width: 1280, height: 720, getContext: () => null } as unknown as HTMLCanvasElement;
 const build = { content: "test", bake: "", commit: "test" };
 const settle = () => new Promise((r) => setTimeout(r, 20));
-async function capture(search = "") {
+async function capture(search = "", video = false) {
   browser(search);
-  FakeWorker.refuse = null;
+  FakeWorker.refuse = null; FakeWorker.refuseRemove = null; FakeWorker.videoAnswer = null;
   const { FlightCapture } = await import("../src/runtime/flight/capture.js");
-  const c = new FlightCapture(canvas, "playtest", false, build);
+  const c = new FlightCapture(canvas, "playtest", video, build);
   await settle();
   const worker = [...FakeWorker.alive].at(-1)!;
   return { c, worker };
@@ -254,4 +268,85 @@ test("R2 (4070 run): a picture still encoding through a long stall is never expi
   assert.equal(index.length, 1);
   assert.equal(index[0].missing, undefined, "the picture's own entry is its state");
   assert.equal(worker.files.get(index[0].file), "late picture");
+});
+
+
+// --- R3 ---------------------------------------------------------------------
+
+/** Drives the video for `frames` frames of 1/12 s from page time `from`. */
+async function play(c: { afterRender(now: number): void }, from: number, frames: number) {
+  for (let i = 0; i < frames; i++) { c.afterRender(from + i * (1000 / 12) + 1); await new Promise((r) => setTimeout(r, 2)); }
+  await settle();
+}
+
+test("R3-3: pictures the encoder refused are kept as a timestamped gap, survive Off, and completeness reports them", async () => {
+  const { c, worker } = await capture("", true);
+  FakeWorker.videoAnswer = (m) => (m.t! > 1000 && m.t! < 2000 ? "the encoder was behind" : "kept");
+  await play(c, 0, 30);
+  c.stop();
+  await c.exportZip();
+  const header = JSON.parse(worker.exports.at(-1)!.get("header.json")!);
+  const gaps = header.retention.videoGaps.filter((g: { kind: string }) => g.kind === "lost");
+  assert.equal(gaps.length, 1, JSON.stringify(header.retention.videoGaps));
+  assert.ok(gaps[0].from > 1000 && gaps[0].to < 2000 && gaps[0].pictures >= 10, JSON.stringify(gaps[0]));
+  assert.ok(gaps[0].heldFrom < gaps[0].from, "it names the picture the video holds");
+  assert.ok(header.retention.videoDrops.refused >= 10, "the count survives Off");
+  const { integrityOf, videoCoverage } = await import(pathToFileURL(path.resolve("scripts/rec/analyse.mjs")).href);
+  const integrity = integrityOf({ header, events: [], snapshots: [], rec: tmpdir() }, []);
+  assert.ok(integrity.problems.some((p: string) => /video pictures not captured/.test(p)), integrity.problems.join("; "));
+  const cover = videoCoverage([{ file: "video/000.webm", start: 0 }], { "video/000.webm": 2.5 }, 0, 2500, header.retention.videoGaps);
+  assert.equal(cover.status, "partial", "a lost stretch is not coverage");
+  const { heldNote } = await import(pathToFileURL(path.resolve("scripts/rec/pack.mjs")).href);
+  assert.match(heldNote(header, 1500, 0), /NO PICTURE \(not captured\) · held from/);
+  assert.equal(heldNote(header, 500, 0), null);
+});
+
+test("R3-1: an encoder failure ends the video with a loss fact; telemetry, the barrier and the export still work", async () => {
+  const { c, worker } = await capture("", true);
+  FakeWorker.videoAnswer = (m) => (m.t! > 500 ? "throw" : "kept");
+  await play(c, 0, 12);
+  c.recorder.event("action", "after the failure", { snapshot: false });
+  c.flush(5000);
+  await c.exportZip();
+  const header = JSON.parse(worker.exports.at(-1)!.get("header.json")!);
+  assert.ok(header.retention.lost.some((l: { why: string }) => /video encoder failed/.test(l.why)), JSON.stringify(header.retention.lost));
+  assert.ok(lines(worker.exports.at(-1)!.get("events.ndjson")).some((e) => e.text === "after the failure"), "telemetry after the failure is in the export");
+});
+
+test("R3-2: a refused removal is not credited: the ledger says refused, the space is still counted, and the recording stops honestly", async () => {
+  older = [{ name: "2026-01-01/video/000.webm", size: 3 * 1048576 }];
+  try {
+    browser("?recbudget=1");
+    FakeWorker.refuse = null; FakeWorker.videoAnswer = null;
+    FakeWorker.refuseRemove = (m) => m.dir === "flight/2026-01-01";
+    const { FlightCapture } = await import("../src/runtime/flight/capture.js");
+    const c = new FlightCapture(canvas, "playtest", false, build);
+    await new Promise((r) => setTimeout(r, 60));
+    const ledger = c.header.retention as { removedOlder: unknown[]; removalRefused: { session: string; why: string }[]; stopped: { why: string } | null };
+    assert.equal(ledger.removedOlder.length, 0, "nothing credited as removed");
+    assert.ok(ledger.removalRefused.some((r) => r.session === "2026-01-01" && /refused/.test(r.why)), JSON.stringify(ledger.removalRefused));
+    assert.match(ledger.stopped?.why ?? "", /could not be removed/, "with the older recording's space still counted, the budget is full: an honest stop");
+  } finally { older = []; }
+});
+
+test("R3-2: a recording this page still holds (the latest completed, exportable) is never removed by another's budget", async () => {
+  browser();
+  FakeWorker.refuse = null; FakeWorker.refuseRemove = null; FakeWorker.videoAnswer = null;
+  const { FlightCapture } = await import("../src/runtime/flight/capture.js");
+  const a = new FlightCapture(canvas, "playtest", false, build);
+  await settle();
+  a.stop();
+  await new Promise((r) => setTimeout(r, 5));
+  older = [{ name: `${a.session}/samples.ndjson`, size: 3 * 1048576 }];
+  try {
+    browser("?recbudget=1");
+    const b = new FlightCapture(canvas, "playtest", false, build);
+    await new Promise((r) => setTimeout(r, 60));
+    const ledger = b.header.retention as { removedOlder: { session: string }[] };
+    assert.ok(!ledger.removedOlder.some((r) => r.session === a.session), "A is pinned while it is exportable");
+    const exported = await a.exportZip();
+    assert.ok(exported.name.endsWith(".zip"), "and A still exports");
+    await a.retire();
+    await b.retire();
+  } finally { older = []; }
 });

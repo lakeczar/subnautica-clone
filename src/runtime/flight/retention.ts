@@ -26,20 +26,24 @@ const segmentOrder = (a: StoredFile, b: StoredFile): number =>
 
 /**
  * What to remove so everything fits `budget`. `current` is this recording's
- * session; `active` the file being written (never removed).
+ * session; `active` the files being written (never removed). `pinned` files
+ * count against the budget but are never chosen: a recording another capture
+ * in this page still holds exportable, or a file whose removal was refused (R3-2).
  */
-export function planRetention(files: readonly StoredFile[], current: string, active: readonly string[], budget: number): RetentionPlan {
+export function planRetention(files: readonly StoredFile[], current: string, active: readonly string[], budget: number,
+  pinned: (f: StoredFile) => boolean = () => false): RetentionPlan {
   let total = files.reduce((a, f) => a + f.bytes, 0);
   const remove: Removal[] = [];
   const gone = new Set<StoredFile>();
   const drop = (f: StoredFile, why: string) => { if (gone.has(f)) return; gone.add(f); total -= f.bytes; remove.push({ session: f.session, file: f.file, bytes: f.bytes, why }); };
-  const live = (f: StoredFile) => f.session === current && active.includes(f.file);
+  const live = (f: StoredFile) => (f.session === current && active.includes(f.file)) || pinned(f);
   // 0. Old exports (they are copies).
   for (const f of files.filter((x) => x.kind === "export" && !live(x))) { if (total <= budget) break; drop(f, "an earlier export (a copy)"); }
   // 1. Older recordings' video, oldest first.
-  for (const f of files.filter((x) => x.kind === "video" && x.session !== current).sort(segmentOrder)) { if (total <= budget) break; drop(f, "video of an older recording, over the storage budget"); }
-  // 2. Whole older recordings, oldest first.
-  const older = [...new Set(files.filter((x) => x.session !== current).map((x) => x.session))].sort();
+  for (const f of files.filter((x) => x.kind === "video" && x.session !== current && !live(x)).sort(segmentOrder)) { if (total <= budget) break; drop(f, "video of an older recording, over the storage budget"); }
+  // 2. Whole older recordings, oldest first (one with a pinned file is never removed whole).
+  const older = [...new Set(files.filter((x) => x.session !== current && !x.session.startsWith("export:")).map((x) => x.session))].sort()
+    .filter((session) => !files.some((x) => x.session === session && live(x)));
   for (const session of older) {
     if (total <= budget) break;
     const rest = files.filter((x) => x.session === session && !gone.has(x));

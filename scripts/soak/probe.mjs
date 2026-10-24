@@ -62,19 +62,35 @@ export function cdpHeap(cdp) {
 /** Forces a full GC in the measured page (soak.mjs then settles before sampling). */
 export const collectGarbage = (g) => g.cdp.send("HeapProfiler.collectGarbage");
 
+/** The browser's processes, from its PID: [{ pid, cmd }] for it and every descendant. */
+export function browserTree(browserPid) {
+  const cmd = (pid) => { try { return readFileSync(`/proc/${pid}/cmdline`, "utf8"); } catch { return ""; } };
+  const parent = (pid) => { try { const st = readFileSync(`/proc/${pid}/stat`, "utf8"); return Number(st.slice(st.lastIndexOf(")") + 2).split(" ")[1]); } catch { return null; } };
+  const all = readdirSync("/proc").filter((p) => /^\d+$/.test(p)).map(Number);
+  const tree = new Set([browserPid]);
+  for (let grew = true; grew;) { grew = false; for (const p of all) if (!tree.has(p) && tree.has(parent(p))) { tree.add(p); grew = true; } }
+  return [...tree].map((pid) => ({ pid, cmd: cmd(pid) }));
+}
+
+/** CPU seconds used so far (user + system, every thread) by the browser's
+ * renderer processes, its GPU process and the whole tree: the page's worker
+ * and media threads are in the renderer's. Read twice and subtract. */
+export function processCpu(browserPid) {
+  const hz = 100;
+  const secs = (pid) => { try { const st = readFileSync(`/proc/${pid}/stat`, "utf8"); const f = st.slice(st.lastIndexOf(")") + 2).split(" "); return (Number(f[11]) + Number(f[12])) / hz; } catch { return 0; } };
+  const procs = browserTree(browserPid).map((x) => ({ ...x, s: secs(x.pid) }));
+  const sum = (xs) => +xs.reduce((a, x) => a + x.s, 0).toFixed(2);
+  return { renderer: sum(procs.filter((x) => x.cmd.includes("--type=renderer"))), gpu: sum(procs.filter((x) => x.cmd.includes("--type=gpu-process"))), tree: sum(procs) };
+}
+
 /** Resident memory of the browser's processes: the largest renderer, the GPU
  * process and the whole tree, found from the browser's PID. */
 export function processRss(browserPid) {
   const kib = (pid) => { try { return Number(/VmRSS:\s+(\d+)/.exec(readFileSync(`/proc/${pid}/status`, "utf8"))[1]); } catch { return null; } };
-  const cmd = (pid) => { try { return readFileSync(`/proc/${pid}/cmdline`, "utf8"); } catch { return ""; } };
-  const parent = (pid) => { try { const st = readFileSync(`/proc/${pid}/stat`, "utf8"); return Number(st.slice(st.lastIndexOf(")") + 2).split(" ")[1]); } catch { return null; } };
   return {
     name: "process-rss",
     async sample() {
-      const all = readdirSync("/proc").filter((p) => /^\d+$/.test(p)).map(Number);
-      const tree = new Set([browserPid]);
-      for (let grew = true; grew;) { grew = false; for (const p of all) if (!tree.has(p) && tree.has(parent(p))) { tree.add(p); grew = true; } }
-      const procs = [...tree].map((p) => ({ p, c: cmd(p), r: kib(p) })).filter((x) => x.r != null);
+      const procs = browserTree(browserPid).map((x) => ({ p: x.pid, c: x.cmd, r: kib(x.pid) })).filter((x) => x.r != null);
       const renderer = procs.filter((x) => x.c.includes("--type=renderer")).map((x) => x.r);
       const gpu = procs.filter((x) => x.c.includes("--type=gpu-process")).map((x) => x.r);
       return { memory: {
