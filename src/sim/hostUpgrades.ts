@@ -61,7 +61,7 @@ export function upgradeHostModule(s: GameState, hostId: string, socket: string, 
   const offer = hostUpgradeOffer(s, hostId, socket, upgrade);
   if (offer.refusal) return { ok: false, message: offer.refusal };
   const module = moduleIn(s, hostId, socket)!;
-  applySpend(s, offer.plan.lines);
+  applySpend(s, offer.plan);
   s.systems.moduleUpgrades = { ...s.systems.moduleUpgrades, [module.itemId]: upgrade };
   return { ok: true, hostId, itemId: module.itemId, upgrade,
     message: `${offer.label} fitted · ${offer.benefit} Spent ${offer.plan.lines.map((l) => `${l.quantity} × ${labelOf(l.kind)}`).join(", ")}.` };
