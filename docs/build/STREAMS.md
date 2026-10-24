@@ -932,3 +932,29 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **What passed:** composition clean, 43 tests. Fixes plus one exclusive rerun next.
 - **SIM-PERF-1 R1 fixes at `2bcc25fe`:** honest attribution in the handoff (two steps unproven); a stricter `classifyStep` patch for CW-1 (renderer-only, interior, canary-capped, raw rows saved); `src/sim/caches.ts` cache ledger plus `BoundedMemo`; a fixed hazard-centre table. Fast tier 149 files. Short Sol R2 running (`siltwake-simperf1-review-r2-sol-2bcc25f`).
 - **SIM-1b merged to root at `e86e89a2`** (R4 ACCEPT, Sol `df9e4b03`): playthrough 8/8 (`261024-141553-1487`); fast, build and 6 economy pass (`261024-154946-b6ae`, moved off a 4070 pin to `any` and run on the 3090 in 1 m 43 s). Saves exported at `e86e89a2`. COL-1 stage A merges next.
+- **COL-1 stage A merged locally at `ac734b0d`** (head `dae2dd05`: docs plus the 3090 zero-shell-build traversals). Full `npm run gate` running.
+- **SCHED-3 R1** (Sol on `86744a72`, report on `review/sched-3-r1` `6f49c776`): REQUEST CHANGES, not installed. Suites 23/23, 27/27, 29/29.
+  - **P1:** a default `any` with argv-only checks moves opaque jobs remote and strands local outputs and builds.
+  - **P2:** build-only refuses a declared `--artifact dist` remote build that base allowed.
+  - **P3:** cancel, expiry and recovery drop the route reason.
+  - **Decisions:** portability is declared, not inferred (a registry of proven self-contained commands, or an explicit `--machine` with `--artifact`; otherwise the 3090 with a printed reason); builds respect declared artifacts; one terminal-record helper. Audited GPU tools are made portable only where trivial, otherwise pinned to the 3090 in their headers.
+- **SIM-PERF-1 R2** (Sol on `2bcc25fe`, report on `review/sim-perf-1-r2` `1a45e115`): REQUEST CHANGES on one P3. R1-F1 is resolved (9 patch tests; repro arithmetic; handoff honest); the ledger is pulled; profile and hazard equivalence exact (4,320 and 19,306 comparisons).
+  - **P3:** `BoundedMemo` keeps a single oversized entry over its byte ceiling.
+  - **Decision:** mirror `GeometryCache` (return uncached and count it; reject zero ceilings), plus regressions.
+- **CW-1 R3 fixes at `64bf2565`:**
+  - **R3-1:** steal excuses a frame only when it is provably inside the frame, on a thread that could be delayed, with the canary agreeing; uncertain cases count as ours; canary and thread states always on, with raw rows per long frame.
+  - **R3-2:** `CaveLighting` is the only upload scheduler (active cave first, partial progress kept); the byte cap holds, except that a single oversize plane is written alone.
+  - **R3-3:** readiness counts only from frames drawn since entry; if the light never arrives, the expedition moves to safe water, then stays on the loading cover with the menu usable.
+  - **r12 corrected:** 3/8 proven (tours 0 and 5, hop 2).
+  - **Next:** checks `6ff6` and `5fbe`, then one 6-ticket exclusive rerun (5 unresolved segments plus a tour 1 hub and re-entry segment), then R4.
+- **CW-1 r13 rerun submitted 16:02Z** at `64bf2565` (`dist-r13` on alickers, bake `866d9186`): six exclusive tickets blocked behind its own checks `6ff6`/`5fbe`; window about 16:30–18:30Z. All four other builders warned (steer).
+- **SIM-PERF-1 done at `e695650b`:**
+  - **R2 fix `261ddc0e`:** an oversized value is returned uncached and counted as `declined`; zero or invalid ceilings throw; regressions added.
+  - **Root merge `e86e89a2`:** the `app.ts` conflict resolved; the harness commits `TimelineJournal` every 600 ticks.
+  - **Checks:** fast 152 files; held smoke max step 2.18 ms.
+  - **Review:** short Sol R3 running (`siltwake-simperf1-review-r3-sol-e695650`).
+- **CW-1 r13 rerun resubmitted 16:13Z** (window open about 1.5 h): fast 1,492/1,492, economy 6/6, playthrough 8/8, heavy all pass except `caves-deep-perf` under three-way concurrency (437.6 vs 400 µs; alone 380.9 µs, path untouched by R3). Tickets `84bc`, `b55f`, `16ce`, `ca94`, `514d` and `7fed`.
+  - **Follow-up (STEW):** the heavy tier runs per-step perf bounds concurrently, so CA-3's bound flakes. Root fix: perf-bound files run serially in their own step, not a looser bound.
+- **COL-1 stage A merged to root at `ac734b0d`:** full `npm run gate` passes (fast, bake, build, 6 economy, playthrough). Saves exported at `ac734b0d`. Stage B code waits for CW-1 on root; CW-1 (second to merge) rebakes `collision.bin`.
+- **Disturbance, REC-1 exclusive `4a2b`** (admitted 16:17:07Z): overlapped by SCHED-3's local acceptance suites (16:17–16:23) and the coordinator's `saves-export.sh` local archive build (about 16:22–16:25). Cause: the window was announced from CW-1's estimate while REC-1's exclusives were already queued. 4a2b is to be rerun.
+  - **Follow-ups:** warnings now come from the first queued exclusive; `saves-export.sh` should submit its local archive build through the queue (SCHED/STEW).
