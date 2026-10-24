@@ -30,6 +30,8 @@ import {
 import type { JournalTabId } from "../sim/systems/journal.js";
 import type { CreatureEntry, CycleEntry } from "../sim/systems/index.js";
 import { speciesScanId } from "../sim/signatures.js";
+import { hostUpgradeOffers } from "../sim/hostUpgrades.js";
+import { hostUpgrade } from "../content/upgrades/hosts.js";
 import { berthChargePlan, chartOptions, deployPoint, hostPower, hostPowerReason, OUTPOST_SERVICE_RADIUS, outpostRules, siteQuery, surveyTierAt, systemsContext } from "../sim/systemsLink.js";
 import { surveyRange } from "../sim/systems/survey.js";
 import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
@@ -77,6 +79,14 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
           actions.push(button(`Plant ${SEEDS[seed.kind as keyof typeof SEEDS].label}`, { type: "plant", hostId: host.id, socket: k.id, seed: seed.kind }));
       }
       if (occ.module === "survey") actions.push(button("Survey", { type: "survey", hostId: host.id }, !powered, reason ?? undefined));
+      // SIG-1: a decoder lattice or survey array fits in place; the offer is the command's own plan.
+      if ((occ.module === "decoder" || occ.module === "survey") && occ.itemId) {
+        const fitted = sys.moduleUpgrades[occ.itemId];
+        if (fitted) actions.unshift(`<small>${esc(hostUpgrade(fitted).label)}</small>`);
+        for (const offer of hostUpgradeOffers(s, host.id, k.id))
+          actions.push(button(`Fit ${offer.label}`, { type: "upgrade-host-module", hostId: host.id, socket: k.id, upgrade: offer.upgrade },
+            !!offer.refusal, offer.refusal ?? `${offer.benefit} Costs ${offer.cost}.`));
+      }
       actions.push(...faunaSocketActions(s, host.id, k.id, occ.module, button));
       return `<li><b>${esc(k.id)}</b> · ${esc(occ.label)} ${actions.join("")}</li>`;
     }).join("");

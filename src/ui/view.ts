@@ -177,7 +177,9 @@ export class GameView {
         if (target && !target.disabled) {
           const command = this.panels.command(target.dataset.action ?? "");
           if (command) actions.command(command);
-          else if (this.panels.selectJournalTab(target.dataset.action ?? "")) { if (this.latest) this.refreshPanel(this.latest); }
+          else if (this.panels.selectJournalTab(target.dataset.action ?? "") || this.panels.selectCargoFilter(target.dataset.action ?? "")) {
+            if (this.latest) this.refreshPanel(this.latest);
+          }
           else map[target.dataset.action ?? ""]?.();
         }
       },
