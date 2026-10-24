@@ -502,18 +502,24 @@ export function createWorldQueries(
   const nearInto = (box: { min: Vec3; max: Vec3 }, out: Solid[]): number =>
     index ? index.dataInBox(box, "solid", out) : solids.length;
   const listOf = (out: Solid[]): readonly Solid[] => index ? out : solids;
-  const clearHits: Solid[] = [], supportHits: Solid[] = [], moveHits: Solid[] = [];
-  const clearBox = scratchBox(), supportBox = scratchBox(), moveBox = scratchBox();
+  const clearHits: Solid[] = [], supportHits: Solid[] = [], moveHits: Solid[] = [], sightHits: Solid[] = [];
+  const clearBox = scratchBox(), supportBox = scratchBox(), moveBox = scratchBox(), sightBox = scratchBox();
   return {
     lineOfSight(a, b, ignore = []) {
       if (!finitePoint(a) || !finitePoint(b)) return false;
       const length = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
       const steps = Math.max(1, Math.ceil(length / 0.15));
       if (!Number.isFinite(steps) || steps > 100000) return false;
-      const candidates = index ? index.alongSegment(a, b, BROAD_PHASE_MARGIN, ["solid"]).map(e => e.data!) : solids;
-      for (const solid of candidates) {
+      // The segment's bounds through the allocation-free box query (a superset
+      // of the old segment gather; the exact test below decides).
+      const m = BROAD_PHASE_MARGIN;
+      const count = index ? nearInto(setBox(sightBox, Math.min(a.x, b.x) - m, Math.min(a.y, b.y) - m, Math.min(a.z, b.z) - m,
+        Math.max(a.x, b.x) + m, Math.max(a.y, b.y) + m, Math.max(a.z, b.z) + m), sightHits) : solids.length;
+      const candidates = index ? sightHits : solids;
+      for (let k = 0; k < count; k++) {
+        const solid = candidates[k]!;
         if (!finitePoint(solid.min) || !finitePoint(solid.max) ||
-            AXES.some(axis => solid.min[axis] > solid.max[axis])) return false;
+            solid.min.x > solid.max.x || solid.min.y > solid.max.y || solid.min.z > solid.max.z) return false;
         if (ignore.includes(solid.id)) continue;
         const rib = canonicalRib(solid);
         if (rib ? segmentDistanceSquared(a, b, rib.a, rib.b) <= rib.radius ** 2
@@ -597,11 +603,12 @@ export function createWorldQueries(
       // Slides never travel further than |delta| in total, so the actor box
       // grown by that length bounds every swept contact.
       const reach = Math.hypot(delta.x, delta.y, delta.z);
-      let candidates: readonly Solid[] = solids;
+      let candidates: readonly Solid[] = solids, candidateCount = solids.length;
       if (index && Number.isFinite(reach)) {
         const a = actorBox(origin, capsule), r = reach + BROAD_PHASE_MARGIN;
-        // A move iterates its candidates many times: a right-sized copy of this one gather.
-        candidates = moveHits.slice(0, nearInto(setBox(moveBox, a.min.x - r, a.min.y - r, a.min.z - r, a.max.x + r, a.max.y + r, a.max.z + r), moveHits));
+        // The move's own buffer: nothing inside the move gathers into it again.
+        candidates = moveHits;
+        candidateCount = nearInto(setBox(moveBox, a.min.x - r, a.min.y - r, a.min.z - r, a.max.x + r, a.max.y + r, a.max.z + r), moveHits);
       }
       let position = { ...origin },
         remaining = { ...delta },
@@ -635,7 +642,8 @@ export function createWorldQueries(
           const hit = sweepTerrain(position, remaining, capsule, solid);
           if (hit && (!nearest || hit.t < nearest.t)) nearest = { ...hit, rib: false, stop: false };
         }
-        for (const solid of candidates) {
+        for (let k = 0; k < candidateCount; k++) {
+          const solid = candidates[k]!;
           if (!sweptBoxIntersects(box, remaining, solid)) continue;
           const rib = canonicalRib(solid);
           if (!rib && options?.separateBoxOverlaps) {
