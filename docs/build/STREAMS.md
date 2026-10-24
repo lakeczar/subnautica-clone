@@ -1023,3 +1023,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - **REC-1b:** (3) the OPFS readiness probe, then the memory-export fallback.
     - **REC-2:** (2) note payloads pinned and exported with their timeline; (4) free-space-aware export admission; (7) telemetry rotation; (8) one recorder writer per origin.
   - **Owner-facing note:** browser-only saves are lost if site data is cleared or in private windows, so use Export save for anything precious until SAVE-2's `persist()` lands.
+- **SCHED-3 R3** (Sol on `3850c9bd`, report on `review/sched-3-r3` `7c188ded`): REQUEST CHANGES, not installed. E1–E5 fixed (6/6).
+  - **Findings:** P1 npm config-file selectors and `~/.npmrc` change the command remotely; P2 the build-cache variables are missing; P3 local orphan recovery claims `ran:true` before launch.
+  - **Decision (root fix):** stop extending blocklists. Registered commands run through an owned portable runner, with no npm in the path and a normalized allowlisted environment on **both** machines. A conservative intent check (any non-queue `SILTWAKE_*`, `NODE_*` or non-descriptive `npm_config_*`) keeps the job local, unchanged, with a reason. Recovery `ran` comes from the started marker.
+  - **After acceptance:** install, then Sol's live canary.
