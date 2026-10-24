@@ -23,7 +23,7 @@ import {
 import type { FaunaSourceId } from "../src/content/fauna/grounds.js";
 import { THREAT_WINDOWS, WINDOW_IDS } from "../src/content/fauna/windows.js";
 import type { WindowId } from "../src/content/fauna/windows.js";
-import { PLACES, RECIPES, SOURCES, SOURCE_RENEWAL } from "../src/content/registry.js";
+import { ITEMS, PLACES, RECIPES, SOURCES, SOURCE_RENEWAL } from "../src/content/registry.js";
 import type { SourceId } from "../src/content/registry.js";
 import { SEEDS } from "../src/content/systems/cultivation.js";
 import { createEnvelope, decodeSave } from "../src/save/codec.js";
@@ -109,6 +109,37 @@ test("cooking is one interaction with portions: roe first, fish in pairs, totals
   assert.equal(count(s, "small_fish"), 1, "an odd fish stays raw");
   assert.match(cookCatch(s, 1) ?? "", /Nothing to cook/);
   roundTrip(s);
+});
+
+test("cooking room is read from the spend plan: raw paid from the locker frees its space; exact fit cooks, one CU short falls back or refuses", () => {
+  const base = opened();
+  base.player.pose.position = { ...PLACES.home_pod.position };
+  const locker = base.inventory.containers.find((c) => c.id === "pod_locker")!, diver = base.inventory.containers.find((c) => c.id === "diver")!;
+  base.inventory.items = base.inventory.items.filter((i) => i.containerId !== "pod_locker" && i.containerId !== "diver");
+  // Four fish in the locker make two meals: exactly the space they free, with the rest filled.
+  const fit = structuredClone(base);
+  addItem(fit, "small_fish", 4, "pod_locker");
+  addItem(fit, "structural_alloy", (locker.capacity - 4) / ITEMS.structural_alloy.cu, "pod_locker");
+  assert.equal(cookPlan(fit, 2).to, "pod_locker", "exact fit: the paid raw makes the room");
+  assert.equal(cookCatch(fit, 2), null);
+  assert.equal(count(fit, "meal", "pod_locker"), 2);
+  // Raw from the diver frees nothing in a full locker: the meals go to the diver hold.
+  const fallback = structuredClone(base);
+  addItem(fallback, "small_fish", 4, "diver");
+  addItem(fallback, "structural_alloy", locker.capacity / ITEMS.structural_alloy.cu, "pod_locker");
+  assert.equal(cookPlan(fallback, 2).to, "diver", "the diver hold, which the fish themselves free");
+  // Both full apart from the raw: one CU short everywhere refuses, naming the meals' CU.
+  const full = structuredClone(base);
+  addItem(full, "roe_cluster", 1, "diver");
+  addItem(full, "structural_alloy", locker.capacity / ITEMS.structural_alloy.cu, "pod_locker");
+  addItem(full, "silica_glass", (diver.capacity - 1) / ITEMS.silica_glass.cu, "diver");
+  const plan = cookPlan(full, 2);
+  assert.equal(plan.meals, COOKING.roe_cluster.meals);
+  assert.equal(plan.to, null);
+  assert.match(plan.refusal ?? "", new RegExp(`${plan.meals} meals need ${plan.meals * ITEMS.meal.cu} CU free`));
+  const before = structuredClone(full);
+  assert.match(cookCatch(full, 2) ?? "", /Nothing cooked/);
+  assert.deepEqual(full, before, "refused: nothing cooked or spent");
 });
 
 test("the fish trap: wet hosts only; one fish per interval, capped; emptied in one interaction; kept through a save", () => {

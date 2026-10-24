@@ -9,7 +9,7 @@ import type { ItemKind, MountKind, RecipeId } from "../content/registry.js";
 import { isMountKind } from "../content/registry.js";
 import {
   available, containerAccessible, containerLabel as inventoryLabel, distance, equipped, fabricationContainers,
-  facility, hasRoom, localBenchSite, materialStoragePreview, nearCanopyStop, nearPod,
+  facility, hasRoom, itemCu, localBenchSite, materialStoragePreview, nearCanopyStop, nearPod,
   nearStop, nearWorkshop, stopWorks, supportedServiceSite, usedCapacity,
 } from "../sim/inventory.js";
 import { atSite, craftingBlock, craftSite, hullOutput, personalLimit, recipeSites, refitHull, refitTier, suitRefit } from "../sim/progression.js";
@@ -302,14 +302,14 @@ export class PanelView {
       if (!i.fitted && !installed)
         for (const d of bins.filter((d) => d.id !== containerId)) {
           const label = d.id === "diver" ? "Take to diver" : `To ${containerLabel(state, d.id)}`;
-          const room = hasRoom(state, d.id, ITEMS[i.kind].cu * i.quantity);
-          actions += button(`${label} · all (${i.quantity})`, { type: "transfer", itemId: i.id, to: d.id, quantity: i.quantity }, !room, room ? undefined : `Needs ${ITEMS[i.kind].cu * i.quantity} CU free in ${containerLabel(state, d.id)}.`);
+          const room = hasRoom(state, d.id, itemCu(i));
+          actions += button(`${label} · all (${i.quantity})`, { type: "transfer", itemId: i.id, to: d.id, quantity: i.quantity }, !room, room ? undefined : `Needs ${itemCu(i)} CU free in ${containerLabel(state, d.id)}.`);
           if (i.quantity > 1) {
             const one = hasRoom(state, d.id, ITEMS[i.kind].cu);
             actions += button(`${label} · 1`, { type: "transfer", itemId: i.id, to: d.id, quantity: 1 }, !one, one ? undefined : `Needs ${ITEMS[i.kind].cu} CU free in ${containerLabel(state, d.id)}.`);
           }
         }
-      return `<div class="item-row" data-row-key="${escapeHtml(`${containerId}:${i.id}`)}"><div><strong>${escapeHtml(this.itemLabel(state, i))}${i.quantity > 1 ? ` × ${i.quantity}` : ""}</strong><small>${ITEMS[i.kind].cu * i.quantity} CU${installed ? ` · Installed in ${HULLS[installed.hull].label} · remove at collar before transfer` : i.fitted ? " · Fitted / retained" : ""}${i.charge !== null ? ` · charge ${i.charge.toFixed(0)}%` : ""}${i.provenance === "maintenance" ? " · rescue stock" : ""}</small></div><div class="item-actions">${buoy}${actions ? this.group(`move:${i.id}`, `Move <span class="sr-only">${escapeHtml(this.itemLabel(state, i))}</span>`, `<div class="move-destinations">${actions}</div>`) : ""}</div></div>`;
+      return `<div class="item-row" data-row-key="${escapeHtml(`${containerId}:${i.id}`)}"><div><strong>${escapeHtml(this.itemLabel(state, i))}${i.quantity > 1 ? ` × ${i.quantity}` : ""}</strong><small>${itemCu(i)} CU${installed ? ` · Installed in ${HULLS[installed.hull].label} · remove at collar before transfer` : i.fitted ? " · Fitted / retained" : ""}${i.charge !== null ? ` · charge ${i.charge.toFixed(0)}%` : ""}${i.provenance === "maintenance" ? " · rescue stock" : ""}</small></div><div class="item-actions">${buoy}${actions ? this.group(`move:${i.id}`, `Move <span class="sr-only">${escapeHtml(this.itemLabel(state, i))}</span>`, `<div class="move-destinations">${actions}</div>`) : ""}</div></div>`;
     }).join("") || '<p class="empty-hold">Empty</p>';
   }
 
