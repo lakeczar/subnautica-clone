@@ -53,6 +53,7 @@ import { moduleOfItem, MODULES as SYS2_MODULES, OUTPOST_TIERS } from "../content
 import { hostUpgrade } from "../content/upgrades/hosts.js";
 import { DECODABLES } from "../content/systems/decodes.js";
 import { LEGACY_GRANTS, legacyRow, legacySourceHeld } from "./legacyGrants.js";
+import { siteCacheOf } from "../sim/systems/siteCaches.js";
 import { lockerModuleCapacity } from "../sim/upgrades/hosts.js";
 import type { LegacyGrant } from "../sim/types.js";
 const TICK = 2147483647;
@@ -839,7 +840,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
   }
   if (
     s.opening.phase < 4 &&
-    (k.evidence.length || k.crafted.length || items.length || f.vehicles.length)
+    // LS-1: a lost site's cache holds world stock from New Game, not the diver's items.
+    (k.evidence.length || k.crafted.length || items.some((i) => !siteCacheOf(i.containerId)) || f.vehicles.length)
   )
     return false;
   // Campaign fleets: at most one earned hull of each kind; a docking interface

@@ -121,7 +121,7 @@ test("a fresh schema 8 game gets the planter plan only from the keeper's racks; 
   forged.knowledge.blueprints.push("bp_cultivation" as never);
   forged.knowledge.legacyGrants = [{ blueprint: "bp_cultivation" as never, source: { kind: "scan", id: "workshop_outpost_sheet" } }];
   assert.equal(validState(forged), false, "a legacy entry whose scan was never read is refused");
-  forged.knowledge.scans.push("workshop_outpost_sheet");
+  readTechRecord(forged, "workshop_outpost_sheet");
   assert.ok(validState(forged), "with its source held it is accepted");
   const notARow = structuredClone(forged);
   notARow.knowledge.legacyGrants = [{ blueprint: "bp_cultivation" as never, source: { kind: "scan", id: "canopy_lab_outpost_sheet" } }];

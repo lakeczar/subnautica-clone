@@ -53,6 +53,7 @@ test("locker extension: only the chosen locker module grows, through pack and re
   const cap = (item: string) => s.inventory.containers.find((c) => c.id === `${item}_locker`)!.capacity;
   assert.equal(cap(a), 48, "32 CU × 1.5");
   assert.equal(cap(b), 32, "the other locker module is unchanged");
+  give(s, "structural_alloy", 1); give(s, "flex_membrane", 1); // packing breaks the anchor seals
   assert.equal(packOutpost(s, s.systems, id), null);
   assert.equal(cap(a), 48, "the capacity travels with the module item");
   const back = reload(s);
