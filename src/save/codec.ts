@@ -34,8 +34,13 @@ function blockedCarrierInterior(s: GameState): boolean {
   return s.player.interiorPose?.frame === "carrier-local" && !createWorldQueries(carrierInteriorSolids(s), () => -200)
     .clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 });
 }
+/** Whether `text` is over `limit` bytes as UTF-8; it encodes only when the length can't tell
+ * (a UTF-16 code unit is at most 3 UTF-8 bytes). */
+export const utf8Over = (text: string, limit: number): boolean =>
+  text.length > limit || (text.length * 3 > limit && new TextEncoder().encode(text).byteLength > limit);
+
 export function decodeSave(text: string): Result<SaveEnvelope> {
-  if (new TextEncoder().encode(text).byteLength > MAX_SAVE_BYTES)
+  if (utf8Over(text, MAX_SAVE_BYTES))
     return { ok: false, error: "This save exceeds the 1 MiB import limit." };
   let d: unknown;
   try {

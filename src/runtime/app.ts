@@ -2,12 +2,17 @@ import { armTarget, fittedCabin } from "../sim/fleet.js";
 import { craftActions } from "../sim/signatures.js";
 import { SiltwakeAudio } from "../audio/director.js";
 import { StepFault, StepGuard } from "../sim/stepGuard.js";
+import { PHASE, StepCosts, stepMeter } from "../sim/stepCosts.js";
+import type { StepCostSnapshot } from "../sim/stepCosts.js";
+import { simCaches } from "../sim/caches.js";
+import type { CacheStats } from "../sim/caches.js";
 import { gameWorld } from "../sim/world.js";
+import { warmSimulation } from "../sim/warmup.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
 import { encodeSave } from "../save/codec.js";
-import { SaveRepository } from "../save/repository.js";
+import { SaveRepository, warmCommit } from "../save/repository.js";
 import type { StoragePort } from "../save/repository.js";
 import { browserWriterLock } from "./browserLock.js";
 import { ExpeditionSession } from "./session.js";
@@ -144,6 +149,9 @@ export class SiltwakeApp {
   /** SIM-1: the live state steps in place; a throw restores it (development
    * builds also check every 10th checkpoint's replay against the live state). */
   private readonly guard = new StepGuard({ verifyEvery: DEV ? 10 : 0 });
+  /** SIM-PERF-1: each fixed step's time by phase, the app's own work included.
+   * Pulled on demand (`stepCosts()`); recording allocates nothing per step. */
+  private readonly costs = new StepCosts();
   /** Local-only play timeline (SYS-2, C4): never in the save, never sent. One per expedition entry (SIM-1b). */
   private live: LiveTimeline | null = null;
   private get timeline(): TimelineRecorder | null { return this.live?.recorder ?? null; }
@@ -352,6 +360,10 @@ export class SiltwakeApp {
       },
       options,
     );
+    // FORK(step-costs-global): a pulled diagnostic global beside REC-1's `__siltwake` hook;
+    // retire in whichever of REC-1 and SIM-PERF-1 merges second (as `__siltwake.steps()`).
+    (globalThis as { __siltwakeStepCosts?: () => StepCostSnapshot & { caches: CacheStats[] } }).__siltwakeStepCosts =
+      () => ({ ...this.stepCosts(), caches: simCaches() });
     this.frameId = requestAnimationFrame((now) => this.frame(now));
   }
 
@@ -369,35 +381,9 @@ export class SiltwakeApp {
     if (this.disposed) return;
     this.clock.advance(now, this.active, () => {
       if (!this.state || !this.active) return;
-      const gesture = this.sampleGesture();
-      const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
-      this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
-      // SIM-1: the live state steps in place; the guard keeps a throw atomic.
-      let result: { state: GameState; events: GameEvent[] };
-      try {
-        result = { state: this.state, events: this.guard.step(this.state, [...controls, ...gesture], this.world) };
-      } catch (error) {
-        this.simulationFault(error);
-        return;
-      }
-      this.events(result.events);
-      this.observeTimeline(result.state, [...controls, ...gesture], result.events);
-      this.observeAscent(result.events);
-      this.observeThrust(result.events);
-      this.view.presentationStep(result.state);
-      this.validateGesture();
-      for (const event of result.events)
-        if (
-          event.type === "foundation-boundary" &&
-          now - this.lastBoundaryNotice > 6000
-        ) {
-          this.view.notify(
-            "World edge · open ocean beyond. Turn back toward the regions.",
-            false, { channel: "system" },
-          );
-          this.lastBoundaryNotice = now;
-        }
-      this.session.autosave();
+      stepMeter.active = this.costs;
+      this.costs.open();
+      try { this.step(now); } finally { this.costs.close(this.state?.tick ?? 0); }
     });
     const target = this.active && this.state ? aimedInteraction(this.state, this.world) : null;
     const preview = this.active && this.state && !target ? reachPreview(this.state, this.world) : null;
@@ -441,6 +427,50 @@ export class SiltwakeApp {
     this.frameId = requestAnimationFrame((time) => this.frame(time));
   }
 
+  /** One fixed simulation step with this frame's input, marked phase by phase (SIM-PERF-1). */
+  private step(now: number): void {
+    if (!this.state || !this.active) return;
+    const costs = this.costs;
+    const gesture = this.sampleGesture();
+    const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
+    this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
+    costs.mark(PHASE.input);
+    // SIM-1: the live state steps in place; the guard keeps a throw atomic.
+    let result: { state: GameState; events: GameEvent[] };
+    try {
+      result = { state: this.state, events: this.guard.step(this.state, [...controls, ...gesture], this.world) };
+    } catch (error) {
+      this.simulationFault(error);
+      return;
+    }
+    this.events(result.events);
+    costs.mark(PHASE.events);
+    this.observeTimeline(result.state, [...controls, ...gesture], result.events);
+    costs.mark(PHASE.timelineSave);
+    this.observeAscent(result.events);
+    this.observeThrust(result.events);
+    this.view.presentationStep(result.state);
+    this.validateGesture();
+    for (const event of result.events)
+      if (
+        event.type === "foundation-boundary" &&
+        now - this.lastBoundaryNotice > 6000
+      ) {
+        this.view.notify(
+          "World edge · open ocean beyond. Turn back toward the regions.",
+          false, { channel: "system" },
+        );
+        this.lastBoundaryNotice = now;
+      }
+    costs.mark(PHASE.presentation);
+    this.session.autosave();
+    costs.mark(PHASE.autosave);
+  }
+
+  /** Where the fixed steps' time has gone this page (SIM-PERF-1), read on demand; the sim's
+   * cache ledger (`simCaches()`) is read beside it through the same diagnostic global. */
+  stepCosts(): StepCostSnapshot { return this.costs.snapshot(); }
+
   private syncSessionUi(): void {
     if (this.disposed) return;
     this.view.slot(this.repository.status, this.state !== null);
@@ -476,6 +506,7 @@ export class SiltwakeApp {
     observe(this.timeline, s, { input, waiting });
     const systems = events.flatMap((e) => e.type === "systems" ? [e.event] : []);
     if (systems.length) recordSystemsEvents(this.timeline, s, systems);
+    this.costs.mark(PHASE.timeline);
     if (s.tick - this.timelineSaved >= 600) this.saveTimeline();
   }
   /** Commits the timeline journal (SIM-1b): the small head plus any new or folded chunk. */
@@ -562,6 +593,7 @@ export class SiltwakeApp {
     this.cancelGesture();
     // UX-1: a replaced session inherits no head look or rudder, before its first frame.
     this.helm.clear();
+    this.warm();
     forgetCorridorView();
     this.view.resetPresentation();
     // After the reset, so the new timeline's protection or memory-only notice stays (SIM-1b R1 F5).
@@ -572,6 +604,16 @@ export class SiltwakeApp {
     if (!automatically || !this.resume())
       this.pause("Expedition ready. Resume when ready.", false);
     else if (navigator.userActivation?.isActive) this.requestCapture();
+  }
+
+  /** SIM-PERF-1: the first steps' compilation, the hull contact meshes and the save path's
+   * first commit are paid here, behind the entry pause, not in the first seconds of play
+   * (5–8, about 3 and 12–17 ms). Nothing live changes: the step runs on a copy. */
+  private warm(): void {
+    if (!this.state) return;
+    warmSimulation(this.state, this.world);
+    const save = this.session.envelope();
+    if (save) warmCommit(save);
   }
 
   private resume(capture = false): boolean {
@@ -934,6 +976,9 @@ export class SiltwakeApp {
     this.paused = true;
     this.live?.close(null, false);
     cancelAnimationFrame(this.frameId);
+    if (stepMeter.active === this.costs) stepMeter.active = null;
+    const g = globalThis as { __siltwakeStepCosts?: () => unknown };
+    if (g.__siltwakeStepCosts) delete g.__siltwakeStepCosts;
     this.abort.abort();
     this.session.dispose();
     this.input?.dispose();

@@ -273,8 +273,9 @@ export function stepSystems(s: GameState, events: GameEvent[]): void {
       message: `${site.label} · data captured: ${fresh.map((d) => DECODABLES[d].label).join(", ")}. Decode it at a decoder module to read it.` },
       { type: "sound", cue: "scan" });
   }
-  // Host drain: cell outposts draw their lockers' cells; the carrier its battery.
-  for (const host of listHosts(s, sys)) {
+  // Host drain: cell outposts draw their lockers' cells; the carrier its battery. Only
+  // occupied hosts can have powered modules.
+  for (const host of listHosts(s, sys, { occupied: true })) {
     const input = powerInput(s, host);
     if (input.poweredModules <= 0) continue;
     const drain = hostDrainStep(input, 1 / 60);

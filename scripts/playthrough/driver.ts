@@ -59,6 +59,8 @@ function heartbeat(): void {
 
 /** Sees every step and command a driver applies (the SIM-1 differential). */
 export interface DriverObserver {
+  /** Before each tick's step (SIM-PERF-1's step timing opens the step here). */
+  before?(d: Driver): void;
   tick(d: Driver, controls: readonly GameCommand[], events: readonly GameEvent[]): void;
   command(d: Driver, command: GameCommand, result: { state: GameState; events: GameEvent[] }): void;
 }
@@ -106,6 +108,7 @@ export class Driver {
   tick(controls: readonly GameCommand[] = [IDLE]): GameEvent[] {
     const s = this.state, failures = s.metrics.failures;
     this.recordStocks(s);
+    this.observer?.before?.(this);
     const events = this.guard.step(s, controls, this.world);
     this.accept(s, events);
     this.observer?.tick(this, controls, events);
