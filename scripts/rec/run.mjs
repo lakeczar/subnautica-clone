@@ -138,6 +138,8 @@ try {
       await g.page.waitForTimeout(alternateS * 1000);
       const now = await metrics(), m = await g.page.evaluate(() => window.__recProbe.work.length);
       if (m > n) alternation.push({ on, frames: m - n, msPerFrame: +(((now.TaskDuration - at.TaskDuration) * 1000) / (m - n)).toFixed(4) });
+      // A line per window: the job's stall detector hears the run is alive.
+      log("window", i + 1, on ? "on" : "off", alternation.at(-1)?.msPerFrame ?? "-");
       at = now; n = m;
     }
     await g.page.evaluate(() => window.__siltwake.measure.pauseRecorder(false));
@@ -148,6 +150,7 @@ try {
       await g.page.waitForTimeout(Math.min(left, HOLD_WINDOW_S) * 1000);
       const now = await metrics(), m = await g.page.evaluate(() => window.__recProbe.work.length);
       if (m > n) windows.push(+(((now.TaskDuration - at.TaskDuration) * 1000) / (m - n)).toFixed(3));
+      log("window", windows.length, windows.at(-1) ?? "-");
       at = now; n = m;
     }
     await stopProfile();
