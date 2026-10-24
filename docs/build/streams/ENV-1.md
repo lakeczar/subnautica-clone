@@ -1,8 +1,8 @@
-# ENV-1: explorable interiors with environmental storytelling (design plan, stage 0, revision 1)
+# ENV-1: explorable interiors with environmental storytelling (design plan, stage 0, revision 2)
 
 Opus 5.5 high, design authority for the stream. Branch `t3/env-1-interiors`, with root `e136beb6` merged. **Docs only: no code stage starts until the coordinator approves this plan.** Spoiler-safe. The lore notes (hindsight meanings, canon ties, rulings and the player-text rules) are in `docs/spoilers/ENV-1-LORE.md`, for writers and integration agents only.
 
-This revision answers Sol's R1 (`review/env-1-r1`, `b2f5de12`) and the coordinator's two owner points. The dispositions are in *Review responses* at the end.
+This revision answers Sol's R1 (`review/env-1-r1`, `b2f5de12`), the coordinator's two owner points, and Sol's R2 (`review/env-1-r2`, `a77c186d`). The dispositions are in *Review responses* at the end.
 
 **Player outcome.** A handful of abandoned buildings you can go inside, each dense with detail and each with something wrong that you notice before you read anything. The early ones feel like someone just stepped out. Later ones are orderly in a way that unsettles. The logs explain what you've already seen. Fear comes from implication, never gore.
 
@@ -322,7 +322,7 @@ Cave types are imported **type-only**, and `content/interiors` refers to templat
 
 Collision (`meshShapes`), emissive clustering (`clusterEmissive`) and the cel material see the same buffers either way, so a template can change source without its interiors changing. ENV-1 builds no importer, no generic material system and no texture path. Textures, UVs, materials and articulated doors are that pipeline's decisions.
 
-**The bake** (WK-1), per interior: fine and coarse meshes, the COL-1 collider, the light field and occupancy (§3.5). It is content-addressed and bound to the build. Only transferable typed arrays cross the worker boundary. The stage-2 brief names WK-1's accepted manifest and registration before work starts.
+**The bake** (WK-1), per interior: fine and coarse meshes, the COL-1 collider, the light field, the occupancy with its brick level, and the machine-light reach masks (§3.5). It is content-addressed and bound to the build. Only transferable typed arrays cross the worker boundary. The stage-2 brief names WK-1's accepted manifest and registration before work starts.
 
 ### 3.4 Collision, navigation and the air proof
 
@@ -386,21 +386,35 @@ A node that is neither fails the validator, which names the scenario and the nod
 - the shader starts the ray 0.3 m off the surface (`caveLight.ts`).
 
 A 0.25 m interior wall would be skipped entirely, so a lamp could light a prop through it. **The walls are not thickened.** Instead:
-- **Occupancy resolution comes from the geometry.** The bake chooses the occupancy voxel so the thinnest solid in the volume spans at least two voxels. Kit architecture is at least 0.25 m, so interiors use 0.125 m voxels, stored as bits within the occupancy budget (§3.8). Caves keep their 0.5 m grid.
+- **Occupancy resolution comes from the geometry.** The bake chooses the occupancy voxel so the thinnest solid in the volume spans at least two voxels. Kit architecture is at least 0.25 m, so interiors use 0.125 m voxels, stored as bits (§3.8). Caves keep their 0.5 m grid.
 - **Skin and origin offset come from the geometry.** The bake computes both from the volume's own thinnest solid and voxel: the offset is half a voxel plus epsilon, and the skin is at most the thinnest solid less one voxel, so every wall keeps at least one voxel in the walk. Both are stored in the volume header. `lampVisible` and the shader read the same header values (the shader as uniforms), so the CPU and GPU paths can't drift.
 - **Caves are unchanged.** For caves the derivation yields today's 0.45 m and 0.3 m, and a test pins them, so cave lighting doesn't move.
 
-**Room-confined machine lights, with no second lighting authority.** Local point lights have no wall test today. In stage 2:
-- each interior emissive cluster carries its room;
-- the light volume stores a room ID per 1 m texel (one byte, an R8 texture in the same volume record);
-- the existing local-light shader term multiplies a tagged light by its **room reach**: 1 in its own room, a bake-computed transmission for rooms joined to it through an open portal, and 0 otherwise. The exterior counts as a room, reached only through exterior portals.
+**The walk must reach as far as the lamp (R2-1).** Today both walks stop after `LAMP_WALK_STEPS` (200) voxel steps, and a walk that runs out reports "blocked". On the 0.125 m grid that cuts clear rays off at about 23–26 m, short of the 32 m lamp. A plain walk at that resolution would need about 450 steps in the worst direction. **My call: a two-level walk with a bound derived so that it can't run out.**
+- **A coarse brick level.** The bake stores, with the bit occupancy, one "any solid" bit per 1 m brick (8 × 8 × 8 fine voxels). The walk steps brick by brick through empty space, and descends to the fine voxels only inside bricks that contain solid, returning to the brick level when it leaves one.
+- **The bound is derived, not tuned.** A ray of length R crosses at most `⌈√3·R / B⌉ + 3` bricks (B the brick size), and at most `3·B / v` fine voxels inside each (v the voxel size). The header stores `walkBound = bricks × (1 + 3·B/v)`, computed from the volume's own voxel, brick and lamp reach:
+  - for interiors (R 32 m, B 1 m, v 0.125 m), 59 × 25 = 1,475 iterations in the pathological worst case of every brick on the ray containing solid;
+  - typically far fewer, about 32 brick steps plus a few fine descents near walls.
 
-Untagged exterior lights are unaffected, and `selectLights` (bounded top-k) is unchanged. It's one extra fetch and multiply in the existing path.
+  Since the bound covers every possible ray, "ran out of steps" can no longer be mistaken for "blocked". A test counts steps on random rays and fails if any walk reaches the bound.
+- **One walk, one shader routine.** Caves use the same function with B equal to their voxel (a single level), and keep `walkBound` = 200. That is above their derived requirement (√3 × 32 / 0.5 + 3 ≈ 114), so a test pins cave visibility and reach as they are today.
+- **GPU cost is a stage-2 measurement,** not a claim: the lamp walk's frame-time cost in the densest interior, lamp on, at 1080p, `--class exclusive` on the 3090, plus a 4070 check. If it doesn't fit the frame, the cheaper evaluation chosen (for example, the walk shared across a pixel quad) is filed as a compromise with its root fix. The bound is never cut back.
+
+**Room-confined machine lights: a baked reach mask per light (R2-2).** Local point lights have no wall test today. A room-ID multiplier can't separate the doorway's spill from a receiver behind the wall beside it, because both are in the same room. Interior machine lights are static, so their visibility is baked:
+- **The mask.** For each interior emissive cluster, the bake walks the same occupancy from the light to every texel of a mask covering the light's reach box, clipped to where its attenuation is non-zero (exterior parts included, so spill out through an exterior portal works too). It stores one bit per 0.25 m texel: visible or not. A texel's bit counts only its free-space sub-samples, never sub-samples inside solid, so a texel straddling a wall takes the visibility of its open side.
+- **Sampling.** The receiver samples its light's mask at its position, offset half a mask texel along its surface normal into its own space, with nearest filtering. The hard step at the doorway's shadow line suits the banded cel lighting, and the offset keeps a receiver pressed against a wall from reading the far side.
+- **The same light path and authority.** A tagged light's entry carries its mask slot. The existing local-light term multiplies by the mask bit, using the same bit-packed 3D addressing routine as occupancy. Untagged lights (exterior emissives, creatures) have no slot and are unaffected. `selectLights` (bounded top-k) is unchanged, and no second lighting system exists.
+- **Lifecycle.** Masks bake offline (WK-1), are resident and evicted with their fine interior, and are registered in the ledger. A light that changes with a state (dark before restoration, lit after) changes intensity only; its mask stays valid.
+- **Cost:** at most 6 masks × 32 KiB per interior (a 16 m reach cube at 0.25 m is 64³ bits), and one integer 3D fetch plus a bit test per tagged light per fragment (§3.8).
+
+The per-texel room-ID texture from revision 1 is dropped: the masks replace it.
 
 **Lighting fixtures** (CPU in the heavy tier, GPU as REC-1 fixture views in the stage-2 browser run):
-1. **The near-wall prop:** Sol's case. A prop face at X = −0.05 facing +X, a wall at X ∈ [0, 0.5], and a lamp beyond the wall. The prop stays dark on both paths.
-2. **A dark room beside a lit room:** through a solid wall it stays dark; through an open door only the doorway's reach is lit.
-3. **Cave regression:** a cave's derived skin and offset equal today's constants, and its sampled field is unchanged.
+1. **The near-wall prop:** a prop face at X = −0.05 facing +X, a wall at X ∈ [0, 0.5], and a lamp beyond the wall. The prop stays dark on both paths, for the lamp and for a masked machine light.
+2. **Full lamp reach:** a clear 32 m axial ray and a clear 32 m diagonal ray on the 0.125 m grid read visible, and a 0.25 m wall 0.5 m short of the lamp reads blocked. No walk reaches its bound.
+3. **Doorway confinement, Sol's counterexample.** A partition at X ∈ [0, 0.25] with a doorway at Z ∈ [−0.5, 0.5], and a machine light at (−2, 1, 0). The receiver at (2, 1, 0), through the doorway, is lit. The receiver at (1.2, 1, 2.4), the same distance away in the same room but behind the wall, is dark. Receivers either side of the doorway's shadow line are classified correctly within one mask texel.
+4. **A dark room beside a lit room:** through a solid wall it stays dark.
+5. **Cave regression:** a cave's derived skin, offset and walk bound equal today's values, and its sampled field and lamp visibility are unchanged.
 
 **Occlusion is new work in stage 2:** room-and-portal visibility on the interior's own graph.
 - From outside: the shell and the rooms seen through open portals.
@@ -514,9 +528,20 @@ These are per fine interior while resident: targets to prove in the named dedica
 | Draw calls | ≤ 10 visible | See batching below |
 | Emissive clusters | ≤ 6 candidates | They compete for the global 12 through `selectLights`; they are not reserved slots |
 | Collider | ≤ 1.5 MiB | COL-1's compact format |
-| Light field and room IDs | ≤ 128 KiB | 1 m texels over the rooms |
-| Occupancy | ≤ 256 KiB | 0.125 m voxels as bits: a 30 × 14 × 8 m hall is ≈ 215 KiB |
+| Light field | ≤ 128 KiB | 1 m texels over the rooms (≈ 16 KiB for the example hall) |
+| Occupancy, with its brick level | ≤ 384 KiB on CPU and GPU, padding included | 0.125 m voxels as bits: a 30 × 14 × 8 m hall is ≈ 210 KiB unpadded; 32 × 16 × 10 m padded bounds are 320 KiB. The 1 m brick bits add under 1 KiB. |
+| Machine-light reach masks | ≤ 192 KiB on CPU and GPU (≤ 6 × 32 KiB) | One bit per 0.25 m texel over each light's reach box (a 16 m cube is 64³ bits) |
+| Lighting work per fragment | Lamp: one two-level walk, bounded by `walkBound` (§3.5). Each tagged machine light: one integer 3D fetch and a bit test. | The lamp walk's GPU cost is measured in stage 2, not assumed |
 | Fine interiors resident | 1, or 2 at a seam | ENV-1's owner policy (§3.5) |
+
+**Bit layouts are bit layouts all the way through,** not only in the file. Today's runtime keeps one R8 texel per voxel, and CW-1's LCF1 codec (`lightField.ts`) and texture port (`caveMaterial.ts`) assume that layout. The packed occupancy, brick bits and masks go through all of these in their packed form, behind a layout flag in the one codec:
+- the bake and the codec;
+- the CPU lookup and the GPU addressing (an integer 3D texture, eight voxels per texel along X, with one shared addressing routine);
+- the sliced uploads;
+- retention on restore;
+- the ledger entries.
+
+Caves keep their R8 layout unless a later stream chooses to migrate them.
 
 **Batching strategy.**
 - Per room group, one merged static mesh holds the shell plus every prop that isn't repeated, so culling stays room-granular.
@@ -558,7 +583,7 @@ Each stage is one reviewable outcome with a one-page handoff: SHA, `npm run gate
 | Stage | Questions (≤ 3) | Checks | Images | Adverse case |
 | --- | --- | --- | --- | --- |
 | 1 | 1. Do the five air-proof fixtures (two parking places and one craft, the unrestored station, walking headroom, a one-way drop, a blocking hull) fail, naming scenario and node, while the three definitions pass on every scenario? 2. Does the validator catch a blocked portal, a heaped belonging and a missing caption? 3. Do the kit recipes give identical buffers on repeat, with fine and coarse silhouettes matching and draws and bytes within budget? | Fast tier; gate | 0 | The two-parking hall passes only when its far room is within the line or a timed return of the one craft's parking place. |
-| 2 | 1. Does the dormitory read before its record: tell, turn and keepsake by lamp in the views? 2. Do collision (oracle), configuration-space routes and the air proof pass on the composed world for both routes' scenarios, with the hull present? 3. Do the three lighting fixtures pass on the CPU and GPU paths, with caves unchanged? | Gate; COL-1 B oracle; composed validator (one heavy job, `--machine any`); REC-1 views tagged `interiors` and the lighting fixture views; **an ordinary-input browser run**: swim in from the craft by keyboard, lamp on and off, read C05, leave by the other exit, save, reload inside, leave again; streaming on a Dart approach; a 3090 exclusive frame check inside and a 4070 check | 3–4 (entry, tell, turn, lamp off), plus the fixture views | Reload inside the dormitory on a starved budget: admission finishes in the load screen, the diver is valid, and there's no hold in ordinary play. |
+| 2 | 1. Does the dormitory read before its record: tell, turn and keepsake by lamp in the views? 2. Do collision (oracle), configuration-space routes and the air proof pass on the composed world for both routes' scenarios, with the hull present? 3. Do the five lighting fixtures (near-wall prop, full lamp reach, doorway confinement, dark room beside a lit room, cave regression) pass on the CPU and GPU paths, with no walk reaching its bound, and what does the lamp walk cost on the GPU? | Gate; COL-1 B oracle; composed validator (one heavy job, `--machine any`); REC-1 views tagged `interiors` and the lighting fixture views; **an ordinary-input browser run**: swim in from the craft by keyboard, lamp on and off, read C05, leave by the other exit, save, reload inside, leave again; streaming on a Dart approach; a 3090 exclusive frame check inside, the lamp walk's cost measured with the lamp on, and a 4070 check | 3–4 (entry, tell, turn, lamp off), plus the fixture views | Reload inside the dormitory on a starved budget: admission finishes in the load screen, the diver is valid, and there's no hold in ordinary play. |
 | 3a | 1. Do exposure, movement and optics follow §3.6 above and below the waterline, before and after activation (exercised on a fixture row)? 2. Does the lab answer identically everywhere, and does every stop's air, rest and service behave as before? 3. Do the sim and shader agree on sampled points? | Gate (playthroughs included: the bases' rest and wake unchanged); air-room tests | 0 | Reload while standing in an active fixture room, then while swimming below it. |
 | 3 | 1. Do both states read, and does restoration visibly change the station, with the hull replaced (no old solid, one draw source)? 2. Rest → incapacity → wake in the drained room, and the old sphere granting no air or rest while service still works? 3. Does the air proof pass before restoration from each route's one parked craft? | Gate (economy scripts unchanged); §3.6 checks 1–4 and 7; §3.7 tests; REC-1 views; ordinary-input run through the lock; frame checks | 3–4 | Restoring while floating where the floor will be: a deterministic settle, the same on reload. |
 | 4 | 1. Is every belonging hung, folded or racked, with nothing heaped (validator plus coordinator inspection)? 2. Does the upper hall switch states, and its air row activate, from the works flags alone through save and reload? 3. Do the halls stay within their budget with two resident at the seam? | Gate; REC-1 views; ordinary-input run hall → annex → upper hall; the air proof for the transfer hall with the one craft at either parking place; frame checks | 4–6 (stage exit ≤ 10) | A save made between restoring the hall frame and the food bay reloads with exactly the hall restored. |
@@ -602,8 +627,16 @@ Each stage is one reviewable outcome with a one-page handoff: SHA, `npm run gate
 | --- | --- | --- |
 | **F1 [P2]** air coverage from real expeditions | **Fixed.** Per-route first-access scenarios from SAVE-1 milestone saves, each with one available craft at one parking place, the save's suit tier and its active air rooms. Coverage uses the real `airLineSupply` on the basic line (no reel, no Mantle line), or a timed return that keeps the 25% reserve. The graph is in configuration space, with directed collider moves and both capsules (0.95 m swim, 1.75 m walk). The parked hull is present for approach, exit, boarding and route sweeps. The fixtures include two parking places with one craft, and an unrestored station. | Design call 10; §3.4; §2.4 and §2.6 navigation; stage 1 and 2 tests |
 | **F2 [P2]** drained-room air contract | **Fixed.** One `AirRoom` descriptor: activation derived from the restoration fact, a local waterline and the rest-base identity. Exposure, movement (`surfaceY`), optics, rest and wake read it. The Rift's 4 m sphere is retired while service access stays. The scope covers `stops.ts`, `bases.ts`, the rest and recovery consumers, and the `WorldQueries` extension. The checks cover before and after, above and below, rest → incapacity → wake, and reload. No persisted field. The rows are exactly the coordinator's set. | Design call 9; §3.6; §2.4; stage 3a |
-| **F3 [P2]** thin-wall lighting | **Fixed** in stage 2's light-volume adaptation. Occupancy resolution, skin and origin offset are derived from the volume's own geometry and read from one header by the CPU and shader paths. Caves keep today's values. Machine lights are confined by a per-texel room ID and room reach in the existing local-light term, so there's no second authority. Fixtures: the near-wall prop, a dark room beside a lit room, cave regression. Walls are not thickened. | §3.5; stage 2 |
+| **F3 [P2]** thin-wall lighting | **Fixed** in stage 2's light-volume adaptation. Occupancy resolution, skin and origin offset are derived from the volume's own geometry and read from one header by the CPU and shader paths. Caves keep today's values. Machine-light confinement was revised in R2 (baked reach masks; see below). Fixtures: the near-wall prop, a dark room beside a lit room, cave regression. Walls are not thickened. | §3.5; stage 2 |
 | **F4 [P2]** the Rift hull and shared replacements | **Fixed.** Stage 3 atomically replaces `rift.materials_station.hull` (collision, fine art and scatter out; coarse and far shell in) through the proposed `replaces` interface at the single `STRUCTURES` composition, with registry, far-layer and arbiter registration named for the coordinator. Disjointness is qualified: content in parallel, shared roots serially. The district shell replacement is conditional on the coordinator's agreement. | §3.7; §2.4; §3.1; stages 3, 4 and 6 |
 | **F5 [P3]** story-mechanics commentary | **Fixed.** The two rationales are removed here and kept in the lore appendix. | Player outcome; design call 5 |
 | Checks notes: the dry-coordinate count corrected; portal kinds, the validator and room visibility named as new work; arbiter counts enforced by ENV-1; 32-bit index arithmetic; CPU reservations; the shared ~2 ms frame allowance; light clusters as candidates, not reserved slots; a batching strategy with draw and byte accounting; `systems.opened` named as LS-1 1b's; an explicit lock and drain reload policy; reuse of `MeshRecipe`/`TemplateRecipe`/`TemplateLibrary`, with no importer, material system or full prop library ahead of the proof asset | **Adopted.** | Design calls 6, 7 and 9; §3.2–§3.9 |
 | Owner points: the look waits for the asset debate; the deepest rooms approved; dry rooms pending, written for the bigger restored stops | **Adopted.** | §6; stages 6 and 7; §3.6 |
+
+**R2** (Sol 6.1 xhigh, `review/env-1-r2` `a77c186d`): F1, F2, F4 and F5 resolved; F3's two remaining points fixed:
+
+| Finding | Disposition | Where |
+| --- | --- | --- |
+| **R2-1 [P2]** the walk's step bound | **Fixed.** A two-level walk (1 m brick bits over the 0.125 m bit occupancy) with a derived bound, `walkBound = (⌈√3·R/B⌉ + 3) × (1 + 3·B/v)`, stored in the volume header. That is 1,475 in the interior worst case, so exhaustion can't occur, and a step-count test enforces it. Caves use the same routine as one level with their bound kept at 200 (above their derived ≈ 114), and visibility and reach are pinned. The GPU cost is an explicit stage-2 measurement; any cheaper evaluation is a filed compromise, never a shorter bound. Fixtures: clear 32 m axial and diagonal rays, and a wall near the ray's end, on the CPU and GPU. | §3.5; §3.8; stage 2 tests |
+| **R2-2 [P2]** doorway confinement | **Fixed.** A baked one-bit reach mask per static machine light (0.25 m, free-space sub-samples only, sampled half a texel off the surface with nearest filtering), multiplied in the existing local-light term through a mask slot on the light's entry. `selectLights` and the lighting authority are unchanged, and the room-ID texture is dropped. Sol's counterexample is fixture 3: the doorway receiver lit, the wall-occluded one dark. Budget: ≤ 192 KiB of masks per interior and one fetch plus a bit test per tagged light per fragment. | §3.5; §3.8; stage 2 tests |
+| Occupancy layout note | **Adopted.** The packed layout is carried through bake, codec, CPU lookup, GPU addressing, sliced uploads, restore retention and the ledger, behind one codec flag. Padding is counted in the budget. | §3.8 |
