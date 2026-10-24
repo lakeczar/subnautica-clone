@@ -13,7 +13,9 @@ import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import { airSupply, exposure } from "../sim/survival.js";
 import { distractionPreview, exitBlock, hullDepth, serviceState } from "../sim/vehicles.js";
 import { servicePreview } from "../sim/serviceLink.js";
-import { ARM_CHARGE, ARM_LIFT_SECONDS, armNearby, armTarget, cabinHull, cabinEnterRefusal, fittedCabin } from "../sim/fleet.js";
+import { ARM_LIFT_SECONDS, armNearby, armTarget, cabinHull, cabinEnterRefusal, fittedCabin } from "../sim/fleet.js";
+import { craftActions } from "../sim/signatures.js";
+import { RANGE_TAGGER } from "../sim/upgrades/tools.js";
 import { usedCapacity } from "../sim/inventory.js";
 import type { GameState, NoticeContext, NoticeOptions, Vec3, WorldQueries } from "../sim/types.js";
 import { FACILITY_SOLIDS } from "../sim/world.js";
@@ -218,7 +220,7 @@ export class HudView {
       // The Creel's E is its work key: tool arms on a host ahead, else its cabin.
       const work = v.hull === "creel" ? creelWork(state) : "";
       const exitKey = v.hull === "creel" ? "X" : this.exitKey;
-      const html = helmGuidance(state) ?? `${work}<kbd>${exitKey}</kbd> ${block ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${block || stopped ? `<small>${escapeHtml(block?.message ?? `Suit ${personalLimit(state)} m · hull ${v.rating} m`)}</small>` : ""}`;
+      const html = helmGuidance(state) ?? `${work}${craftActionLine(state)}<kbd>${exitKey}</kbd> ${block ? "Exit blocked" : `${deliberateExit(state) ? "Hold to exit" : "Exit"}`}${this.exitProgress !== null ? ` <progress aria-label="Exit hold" max="1" value="${this.exitProgress}"></progress>` : ""}${block || stopped ? `<small>${escapeHtml(block?.message ?? `Suit ${personalLimit(state)} m · hull ${v.rating} m`)}</small>` : ""}`;
       if (guidance.innerHTML !== html) guidance.innerHTML = html;
       guidance.classList.toggle("urgent", block !== null);
     }
@@ -596,10 +598,18 @@ function atCradleRail(state: GameState): boolean {
     p.y + proxy.height > s.min.y && p.y < s.max.y);
 }
 
+/** SIG-1: the piloted craft's fitted actions on the number row, with their state. */
+export function craftActionLine(state: GameState): string {
+  const actions = craftActions(state);
+  if (!actions.length) return "";
+  const tag = state.fleet.vehicles.find(v => v.id === state.player.controlledVehicleId)?.upgrades.tag;
+  const aim = tag ? ` <progress aria-label="Tag aim" max="1" value="${Math.min(1, (state.tick - tag.since) / (RANGE_TAGGER.aimSeconds * 60)).toFixed(2)}"></progress>` : "";
+  return `<span class="craft-actions">${actions.map(a => `<span class="craft-action ${a.state}"><kbd>${a.key}</kbd> ${escapeHtml(a.label)}${a.detail ? ` <small>${escapeHtml(a.detail)}</small>` : ""}${a.action === "tag" ? aim : ""}</span>`).join(" ")}</span><br />`;
+}
 /** Creel work line: tool arms on the host ahead, else the cabin when stopped. */
 function creelWork(state: GameState): string {
   const arm = armTarget(state);
-  if (arm) return `<kbd>E</kbd> ${arm.refusal ? escapeHtml(arm.refusal) : `Tool arms · ${escapeHtml(SOURCES[arm.sourceId].label)} · ${ARM_LIFT_SECONDS} s · ${ARM_CHARGE}% power`}<br />`;
+  if (arm) return `<kbd>E</kbd> ${arm.refusal ? escapeHtml(arm.refusal) : `${arm.work.seconds < ARM_LIFT_SECONDS ? "Cutting arm" : "Tool arms"} · ${escapeHtml(SOURCES[arm.sourceId].label)} · ${arm.work.seconds} s · ${arm.work.bundle} × · ${arm.work.charge}% power`}<br />`;
   const near = armNearby(state);
   if (near) return `<kbd>E</kbd> Turn the bow to ${escapeHtml(SOURCES[near].label)} for the tool arms<br />`;
   const v = state.fleet.vehicles.find(a => a.id === state.player.controlledVehicleId);

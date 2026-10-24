@@ -4,7 +4,7 @@ import type { GeometryCache } from "../geometryCache.js";
 import { PALETTE as P } from "../palette.js";
 import { label, type LabelMaterials } from "../landmarks.js";
 import { wallWithOpening } from "../materials.js";
-import { CARRIER_LAYOUT, carrierRooms, carrierStructure } from "../../sim/carrier.js";
+import { CARRIER_LAYOUT, carrierRooms, carrierStructure, slotSize } from "../../sim/carrier.js";
 import { HEARTHLINE, HEARTHLINE_HOUSE as H, HEARTHLINE_KEELS as K, HEARTHLINE_WINDOWS as W } from "../../content/fleet/hulls.js";
 import {
   BERTH_ZONE, DECK_Y, HEARTHLINE_FIXTURES, HEARTHLINE_ROOMS, HEARTHLINE_SOCKETS, LINING, type InteriorSolid, type Socket,
@@ -398,7 +398,7 @@ function socketOccupant(scene: Scene, cel: ShaderMaterial, name: string, s: Sock
  * physical authority: every box is drawn on its descriptor, skins at most 1 cm
  * proud. Rebuilt on configuration or transfer slot changes, as today. */
 export function hearthlineShellArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, id: string,
-  configuration: "compact" | "medium", openSlot?: 0 | 1, labels?: LabelMaterials): Mesh {
+  configuration: "compact" | "medium" | "mixed", openSlot?: 0 | 1, labels?: LabelMaterials): Mesh {
   const b = new ArtBatch(`${id}.shell`, scene, cel);
   const rooms = carrierRooms(configuration), panes: Point[][] = [], signs: [string, Point, number, number][] = [];
   for (const solid of carrierStructure(configuration, openSlot)) {
@@ -424,7 +424,7 @@ export function hearthlineShellArt(scene: Scene, cel: ShaderMaterial, glass: Sha
       panes.push([[x0, y0, z + toward * .02], [x1, y0, z + toward * .02], [x1, y1, z + toward * .02], [x0, y1, z + toward * .02]]);
       b.tube([[x0, y0, f], [x1, y0, f], [x1, y1, f], [x0, y1, f], [x0, y0, f]], .014, P.ochre, 4);
       const yaw = toward < 0 ? 0 : Math.PI;
-      signs.push([configuration === "medium" ? "SERVICE BERTH" : slot === 0 ? "PORT / 01" : "STARBOARD / 02", [cx, a.y + 2.95, z + toward * .022], Math.min(2.3, w - 1.05), yaw]);
+      signs.push([slotSize(configuration, slot) === "medium" ? "SERVICE BERTH" : slot === 0 ? "PORT / 01" : "STARBOARD / 02", [cx, a.y + 2.95, z + toward * .022], Math.min(2.3, w - 1.05), yaw]);
       signs.push([openSlot === slot ? "TRANSFER / KEEP CLEAR" : "DRY / ISOLATED", [cx, a.y + .65, z + toward * .022], Math.min(1.65, w - .9), yaw]);
     }
   }

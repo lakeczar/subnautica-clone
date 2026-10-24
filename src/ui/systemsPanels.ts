@@ -29,6 +29,9 @@ import {
 } from "../sim/systems/index.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import type { CreatureEntry, CycleEntry } from "../sim/systems/index.js";
+import { speciesScanId } from "../sim/signatures.js";
+import { hostUpgradeOffers } from "../sim/hostUpgrades.js";
+import { hostUpgrade } from "../content/upgrades/hosts.js";
 import { berthChargePlan, chartOptions, deployPoint, hostPower, hostPowerReason, OUTPOST_SERVICE_RADIUS, outpostRules, siteQuery, surveyTierAt, systemsContext } from "../sim/systemsLink.js";
 import { surveyRange } from "../sim/systems/survey.js";
 import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
@@ -75,6 +78,14 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
           actions.push(button(`Plant ${SEEDS[seed.kind as keyof typeof SEEDS].label}`, { type: "plant", hostId: host.id, socket: k.id, seed: seed.kind }));
       }
       if (occ.module === "survey") actions.push(button("Survey", { type: "survey", hostId: host.id }, !powered, reason ?? undefined));
+      // SIG-1: a decoder lattice or survey array fits in place; the offer is the command's own plan.
+      if ((occ.module === "decoder" || occ.module === "survey") && occ.itemId) {
+        const fitted = sys.moduleUpgrades[occ.itemId];
+        if (fitted) actions.unshift(`<small>${esc(hostUpgrade(fitted).label)}</small>`);
+        for (const offer of hostUpgradeOffers(s, host.id, k.id))
+          actions.push(button(`Fit ${offer.label}`, { type: "upgrade-host-module", hostId: host.id, socket: k.id, upgrade: offer.upgrade },
+            !!offer.refusal, offer.refusal ?? `${offer.benefit} Costs ${offer.cost}.`));
+      }
       actions.push(...faunaSocketActions(s, host.id, k.id, occ.module, button));
       return `<li><b>${esc(k.id)}</b> · ${esc(occ.label)} ${actions.join("")}</li>`;
     }).join("");
@@ -175,9 +186,12 @@ export function fitPanel(s: GameState, button: CommandButton, group: Group): str
 /** Creatures met: every species of a region whose habitats you have worked. */
 function creatures(s: GameState): CreatureEntry[] {
   const regions = new Set(s.knowledge.scans.filter((id) => Object.hasOwn(SOURCES, id)).map((id) => SOURCES[id as keyof typeof SOURCES].region as RegionId));
+  // SIG-1: a species the Dart's range tagger filed is known wherever it was met.
+  const known = (id: string, region: RegionId): boolean => regions.has(region) || s.knowledge.scans.includes(speciesScanId(id));
+  const tagged = (id: string): readonly string[] => s.knowledge.scans.includes(speciesScanId(id)) ? ["Tagged at range by the Dart."] : [];
   return [
-    ...Object.entries(THREATS).filter(([, t]) => regions.has(t.region)).map(([id, t]) => ({ id, label: t.label, region: t.region, behaviour: t.scan, danger: "hunter" as const })),
-    ...Object.entries(CUE_SPECIES).filter(([, c]) => regions.has(c.region)).map(([id, c]) => ({ id, label: c.label, region: c.region, behaviour: c.scan, danger: "cue" as const })),
+    ...Object.entries(THREATS).filter(([id, t]) => known(id, t.region)).map(([id, t]) => ({ id, label: t.label, region: t.region, behaviour: t.scan, danger: "hunter" as const, notes: tagged(id) })),
+    ...Object.entries(CUE_SPECIES).filter(([id, c]) => known(id, c.region)).map(([id, c]) => ({ id, label: c.label, region: c.region, behaviour: c.scan, danger: "cue" as const, notes: tagged(id) })),
   ];
 }
 /** Natural cycles the player has watched (C4B-07): only timings seen from a

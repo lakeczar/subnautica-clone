@@ -15,6 +15,7 @@ import { createLandmarks, createNavigationSilhouettes, LabelMaterials } from "./
 import { createEcology } from "./ecology.js";
 import { createCreatureLayer } from "./creatures/layer.js";
 import { createPlacedHosts } from "./placedHosts.js";
+import { createFieldKit } from "./fieldKit.js";
 import { ecologyView } from "../sim/ecology/ecology.js";
 import { lampOn, presentationStimulus } from "../sim/ecologyLink.js";
 import { createExpeditionActors, createExpeditionRegion, DART_SEAT } from "./expedition.js";
@@ -246,6 +247,8 @@ export function createRenderer(
     // S4's later-region species, cue animals, deterrents and field cues (C3).
     const creatures = createCreatureLayer(scene, cel);
     const placed = createPlacedHosts(scene, cel);
+    // SIG-1: outposts, host modules, signature tools out in the water and fitted hardware.
+    const fieldKit = createFieldKit(scene, cel);
     // W2: the summit beacon over the hub and the crown rays' ring.
     const hub = createHubArt(scene, cel);
     for (const mesh of creatures.meshes) mesh.renderingGroupId = 1;
@@ -370,6 +373,7 @@ export function createRenderer(
         streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
         canvas.dataset.currentStreaks = String(streaks.shown);
         placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
+        fieldKit.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         hub.update(time, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
           { x: camera.position.x, y: camera.position.y, z: camera.position.z }, state);
@@ -432,6 +436,7 @@ export function createRenderer(
         art.dispose();
         creatures.dispose();
         placed.dispose();
+        fieldKit.dispose();
         hub.dispose();
         caveView.dispose();
         streaks.dispose();

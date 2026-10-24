@@ -40,6 +40,7 @@ import { aimedInteraction } from "./targeting.js";
 import { board, distraction, eat, exit, exitBlock, rechargeCells, reserve } from "./vehicles.js";
 import { installModule, removeModule } from "./modules.js";
 import {
+  berthRefitOutcome,
   carrierCommand,
   carrierHull,
   carrierInteriorSolids,
@@ -100,6 +101,7 @@ import { dampIntoFace, impactLoss, supportedDrift } from "./currents/move.js";
 import { flowAt, worldCurrents } from "./currents/world.js";
 import { stepUpgrades, upgradeAction } from "./fittings.js";
 import { stepSystems, systemsCommand } from "./systemsLink.js";
+import { hostUpgradeCommand } from "./hostUpgrades.js";
 import { serviceCommand, servicePreview } from "./serviceLink.js";
 import { observeWorldCycles } from "./cyclesLink.js";
 import { faunaCommand, stepFauna } from "./fauna/link.js";
@@ -111,6 +113,7 @@ import { restBaseHere } from "./survival.js";
 import { vehicleProfile } from "./fittings.js";
 import { hullDamage, motion } from "./upgrades/effects.js";
 import { BALLAST, ballastStep, overdriveMotion } from "./upgrades/tools.js";
+import { activeDrone, isSignatureAction, lineHolds, settleSignatures, signatureCommand, signatureLoudness, steerDrone, stepSignatures } from "./signatures.js";
 const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
 /** Highest rock lip a swimmer glides up onto, metres (one cave voxel, plus margin). */
 const SWIM_LIP = 0.6;
@@ -176,6 +179,8 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     if (fauna === null && s.feedback) actionResult(s, events, s.feedback);
     return fauna;
   }
+  const hostUpgrade = hostUpgradeCommand(s, c, events);
+  if (hostUpgrade !== undefined) return hostUpgrade;
   const systems = systemsCommand(s, c, w);
   if (systems !== undefined) {
     if (systems === null && s.feedback) actionResult(s, events, s.feedback);
@@ -256,8 +261,11 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       const target = armTarget(s);
       if (!target) return "No salvage host within reach of the tool arms. Bring the bow within a few metres.";
       if (target.refusal) return target.refusal;
-      s.world.action = { sourceId: target.sourceId, seconds: ARM_LIFT_SECONDS, kind: "arm" };
-      events.push({ type: "notice", channel: "action", message: `Tool arms on ${SOURCES[target.sourceId].label} · ${ARM_LIFT_SECONDS} s · hold position.` });
+      s.world.action = { sourceId: target.sourceId, seconds: target.work.seconds, kind: "arm" };
+      const def = SOURCES[target.sourceId];
+      events.push({ type: "notice", channel: "action", message: `${target.work.seconds === ARM_LIFT_SECONDS ? "Tool arms" : "Cutting arm"} on ${def.label} · ${target.work.seconds} s · hold position.` },
+        { type: "signature", event: { kind: "arm", vehicleId: s.player.controlledVehicleId!, phase: "start", sourceId: target.sourceId, item: def.item,
+          quantity: target.work.bundle, charge: target.work.charge } });
       return null;
     }
     case "hint": {
@@ -278,6 +286,12 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
         incapacitate(s, "Fixture incapacity inside the carrier.");
         return null;
       }
+      if (c.action === "reconfigure") {
+        const no = carrierCommand(s, c.action, c.vehicleId, w), r = no ? null : berthRefitOutcome(s);
+        if (r) events.push({ type: "notice", channel: "action", message: r.message, summary: "Berths refitted" }, { type: "sound", cue: "craft" },
+          { type: "signature", event: r.event });
+        return no;
+      }
       return carrierCommand(s, c.action, c.vehicleId, w);
     case "distraction": {
       const no = distraction(s);
@@ -292,6 +306,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     case "lamp":
       return toggleLamp(s);
     case "upgrade": {
+      if (isSignatureAction(c.action)) return signatureCommand(s, c.action, w, events);
       const no = upgradeAction(s, c.action, w, c.itemId);
       // A flare is a bright light that sight hunters turn to: S4's lure, at the flare.
       if (!no && c.action === "flare") placeDeterrent(s, "lure", s.world.flares.at(-1)!.position);
@@ -478,29 +493,36 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       return "That command is not available here.";
   }
 }
-function updateAction(s: GameState): void {
+function updateAction(s: GameState, events: GameEvent[]): void {
   const a = s.world.action;
   if (!a) return;
   if (a.kind === "arm") {
     const target = armTarget(s);
     if (!target || target.sourceId !== a.sourceId || target.refusal) {
+      // SIG-1 (F17): arm work reports typed outcomes; nothing is inferred from feedback.
+      const vehicleId = s.player.controlledVehicleId ?? "", def = SOURCES[a.sourceId];
       s.world.action = null;
-      s.feedback = "Tool arms released · the bow left the host or the hold/power changed. Nothing lifted.";
+      events.push({ type: "notice", channel: "action", message: "Tool arms released · the bow left the host or the hold/power changed. Nothing lifted.", error: true },
+        { type: "signature", event: { kind: "arm", vehicleId, phase: "stopped", sourceId: a.sourceId, item: def.item, quantity: 0, charge: 0 } });
       return;
     }
     a.seconds -= DT;
     if (a.seconds > 0) return;
     const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId)!;
     const def = SOURCES[a.sourceId], node = s.world.resources.find((n) => n.id === a.sourceId)!;
-    const n = Math.min(def.bundle, node.stock);
+    // The fitted arm's work (SIG-1: the cutting arm cuts faster and yields more).
+    const { bundle: n, charge } = target.work;
     addItem(s, def.item, n, v.cargoId);
     node.stock -= n;
-    v.charge = Math.max(0, v.charge - ARM_CHARGE);
-    s.metrics.powerUsed += ARM_CHARGE;
+    v.charge = Math.max(0, v.charge - charge);
+    s.metrics.powerUsed += charge;
     s.metrics.collections++;
     if (!s.knowledge.scans.includes(a.sourceId)) s.knowledge.scans.push(a.sourceId);
-    s.feedback = `Tool arms · ${n} × ${ITEMS[def.item].label} → Creel hold · −${ARM_CHARGE}% power.`;
     s.world.action = null;
+    const tool = target.work.seconds < ARM_LIFT_SECONDS ? "Cutting arm" : "Tool arms";
+    events.push({ type: "notice", channel: "action", message: `${tool} · ${n} × ${ITEMS[def.item].label} → Creel hold · −${charge}% power.`,
+      summary: `${tool} · +${n} ${ITEMS[def.item].label}` }, { type: "sound", cue: "collect" },
+      { type: "signature", event: { kind: "arm", vehicleId: v.id, phase: "done", sourceId: a.sourceId, item: def.item, quantity: n, charge } });
     return;
   }
   if (
@@ -555,6 +577,8 @@ function updateAction(s: GameState): void {
 function settleArm(s: GameState): void {
   if (s.world.action?.kind === "arm" &&
       s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId)?.hull !== "creel") s.world.action = null;
+  // SIG-1: a tag aim belongs to its piloted, fitted Dart; every command ends saveable.
+  settleSignatures(s);
 }
 /** Menu transactions use the same rules without advancing survival or world time. */
 export function executeCommand(
@@ -652,8 +676,10 @@ export function stepGameInPlace(
     vertical = 0,
     sprint = false,
     quiet = false;
-  let yaw = s.player.pose.yaw,
-    pitch = s.player.pose.pitch;
+  // SIG-1: while the Mantle's scout drone is out, look and move steer the drone.
+  const droneHost = activeDrone(s);
+  let yaw = droneHost ? droneHost.upgrades.drone!.yaw : s.player.pose.yaw,
+    pitch = droneHost ? droneHost.upgrades.drone!.pitch : s.player.pose.pitch;
   for (const c of commands) {
     if (c.type === "look") {
       yaw += clamp(c.yawDelta, -0.8, 0.8);
@@ -667,6 +693,11 @@ export function stepGameInPlace(
     }
   }
   yaw = ((yaw % TAU) + TAU) % TAU;
+  if (droneHost) {
+    steerDrone(droneHost, yaw, pitch, { forward, right, vertical }, world);
+    yaw = s.player.pose.yaw; pitch = s.player.pose.pitch;
+    forward = right = vertical = 0; sprint = false;
+  }
   const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
   const handling = v ? hullHandling(v.hull) : null;
   if (v && handling) {
@@ -723,7 +754,7 @@ export function stepGameInPlace(
     const stopped = Math.hypot(target.x, target.y, target.z) < MOTION.stopped;
     const current = v.berth ? null : respondToFlow(flowAt(v.pose.position, s.tick).flow, {
       id: v.hull, authority: profile.current, cruise: profile.speed.cruise, drain: cruiseDrain,
-    }, drive, v.upgrades.anchored && stopped ? "anchor" : powered && stopped ? "station" : "none", powered);
+    }, drive, (v.upgrades.anchored || lineHolds(v)) && stopped ? "anchor" : powered && stopped ? "station" : "none", powered);
     const driftDelta = current ? { x: current.drift.x * DT, y: current.drift.y * DT, z: current.drift.z * DT } : ZERO;
     // Emergency ballast: a mechanical rise through the same sweep, power or not.
     const ballast = ballastStep(v.upgrades, Math.max(0, -(v.pose.position.y + 0.5)), DT);
@@ -812,7 +843,7 @@ export function stepGameInPlace(
     v.charge = Math.max(0, v.charge - drain);
     s.metrics.powerUsed += drain;
     loudness = Math.max(quiet ? pilot.loudness : sprint || moving ? pilot.loudness : idle.loudness,
-      ballast.rise > 0 ? BALLAST.loudness : 0);
+      ballast.rise > 0 ? BALLAST.loudness : 0, signatureLoudness(s, v));
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
     if (move.hitBoundary || move.forwardBoundary) thrust = null;
     else if (thrust) thrust.actual = Math.hypot(move.position.x - old.x, move.position.z - old.z);
@@ -1048,9 +1079,10 @@ export function stepGameInPlace(
       buoy.position[a] +=
         (s.player.pose.position[a] - buoy.position[a]) * DT * 2;
   }
-  updateAction(s);
+  updateAction(s, events);
   stepUpgrades(s, new Set(s.fleet.vehicles.filter((a) => distance(a.pose.position,
     pre.vehicles.get(a.id) ?? a.pose.position) > 0.003).map((a) => a.id)));
+  stepSignatures(s, world, events);
   stepSystems(s, events);
   stepFauna(s, world, events);
   observeWorldCycles(s, world, events);

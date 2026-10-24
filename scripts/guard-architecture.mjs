@@ -55,6 +55,8 @@ export const ALLOW = {
     "docs/build/streams/enc1/play.mjs", "docs/build/streams/hub2/play.mjs", "docs/build/streams/poi1/server.mjs",
     "docs/build/streams/ux1/before.mjs", "docs/build/streams/ux1/drive.mjs", "docs/build/streams/ux1/play.mjs",
     "docs/build/streams/ux1/run-gpu.sh", "docs/build/streams/w2/server.mjs",
+    // SIG-1's browser check, written before REC-1 merged (its brief: the existing drivers until then).
+    "docs/build/streams/sig1/play.mjs",
     "tools/cave-deep-shots.mjs", "tools/cave-gpu-check.mjs", "tools/large-cave-lab.gpu.mjs",
   ],
   /** The kit builder and the biome builder: FORK(biome-recipe-builder), retired by WK-1. */

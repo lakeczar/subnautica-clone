@@ -1,6 +1,6 @@
 {
   "format": "siltwake.save",
-  "schemaVersion": 6,
+  "schemaVersion": 7,
   "contentVersion": "expedition.7",
   "meta": {
     "sessionId": "5c1ce9fd-ce62-45ac-9d9e-e3794226e913",
@@ -847,7 +847,8 @@
       "beacons": [],
       "beaconsOff": [],
       "categoriesOff": [],
-      "chart": []
+      "chart": [],
+      "moduleUpgrades": {}
     },
     "story": {
       "discoveries": [],

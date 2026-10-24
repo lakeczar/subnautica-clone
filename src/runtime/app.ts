@@ -1,4 +1,5 @@
 import { armTarget, fittedCabin } from "../sim/fleet.js";
+import { craftActions } from "../sim/signatures.js";
 import { SiltwakeAudio } from "../audio/director.js";
 import { StepFault, StepGuard } from "../sim/stepGuard.js";
 import { gameWorld } from "../sim/world.js";
@@ -315,9 +316,10 @@ export class SiltwakeApp {
         return;
       }
       if (event.code === "KeyN" && this.active) { event.preventDefault(); this.feedbackNote(); return; }
-      // C4: piloted upgrade actions on the number row, and the handheld ping.
-      const upgrade = ({ Digit1: "overdrive", Digit2: "flare", Digit3: "ballast", Digit4: "listen", Digit5: "sample", Digit6: "anchor" } as const)[event.code as "Digit1"];
-      if (upgrade && this.state?.player.controlledVehicleId) { event.preventDefault(); this.command({ type: "upgrade", action: upgrade }); return; }
+      // SIG-1: the number row runs the piloted craft's fitted actions, numbered on the HUD.
+      const digit = /^Digit([1-9])$/.exec(event.code)?.[1];
+      const craftAction = digit && this.state?.player.controlledVehicleId ? craftActions(this.state)[Number(digit) - 1] : undefined;
+      if (craftAction) { event.preventDefault(); this.command({ type: "upgrade", action: craftAction.action }); return; }
       const commands: Record<string, GameCommand> = {
         KeyE: { type: "interact" }, KeyQ: { type: "scan" }, KeyP: { type: "ping" },
         KeyB: { type: "buoy" }, KeyF: { type: "eat" },

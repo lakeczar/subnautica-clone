@@ -4,7 +4,6 @@
  * saved runtime resumes exactly. Nothing here reads or writes GameState. */
 import type { CostKind } from "../../content/registry.js";
 import type { Vec3, WorldQueries } from "../types.js";
-import { ARM_CHARGE, ARM_LIFT_SECONDS } from "../fleet.js";
 import type { CraftProfile, Motion } from "./effects.js";
 
 export const TICKS_PER_SECOND = 60;
@@ -19,14 +18,25 @@ export interface UpgradeRuntime {
   /** Ballast ascent in progress: metres of rise left. */
   ascent: number | null;
   overdrive: { activeUntil: number; readyAt: number };
-  grapple: GrappleLine | null;
+  grapple: GrappleHold | null;
   /** The cargo pod while it is dropped; its 16 CU container keeps its contents. */
   pod: { position: Vec3 } | null;
   anchored: boolean;
+  /** SIG-1: the last wide-sonar sweep (its origin and tick) and when the next is ready. */
+  sonar: { at: number; readyAt: number; origin: Vec3 } | null;
+  /** SIG-1: a range-tagger aim held on one target since a tick. */
+  tag: { targetId: string; since: number } | null;
+  /** SIG-1: the Mantle's scout drone while it is out. */
+  drone: DroneState | null;
+  /** SIG-1: a timed crane or clamp lift on one source, done at `readyAt`. */
+  lift: { tool: "crane" | "clamp"; sourceId: string; readyAt: number } | null;
+  /** SIG-1: the disabled hull the salvage clamp holds for tow. */
+  tow: string | null;
 }
 export const initialRuntime = (): UpgradeRuntime => ({
   flares: FLARE.magazine, ballastArmed: true, ascent: null,
   overdrive: { activeUntil: 0, readyAt: 0 }, grapple: null, pod: null, anchored: false,
+  sonar: null, tag: null, drone: null, lift: null, tow: null,
 });
 /** Any supported dock refills flares and rearms the ballast; no material is spent. */
 export function rearm(rt: UpgradeRuntime, p: CraftProfile, docked: boolean): { runtime: UpgradeRuntime; refusal: string | null } {
@@ -113,6 +123,11 @@ export function hostKind(item: CostKind | "meal"): HostKind {
   if (item === "flex_membrane" || item === "buoyant_resin" || item === "meal") return "living";
   return "mineral";
 }
+export const ARM_LIFT_SECONDS = 6;
+/** Battery percent per arm lift. C3 (P1 playthrough): at 4% a full Basin frame
+ * haul (10 lifts plus the return loop) came home at 7%; at 1.5% it keeps the
+ * 25% return margin EXPEDITION_INTEGRATION asks for. */
+export const ARM_CHARGE = 1.5;
 export const CUTTING_ARM = { seconds: 4, yield: 1.5, extraCharge: 2 } as const;
 export interface ArmWork { refusal: string | null; seconds: number; charge: number; bundle: number }
 /** The Creel's arms on a host: bulk salvage and frames by default; the cutting arm
@@ -131,6 +146,8 @@ export function armWork(p: CraftProfile, item: CostKind | "meal", bundle: number
 // ---------------------------------------------------------------- Creel grapple
 /** A straight line from the hull to a rock anchor; no rope physics. */
 export interface GrappleLine { readonly anchor: Vec3; readonly length: number }
+/** A held line as saved: reeling on or off, and the frame host it is hooked on, if any. */
+export interface GrappleHold extends GrappleLine { readonly reeling: boolean; readonly load: string | null }
 export const GRAPPLE = { range: 30, reel: 2.5, minLength: 2 } as const;
 export function fireGrapple(p: CraftProfile, origin: Vec3, direction: Vec3, world: Pick<WorldQueries, "moveCapsule">):
   { line: GrappleLine } | { refusal: string } {
@@ -245,13 +262,25 @@ export function sonarSweep(p: CraftProfile, origin: Vec3, features: readonly Sen
 /** Dart range tagger. Contract: the nearest creature or site inside a narrow cone
  * and range; held steady for `aimSeconds`, it writes a journal mark (SYS-2). */
 export const RANGE_TAGGER = { range: 60, coneDeg: 6, aimSeconds: 1.5 } as const;
-export function tagCandidate(p: CraftProfile, origin: Vec3, aim: Vec3, candidates: readonly SensedFeature[]): SensedFeature | null {
+export function tagCandidate<T extends SensedFeature>(p: CraftProfile, origin: Vec3, aim: Vec3, candidates: readonly T[]): T | null {
   if (!hasContract(p, "range_tagger")) return null;
-  const n = Math.hypot(aim.x, aim.y, aim.z) || 1, cos = Math.cos((RANGE_TAGGER.coneDeg * Math.PI) / 180);
-  return candidates.map((c) => ({ c, d: dist(origin, c.position) }))
-    .filter(({ c, d }) => d > 0 && d <= RANGE_TAGGER.range &&
-      ((c.position.x - origin.x) * aim.x + (c.position.y - origin.y) * aim.y + (c.position.z - origin.z) * aim.z) / (d * n) >= cos)
-    .sort((a, b) => a.d - b.d || a.c.id.localeCompare(b.c.id))[0]?.c ?? null;
+  return nearestInCone(origin, aim, candidates, RANGE_TAGGER.range, RANGE_TAGGER.coneDeg);
+}
+/** Is `point` within `range` of `origin` and `coneDeg` of the `aim` direction? */
+export function inCone(origin: Vec3, aim: Vec3, point: Vec3, range: number, coneDeg: number): boolean {
+  const d = dist(origin, point), n = Math.hypot(aim.x, aim.y, aim.z) || 1;
+  return d > 0 && d <= range && ((point.x - origin.x) * aim.x + (point.y - origin.y) * aim.y + (point.z - origin.z) * aim.z) / (d * n) >=
+    Math.cos((coneDeg * Math.PI) / 180);
+}
+/** The nearest candidate inside an aim cone; ties break by ID. No allocation per candidate. */
+export function nearestInCone<T extends SensedFeature>(origin: Vec3, aim: Vec3, candidates: readonly T[], range: number, coneDeg: number): T | null {
+  let best: T | null = null, bestD = Infinity;
+  for (const c of candidates) {
+    if (!inCone(origin, aim, c.position, range, coneDeg)) continue;
+    const d = dist(origin, c.position);
+    if (d < bestD || (d === bestD && best && c.id.localeCompare(best.id) < 0)) { best = c; bestD = d; }
+  }
+  return best;
 }
 /** Hush listening array. Contract: while the Hush is quiet, bearings (yaw, rad,
  * 0 = −Z, quantised) to sources loud enough to carry; a louder source carries further. */
@@ -268,6 +297,8 @@ export function listen(p: CraftProfile, origin: Vec3, ownLoudness: number,
  * a stopped, unberthed Mantle; small enough for diver-only passages; maps and scans
  * within its tether and battery, and is recalled when either runs out. */
 export const SCOUT_DRONE = { tether: 60, speed: 2.5, radius: 0.35, height: 0.4, batterySeconds: 120, scanRange: 12 } as const;
+/** The drone out of its bay: where it is, where it looks, and when it left. */
+export interface DroneState { position: Vec3; yaw: number; pitch: number; launchedAt: number }
 export function droneLaunchRefusal(p: CraftProfile, mantle: { speed: number; berthed: boolean; charge: number }): string | null {
   if (!hasContract(p, "scout_drone")) return "No drone bay is fitted.";
   if (mantle.berthed) return "Launch the drone from open water.";

@@ -210,6 +210,21 @@ export function localBenchSite(s: GameState): Exclude<ServiceSite, `mooring:${st
 }
 /** The cabin locker container belongs to its cabin item, wherever that item is. */
 export const cabinLockerId = (cabinItemId: string): string => `${cabinItemId}_locker`;
+/** SIG-1: the Creel cargo pod's own container belongs to its pod item, as the cabin's locker does. */
+export const podContainerId = (podItemId: string): string => `${podItemId}_pod`;
+/** The pod item a container belongs to, if it is a pod's. */
+const podOf = (s: GameState, id: string): ItemStack | undefined => id.endsWith("_pod")
+  ? s.inventory.items.find((i) => i.kind === "creel_drop_pod" && podContainerId(i.id) === id) : undefined;
+/** A pod is reached aboard its Creel like the hold, or within this reach once dropped. */
+const POD_REACH = 8;
+function podAccessible(s: GameState, pod: ItemStack): boolean {
+  const creel = s.fleet.vehicles.find((v) => v.modules.includes(pod.id));
+  if (!creel) return false; // A pod off its socket is folded shut; its contents wait inside.
+  const out = creel.upgrades.pod;
+  if (!out) return containerAccessible(s, creel.cargoId);
+  const at = s.player.controlledVehicleId ? s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId)?.pose.position : s.player.pose.position;
+  return !s.player.interiorId && !!at && distance(at, out.position) <= POD_REACH;
+}
 export function containerAccessible(s: GameState, id: string): boolean {
   if (id === "diver" || id === "equipment") return true;
   if (id === "pod_locker") return nearPod(s);
@@ -224,6 +239,8 @@ export function containerAccessible(s: GameState, id: string): boolean {
   if (storeOf) return localBenchSite(s) === storeOf && stopServes(s, storeOf);
   const compartment = carrierCompartment(s, id);
   if (compartment) return s.player.interiorId === compartment.host.id && !compartment.host.disabled;
+  const pod = podOf(s, id);
+  if (pod) return podAccessible(s, pod);
   // C4 (SYS-2): an outpost's locker at that outpost; a locker module's container
   // only where the module is installed and its host works.
   const onFoot = !s.player.controlledVehicleId && !s.player.interiorId;
@@ -282,6 +299,7 @@ export function containerLabel(s: GameState, id: string): string {
   const storeOf = STOP_IDS.find((stop) => (WORKING_STOPS[stop] as WorkingStop).stores?.includes(id));
   if (storeOf) return `${WORKING_STOPS[storeOf].label} store ${((WORKING_STOPS[storeOf] as WorkingStop).stores!.indexOf(id) + 1)}`;
   if (s.inventory.items.some((i) => i.kind === "creel_cabin" && cabinLockerId(i.id) === id)) return "cabin locker";
+  if (podOf(s, id)) return "cargo pod";
   const outpost = s.systems.outposts.find((o) => `${o.id}_locker` === id);
   if (outpost) return `${outpost.name} locker`;
   if (s.systems.sockets.some((e) => `${e.itemId}_locker` === id) ||

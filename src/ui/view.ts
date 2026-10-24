@@ -185,7 +185,13 @@ export class GameView {
     );
     root.addEventListener("change", (event) => {
       const target = event.target as HTMLSelectElement;
-      if (!this.latest || (target.id !== "storage-from" && target.id !== "storage-to")) return;
+      if (!this.latest) return;
+      // UI-01: the Cargo kind filter is panel-local, like the storage operands.
+      if (target.id === "cargo-filter") {
+        if (this.panels.selectCargoFilter(target.value)) { this.refreshPanel(this.latest); this.get(target.id).focus({ preventScroll: true }); }
+        return;
+      }
+      if (target.id !== "storage-from" && target.id !== "storage-to") return;
       this.panels.selectStorage(target.id, target.value);
       this.refreshPanel(this.latest);
       this.get(target.id).focus({ preventScroll: true });

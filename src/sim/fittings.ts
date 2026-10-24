@@ -21,6 +21,7 @@ import type { Protection } from "./ecology/types.js";
 import { launchPoint } from "./carrier.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import { addItem, distance, hasRoom, supportedServiceSite, takeInstance, usedCapacity } from "./inventory.js";
+import { fittedUpgradeKinds } from "./fleet.js";
 import { airLineSupply, type AirLineCraft, type AirLineSupply } from "./power/airline.js";
 import { bioFeedStep, insertBioCellRefusal, startBioFeed, totalRate, trickleRates } from "./power/charging.js";
 import { craftProfile } from "./upgrades/effects.js";
@@ -33,15 +34,8 @@ import {
 } from "./upgrades/tools.js";
 import type { GameState, ItemStack, Vec3, VehicleState, WorldQueries } from "./types.js";
 
-/** The upgrade kinds fitted to a hull, in fitting order. */
-export function fittedKinds(s: Readonly<GameState>, v: Readonly<VehicleState>): UpgradeId[] {
-  const out: UpgradeId[] = [];
-  for (const id of v.modules) {
-    const kind = s.inventory.items.find((i) => i.id === id)?.kind;
-    if (kind && upgradeId(kind)) out.push(kind);
-  }
-  return out;
-}
+/** The upgrade kinds fitted to a hull, in fitting order (one helper, in fleet.ts). */
+export const fittedKinds = fittedUpgradeKinds;
 export const fittedList = (s: Readonly<GameState>, v: Readonly<VehicleState>): Fitted[] =>
   v.modules.flatMap((id) => {
     const kind = s.inventory.items.find((i) => i.id === id)?.kind;
@@ -114,7 +108,8 @@ export function fitTarget(s: Readonly<GameState>, v: Readonly<VehicleState>): Fi
     ...(v.hull === "hearthline" && docking?.vehicleId === v.id ? { carrier: {
       configuration: docking.configuration, berthsEmpty: !s.fleet.vehicles.some((a) => a.berth), systemOccupied,
     } } : {}),
-    inUse: { anchored: v.upgrades.anchored },
+    inUse: { anchored: v.upgrades.anchored, pod: v.upgrades.pod !== null, grapple: v.upgrades.grapple !== null,
+      drone: v.upgrades.drone !== null, lift: v.upgrades.lift !== null, tow: v.upgrades.tow !== null },
   };
 }
 const fittedItem = (s: GameState, id: string): ItemStack | undefined => s.inventory.items.find((i) => i.id === id);
@@ -161,7 +156,7 @@ export function actorProtection(s: GameState, suitFitted: Parameters<typeof prot
 const controlled = (s: GameState): VehicleState | undefined =>
   s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
 /** A direction from the pilot's view. */
-const forward = (s: GameState): Vec3 => ({
+export const pilotForward = (s: Readonly<GameState>): Vec3 => ({
   x: Math.sin(s.player.pose.yaw) * Math.cos(s.player.pose.pitch), y: Math.sin(s.player.pose.pitch),
   z: -Math.cos(s.player.pose.yaw) * Math.cos(s.player.pose.pitch),
 });
@@ -183,7 +178,7 @@ export function upgradeAction(s: GameState, action: string, world: WorldQueries,
       return null;
     }
     case "flare": {
-      const fired = fireFlare(p, v.upgrades, v.pose.position, forward(s), s.tick, world);
+      const fired = fireFlare(p, v.upgrades, v.pose.position, pilotForward(s), s.tick, world);
       if ("refusal" in fired) return fired.refusal;
       if (s.world.flares.length >= MAX_FLARES) s.world.flares.shift();
       v.upgrades = fired.runtime;

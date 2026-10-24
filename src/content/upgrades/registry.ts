@@ -1,7 +1,8 @@
 /** C4: SYS-1's catalogue as registry rows. Every non-refit upgrade is an item
  * kind (the intact module); recipes exist only for upgrades whose effect the
- * game runs today. The rest stay catalogue data until their behaviour lands
- * (see docs/build/streams/C4.md), so nothing fabricable does nothing.
+ * game runs, so nothing fabricable does nothing. SIG-1 wired the last nine
+ * signatures (`sim/signatures.ts`, the cutting arm in `fleet.ts`, the berth
+ * extension in `carrier.ts`): every catalogue upgrade now has a recipe.
  *
  * Imports only types from the registry, so the registry can spread these rows. */
 import type { CostKind } from "../registry.js";
@@ -29,6 +30,9 @@ export const WIRED_UPGRADES = [
   "dart_overdrive", "creel_service_head", "hush_listening_array", "hush_specimen_bay", "hush_extended_glide",
   "spindle_solar_array", "spindle_shore_ramp", "spindle_radio_mast", "mantle_thermal_shroud", "mantle_hull_air_line",
   "hearthline_system_bay", "hearthline_mooring_anchor",
+  // SIG-1: the signatures whose behaviour landed with it.
+  "dart_wide_sonar", "dart_range_tagger", "creel_cutting_arm", "creel_grapple", "creel_drop_pod", "spindle_deck_crane",
+  "mantle_salvage_clamp", "mantle_drone_bay", "hearthline_berth_extension",
 ] as const satisfies readonly UpgradeItemKind[];
 export type WiredUpgradeId = (typeof WIRED_UPGRADES)[number];
 export const wiredUpgrade = (id: unknown): id is WiredUpgradeId => (WIRED_UPGRADES as readonly unknown[]).includes(id);
