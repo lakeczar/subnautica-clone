@@ -16,7 +16,7 @@ import type { DockKind, UpgradeId } from "../content/upgrades/catalogue.js";
 import { LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import { isSeed, SEEDS } from "../content/systems/cultivation.js";
 import { SYS2_SOURCES } from "../content/systems/items.js";
-import { caveFieldLevel, cycleLevel, fieldLevel, protectionFor, sampleHazards, shapeWeight } from "./ecology/hazards.js";
+import { caveFieldLevel, cycleLevel, fieldLevel, protectionFor, shapeWeight } from "./ecology/hazards.js";
 import { DEEP_CAVE_HAZARDS } from "../content/regions/caves/deepCaves.js";
 import type { Protection } from "./ecology/types.js";
 import { launchPoint } from "./carrier.js";
@@ -56,25 +56,34 @@ export const effectiveRating = (s: Readonly<GameState>, v: Readonly<VehicleState
 /** S4's hazard fields at a point, as SYS-1's heat contributions: a cycled plume
  * is a core while quiet and a burst while it vents; steady warm water is ambient. */
 export function hazardsAt(p: Vec3, tick: number): Hazards {
-  const heat: HeatContribution[] = [];
-  for (const id of Object.keys(HAZARD_FIELDS) as HazardFieldId[]) {
+  // One pass for heat and brine, each field's level read once (SIM-PERF-1: this ran a
+  // second full sampleHazards for brine alone). Brine is that sample's: the strongest field.
+  let heat: HeatContribution[] | null = null, brine = 0;
+  for (const id of HAZARD_FIELD_IDS) {
     const f = HAZARD_FIELDS[id];
-    if (f.kind !== "heat") continue;
-    const level = shapeWeight(f.shape, f.edge, p) * fieldLevel(id, tick) * f.intensity;
+    if (f.kind !== "heat" && f.kind !== "brine") continue;
+    const w = shapeWeight(f.shape, f.edge, p);
+    if (w <= 0) continue;
+    const field = fieldLevel(id, tick), level = w * field * f.intensity;
     if (level <= 1e-9) continue;
+    if (f.kind === "brine") { brine = Math.max(brine, level); continue; }
     const cycled = "cycle" in f;
-    heat.push({ level, kind: !cycled ? "ambient" : fieldLevel(id, tick) > ((f as { baseline?: number }).baseline ?? 0) + 1e-9 ? "burst" : "core" });
+    (heat ??= []).push({ level, kind: !cycled ? "ambient" : field > ((f as { baseline?: number }).baseline ?? 0) + 1e-9 ? "burst" : "core" });
   }
-  // CA-3's cave heat (CW-1): a breath is a burst above its baseline, else a core.
+  // CA-3's cave fields (CW-1): a breath is a burst above its baseline, else a core; a
+  // brine pool counts as sampleHazards counts it.
   for (const f of DEEP_CAVE_HAZARDS) {
-    if (f.kind !== "heat") continue;
+    if (f.kind !== "heat" && f.kind !== "brine") continue;
     const level = caveFieldLevel(f, p, tick);
     if (level <= 1e-9) continue;
+    if (f.kind === "brine") { brine = Math.max(brine, level); continue; }
     const cycled = f.cycle ? cycleLevel(f.cycle, tick) > 1e-9 : false;
-    heat.push({ level, kind: !f.cycle ? "ambient" : cycled ? "burst" : "core" });
+    (heat ??= []).push({ level, kind: !f.cycle ? "ambient" : cycled ? "burst" : "core" });
   }
-  return { heat, brine: sampleHazards(p, tick).brine };
+  return { heat: heat ?? NO_HEAT, brine };
 }
+const HAZARD_FIELD_IDS = Object.keys(HAZARD_FIELDS) as HazardFieldId[];
+const NO_HEAT = Object.freeze([]) as unknown as HeatContribution[];
 const NO_HAZARD: Hazards = { heat: [], brine: 0 };
 const depthOf = (p: Vec3): number => Math.max(0, -(p.y + 0.5));
 

@@ -41,9 +41,26 @@ export interface CraftProfile {
 export const MAX_CURRENT_AUTHORITY = 0.95;
 const BASE_SYSTEM_SOCKETS = 2;
 
+/** Profiles by their inputs (SIM-PERF-1): the fold ran several times a step, the
+ * step's largest allocation (about 17 KiB). Owned here; at most PROFILE_MEMO
+ * entries (a few hundred bytes each), the oldest dropped first; the key is the
+ * inputs themselves, so a hit is exactly the fold's answer. Profiles are frozen. */
+const PROFILE_MEMO = 128;
+const profiles = new Map<string, CraftProfile>();
+
 /** Fold fitted upgrades onto the hull base. `rating` is the paid hull rating
  * (VehicleState.rating); refits are already in it, so refit entries add nothing. */
 export function craftProfile(hull: HullId, rating: number, fitted: readonly UpgradeId[]): CraftProfile {
+  const key = `${hull}|${rating}|${fitted.join(",")}`;
+  let profile = profiles.get(key);
+  if (profile) return profile;
+  profile = foldProfile(hull, rating, fitted);
+  if (profiles.size >= PROFILE_MEMO) profiles.delete(profiles.keys().next().value!);
+  profiles.set(key, profile);
+  return profile;
+}
+
+function foldProfile(hull: HullId, rating: number, fitted: readonly UpgradeId[]): CraftProfile {
   const b = HULL_BASE[hull];
   const effects: UpgradeEffect[] = fitted.map((id) => UPGRADES[id].effect);
   const product = (key: "speed" | "noise" | "lamp" | "drain" | "capacity" | "damage" | "heatLoad" | "solar"): number =>
@@ -58,11 +75,11 @@ export function craftProfile(hull: HullId, rating: number, fitted: readonly Upgr
   let boost = Math.max(cruise, b.speed.boost * k + sum("boostAdd"));
   if (has("noBoost")) boost = cruise;
   const n = product("noise");
-  return {
+  return Object.freeze({
     hull,
     rating: hull === "spindle" ? 0 : rating + sum("ratingAdd"),
-    speed: { quiet: Math.min(quiet, cruise), cruise, boost },
-    loudness: { idle: b.loudness.idle * n, quiet: b.loudness.quiet * n, cruise: b.loudness.cruise * n, boost: b.loudness.boost * n },
+    speed: Object.freeze({ quiet: Math.min(quiet, cruise), cruise, boost }),
+    loudness: Object.freeze({ idle: b.loudness.idle * n, quiet: b.loudness.quiet * n, cruise: b.loudness.cruise * n, boost: b.loudness.boost * n }),
     drain: b.drain * product("drain"),
     drainMode: b.drainMode,
     capacity: product("capacity"),
@@ -80,9 +97,9 @@ export function craftProfile(hull: HullId, rating: number, fitted: readonly Upgr
     airLine: has("airLine") ? "hull" : "basic",
     systemSockets: hull === "hearthline" ? BASE_SYSTEM_SOCKETS + sum("systemSockets") : 0,
     mixedBerths: has("mixedBerths"),
-    tools: fitted.flatMap((id) => { const t = (UPGRADES[id].effect as UpgradeEffect).tool; return t ? [t] : []; }),
-    contracts: fitted.flatMap((id) => { const c = (UPGRADES[id].effect as UpgradeEffect).contract; return c ? [c] : []; }),
-  };
+    tools: Object.freeze(fitted.flatMap((id) => { const t = (UPGRADES[id].effect as UpgradeEffect).tool; return t ? [t] : []; })),
+    contracts: Object.freeze(fitted.flatMap((id) => { const c = (UPGRADES[id].effect as UpgradeEffect).contract; return c ? [c] : []; })),
+  });
 }
 
 export interface Motion {

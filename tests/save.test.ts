@@ -187,6 +187,34 @@ test("corrupt current recovers previous, blocks autosave and preserves raw recor
   if (backup.ok) assert.equal(backup.value.state.tick, 10);
 });
 
+test("a commit reuses the record it read or wrote: its slot equals a fresh page's, through repair and another tab's write", async () => {
+  // SIM-PERF-1: the repository remembers its own record decoded instead of decoding it again.
+  const lock = new TestWriterLock(), storage = new MemoryStorage(), repo = new SaveRepository(storage, lock);
+  const fresh = () => new SaveRepository(storage, lock).load();
+  const same = (label: string): void => {
+    const page = fresh();
+    assert.equal(repo.status.kind, page.kind, label);
+    assert.deepEqual(repo.status.save, page.save, `${label}: current`);
+    assert.deepEqual(repo.status.backup, page.backup, `${label}: backup`);
+  };
+  repo.load();
+  for (const tick of [10, 20, 30]) { assert.equal((await repo.commit(sample(tick))).ok, true); same(`after ${tick}`); }
+  // A corrupt current loads as recovered; the repair keeps the old previous as the backup.
+  const record = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)!) as Record<string, unknown>;
+  record.current = "{corrupt";
+  storage.setItem(LOCAL_SAVE_KEY, JSON.stringify(record));
+  const repairer = new SaveRepository(storage, lock);
+  assert.equal(repairer.load().kind, "recovered");
+  assert.equal((await repairer.commit(sample(40), true)).ok, true);
+  assert.equal(repairer.status.backup?.state.tick, 20);
+  assert.equal((await repairer.commit(sample(50))).ok, true);
+  assert.equal(repairer.status.backup?.state.tick, 40);
+  assert.deepEqual(repairer.status.backup, fresh().backup);
+  // The first repository's memory is stale now: it must see the conflict, never reuse it.
+  assert.equal((await repo.commit(sample(60))).ok, false);
+  assert.equal(fresh().save?.state.tick, 50);
+});
+
 test("unsupported local current is protected, even with a valid previous save", async () => {
   const lock = new TestWriterLock(),
     storage = new MemoryStorage();

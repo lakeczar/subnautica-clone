@@ -504,6 +504,12 @@ export function createWorldQueries(
   const listOf = (out: Solid[]): readonly Solid[] => index ? out : solids;
   const clearHits: Solid[] = [], supportHits: Solid[] = [], moveHits: Solid[] = [], sightHits: Solid[] = [];
   const clearBox = scratchBox(), supportBox = scratchBox(), moveBox = scratchBox(), sightBox = scratchBox();
+  // Whether some solid is non-finite or inverted (separated sweeps refuse then). The roster
+  // is immutable, so it is checked once per world (SIM-PERF-1: a full scan of the world's
+  // 11k solids on every hunter sweep slice).
+  let invalidRoster: boolean | undefined;
+  const rosterInvalid = (): boolean => invalidRoster ??= solids.some(s => !finitePoint(s.min) ||
+    !finitePoint(s.max) || AXES.some(a => s.min[a] > s.max[a]));
   return {
     lineOfSight(a, b, ignore = []) {
       if (!finitePoint(a) || !finitePoint(b)) return false;
@@ -597,8 +603,7 @@ export function createWorldQueries(
       if (!finitePoint(delta) || !validShape(capsule) ||
           !finitePoint({ x: origin.x + delta.x, y: origin.y + delta.y, z: origin.z + delta.z }))
         return { position: { ...origin }, hitSolid: true, hitBoundary: false };
-      if (options?.separateBoxOverlaps && (solids.some(s => !finitePoint(s.min) || !finitePoint(s.max) ||
-          AXES.some(a => s.min[a] > s.max[a])) || !Number.isFinite(floorHeight(origin.x, origin.z))))
+      if (options?.separateBoxOverlaps && (rosterInvalid() || !Number.isFinite(floorHeight(origin.x, origin.z))))
         return { position: { ...origin }, hitSolid: true, hitBoundary: false };
       // Slides never travel further than |delta| in total, so the actor box
       // grown by that length bounds every swept contact.

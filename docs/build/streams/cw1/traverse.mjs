@@ -280,15 +280,24 @@ try {
   // /proc/stat and the vCPU the renderer's main thread is on, every 10 ms (epoch ms).
   const host = process.env.SIMPERF_HOST ? new Worker(`
     const { parentPort } = require("node:worker_threads"), fs = require("node:fs");
-    const late = [], steal = [], where = [], last = [], sleeper = new Int32Array(new SharedArrayBuffer(4));
+    const late = [], steal = [], where = [], states = [], last = [], sleeper = new Int32Array(new SharedArrayBuffer(4));
+    let stateWas = "";
     let pid = null, stop = false, prev = performance.timeOrigin + performance.now(), n = 0, cpuWas = -1;
     parentPort.on("message", (m) => { if (m === "stop") stop = true; else pid = m; });
     const tick = () => {
-      if (stop) { parentPort.postMessage({ late, steal, where }); return; }
+      if (stop) { parentPort.postMessage({ late, steal, where, states }); return; }
       Atomics.wait(sleeper, 0, 0, 1);
       const now = performance.timeOrigin + performance.now();
       if (now - prev > 3) late.push([prev, +(now - prev).toFixed(2)]);
       prev = now;
+      // Every 2 ms: the renderer main thread's state (R running, S sleeping, D disk/fault) and wait channel.
+      if (pid && n % 2 === 0) try {
+        const f = fs.readFileSync("/proc/" + pid + "/task/" + pid + "/stat", "utf8"), st = f.slice(f.lastIndexOf(")") + 2, f.lastIndexOf(")") + 3);
+        // The syscall it is in (wchan is hidden on this kernel); "running" when in user space.
+        const sc = st === "R" ? "" : fs.readFileSync("/proc/" + pid + "/task/" + pid + "/syscall", "utf8").split(" ")[0];
+        const w = { "0": "read", "1": "write", "7": "poll", "16": "ioctl", "46": "sendmsg", "47": "recvmsg", "202": "futex", "230": "nanosleep", "232": "epoll_wait", "270": "pselect", "271": "ppoll", "281": "epoll_pwait" }[sc] ?? sc.trim();
+        const key = st + " " + w; if (key !== stateWas) { states.push([now, st, w]); stateWas = key; }
+      } catch {}
       if (++n % 10 === 0) {
         try { for (const line of fs.readFileSync("/proc/stat", "utf8").split("\n")) { const m = /^cpu(\d+) /.exec(line); if (!m) continue;
           const c = +m[1], v = +line.trim().split(/\s+/)[8]; if (last[c] !== undefined && v > last[c]) steal.push([now, c, v - last[c]]); last[c] = v; } } catch {}
@@ -407,7 +416,13 @@ try {
       const e0 = data.origin + at - g, e1 = data.origin + at;
       const stealIn = {}; for (const [t, c, j] of hostData.steal) if (t >= e0 - 10 && t <= e1 + 30) stealIn[c] = (stealIn[c] ?? 0) + j;
       let cpus = new Set(); for (let i = 0; i < hostData.where.length; i++) { const [t, c] = hostData.where[i], next = hostData.where[i + 1]?.[0] ?? Infinity; if (t <= e1 && next >= e0) cpus.add(c); }
-      return { canary: hostData.late.filter(([t, ms]) => t < e1 && t + ms > e0).map(([, ms]) => ms), steal: stealIn, rendererCpus: [...cpus],
+      // Time in each thread state (and wait channel) over the frame, ms.
+      const inState = {};
+      for (let i = 0; i < hostData.states.length; i++) {
+        const [t, st, w] = hostData.states[i], next = hostData.states[i + 1]?.[0] ?? e1, a = Math.max(t, e0), b = Math.min(next, e1);
+        if (b > a) { const k = w ? st + ":" + w : st; inState[k] = +((inState[k] ?? 0) + b - a).toFixed(1); }
+      }
+      return { canary: hostData.late.filter(([t, ms]) => t < e1 && t + ms > e0).map(([, ms]) => ms), steal: stealIn, rendererCpus: [...cpus], states: inState,
         stealOnRendererCpu: [...cpus].reduce((n, c) => n + (stealIn[c] ?? 0), 0) };
     })() : null;
     const slices = threadSlices.filter(x => x.at < at && x.at + x.ms > at - g).sort((a, b) => b.ms - a.ms).slice(0, 8)

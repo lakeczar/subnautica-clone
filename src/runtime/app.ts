@@ -10,6 +10,7 @@ import { createCaveRuntime, type CaveHold } from "../world/caves/admission.js";
 import { StepFault, StepGuard } from "../sim/stepGuard.js";
 import { PHASE, StepCosts, stepMeter } from "../sim/stepCosts.js";
 import type { StepCostSnapshot } from "../sim/stepCosts.js";
+import { warmSimulation } from "../sim/warmup.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
@@ -656,6 +657,7 @@ export class SiltwakeApp {
     this.cancelGesture();
     // UX-1: a replaced session inherits no head look or rudder, before its first frame.
     this.helm.clear();
+    this.warm();
     forgetCorridorView();
     this.view.resetPresentation();
     // CW-1 R1: the expedition stays behind the menu's loading presentation
@@ -709,6 +711,16 @@ export class SiltwakeApp {
     } catch (error) {
       this.view.graphicsError(errorText(error));
     }
+  }
+
+  /** SIM-PERF-1: the first steps' compilation, the hull contact meshes and the save path's
+   * first encode are paid here, behind the entry pause, not in the first seconds of play
+   * (5–8, about 3 and 12–17 ms). Nothing live changes: the step runs on a copy. */
+  private warm(): void {
+    if (!this.state) return;
+    warmSimulation(this.state, this.world);
+    const save = this.session.envelope();
+    if (save) encodeSave(save);
   }
 
   private resume(capture = false): boolean {

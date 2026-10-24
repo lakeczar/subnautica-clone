@@ -1,4 +1,4 @@
-import { decodeSave, encodeSave, MAX_SAVE_BYTES } from './codec.js';
+import { decodeSave, encodeSave, MAX_SAVE_BYTES, utf8Over } from './codec.js';
 import type { SaveEnvelope } from './codec.js';
 import { SAVE_WRITER_LOCK } from './writer-lock.js';
 import type { WriterLockPort } from './writer-lock.js';
@@ -17,7 +17,7 @@ export type CommitFailure = 'invalid' | 'storage-unavailable' | 'write-refused' 
 export type CommitResult = { ok: true; value: SaveSlot } | { ok: false; code: CommitFailure; error: string };
 
 function journal(raw: string): Journal | null {
-  if (new TextEncoder().encode(raw).byteLength > MAX_JOURNAL_BYTES) return null;
+  if (utf8Over(raw, MAX_JOURNAL_BYTES)) return null;
   try {
     const value: unknown = JSON.parse(raw);
     if (typeof value !== 'object' || value === null) return null;
@@ -32,6 +32,10 @@ function journal(raw: string): Journal | null {
  * The observed-record comparison AND write run inside the shared cross-context lock. */
 export class SaveRepository {
   private observed: string | null = null;
+  /** The record this repository last read or wrote, already decoded, so a commit never parses
+   * or validates its own record again (SIM-PERF-1: four full decodes per autosave). Decoding
+   * is a pure function of the text, and slot envelopes are never mutated (the session clones). */
+  private known: { raw: string; data: Journal; current: SaveEnvelope | null; previous: SaveEnvelope | null } | null = null;
   private readable = false;
   private slot: SaveSlot = { kind: 'unavailable', save: null, backup: null, message: 'Local storage has not been read.' };
 
@@ -48,6 +52,7 @@ export class SaveRepository {
       const current = decodeSave(data.current);
       const previous = data.previous === null ? null : decodeSave(data.previous);
       const backup = previous?.ok ? previous.value : null;
+      this.known = { raw: this.observed, data, current: current.ok ? current.value : null, previous: backup };
       if (current.ok) return this.slot = { kind: 'ready', save: current.value, backup, message: `Local save · ${new Date(current.value.meta.savedAt).toLocaleString()}` };
       if (backup) return this.slot = { kind: 'recovered', save: backup, backup, message: `Current slot could not load: ${current.error} A previous valid save is available. Automatic saving is paused until you explicitly repair the slot.` };
       return this.slot = { kind: 'protected', save: null, backup: null, message: `The local save is protected: ${current.error}` };
@@ -84,19 +89,23 @@ export class SaveRepository {
         if (current !== this.observed) return { ok: false, code: 'conflict', error: 'The local slot changed in another tab. Export any active session, then reload before replacing that slot.' };
         const protectedSlot = this.slot.kind === 'protected' || this.slot.kind === 'recovered';
         if (protectedSlot && !replaceProtected) return { ok: false, code: 'protected', error: 'The unreadable slot is protected. Use the explicit repair / replace action in the save menu.' };
-        if (protectedSlot && this.observed !== null && new TextEncoder().encode(this.observed).byteLength > MAX_SAVE_BYTES * 4) return { ok: false, code: 'too-large', error: 'The protected record is too large to preserve safely. Export it; this build will not overwrite it.' };
-        const data = this.observed === null ? null : journal(this.observed);
-        const oldCurrent = data ? decodeSave(data.current) : null;
-        const oldPrevious = data?.previous ? decodeSave(data.previous) : null;
-        const previous = oldCurrent?.ok ? data!.current : oldPrevious?.ok ? data!.previous : null;
+        if (protectedSlot && this.observed !== null && utf8Over(this.observed, MAX_SAVE_BYTES * 4)) return { ok: false, code: 'too-large', error: 'The protected record is too large to preserve safely. Export it; this build will not overwrite it.' };
+        const known = this.observed !== null && this.known?.raw === this.observed ? this.known : null;
+        const data = this.observed === null ? null : known?.data ?? journal(this.observed);
+        const valid = (text: string): SaveEnvelope | null => { const d = decodeSave(text); return d.ok ? d.value : null; };
+        // The new backup is the old current if it loads, else the old previous if that does.
+        const oldCurrent = known ? known.current : data ? valid(data.current) : null;
+        const oldPrevious = oldCurrent || !data?.previous ? null : known ? known.previous : valid(data.previous);
+        const previous = oldCurrent ? data!.current : oldPrevious ? data!.previous : null;
         const next: Journal = { format: 'siltwake.local', version: 1, current: encoded.value, previous, preserved: protectedSlot ? this.observed : data?.preserved ?? null };
         const raw = JSON.stringify(next);
-        if (new TextEncoder().encode(raw).byteLength > MAX_JOURNAL_BYTES) return { ok: false, code: 'too-large', error: 'The combined save record is too large. The local slot is unchanged.' };
+        if (utf8Over(raw, MAX_JOURNAL_BYTES)) return { ok: false, code: 'too-large', error: 'The combined save record is too large. The local slot is unchanged.' };
         try { storage.setItem(LOCAL_SAVE_KEY, raw); }
         catch { return { ok: false, code: 'write-refused', error: 'Browser storage refused the save (quota or permissions). The local record is unchanged.' }; }
         this.observed = raw;
-        const backup = previous ? decodeSave(previous) : null;
-        this.slot = { kind: 'ready', save: snapshot, backup: backup?.ok ? backup.value : null, message: `Saved locally · ${new Date(snapshot.meta.savedAt).toLocaleTimeString()}` };
+        const backup = oldCurrent ?? oldPrevious;
+        this.known = { raw, data: next, current: snapshot, previous: backup };
+        this.slot = { kind: 'ready', save: snapshot, backup, message: `Saved locally · ${new Date(snapshot.meta.savedAt).toLocaleTimeString()}` };
         return { ok: true, value: this.slot };
       });
     } catch {
