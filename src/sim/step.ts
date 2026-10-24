@@ -153,7 +153,7 @@ function exitAction(s: GameState, w: WorldQueries, events: GameEvent[]): string 
   if (!no) actionResult(s, events, "Left the craft");
   return no;
 }
-/** Mutates only the detached fixed-step draft; every refusal precedes gameplay mutations. */
+/** Mutates the step's state (in place, or executeCommand's draft); every refusal precedes gameplay mutations. */
 function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent[]): string | null {
   if (c.type === "look" || c.type === "move") return null;
   if (c.type === "skip-opening") {
@@ -576,12 +576,42 @@ export function executeCommand(
     );
   return { state: draft, events };
 }
+/** A detached fixed step: `state` is left untouched and a new state returned.
+ * For forks and comparisons (tests, previews); play uses `stepGameInPlace`. */
 export function stepGame(
   state: GameState,
   commands: readonly GameCommand[],
   world: WorldQueries,
 ): { state: GameState; events: GameEvent[] } {
-  const s = structuredClone(state),
+  const s = structuredClone(state);
+  return { state: s, events: stepGameInPlace(s, commands, world) };
+}
+/** What the step compares against after mutating: copied before anything moves. */
+interface PreStep {
+  tick: number;
+  phase: GameState["opening"]["phase"];
+  failures: number;
+  mode: GameState["player"]["mode"];
+  controlledVehicleId: string | null;
+  interiorId: GameState["player"]["interiorId"];
+  vehicles: Map<string, Vec3>;
+}
+function preStep(s: GameState): PreStep {
+  const p = s.player;
+  return {
+    tick: s.tick, phase: s.opening.phase, failures: s.metrics.failures,
+    mode: p.mode, controlledVehicleId: p.controlledVehicleId, interiorId: p.interiorId,
+    vehicles: new Map(s.fleet.vehicles.map((v) => [v.id, { ...v.pose.position }])),
+  };
+}
+/** One fixed step, mutating `s` in place. A throw leaves `s` part-way through
+ * the step: callers in play go through `StepGuard`, which restores it. */
+export function stepGameInPlace(
+  s: GameState,
+  commands: readonly GameCommand[],
+  world: WorldQueries,
+): GameEvent[] {
+  const pre = preStep(s),
     events: GameEvent[] = [];
   s.tick++;
   let movementActorStable = true;
@@ -590,8 +620,8 @@ export function stepGame(
     const actionEvents: GameEvent[] = [];
     const no = action(s, c, world, actionEvents);
     settleArm(s);
-    if (s.player.controlledVehicleId !== state.player.controlledVehicleId ||
-        s.player.mode !== state.player.mode || s.player.interiorId !== state.player.interiorId)
+    if (s.player.controlledVehicleId !== pre.controlledVehicleId ||
+        s.player.mode !== pre.mode || s.player.interiorId !== pre.interiorId)
       movementActorStable = false;
     if (no) events.push(...(actionEvents.some(e => e.type === "notice" && e.refusal)
       ? actionEvents : [{ type: "notice" as const, channel: "action" as const, message: no, error: true }]));
@@ -615,7 +645,7 @@ export function stepGame(
   }
   if (s.opening.phase < 4) {
     s.opening.phaseTicks++;
-    return { state: s, events };
+    return events;
   }
   let forward = 0,
     right = 0,
@@ -996,12 +1026,12 @@ export function stepGame(
     loudness = quiet ? 0.03 : sprint ? 0.6 : d > 0.001 ? 0.14 : 0;
     if (hitBoundary) events.push({ type: "foundation-boundary" });
   }
-  if (s.player.mode !== state.player.mode)
+  if (s.player.mode !== pre.mode)
     events.push({ type: "movement-mode-changed", mode: s.player.mode });
   // A current's readable cue, once, as the swimmer or craft enters its flow.
   if (s.player.mode === "swimming" || s.player.mode === "piloting") {
     const felt = (c: { weight: number; level: number }): boolean => c.weight * c.level > 0.05;
-    const was = new Set(flowAt(old, state.tick).volumes.filter(felt).map(c => c.id));
+    const was = new Set(flowAt(old, pre.tick).volumes.filter(felt).map(c => c.id));
     for (const c of flowAt(s.player.pose.position, s.tick).volumes)
       if (!was.has(c.id) && felt(c)) {
         const def = worldCurrents().volumes.find(volume => volume.id === c.id);
@@ -1020,7 +1050,7 @@ export function stepGame(
   }
   updateAction(s);
   stepUpgrades(s, new Set(s.fleet.vehicles.filter((a) => distance(a.pose.position,
-    state.fleet.vehicles.find((b) => b.id === a.id)?.pose.position ?? a.pose.position) > 0.003).map((a) => a.id)));
+    pre.vehicles.get(a.id) ?? a.pose.position) > 0.003).map((a) => a.id)));
   stepSystems(s, events);
   stepFauna(s, world, events);
   observeWorldCycles(s, world, events);
@@ -1041,19 +1071,19 @@ export function stepGame(
   updateSurvival(s, events);
   // A command/berth transition or incapacity can replace the moving actor this step.
   // Emit only a measurement that still describes the original active actor and mode.
-  if (ascent && state.opening.phase === 4 && s.player.mode === state.player.mode &&
+  if (ascent && pre.phase === 4 && s.player.mode === pre.mode &&
       s.player.mode === (ascent.actorId === null ? "swimming" : "piloting") &&
-      s.player.controlledVehicleId === ascent.actorId && state.player.controlledVehicleId === ascent.actorId &&
-      !s.player.interiorId && s.metrics.failures === state.metrics.failures &&
+      s.player.controlledVehicleId === ascent.actorId && pre.controlledVehicleId === ascent.actorId &&
+      !s.player.interiorId && s.metrics.failures === pre.failures &&
       (!v || (!v.disabled && v.charge > 0))) {
     ascent.actualRise = s.player.pose.position.y - old.y;
     events.push(ascent);
   }
-  if (thrust && movementActorStable && state.opening.phase === 4 &&
-      s.player.mode === "piloting" && state.player.mode === "piloting" &&
-      s.player.controlledVehicleId === thrust.actorId && state.player.controlledVehicleId === thrust.actorId &&
-      !s.player.interiorId && s.metrics.failures === state.metrics.failures &&
+  if (thrust && movementActorStable && pre.phase === 4 &&
+      s.player.mode === "piloting" && pre.mode === "piloting" &&
+      s.player.controlledVehicleId === thrust.actorId && pre.controlledVehicleId === thrust.actorId &&
+      !s.player.interiorId && s.metrics.failures === pre.failures &&
       v && !v.disabled && v.charge > 0)
     events.push(thrust);
-  return { state: s, events };
+  return events;
 }

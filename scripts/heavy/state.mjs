@@ -14,6 +14,7 @@ import { createHash } from "node:crypto";
 import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
+import { unmeasuredContext } from "./contention.mjs";
 import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 
@@ -37,6 +38,11 @@ export function loadConfig(env = process.env) {
   if (env.SILTWAKE_SCHED_UNIT_PREFIX) cfg.unitPrefix = env.SILTWAKE_SCHED_UNIT_PREFIX;
   if (env.SILTWAKE_SCHED_SUPERVISOR_PREFIX) cfg.supervisorPrefix = env.SILTWAKE_SCHED_SUPERVISOR_PREFIX;
   cfg.production = dir === PRODUCTION_DIR;
+  // The top-level slice exclusive jobs run in, whose CPU weight is fixed in its
+  // unit file (TST-16, contention.mjs). A private state directory (tests) uses
+  // only a slice its environment or config.json names.
+  cfg.exclusiveSlice = env.SILTWAKE_SCHED_EXCLUSIVE_SLICE || fileCfg.exclusiveSlice || (cfg.production ? "siltwake_exclusive.slice" : null);
+  cfg.exclusiveCpuWeight = fileCfg.exclusiveCpuWeight ?? 10000;
   cfg.paths = {
     state: join(dir, "state.json"),
     lock: join(dir, "state.lock"),
@@ -123,6 +129,13 @@ export const self = () => ({ pid: process.pid, start: procStart(process.pid) });
 export function systemctl(...args) {
   return spawnSync("systemctl", ["--user", ...args], { encoding: "utf8" });
 }
+/** systemctl with a hard bound (ms; killed at it): { ok, out, error }. ok only
+ * on exit 0, with no spawn error, timeout or signal. */
+export function systemctlBounded(timeoutMs, ...args) {
+  const r = spawnSync("systemctl", ["--user", ...args], { encoding: "utf8", timeout: timeoutMs, killSignal: "SIGKILL" }); // a hard deadline, waited for (R10-F3)
+  const ok = r.status === 0 && !r.error && !r.signal;
+  return { ok, out: r.stdout ?? "", error: ok ? null : (r.error?.code === "ETIMEDOUT" ? `timed out after ${timeoutMs / 1000} s` : r.error?.message ?? (r.signal ? `killed by ${r.signal}` : (r.stderr || `exit ${r.status}`).trim())) };
+}
 
 /**
  * Whether a job scope still holds processes. "Empty" means conclusively empty:
@@ -130,16 +143,33 @@ export function systemctl(...args) {
  * (deactivating) scope is not empty, and any query failure counts as
  * populated, so a reservation is never freed on a guess.
  */
-export function scopePopulated(unit) {
-  const r = systemctl("show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", `${unit}.scope`);
-  if (r.status !== 0) return true;
-  const p = Object.fromEntries(r.stdout.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
+export function scopePopulated(unit) { return unitPopulated(`${unit}.scope`); }
+/** Whether a unit (a scope, a slice) holds processes, failing closed: anything
+ * but a conclusive "empty" counts as populated. */
+export function unitPopulated(name) { return unitPopulation(name) !== false; }
+/** A unit's population: true, false, or a reason it couldn't be told. Empty
+ * only when conclusive: not found, inactive with no cgroup, or an explicit
+ * "populated 0". timeoutMs: a hard bound on the query. */
+export function unitPopulation(name, { timeoutMs = 0 } = {}) {
+  const args = ["show", "-p", "LoadState", "-p", "ActiveState", "-p", "ControlGroup", name];
+  const r = timeoutMs ? systemctlBounded(timeoutMs, ...args) : (() => { const x = systemctl(...args); return { ok: x.status === 0, out: x.stdout ?? "", error: x.stderr }; })();
+  if (!r.ok) return `systemd could not be asked (${(r.error || "failed").trim().slice(0, 120)})`;
+  const p = Object.fromEntries(r.out.trim().split("\n").map((l) => [l.slice(0, l.indexOf("=")), l.slice(l.indexOf("=") + 1)]));
   if (p.LoadState === "not-found") return false;
   if (p.ControlGroup) {
-    const events = cgroupRead(`/sys/fs/cgroup${p.ControlGroup}`, "cgroup.events");
-    if (events != null) return /^populated 1$/m.test(events);
+    const known = populatedFromEvents(cgroupRead(`/sys/fs/cgroup${p.ControlGroup}`, "cgroup.events"));
+    if (known != null) return known;
   }
-  return p.ActiveState !== "inactive" && p.ActiveState !== "failed";
+  if (p.ActiveState === "inactive" || p.ActiveState === "failed") return false;
+  return `its cgroup's population could not be read (${p.ActiveState})`;
+}
+
+/** A cgroup.events text's population: true or false only when it says so
+ * ("populated 1" / "populated 0"); null when absent or unrecognised (R7-F3). */
+export function populatedFromEvents(text) {
+  if (/^populated 1$/m.test(text ?? "")) return true;
+  if (/^populated 0$/m.test(text ?? "")) return false;
+  return null;
 }
 
 /** What systemd recorded for a finished job scope (Result, MemoryPeak,
@@ -296,10 +326,6 @@ function remoteHealth(cfg) {
     : h.state === "unreachable" ? Math.min(s.unreachableMax, s.unreachable * 2 ** Math.max(0, (h.failures ?? 1) - 1)) : 0;
   return Date.now() - (h.at ?? 0) <= (ttlS + 30) * 1000 ? h : { ...h, state: "unknown", stale: h.state };
 }
-export function cpuContext() {
-  const load1 = Number(readFileSync("/proc/loadavg", "utf8").split(" ")[0]);
-  return { load1, cpuSomeAvg10: psi("cpu", "some"), memFullAvg10: psi("memory", "full") };
-}
 export function readFileSafe(path) {
   try { return readFileSync(path, "utf8").trim(); } catch { return null; }
 }
@@ -352,6 +378,8 @@ export function reconcile(cfg, state) {
     }
     const dir = jobDir(cfg, t.id);
     const result = t.state === "running" ? orphanResult(dir, t) : { code: 75, label: "lost: supervisor died before admission" };
+    // Nobody observed an orphaned exclusive job to its end: its measurement is never clean (TST-16 R1-F4).
+    if (t.state === "running" && t.req.exclusive) result.context = unmeasuredContext("recovered: its holder died, so nobody judged the job's contention to its end");
     const marker = join(t.worktree, t.testBuild ?? ".test-build", ".heavy-job");
     if (readJson(marker)?.ticket === t.id) rmSync(marker, { force: true });
     // What was submitted, kept through recovery (R1 P3). Nobody checked the tree

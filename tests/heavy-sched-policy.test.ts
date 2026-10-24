@@ -442,3 +442,10 @@ test("routing (R1-F5): a 4070 ticket backing off waits (remote-retry) and is nev
   assert.deepEqual([p.admit, p.blocked.g], [[], "remote-retry"]);
   assert.deepEqual(routed(P.plan(stateOf(g), 10_001, remote("up"), cfg)), ["g@4070"]);
 });
+
+test("maintenance (install.sh changing the exclusive slice's unit, TST-16 R9): nothing is admitted; every queued ticket waits as 'maintenance'", () => {
+  const s = { ...stateOf(ticket("a", "quick"), ticket("x", "exclusive", { at: 1 })), maintenance: { since: 0, reason: "exclusive unit update (write)" } };
+  const p = P.plan(s, 10, idle(), cfg);
+  assert.deepEqual([admitted(p), p.blocked], [[], { a: "maintenance", x: "maintenance" }]);
+  assert.deepEqual(admitted(P.plan(stateOf(ticket("a", "quick")), 10, idle(), cfg)), ["a"], "and admits again once cleared");
+});

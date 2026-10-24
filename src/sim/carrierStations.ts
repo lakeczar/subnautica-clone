@@ -192,7 +192,9 @@ export function launchCorridorView(s: GameState, world: WorldQueries, budgetMs =
   const restart = !latest || latest.world !== world || latest.structure !== structure ||
     (latest.pose !== pose && (s.tick - latest.tick >= 60 || s.tick < latest.tick));
   if (restart) {
-    job = { structure, pose, tick: s.tick, world, search: launchCorridorSearch(s, world) };
+    // The search runs across frames while the live state steps in place (SIM-1):
+    // it searches a copy of the state it describes, taken at most once a second.
+    job = { structure, pose, tick: s.tick, world, search: launchCorridorSearch(structuredClone(s), world) };
     // A different craft or berth set: the old status describes something else.
     if (done && (done.structure !== structure || done.world !== world)) done = null;
   }
