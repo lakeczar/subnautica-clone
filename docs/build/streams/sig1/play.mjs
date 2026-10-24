@@ -3,7 +3,7 @@
 // save from derive.mjs is imported through the menu like a player's backup; the craft's actions are
 // pressed by the number the HUD's action bar shows for them, and every effect is screenshotted.
 // usage: node play.mjs <repo> <dist> <out> <port> <saves-dir> [chrome]
-// env: SIG1_PW (playwright-core's install dir), SIG1_ANGLE (gl-egl on the 3090, gl on alickers), SIG1_EXPECT (renderer regex)
+// env: SIG1_ONLY (comma-separated scenarios), SIG1_PW (playwright-core's install dir), SIG1_ANGLE (gl-egl on the 3090, gl on alickers), SIG1_EXPECT (renderer regex)
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
 import { readFileSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
@@ -226,7 +226,7 @@ const SCENARIOS = {
 };
 try {
   for (const [name, run] of Object.entries(SCENARIOS)) {
-    if (!plan[name]) continue;
+    if (!plan[name] || (process.env.SIG1_ONLY && !process.env.SIG1_ONLY.split(",").includes(name))) continue;
     try { await run(); } catch (e) { result.scenarios[name] = { ...(result.scenarios[name] ?? {}), failure: String(e?.stack ?? e) }; note("FAILED", name, String(e)); await shot("failure").catch(() => {}); }
   }
   result.ok = result.errors.length === 0 && Object.values(result.scenarios).every((s) => !s.failure);
