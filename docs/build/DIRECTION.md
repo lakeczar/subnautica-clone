@@ -66,7 +66,7 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
 
 ## Two test machines: how work is planned (owner grill, 2026-10-23)
 
-- **factory-worker (RTX 3090):** builds, fast tests, focused heavy tests, reviewers' quick checks, every 3090 session and every **exclusive** performance measurement (the 60 fps target).
+- **factory-worker (RTX 3090):** builds, fast tests, focused heavy tests, reviewers' quick checks, every 3090 session and exclusive performance measurements on it (the 60 fps target).
 - **siltwake-alickers (RTX 4070 Laptop, best-effort):**
   - whole playthroughs, the full heavy tier and soaks;
   - 4070 "player-class" sessions.
@@ -79,11 +79,12 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - `soak`: alickers first.
 
   Until the lane exists, builders may call `scripts/alickers-job.sh` directly.
-- **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive` on the 3090.
+- **The frame gate is 60 fps on a GPU, not specifically the 3090** (owner, 2026-10-24). Acceptance evidence may come from either test GPU (the RTX 3090 or the RTX 4070 laptop). A run counts when its host was quiet for that machine, judged by the same disturbance rules. Until the queue supports quiet acceptance runs on the 4070 (SCHED-4 follow-up), exclusive acceptance runs stay on the 3090.
+- **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive`.
   - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. Results from the 4070 are labelled indicative.
   - Pin a job to one machine only when the question needs that machine (e.g. factory-worker's host pauses, or a 4070 player-floor check).
 - **Graphics first; integrated graphics later** (owner, 2026-10-24):
-  - **Order:** build for the best graphics first; the dedicated-GPU gates stay (3090 at 60 fps, the 4070 laptop as the player floor). Integrated-graphics laptops come later, through a settings change (a lower preset), not as a target now.
+  - **Order:** build for the best graphics first; the dedicated-GPU gate stays (60 fps on a dedicated GPU; the 4070 laptop is the player floor). Integrated-graphics laptops come later, through a settings change (a lower preset), not as a target now.
   - **The low preset, when it comes:** a steady **30 fps at a reduced internal resolution**, keeping readable exits, warning poses, lamp reach and landmark silhouettes.
   - **Keep it reachable:** don't make choices that rule it out. Quality must stay scalable through settings (resolution scale, draw distance, effects), and memory and streaming budgets must stay parameterised rather than hard-wired to the 3090.
   - **Still open:** the representative integrated-GPU device is chosen later.
@@ -92,7 +93,7 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - **The gap today:** the simulation steps at a fixed 60 Hz and the renderer draws the latest step without interpolation, so above 60 Hz frames repeat (and 144 Hz judders).
   - **Fix:** render interpolation between the last two fixed steps (camera, craft, creatures, particles), with the simulation unchanged and deterministic.
   - **When:** a small stream after CW-1 merges (CW-1 owns `renderer.ts` and `app.ts`).
-  - **Acceptance:** the 60 fps gate on the 3090 stays. Measure at 120 Hz (8.3 ms budget) as indicative, not a gate.
+  - **Acceptance:** the 60 fps GPU gate stays. Measure at 120 Hz (8.3 ms budget) as indicative, not a gate.
 - **Evidence:**
   - Functional results count from either machine, bound to the exact SHA tested.
   - 3090 exclusive numbers are the target.

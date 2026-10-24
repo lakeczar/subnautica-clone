@@ -22,7 +22,7 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - both routes can be finished;
   - the bot's structural checks pass;
   - the owner's playtest says it's full, atmospheric and unpadded at 10+ hours;
-  - a steady 60 fps on the 3090;
+  - a steady 60 fps on a dedicated GPU (owner, 2026-10-24: the gate is "60 fps on GPU, not 3090"; either test GPU, the 3090 or the 4070 laptop, can give acceptance evidence);
   - no progress-breaking bugs.
 - **The bigger interleaved map** (Option B) is re-evaluated once the game is finished.
 
