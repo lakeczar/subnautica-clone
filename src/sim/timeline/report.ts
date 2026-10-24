@@ -32,8 +32,15 @@ export interface TimelineEvent {
   stationary?: number;
   metres?: number;
   hull?: string;
-  /** Idle only: background work that was running (decode, growth, ...). */
+  /** Idle only: background work that was running (decode, growth, ...). Presence, not cause. */
   waiting?: string[];
+  /** Idle only: the declared cause of a wait (a harness's `decode:<id>`), when one was
+   * declared. Only a declared cause says why the player was idle (LS-1). */
+  cause?: string;
+  /** Decode `new` events only: what the decode gave that was not held before
+   * (`plan:<id>`, `reveal:<id>`, `record:<id>`). Empty: nothing new, so it does not
+   * count as new content. Absent (older producers): it counts. */
+  yields?: string[];
   /** Death: what it left behind (`cache:<id>`, `loss:<vehicleId>`). Recovery: the same keys. */
   keys?: string[];
   /** Recovery only: the tick of the death it closes. */
@@ -83,7 +90,9 @@ export interface ChunkSummary {
     long: { play: number; seconds: number; hull: string; region: string | null }[] };
   idle: { count: number; seconds: number; waitingSeconds: number;
     /** Idle stretches of 60 s or more (the report's default listing). */
-    long: { play: number; tick: number; seconds: number; waiting: string[]; region: string | null }[] };
+    long: { play: number; tick: number; seconds: number; waiting: string[]; region: string | null }[];
+    /** Every idle span with a declared cause, however short (LS-1), by cause. */
+    byCause?: Record<string, IdleCause> };
   /** Regions the chunk's region events name, so a resumed recorder knows them. */
   regions: string[];
 }
@@ -94,7 +103,13 @@ export interface TimelineExport { format: typeof TIMELINE_FORMAT; version: numbe
   seq?: number;
   rotated?: ChunkSummary[]; events: TimelineEvent[] }
 
+/** Idle spans with one declared cause: how many, how long in all, the longest. */
+export interface IdleCause { count: number; seconds: number; longest: number }
 const bump = (into: Record<string, number>, key: string, n = 1): void => { into[key] = (into[key] ?? 0) + n; };
+function addCause(into: Record<string, IdleCause>, cause: string, c: IdleCause): void {
+  const x = into[cause] ??= { count: 0, seconds: 0, longest: 0 };
+  x.count += c.count; x.seconds += c.seconds; x.longest = Math.max(x.longest, c.longest);
+}
 /** A travel span's empty stretches: between its ends and any point of interest inside it. */
 function stretchesOf(tr: TimelineEvent, breaks: readonly number[]): { play: number; seconds: number }[] {
   const seconds = tr.seconds ?? 0, out: { play: number; seconds: number }[] = [];
@@ -132,6 +147,7 @@ export function summarizeChunk(events: readonly TimelineEvent[]): ChunkSummary {
       const seconds = e.seconds ?? 0, waiting = e.waiting ?? [];
       s.idle.count++; s.idle.seconds += seconds; if (waiting.length) s.idle.waitingSeconds += seconds;
       if (seconds >= LONG_IDLE_SECONDS) s.idle.long.push({ play: e.play, tick: e.tick, seconds, waiting, region: e.region ?? null });
+      if (e.cause) addCause(s.idle.byCause ??= {}, e.cause, { count: 1, seconds, longest: seconds });
     }
     if ((e.kind === "region" || (e.kind === "new" && e.what === "region")) && e.id && !s.regions.includes(e.id)) s.regions.push(e.id);
   }
@@ -195,6 +211,7 @@ function validate(v: unknown): { ok: true; value: TimelineExport } | { ok: false
       opt(e.seconds, num) && opt(e.stationary, num) && opt(e.metres, num) && opt(e.hull, str) && opt(e.waiting, strings) &&
       opt(e.keys, strings) && opt(e.of, num) && opt(e.text, str) && opt(e.wall, str) &&
       opt(e.at, (a) => Array.isArray(a) && a.length === 3 && a.every(num)) && opt(e.saveRef, validSaveRef) &&
+      opt(e.cause, str) && opt(e.yields, strings) &&
       (e.kind !== "note" || typeof e.text === "string");
   for (const [n, e] of v.events.entries()) if (!event(e)) return { ok: false, error: `Malformed event ${n}.` };
   const counts = (r: unknown): boolean => obj(r) && Object.values(r).every(num);
@@ -205,6 +222,7 @@ function validate(v: unknown): { ok: true; value: TimelineExport } | { ok: false
     obj(r.gathering) && num(r.gathering.count) && counts(r.gathering.byItem) &&
     obj(r.travel) && num(r.travel.count) && num(r.travel.seconds) && num(r.travel.stationary) && counts(r.travel.byHull) && Array.isArray(r.travel.long) && r.travel.long.every(travelStretch) &&
     obj(r.idle) && num(r.idle.count) && num(r.idle.seconds) && num(r.idle.waitingSeconds) && Array.isArray(r.idle.long) && r.idle.long.every(idleStretch) &&
+    (r.idle.byCause === undefined || (obj(r.idle.byCause) && Object.values(r.idle.byCause).every((c) => obj(c) && num(c.count) && num(c.seconds) && num(c.longest)))) &&
     Array.isArray(r.regions) && r.regions.every((x) => typeof x === "string"))))
     return { ok: false, error: "Malformed rotated chunks." };
   return { ok: true, value: v as unknown as TimelineExport };
@@ -231,7 +249,9 @@ export interface TimelineAnalysis {
   gaps: Gap[];
   longestGapMinutes: number;
   travel: { count: number; minutes: number; stationaryMinutes: number; byHull: Record<string, number>; emptyStretches: TravelStretch[] };
-  idle: { count: number; minutes: number; waitingMinutes: number; longest: IdleStretch | null; listed: IdleStretch[] };
+  idle: { count: number; minutes: number; waitingMinutes: number; longest: IdleStretch | null; listed: IdleStretch[];
+    /** Every idle span with a declared cause, rotated chunks included (LS-1 acceptance). */
+    byCause: Record<string, IdleCause> };
   gathering: { count: number; byItem: Record<string, number> };
   /** `recoverySeconds` covers deaths that left something to recover; `nothingLost` the rest. */
   deaths: { count: number; recoverySeconds: number[]; nothingLost: number; unrecovered: number };
@@ -241,6 +261,20 @@ export interface TimelineAnalysis {
   rotated: { chunks: number; events: number; toPlay: number };
 }
 
+/** The new-content beats that count toward cadence (LS-1), in play order: the first
+ * occurrence of each accomplishment (`what` + `id`), so a repeated notice never fills a
+ * gap; a decode only when it yielded something new (or an older producer gave no
+ * `yields`). A genuinely new later payoff keeps its own time. */
+export function newContent(events: readonly TimelineEvent[]): TimelineEvent[] {
+  const seen = new Set<string>(), out: TimelineEvent[] = [];
+  for (const e of [...events].filter((x) => x.kind === "new").sort((a, b) => a.play - b.play || a.tick - b.tick)) {
+    if (e.what === "decode" && e.yields !== undefined && e.yields.length === 0) continue;
+    const key = e.id !== undefined ? `${e.what ?? "other"}:${e.id}` : null;
+    if (key !== null) { if (seen.has(key)) continue; seen.add(key); }
+    out.push(e);
+  }
+  return out;
+}
 const describe = (e: TimelineEvent | undefined): string => !e ? "start" : `${e.what ?? e.kind}${e.label ? `: ${e.label}` : e.id ? `: ${e.id}` : ""}`;
 /** Gaps between new things, empty travel, idle waiting, deaths and notes. */
 export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds = DEFAULT_THRESHOLDS): TimelineAnalysis {
@@ -249,7 +283,7 @@ export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds 
   // exactly as if never rotated; its other events count through its totals.
   const events = [...rotated.flatMap((r) => r.kept), ...t.events].sort((a, b) => a.tick - b.tick);
   const end = t.session.end.play;
-  const fresh = events.filter((e) => e.kind === "new").sort((a, b) => a.play - b.play);
+  const fresh = newContent(events);
   const gaps: Gap[] = [];
   let prev: TimelineEvent | undefined;
   for (const e of [...fresh, undefined]) {
@@ -285,6 +319,8 @@ export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds 
   let idleCount = idles.length, idleSeconds = idles.reduce((n, i) => n + i.seconds, 0);
   let waitingSeconds = idles.filter((i) => i.waiting.length).reduce((n, i) => n + i.seconds, 0);
   const longIdles: IdleStretch[] = [];
+  const byCause: Record<string, IdleCause> = {};
+  for (const e of events) if (e.kind === "idle" && e.cause) addCause(byCause, e.cause, { count: 1, seconds: e.seconds ?? 0, longest: e.seconds ?? 0 });
   for (const r of rotated) {
     travelCount += r.travel.count; travelSeconds += r.travel.seconds; stationarySeconds += r.travel.stationary;
     for (const [h, sec] of Object.entries(r.travel.byHull)) byHull[h] = (byHull[h] ?? 0) + sec / 60;
@@ -293,6 +329,7 @@ export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds 
     for (const [k, n] of Object.entries(r.gathering.byItem)) byItem[k] = (byItem[k] ?? 0) + n;
     idleCount += r.idle.count; idleSeconds += r.idle.seconds; waitingSeconds += r.idle.waitingSeconds;
     longIdles.push(...r.idle.long);
+    for (const [cause, c] of Object.entries(r.idle.byCause ?? {})) addCause(byCause, cause, c);
   }
   const deaths = events.filter((e) => e.kind === "death");
   const recoveryEvents = events.filter((e) => e.kind === "recovery");
@@ -311,6 +348,7 @@ export function analyseTimeline(t: TimelineExport, thresholds: ReportThresholds 
       count: idleCount, minutes: idleSeconds / 60, waitingMinutes: waitingSeconds / 60,
       longest: [...longIdles, ...idles].reduce<IdleStretch | null>((m, i) => !m || i.seconds > m.seconds ? i : m, null),
       listed: [...longIdles, ...idles].filter((i) => i.seconds >= thresholds.idleListSeconds),
+      byCause,
     },
     gathering: { count: gatherCount, byItem },
     deaths: { count: deaths.length, recoverySeconds: recoveries, nothingLost: recoveryEvents.length - recoveries.length,

@@ -10,7 +10,10 @@
  * same source; it publishes nothing unless every scenario completes and every kind
  * holds its facts. scripts/saves-export.sh is the way to run it.
  * --from-library (TST-21): a branch scenario whose parent is not requested starts
- * from the library's compatible milestone save instead of replaying its parent. */
+ * from the library's compatible milestone save instead of replaying its parent.
+ * --timeline-dir DIR (LS-1): also write each scenario's play timeline there. Every run
+ * records one; the pacing acceptance on the four judged scenarios is a run check,
+ * so a failing one exits 1 like any other. */
 import { spawn } from "node:child_process";
 import fs from "node:fs";
 import os from "node:os";
@@ -25,6 +28,8 @@ import { formatRun } from "./report.js";
 import { EXPECTED_PENDING_BASE, malformedExpected, staleExpected } from "./pending.js";
 import { playScenarios, SCENARIOS } from "./scenarios.js";
 import type { PlayHooks } from "./scenarios.js";
+import { driverHooks } from "./driver.js";
+import { PacingTimelines } from "./pacing.js";
 import { buildManifest, codeCommit, CODE_ROOT, libraryRoot, librarySave, publish, SOURCE_MARKER, stagingDir, verifyCommitDir } from "./library.js";
 import type { Produced, Staging } from "./library.js";
 
@@ -54,7 +59,12 @@ if (exporting) {
   staging = await stagingDir(libraryRoot(privateRoot), commit);
 }
 const savesDir = value("--saves-dir") ?? staging?.dir;
+const timelineDir = value("--timeline-dir");
+// LS-1: every driver records its play timeline (the code under test only).
+const pacing = new PacingTimelines();
+driverHooks.attach = (d) => pacing.attach(d);
 const hooks: PlayHooks = {
+  pacing,
   sink: savesDir ? (scenario, label, text) => fs.writeFileSync(path.join(savesDir, `${scenario}@${label}.json`), text) : undefined,
   fromLibrary: fromLibrary ? (scenario, milestone) => {
     const p = librarySave(`${scenario}@${milestone}`, { root: privateRoot });
@@ -71,6 +81,7 @@ const jobs = Math.max(1, Number(value("--jobs") ?? (args.includes("--child") ? 1
 const runs = fault.startsWith("stub")
   ? ids.map((id) => ({ ...emptyRun(id, SCENARIOS.find((s) => s.id === id)!.strategy), outcome: "pending-c3" as const }))
   : jobs > 1 ? await parallel(ids, jobs) : await playScenarios(ids, !quiet, hooks);
+if (timelineDir && jobs <= 1) pacing.write(timelineDir, ids);
 console.log("");
 for (const run of runs) console.log(formatRun(run) + "\n");
 const json = value("--json");
@@ -113,7 +124,7 @@ function spawnGroup(dir: string, deadlineMs: number): Launch {
   let n = 0;
   return (group) => new Promise<ChildOutcome>((resolve) => {
     const out = path.join(dir, `${n++}.json`);
-    const pass = [...(savesDir ? ["--saves-dir", savesDir] : []), ...(fromLibrary ? ["--from-library"] : []), ...(privateRoot ? ["--library-root", privateRoot] : [])];
+    const pass = [...(savesDir ? ["--saves-dir", savesDir] : []), ...(timelineDir ? ["--timeline-dir", timelineDir] : []), ...(fromLibrary ? ["--from-library"] : []), ...(privateRoot ? ["--library-root", privateRoot] : [])];
     const child = spawn(process.execPath, [self, "--child", "--scenario", group.join(","), "--json", out, "--quiet", ...pass], { stdio: ["ignore", "ignore", "inherit"] });
     let error: string | null = null;
     // Node fires an over-large (or infinite) delay at once: no timer then.

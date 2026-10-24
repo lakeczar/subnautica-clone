@@ -4,6 +4,8 @@
  * shows only explored cells, scanned sources and decoded areas. */
 import { SOURCES } from "../../content/registry.js";
 import { DECODABLES, LOST_SITES } from "../../content/systems/decodes.js";
+import type { DecodableId } from "../../content/systems/decodes.js";
+import { decodedReveals, knownSites } from "./decoder.js";
 import { FIXED_HOSTS } from "../../content/systems/hosts.js";
 import type { FixedHostId } from "../../content/systems/hosts.js";
 import { BEACON_CATEGORIES, BEACON_NAME_MAX, BEACON_REACH, CHART_CELL, CHART_VISIT_RADIUS, PLAYER_BEACON_LIMIT } from "../../content/systems/navigation.js";
@@ -67,6 +69,9 @@ export function beaconViews(s: GameState, sys: SystemsState): BeaconView[] {
       const d = FIXED_HOSTS[id];
       return d.facility === null || facility(s, d.facility) || (s.knowledge.markers as string[]).includes(id);
     }).map((id) => ({ id: `stop:${id}`, name: FIXED_HOSTS[id].label, category: "stop" as const, position: FIXED_HOSTS[id].position })),
+    // LS-1: a decoded reveal whose target was placed after the decode finished.
+    ...decodedReveals(sys).filter((r) => !sys.beacons.some((b) => b.id === r.id))
+      .map((r) => ({ id: r.id, name: r.label, category: r.category, position: r.position })),
   ];
   return [...derived.map((d) => ({ ...d, removable: false })), ...sys.beacons.map((b) => ({ id: b.id, name: b.name, category: b.category, position: b.position, removable: b.source === "player" }))]
     .map((b) => ({ ...b, position: { ...b.position }, on: !sys.beaconsOff.includes(b.id) && !sys.categoriesOff.includes(b.category) }));
@@ -104,6 +109,7 @@ export interface ChartOptions {
   livePosition?: boolean;
   sources?: Readonly<Record<string, { label: string; position: Vec3 }>>;
 }
+const DECODABLE_SITE = (id: DecodableId): string => DECODABLES[id].site;
 export function chartView(s: GameState, sys: SystemsState, options: ChartOptions = {}): ChartView {
   const sources: Readonly<Record<string, { label: string; position: Vec3 }>> = options.sources ?? SOURCES;
   const reveal = new Map<string, Set<ChartReveal>>();
@@ -111,12 +117,13 @@ export function chartView(s: GameState, sys: SystemsState, options: ChartOptions
   for (const c of sys.chart) add(c, "explored");
   const scanned = s.knowledge.scans.filter((id) => Object.hasOwn(sources, id));
   for (const id of scanned) add(cellOf(sources[id]!.position.x, sources[id]!.position.z), "scanned");
-  const sites = sys.found.map((d) => DECODABLES[d].site).filter((id, n, a) => a.indexOf(id) === n);
-  for (const id of sites) {
-    const p = (LOST_SITES as Readonly<Record<string, { position: Vec3 }>>)[id]?.position;
+  // Found on site, or revealed by a decoded map (LS-1).
+  const sites: string[] = knownSites(sys);
+  for (const d of sys.found) {
+    const p = (LOST_SITES as Readonly<Record<string, { position: Vec3 }>>)[DECODABLE_SITE(d)]?.position;
     if (p) add(cellOf(p.x, p.z), "explored");
   }
-  for (const d of sys.decoded) for (const r of DECODABLES[d].reveals) for (const c of cellsAround(r.position, r.radius)) add(c, "decoded");
+  for (const r of decodedReveals(sys)) for (const c of cellsAround(r.position, r.radius)) add(c, "decoded");
   const cells = [...reveal].map(([key, how]) => {
     const [x, z] = key.split(":").map(Number) as [number, number];
     return { key, x: x * CHART_CELL, z: z * CHART_CELL, size: CHART_CELL, reveal: [...how].sort() };

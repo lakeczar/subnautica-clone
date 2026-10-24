@@ -208,8 +208,8 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   assert.equal(usedCapacity(s, outpostLockerId(id)), OUTPOST_TIERS.standard.lockerCu, "the locker is genuinely full");
   give(s, "seed_ribbon_fan", 1);
   assert.equal(plant(s, sys, id, "s1", "seed_ribbon_fan"), null);
-  discoverSite(sys, "demo_relay_hut");
-  assert.equal(startDecode(s, sys, id, "demo_hut_fragment"), null);
+  discoverSite(sys, "reef_pumphouse_site");
+  assert.equal(startDecode(s, sys, id, "reef_pumphouse_log"), null);
   play(s, sys, 100);
   assert.equal(sys.decodes[0]!.progress, 100);
   assert.equal(sys.planters[0]!.progress, 100);
@@ -231,7 +231,7 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   assert.deepEqual(p.loss.lines.map((l) => [l.kind, l.quantity, l.from]), [["structural_alloy", 1, outpostLockerId(id)], ["flex_membrane", 1, "diver"]]);
   assert.deepEqual(p.locker.map((m) => [m.kind, m.quantity]).sort(), [["meal", 24], ["reserve_cell", 1], ["structural_alloy", 2]]);
   assert.deepEqual(p.work, [
-    'Decode "Relay hut fragment" at 55% pauses and travels with its decoder module. It resumes when the module is socketed again.',
+    'Decode "Pump house log" at 27% pauses and travels with its decoder module. It resumes when the module is socketed again.',
     "The ribbon fan crop at 23% stops growing while packed and carries on when the planter is socketed again.",
   ]);
   assert.equal(packOutpost(s, sys, id), null);
@@ -250,8 +250,8 @@ test("ADVERSE: packing mid-decode, mid-growth with a full locker loses and dupli
   swimTo(s, SPOTS.c);
   assert.equal(deployOutpost(s, sys, id, SPOTS.c, siteTable({ ventDistance: 8 })), null);
   assert.equal(sys.outposts[0]!.power, "thermal");
-  play(s, sys, 80);
-  assert.deepEqual(sys.decoded, ["demo_hut_fragment"]);
+  play(s, sys, 260);
+  assert.deepEqual(sys.decoded, ["reef_pumphouse_log"]);
   play(s, sys, 240);
   diverCapacity(s, 80);
   assert.equal(harvest(s, sys, id, "s1", { to: "diver" }), null);

@@ -96,7 +96,7 @@ test("validSystems accepts fresh and populated state and rejects malformed rows"
     ...createSystems(),
     outposts: [{ id: "item_4", tier: "basic", name: "Outpost 1", position: { x: 1, y: 2, z: 3 }, region: "refuge_reef", power: "cells" }],
     sockets: [{ hostId: "item_4", socket: "s0", itemId: "item_5", kind: "mod_decoder" }],
-    found: ["demo_hut_fragment"], decodes: [{ moduleId: "item_5", decodable: "demo_hut_fragment", progress: 12.5 }],
+    found: ["reef_pumphouse_log"], decodes: [{ moduleId: "item_5", decodable: "reef_pumphouse_log", progress: 12.5 }],
     planters: [{ moduleId: "item_6", seed: "seed_staple_cup", progress: 3 }],
     beacons: [{ id: "beacon_7", name: "Shelf", category: "player", position: { x: 0, y: 0, z: 0 }, source: "player" }],
     beaconsOff: ["beacon_7"], categoriesOff: ["hint"], chart: ["0:0", "-3:12"],
@@ -105,8 +105,8 @@ test("validSystems accepts fresh and populated state and rejects malformed rows"
   const bad: unknown[] = [
     null, { ...ok, extra: 1 }, { ...ok, outposts: [{ ...ok.outposts[0], tier: "mega" }] },
     { ...ok, sockets: [...ok.sockets, { ...ok.sockets[0] }] },
-    { ...ok, decodes: [{ ...ok.decodes[0], decodable: "demo_vault_archive" }] },
-    { ...ok, decoded: ["demo_cairn_survey"] },
+    { ...ok, decodes: [{ ...ok.decodes[0], decodable: "canopy_basket_log" }] },
+    { ...ok, decoded: ["canopy_basket_log"] },
     { ...ok, planters: [{ ...ok.planters[0], progress: -1 }] },
     { ...ok, beacons: [{ ...ok.beacons[0], name: "" }] },
     { ...ok, chart: ["a:b"] },
@@ -151,8 +151,8 @@ test("composed validation rejects stranded modules: missing carrier, furniture-o
   const decoder = give(s, "mod_decoder"), planter = give(s, "mod_planter");
   assert.equal(installModule(s, sys, hostId, socket, decoder), null);
   assert.equal(installModule(s, sys, hostId, "hl.socket.galley.wall", planter), null);
-  discoverSite(sys, "demo_relay_hut");
-  assert.equal(startDecode(s, sys, hostId, "demo_hut_fragment"), null);
+  discoverSite(sys, "reef_pumphouse_site");
+  assert.equal(startDecode(s, sys, hostId, "reef_pumphouse_log"), null);
   advanceDecodes(s, sys, 99);
   const composed = (x: typeof sys) => ({ shape: validSystems(x), cross: instanceProblems(s, x) });
   assert.deepEqual(composed(sys), { shape: true, cross: [] });

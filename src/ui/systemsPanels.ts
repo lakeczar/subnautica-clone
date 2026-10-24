@@ -15,7 +15,7 @@ import { WORLD_CYCLES } from "../content/currents/cycles.js";
 import { HAZARD_FIELDS } from "../content/ecology/hazards.js";
 import { HULL_SLOTS, UPGRADES, upgradeId } from "../content/upgrades/catalogue.js";
 import type { SlotKind, UpgradeId } from "../content/upgrades/catalogue.js";
-import { DECODABLES, DECODE_LOGS } from "../content/systems/decodes.js";
+import { DECODABLES } from "../content/systems/decodes.js";
 import { isSeed, SEEDS } from "../content/systems/cultivation.js";
 import { MODULES as HOST_MODULES, OUTPOST_TIERS, tierOfKit } from "../content/systems/hosts.js";
 import { PLAYER_BEACON_LIMIT, BEACON_CATEGORIES } from "../content/systems/navigation.js";
@@ -27,7 +27,7 @@ import { installModuleRefusal } from "../sim/modules.js";
 import {
   beaconViews, buildJournal, chartView, cropViews, decodeViews, deployPreview, hostLocal, listHosts, packPreview, upgradePreview,
 } from "../sim/systems/index.js";
-import type { JournalTabId } from "../sim/systems/journal.js";
+import type { JournalSection, JournalTabId } from "../sim/systems/journal.js";
 import type { CreatureEntry, CycleEntry } from "../sim/systems/index.js";
 import { speciesScanId } from "../sim/signatures.js";
 import { hostUpgradeOffers } from "../sim/hostUpgrades.js";
@@ -216,14 +216,19 @@ export function journalPanel(s: GameState, notebook: string, tab: JournalTabId, 
     const t = j.tabs.find((x) => x.id === id)!;
     return tabButton(id, `${t.label}${id === "notebook" ? "" : ` ${t.count}`}`, id === tab);
   }).join("");
-  const body = tab === "notebook" ? notebook : (() => {
-    const t = j.tabs.find((x) => x.id === tab)!;
-    if (!t.count) return `<p class="empty">${esc(t.empty)}</p>`;
-    return t.sections.map((sec) => `<section><h3>${esc(sec.title)}</h3>${sec.entries.map((e) =>
-      `<article class="journal-entry"><p><b>${esc(e.title)}</b>${e.subtitle ? ` · <small>${esc(e.subtitle)}</small>` : ""}</p>${(e.lines ?? []).map((l) => `<p>${esc(l)}</p>`).join("")}${
-        tab === "decodes" && DECODE_LOGS[e.id.replace(/^decode:/, "")] && s.systems.decoded.includes(e.id.replace(/^decode:/, "") as never)
-          ? DECODE_LOGS[e.id.replace(/^decode:/, "")]!.map((l) => `<p class="log">${esc(l)}</p>`).join("") : ""}</article>`).join("")}</section>`).join("");
-  })();
+  const render = (sections: readonly JournalSection[]): string => sections.map((sec) => `<section><h3>${esc(sec.title)}</h3>${sec.entries.map((e) =>
+    `<article class="journal-entry"><p><b>${esc(e.title)}</b>${e.subtitle ? ` · <small>${esc(e.subtitle)}</small>` : ""}</p>${(e.lines ?? []).map((l) => `<p>${esc(l)}</p>`).join("")}${
+      (e.logs ?? []).map((l) => `<p class="log">${esc(l)}</p>`).join("")}</article>`).join("")}</section>`).join("");
+  // The story notebook stays S5/S8's; the shared model's LS-1 sections (found notes, door
+  // codes) follow it, so the one journal model reaches the real panel.
+  const LS1_NOTEBOOK = ["notes", "codes"];
+  const body = tab === "notebook"
+    ? notebook + render(j.tabs.find((x) => x.id === "notebook")!.sections.filter((sec) => LS1_NOTEBOOK.includes(sec.id)))
+    : (() => {
+      const t = j.tabs.find((x) => x.id === tab)!;
+      if (!t.count) return `<p class="empty">${esc(t.empty)}</p>`;
+      return render(t.sections);
+    })();
   return `<p class="objective ${objective.kind}"><b>Now</b> · ${esc(objective.step)}</p><nav class="journal-tabs" aria-label="Journal tabs">${nav}</nav><div class="journal-body">${body}</div>`;
 }
 export { pct, REGIONS };

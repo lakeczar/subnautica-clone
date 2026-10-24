@@ -293,7 +293,7 @@ test("minimal prompt follows actual aimed actions across all real hosts, and is 
     view.update(s, false);
     const prompt = get("interact-prompt").innerHTML;
     assert.ok(prompt.startsWith("<kbd>E</kbd> "), v.id);
-    assert.ok(prompt.replace(/&amp;/g, "&").includes(target.label), v.id);
+    assert.ok(prompt.replace(/&amp;/g, "&").replace(/&#39;/g, "'").includes(target.label), v.id);
     const hasScanner = s.inventory.items.some(i => i.kind === "essential_tools" && i.fitted === "tools");
     assert.equal(prompt.includes("Q scan"), hasScanner && !target.known && (target.kind === "source" || target.kind === "evidence"),
       "scan promises require actual fitted tools and an unknown scannable host");

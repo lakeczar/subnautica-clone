@@ -25,8 +25,8 @@ function midDecode() {
   assert.equal(deployOutpost(s, sys, id, SPOTS.a, siteTable({ ventDistance: 4 })), null);
   const decoder = give(s, "mod_decoder");
   installModule(s, sys, id, "s0", decoder);
-  discoverSite(sys, "demo_relay_hut");
-  startDecode(s, sys, id, "demo_hut_fragment");
+  discoverSite(sys, "reef_pumphouse_site");
+  startDecode(s, sys, id, "reef_pumphouse_log");
   advanceDecodes(s, sys, 99);
   assert.equal(removeModule(s, sys, id, "s0"), null);
   return { s, sys, id, decoder };
@@ -61,12 +61,12 @@ test("death → cache → retrieval: identity items stay with the diver, ordinar
   assert.deepEqual(instanceProblems(s, sys), []);
   assert.ok(validSystems(sys));
   assert.equal(decodeViews(s, sys)[0]!.progress, 99);
-  // Retrieve the cache, refit the decoder: the job finishes from 99 s.
+  // Retrieve the cache, refit the decoder: the six-minute job finishes from 99 s.
   swimTo(s, cache.position);
   for (const i of cached) assert.equal(transfer(s, i.id, "diver", i.quantity), null);
   assert.equal(installModule(s, sys, id, "s0", decoder), null);
-  advanceDecodes(s, sys, 81);
-  assert.deepEqual(sys.decoded, ["demo_hut_fragment"]);
+  advanceDecodes(s, sys, 261);
+  assert.deepEqual(sys.decoded, ["reef_pumphouse_log"]);
   assert.deepEqual(instanceProblems(s, sys), []);
 });
 
@@ -80,6 +80,6 @@ test("a packed kit and its remembered modules survive incapacity and redeploy wi
   assert.deepEqual(sys.packed[0]!.layout, [{ socket: "s0", itemId: decoder }]);
   swimTo(s, SPOTS.b);
   assert.equal(deployOutpost(s, sys, id, SPOTS.b, siteTable({ ventDistance: 4 })), null);
-  advanceDecodes(s, sys, 81);
-  assert.deepEqual(sys.decoded, ["demo_hut_fragment"]);
+  advanceDecodes(s, sys, 261);
+  assert.deepEqual(sys.decoded, ["reef_pumphouse_log"]);
 });

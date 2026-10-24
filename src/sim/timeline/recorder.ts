@@ -36,6 +36,10 @@ export interface ObserveContext {
   input: boolean;
   /** Background work running now (e.g. "decode", "growth"), tagged onto idle spans. */
   waiting?: readonly string[];
+  /** A declared wait (LS-1): the step is idle from its first tick, with no grace
+   * window, and the span records this cause (e.g. `decode:<id>`). A harness that
+   * knows why it waits declares it; presence tags never stand in for a cause. */
+  cause?: string;
 }
 /** What the next observation diffs against. Observation is diff-based
  * (SIM-02): exposed stock is copied into a reused buffer, and cache contents
@@ -69,7 +73,7 @@ export interface TimelineRecorder {
   playTicks: number;
   idleTicks: number;
   lastInputTick: number;
-  idle: { tick: number; play: number; waiting: Set<string> } | null;
+  idle: { tick: number; play: number; waiting: Set<string>; cause?: string } | null;
   /** One piloting session. Its open `piece` is motion since the last point of
    * interest; stationary helm time is kept apart and never counts as travel. */
   travel: {
@@ -239,7 +243,8 @@ function pieceEvent(rec: TimelineRecorder): TimelineEvent | null {
 /** The idle event closing the open idle span as of `s` would record. */
 function idleEvent(rec: TimelineRecorder, s: GameState): TimelineEvent | null {
   const i = rec.idle;
-  return i && { kind: "idle", tick: i.tick, play: i.play, seconds: (s.tick - i.tick) / STEPS, waiting: [...i.waiting].sort(), region: rec.region };
+  return i && { kind: "idle", tick: i.tick, play: i.play, seconds: (s.tick - i.tick) / STEPS, waiting: [...i.waiting].sort(), region: rec.region,
+    ...(i.cause ? { cause: i.cause } : {}) };
 }
 /** What closing the open travel piece and idle span now would record, in that
  * order, without recording it: an export ends open spans this way, so it never
@@ -264,8 +269,13 @@ function closeIdle(rec: TimelineRecorder, s: GameState): void {
 
 /** Call once per active fixed step, after the step. */
 export function observe(rec: TimelineRecorder, s: GameState, ctx: ObserveContext): void {
+  // A declared wait is idle from its first tick and keeps its own span (LS-1).
+  if (ctx.cause !== undefined) {
+    if (rec.idle && rec.idle.cause !== ctx.cause) closeIdle(rec, s);
+    if (!rec.idle) { closeTravel(rec); rec.idle = { tick: s.tick, play: play(rec), waiting: new Set(), cause: ctx.cause }; }
+  } else if (rec.idle?.cause !== undefined) closeIdle(rec, s);
   // Idle: past the grace window without input, time stops counting as play.
-  if (ctx.input) {
+  if (ctx.cause !== undefined) { /* the declared span above */ } else if (ctx.input) {
     rec.lastInputTick = s.tick;
     closeIdle(rec, s);
   } else if (!rec.idle && s.tick - rec.lastInputTick > rec.options.idleAfterSeconds * STEPS && rec.last) {
@@ -388,7 +398,12 @@ function settleRecoveries(rec: TimelineRecorder, s: GameState, contents: NonNull
 /** SYS-2 background results: a decode is a new thing; a ripe crop is a point of interest. */
 export function recordSystemsEvents(rec: TimelineRecorder, s: GameState, events: readonly SystemsEvent[]): void {
   for (const e of events)
-    if (e.type === "decoded") recordEvent(rec, s, { kind: "new", what: "decode", id: e.completion.decodable });
+    if (e.type === "decoded") {
+      // What the decode gave that was new (LS-1): only that makes it new content.
+      const c = e.completion;
+      const yields = [...c.fresh.map((b) => `plan:${b}`), ...c.beacons.map((r) => `reveal:${r}`), ...c.readable.map((r) => `record:${r}`)];
+      recordEvent(rec, s, { kind: "new", what: "decode", id: c.decodable, yields });
+    }
     else if (e.type === "crop-ready") recordEvent(rec, s, { kind: "system", what: "crop-ready", id: e.seed });
 }
 
