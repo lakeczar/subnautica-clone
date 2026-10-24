@@ -59,8 +59,6 @@ function judgeClock(raw, rec, failed, label = "clock") {
   // The export's own header (the live one may already name a segment begun after the cutoff).
   const header = JSON.parse(readFileSync(path.join(rec, "header.json"), "utf8"));
   const ff = decoder(), draws = raw.draws, cutoff = header.exported.cutoff, pauses = raw.pauses ?? [];
-  const inPause = (T) => pauses.some((p) => T >= p.from && T <= p.to);
-  const lastDrawBefore = (T) => { let k = null; for (const d of draws) if (d.t <= T) k = d; return k; };
   if (!ff) { failed.push(`${label}: no ffmpeg here decodes VP9 with showinfo; judge this run with --decode where one does`); return { undecoded: true }; }
   const byId = new Map(draws.map((d, i) => [d.id, { t: d.t, next: draws[i + 1]?.t ?? Infinity }]));
   const segments = [];
@@ -71,8 +69,10 @@ function judgeClock(raw, rec, failed, label = "clock") {
     const frames = times.map((pt, i) => {
       // Picture 0 is the canvas before the first barcode: dated before the first draw, it is right.
       const d = ids[i] === 0 ? { t: -Infinity, next: draws[0]?.t ?? Infinity } : byId.get(ids[i]), T = seg.start + pt * 1000;
-      // In a pause: the last picture drawn, or the one before it if that last one came after the last capture (≤ one interval).
-      const last = lastDrawBefore(T), staleOk = inPause(T) && last && last.id === ids[i] + 1 && last.t - d?.t <= 1000 / (header.video?.fps ?? 12) + 2;
+      // In a pause the file holds the last picture captured before it: drawn at most one capture
+      // interval (and one draw interval: the harness draws every 83 ms) before the pause began.
+      const pause = pauses.find((p) => T >= p.from && T <= p.to), interval = 1000 / (header.video?.fps ?? 12);
+      const staleOk = !!pause && !!d && d.t <= pause.from + 2 && d.t >= pause.from - interval - 85;
       return { pt, id: ids[i], T: +T.toFixed(1), drawn: d?.t ?? null, ok: !!d && T >= d.t - 2 && (T <= d.next + 2 || !!staleOk) };
     });
     const bad = frames.filter((f) => !f.ok);
