@@ -1,6 +1,6 @@
 # CW-1: every authored cave in the game, streamed without pauses (handoff)
 
-Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store) and `a536775` (SCHED-2a, CR-1, UX-1). Code: **`9c73272`** after review R1 (the R1 traversal ran on `fd457d3`; `src` is unchanged since `20679ea`). Review R1: `review/cw-1-r1`, `docs/build/reviews/CW-1-SOL-XHIGH-R1.md`.
+Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Code: **`b03304f`** after review R1 and REC-1's findings (the R1 traversal ran on `fd457d3`; the clean remeasure waits on TST-16). Review R1: `review/cw-1-r1`, `docs/build/reviews/CW-1-SOL-XHIGH-R1.md`.
 
 ## Outcome
 All **55** authored small and medium caves are in the real game: the Fanvault and W2's four hub caves, CA-1's 18 Reef and Isles caves, CA-2's 12 Canopy and Basin groups, and CA-3's 20 Rift, Divide and Meridian sources. The browser never generates a cave: collision and light are baked, streamed ahead by proximity and heading, built in time slices and evicted behind and far first. At 1920×1080 on the RTX 3090, after review R1, 109 minutes of driving from earned library saves (an 8-segment Dart tour from `tour-ready`, deep Creel segments from `canopy-over-geared`) reached 66 of 67 cave stops, **never held and never built a cave unsliced**. The streaming frame gate is **not met**: 18 frames went over 34 ms in streaming parts (24 before R1, in half the driving). Whether they are game work or this machine's is **unresolved** (*Traversal*). R1's fixes removed every real cost the per-call attribution found. Clean 3090 frame-time evidence is listed as **missing**.
@@ -32,6 +32,20 @@ All **55** authored small and medium caves are in the real game: the Fanvault an
   - **The sim's world queries:** clearance, support and move gather into reusable arrays through an allocation-free `dataInBox`. A step went from 283 to 99 KiB and from 1.58 to 0.51 ms; the remaining top allocator is SIM-1's whole-state `structuredClone`.
   - **Cave light textures:** a field's whole `texImage3D` (65–84 ms in a frame) became an empty allocation filled by `texSubImage3D` z slabs, 128 KiB a frame; a field binds only when complete.
   - **Kit cave cluster builds:** these still allocate about 18 MiB per cluster (18k boxes as objects). That's COL-1 debt (below).
+- **REC-1's findings.**
+  - **Cave readiness.** A cave the view stands in, drawn as open water because its light field hasn't landed, is now reported: `caveView.lightPending`, `GameRenderer.caveLightPending`, and `data-cave-light` (`pending` or `resident`).
+    - The load waits for that light behind the loading presentation, 8 s at most.
+    - The settle after a jump ends only once the cave there is lit, 5 s at most.
+    - Captures can wait on `data-cave-light`, and on `data-lights-settled`, which is true when every known mesh is scanned and its lights placed.
+    - App-boundary tests cover the wait and the bound.
+  - **Light selection is a pure function of the eye and the candidate set.** Equal scores are ordered by the light itself (`lightOrder`: position, reach, strength, colour), never by mesh arrival order. A test over 30 tied lattices, shuffled 5 ways each, fails with arrival-order ties. The candidate set itself fills in over the frames after a mesh streams in; `data-lights-settled` says when it is complete.
+  - **Simulation cost: routed to SIM.** The traversal data has 6 frames with over 30 ms of simulation in about 3 hours of travel:
+    - three near caves (37–50 ms, 3–29 m from a footprint);
+    - three far from any cave (63–136 ms, 134–244 m);
+    - one of the six with the thread almost off-CPU;
+    - none with an unsliced cave build.
+
+    So caves don't explain it. One caveat for SIM: a diver step inside the deep caves' composed collision costs about 380 µs, against 34 µs outside (`caves-deep-perf`), so dense cave collision does raise the sim's query cost near caves.
 - **Light placement resumes.** One streamed scatter mesh's thousands of thin-instance lights were placed in one go (37–111 ms). Placement now resumes across frames: 64 instances per budget check, no per-instance matrix allocation.
 - **Tests.** New `cw1-streaming` (fast, 13), `cw1-caves.heavy` (whole world, sheltered caves, every lane near a cave), `cw1-bake.heavy` (CA-1's bake probe over every cave chunk: borders at all LOD pairs, shells, scatter, codec). Tests that assumed one registered cave, or composed CA-2's groups beside the registry, now use the registry once (CA-2 and CA-3 suites compose the game's own world); CA-3's thickness rule allows edge-clipped boxes; the shelf-race escape reads the masked flow; `regions-art` allows pit-cut coarse chunks up to 3,000 vertices (worst 2,529).
 
