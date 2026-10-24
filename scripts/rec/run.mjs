@@ -76,7 +76,7 @@ function probeScript() {
 }
 
 const gpu0 = gpuInfo();
-const query = mode === "off" ? "?rec=off" : mode === "playtest" ? "?rec=playtest" : "?rec=driver";
+const query = mode === "off" ? "?rec=off" : mode === "playtest" ? `?rec=playtest${arg("video") === "off" ? "&recvideo=0" : ""}` : "?rec=driver";
 const result = { mode, video: videoOn, machine, commit, segment, errors: [], reached: [], skipped: [] };
 let exit = 0, g = null;
 try {
