@@ -18,10 +18,9 @@ import { HelmControl } from "./helm.js";
 import { forgetCorridorView } from "../sim/carrierStations.js";
 import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
-import { addNote, createRecorder, exportTimelineText, observe, recordSystemsEvents, resumeRecorder, TIMELINE_STORAGE_KEY,
-  TIMELINE_WHOLE_FLOOR } from "../sim/timeline/recorder.js";
+import { exportTimelineText, observe, recordSystemsEvents } from "../sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../sim/timeline/recorder.js";
-import { parseTimeline } from "../sim/timeline/report.js";
+import { LiveTimeline } from "./liveTimeline.js";
 import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint, regionAtPosition } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
@@ -47,10 +46,6 @@ const ASCENT_EPSILON = 1e-5;
 const IDLE_PREPARE_MS = 250;
 /** Vite's development build (false in production and in Node tests). */
 const DEV = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV === true;
-/** A browser's full-storage error: the standard name and code 22, and Firefox's legacy name and code 1014. */
-const quotaExceeded = (error: unknown): boolean => error instanceof Error &&
-  (error.name === "QuotaExceededError" || error.name === "NS_ERROR_DOM_QUOTA_REACHED" ||
-    (error as { code?: number }).code === 22 || (error as { code?: number }).code === 1014);
 const errorText = (error: unknown): string =>
   error instanceof Error ? error.message : "An unknown error occurred.";
 
@@ -102,9 +97,11 @@ export class SiltwakeApp {
    * STRUCTURE_SOLIDS and A1's VISTA_SOLIDS) in the indexed broad phase, and
    * the W1 caves owning their footprints. */
   private readonly world = gameWorld();
+  /** One cross-tab writer lock port: the save slot and the play timeline each use their own lock name. */
+  private readonly writerLock = browserWriterLock(navigator.locks);
   private readonly repository = new SaveRepository(
     storagePort(),
-    browserWriterLock(navigator.locks),
+    this.writerLock,
   );
   private readonly view: GameView;
   private renderer: GameRenderer | null = null;
@@ -147,8 +144,9 @@ export class SiltwakeApp {
   /** SIM-1: the live state steps in place; a throw restores it (development
    * builds also check every 10th checkpoint's replay against the live state). */
   private readonly guard = new StepGuard({ verifyEvery: DEV ? 10 : 0 });
-  /** Local-only play timeline (SYS-2, C4): never in the save, never sent. */
-  private timeline: TimelineRecorder | null = null;
+  /** Local-only play timeline (SYS-2, C4): never in the save, never sent. One per expedition entry (SIM-1b). */
+  private live: LiveTimeline | null = null;
+  private get timeline(): TimelineRecorder | null { return this.live?.recorder ?? null; }
   private timelineSaved = 0;
 
   constructor(root: HTMLElement) {
@@ -184,6 +182,7 @@ export class SiltwakeApp {
       save: () => this.session.manualSave(),
       exportGame: () => this.exportGame(),
       exportTimeline: () => this.exportTimeline(),
+      repairTimeline: () => this.repairTimeline(),
       exportBackup: () => this.exportBackup(),
       exportRaw: () => this.exportRaw(),
       importFile: (file) =>
@@ -345,7 +344,11 @@ export class SiltwakeApp {
       "pagehide",
       (event) => {
         if (event.persisted) this.pause("Paused after page navigation.");
-        else this.dispose();
+        else {
+          // Ask for a last timeline commit without depending on it: a note is durable once its own commit returns.
+          this.live?.close(this.state, true);
+          this.dispose();
+        }
       },
       options,
     );
@@ -475,42 +478,54 @@ export class SiltwakeApp {
     if (systems.length) recordSystemsEvents(this.timeline, s, systems);
     if (s.tick - this.timelineSaved >= 600) this.saveTimeline();
   }
-  /** The whole timeline under its one key, in one atomic write (SIM-1a; incremental storage is
-   * SIM-1b). Rotation bounds the export and keeps every note. On a full quota the stored copy
-   * keeps fewer whole chunks, halving each try down to the open chunk plus two, the older ones
-   * folded into summaries (notes, new things, deaths and recoveries verbatim); the timeline in
-   * memory keeps its window. False when even that doesn't fit, or storage refused it. */
-  private saveTimeline(): boolean {
-    if (!this.timeline || !this.state) return false;
+  /** Commits the timeline journal (SIM-1b): the small head plus any new or folded chunk. */
+  private saveTimeline(): void {
+    if (!this.live || !this.state) return;
     this.timelineSaved = this.state.tick;
-    for (let whole = this.timeline.sealed.length; ; whole = Math.max(TIMELINE_WHOLE_FLOOR, Math.floor(whole / 2))) {
-      try { localStorage.setItem(TIMELINE_STORAGE_KEY, exportTimelineText(this.timeline, this.state, whole)); return true; }
-      catch (error) { if (!quotaExceeded(error) || whole <= TIMELINE_WHOLE_FLOOR) return false; }
-    }
+    this.live.save(this.state);
   }
   /** Start or resume the timeline for the session just entered (same save session resumes). */
   private startTimeline(): void {
+    // The previous generation ends here: a commit of it still waiting for the lock never writes.
+    this.live?.close(null, false);
+    this.live = null;
     const meta = this.session.envelope()?.meta;
-    if (!meta || !this.state) { this.timeline = null; return; }
-    const options = { regionAt: (x: number, z: number) => regionAtPoint(x, z) };
-    let stored: string | null = null;
-    try { stored = localStorage.getItem(TIMELINE_STORAGE_KEY); } catch {}
-    const parsed = stored ? parseTimeline(stored) : null;
-    this.timeline = parsed?.ok && parsed.value.session.id === meta.sessionId ? resumeRecorder(parsed.value, options)
-      : createRecorder({ id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION }, options);
+    if (!meta || !this.state) { this.view.timelineRepair(false); return; }
+    let storage: Storage | null = null;
+    try { storage = window.localStorage; } catch { /* memory only */ }
+    this.live = LiveTimeline.open(storage, this.writerLock, { id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION },
+      { regionAt: (x: number, z: number) => regionAtPoint(x, z) },
+      (message, error) => { if (!this.disposed) this.view.notify(message, error, { channel: "system" }); },
+      () => { if (!this.disposed) this.view.timelineRepair(this.live?.protected ?? false); });
+    this.view.timelineRepair(this.live.protected);
     this.timelineSaved = this.state.tick;
+  }
+  /** The menu's Repair play timeline: export the unreadable records first, explain, confirm, then replace. */
+  private repairTimeline(): void {
+    const live = this.live;
+    if (!live?.protected || !this.state) return;
+    const records = live.records();
+    if (typeof records === "string") {
+      this.view.notify(`The play-timeline store can't be repaired now: ${records}. Nothing was changed.`, true, { channel: "system" });
+      return;
+    }
+    this.download(JSON.stringify({ format: "siltwake.timeline.records", ...records }), "siltwake-timeline-record.json");
+    this.session.ask({
+      title: "Replace the local play-timeline store?",
+      detail: "The unreadable play-timeline record was just exported as siltwake-timeline-record.json. Replacing it stores this expedition's timeline in its place: the unreadable record, and any earlier timeline it held, are removed from this browser. Your game saves are not affected.",
+      accept: "Replace & save timeline",
+    }, () => { if (this.live === live && this.state) live.repair(this.state, records); });
   }
   /** N: a one-line feedback note stamped with play time and place. */
   private feedbackNote(): void {
     if (!this.timeline || !this.state) return;
     this.pause("", true);
     this.view.noteEntry((text) => {
-      if (text && this.timeline && this.state) {
-        const no = addNote(this.timeline, this.state, text, new Date().toISOString());
-        // "Note saved" only once the write has returned.
-        const saved = !no && this.saveTimeline();
-        this.view.notify(no ?? (saved ? "Note saved to the play timeline."
-          : "Note kept in memory only: the browser refused to store the play timeline. Export it from the menu to keep it."), !saved, { channel: "system" });
+      if (text && this.live && this.state) {
+        // "Saving note…", then "Note saved" once its commit returns, come from the timeline.
+        const no = this.live.note(this.state, text);
+        if (no) this.view.notify(no, true, { channel: "system" });
+        this.timelineSaved = this.state.tick;
       }
       this.resume(true);
     });
@@ -900,6 +915,7 @@ export class SiltwakeApp {
     this.view.cancelFeedback();
     this.disposed = true;
     this.paused = true;
+    this.live?.close(null, false);
     cancelAnimationFrame(this.frameId);
     this.abort.abort();
     this.session.dispose();

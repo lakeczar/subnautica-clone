@@ -4,6 +4,9 @@
  * Node's type stripping; keep it that way. */
 
 export const TIMELINE_FORMAT = "siltwake.timeline";
+/** The longest note save reference (`TimelineEvent.saveRef`). */
+export const SAVE_REF_MAX = 200;
+export const validSaveRef = (v: unknown): v is string => typeof v === "string" && v.length > 0 && v.length <= SAVE_REF_MAX;
 export const TIMELINE_VERSION = 2;
 /** Version 1 exports (one capped event list) still parse and analyse. */
 export const TIMELINE_VERSIONS: readonly number[] = [1, 2];
@@ -38,6 +41,10 @@ export interface TimelineEvent {
   /** Notes only. */
   text?: string;
   wall?: string;
+  /** Notes only: a reference to the game state saved with the note (REC-2 owns the
+   * save and where it is kept). At most `SAVE_REF_MAX` characters, so a 1,000-event
+   * chunk stays bounded. */
+  saveRef?: string;
 }
 /** One death not yet recovered. `losses` are craft still lost (`recovery.losses`
  * vehicle IDs); `cargo` is the specific stacks the death put in its cache (or a
@@ -158,7 +165,8 @@ export function parseTimeline(text: string): { ok: true; value: TimelineExport }
   if (!Array.isArray(v.events) || !num(v.dropped) || (v.seq !== undefined && !num(v.seq))) return { ok: false, error: "Malformed events." };
   const event = (e: unknown): boolean => obj(e) && typeof e.kind === "string" && KINDS.includes(e.kind) && num(e.tick) && num(e.play) &&
       (e.seconds === undefined || num(e.seconds)) && (e.of === undefined || num(e.of)) &&
-      (e.keys === undefined || (Array.isArray(e.keys) && e.keys.every((k) => typeof k === "string"))) && (e.stationary === undefined || num(e.stationary)) && (e.at === undefined || (Array.isArray(e.at) && e.at.length === 3 && e.at.every(num)));
+      (e.keys === undefined || (Array.isArray(e.keys) && e.keys.every((k) => typeof k === "string"))) && (e.stationary === undefined || num(e.stationary)) && (e.at === undefined || (Array.isArray(e.at) && e.at.length === 3 && e.at.every(num))) &&
+      (e.saveRef === undefined || validSaveRef(e.saveRef));
   for (const [n, e] of v.events.entries()) if (!event(e)) return { ok: false, error: `Malformed event ${n}.` };
   const counts = (r: unknown): boolean => obj(r) && Object.values(r).every(num);
   if (v.rotated !== undefined && !(Array.isArray(v.rotated) && v.rotated.every((r) => obj(r) && obj(r.from) && obj(r.to) &&
