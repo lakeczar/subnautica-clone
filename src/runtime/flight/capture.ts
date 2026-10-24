@@ -117,6 +117,8 @@ export class FlightCapture {
   private budget = DEFAULT_BUDGET_BYTES;
   private readonly ledger: Ledger;
   private readonly segmentMs: number;
+  private videoWidth: number = VIDEO_SIZE.width;
+  private videoCodecs: string[] = ["vp9", "vp8"];
   private minVideo = MIN_VIDEO_BUDGET_BYTES;
   private readonly restoreConsole: (() => void) | null = null;
   private readonly encoder = new TextEncoder();
@@ -138,6 +140,9 @@ export class FlightCapture {
     this.segmentMs = Number(q.get("recsegment")) || SEGMENT_MS;
     // Test overrides: a budget in MiB (then no minimum for video), and the segment length.
     if (Number(q.get("recbudget")) > 0) { this.budget = Number(q.get("recbudget")) * 1048576; this.minVideo = 0; }
+    // Measurement overrides (R3b): the video's width and codec order.
+    if (Number(q.get("recvideowidth")) >= 320) this.videoWidth = Math.round(Number(q.get("recvideowidth")) / 2) * 2;
+    if (q.get("reccodec")) this.videoCodecs = q.get("reccodec")!.split(",");
     const gl = canvas.getContext("webgl2");
     const info = gl?.getExtension("WEBGL_debug_renderer_info");
     const script = document.querySelector<HTMLScriptElement>("script[type=module][src]")?.src ?? "";
@@ -204,7 +209,7 @@ export class FlightCapture {
     start = at;
     const v = this.video;
     if (v && !v.paused) {
-      const size = this.scaled(VIDEO_SIZE.width);
+      const size = this.scaled(this.videoWidth);
       if (size.width !== v.segment.width || size.height !== v.segment.height) this.rotateVideo(now, "the picture's size changed");
       else if (now - v.segment.began >= this.segmentMs) this.rotateVideo(now, "rotation");
       // The picture is copied and scaled on the GPU now (this frame's drawing
@@ -412,11 +417,11 @@ export class FlightCapture {
 
   /** A new segment file in the worker: a whole WebM, decodable alone, at the canvas's current aspect. */
   private newSegment(now: number): Video["segment"] {
-    const s = this.spool!, index = this.segmentIndex++, size = this.scaled(VIDEO_SIZE.width);
+    const s = this.spool!, index = this.segmentIndex++, size = this.scaled(this.videoWidth);
     const file = `video/${String(index).padStart(3, "0")}.webm`;
     this.segments.push({ file, start: null, end: null, ...size });
     this.stored.set(file, { session: this.session, file, kind: "video", bytes: 0 });
-    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS });
+    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, codecs: this.videoCodecs });
     return { file, index, start: null, began: now, ...size };
   }
   private videoHeader(): void {

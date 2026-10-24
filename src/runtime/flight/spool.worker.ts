@@ -41,7 +41,7 @@ type Message =
   | { op: "export"; dir: string; out: string; id: number }
   | { op: "barrier"; id: number }
   | { op: "release"; dir: string; id: number }
-  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number }
+  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; codecs?: string[] }
   | { op: "video-frame"; t: number; bitmap?: ImageBitmap }
   | { op: "video-flush"; id: number }
   | { op: "video-close"; id: number; final: boolean };
@@ -133,13 +133,15 @@ function writeVideo(seg: Segment, bytes: Uint8Array): void {
     scope.postMessage({ failed: seg.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: error instanceof Error ? error.message : String(error), video: true });
   }
 }
-async function openEncoder(width: number, height: number, fps: number, bitrate: number): Promise<void> {
-  const size = `${width}x${height}`;
+/** The codecs tried, in order, by WebM codec ID. */
+const CODECS: Record<string, [string, WebmCodec]> = { vp9: ["vp09.00.10.08", "V_VP9"], vp8: ["vp8", "V_VP8"] };
+async function openEncoder(width: number, height: number, fps: number, bitrate: number, order: readonly string[] = ["vp9", "vp8"]): Promise<void> {
+  const size = `${width}x${height}:${order.join(",")}`;
   if (encoder && encoder.state === "configured" && encoderSize === size) return;
   try { encoder?.close(); } catch { /* closed */ }
   encoder = null;
   if (typeof VideoEncoder === "undefined") throw new Error("this browser has no WebCodecs video encoder");
-  for (const [c, id] of [["vp09.00.10.08", "V_VP9"], ["vp8", "V_VP8"]] as const) {
+  for (const [c, id] of order.map((k) => CODECS[k]).filter((x): x is [string, WebmCodec] => !!x)) {
     const config: VideoEncoderConfig = { codec: c, width, height, bitrate, framerate: fps, latencyMode: "realtime" };
     if (!(await VideoEncoder.isConfigSupported(config)).supported) continue;
     codec = id;
@@ -161,7 +163,7 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
 }
 async function videoOpen(m: Extract<Message, { op: "video-open" }>): Promise<void> {
   try {
-    await openEncoder(m.width, m.height, m.fps, m.bitrate);
+    await openEncoder(m.width, m.height, m.fps, m.bitrate, m.codecs);
     const h = await handle(m.dir, m.file);
     h.truncate(0);
     const seg: Segment = { dir: m.dir, file: m.file, h, clusters: null as unknown as WebmClusters, origin: null, frames: 0, broken: false };
