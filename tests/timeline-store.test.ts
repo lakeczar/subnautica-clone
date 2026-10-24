@@ -1028,6 +1028,7 @@ test("SIM-1b R2-F1: legitimate records still load: repeated note text, null regi
   a.add(TIMELINE_CHUNK_EVENTS + 10);
   rotateOldest(a.rec);
   assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
-  const back = reloadsWhole(storage, a.rec, a.s, "well formed");
-  assert.equal(allNotes(back, a.s).filter((n) => n === "same words").length, 2);
+  const back = loaded(storage, "A", "well formed");
+  assert.deepEqual(allNotes(back, a.s), allNotes(a.rec, a.s));
+  assert.equal(allNotes(back, a.s).filter((n) => n === "same words").length, 2, "a repeated note is two notes");
 });

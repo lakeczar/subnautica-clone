@@ -481,7 +481,7 @@ function plumeCue(f: ReturnType<typeof browserFixture>, app: AppSeams, hud: Retu
   let t = s.tick + 1;
   while (!(miteScatter(t).scatter >= 0.5 && miteScatter(t - 1).scatter < 0.5)) t++;
   s.tick = t - 4;
-  for (let i = 0; i < 30 && hud.presentation.central?.context !== "ecology"; i++) f.frames(1);
+  for (let i = 0; i < 30 && hud.presentation.central?.message !== PLUME_CAPTION; i++) f.frames(1);
   assert.equal(hud.presentation.central?.message, PLUME_CAPTION, "the live cue is delivered");
 }
 
