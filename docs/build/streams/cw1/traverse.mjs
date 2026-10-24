@@ -63,10 +63,17 @@ async function read() {
     const c = document.querySelector("#ocean").dataset, q = (s) => document.querySelector(s);
     const pitch = Number(/(-?\d+)/.exec(q("#pitch-cue")?.getAttribute("aria-label") ?? "Pitch 0")?.[1] ?? 0);
     return { cam: (c.cameraPosition ?? "0,0,0").split(",").map(Number), bearing: parseFloat(q("#bearing")?.textContent ?? "0"), pitch,
-      depth: parseFloat(q("#depth")?.textContent ?? "0"), cave: c.cave ?? "", hold: c.caveHold ?? "", vitals: q("#vitals")?.innerText.replace(/\s+/g, " ") ?? "" };
+      depth: parseFloat(q("#depth")?.textContent ?? "0"), cave: c.cave ?? "", hold: c.caveHold ?? "", vitals: q("#vitals")?.innerText.replace(/\s+/g, " ") ?? "",
+      notices: [q("#system-status"), q("#notification")].filter(e => e && !e.hidden).map(e => e.textContent.trim()).join(" | ") };
   });
 }
 const pos = (s) => ({ x: s.cam[0], y: s.cam[1] - eye, z: s.cam[2] });
+// Every hold state change and HUD notice, logged as it happens (a relocation must say why).
+let lastHold = "clear", lastNotice = "";
+const watch = (s) => {
+  if ((s.hold || "clear") !== lastHold) { note("hold", lastHold, "->", s.hold || "clear", "at", s.cam.map(v => v.toFixed(0)).join(","), s.vitals); lastHold = s.hold || "clear"; }
+  if (s.notices && s.notices !== lastNotice) { note("notice", JSON.stringify(s.notices.slice(0, 200)), "at", s.cam.map(v => v.toFixed(0)).join(",")); lastNotice = s.notices; }
+};
 /** Closed-loop piloting to a point with the ordinary keys; false when it gives up (logged, the tour goes on). */
 /** Closed-loop piloting to `t`. Depth follows the planned leg from `from`:
  * the depth the line has reached at the craft's horizontal progress (the
@@ -76,6 +83,7 @@ async function goto(t, { tol = 4, label = "", boost = true, timeout = 100, from 
   const start = performance.now(); let best = Infinity, bestAt = start, recoveries = 0;
   for (;;) {
     const s = await read();
+    watch(s);
     if (s.hold && s.hold !== "clear") result.holds.push({ t: +(performance.now() / 1000).toFixed(1), hold: s.hold, label });
     const p = pos(s), dx = t.x - p.x, dy = t.y - p.y, dz = t.z - p.z, h = Math.hypot(dx, dz), d3 = Math.hypot(h, dy);
     if (d3 <= tol) { await releaseAll(); return true; }
