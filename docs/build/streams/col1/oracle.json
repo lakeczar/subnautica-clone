@@ -1,0 +1,696 @@
+{
+ "generated": "2026-10-23T04:09:00.771Z",
+ "node": "v24.21.0",
+ "dishes": {
+  "label": "DISH-1 Basin dishes",
+  "before": {
+   "boxes": 4855,
+   "note": "frame within 0.35 m and bowl within 1 m (BOWL_STANDOFF) box covers"
+  },
+  "after": {
+   "triangles": 3922,
+   "boxes": 27,
+   "samples": 0,
+   "bytes": 101920,
+   "sharedBytes": 0
+  },
+  "probe": {
+   "clearance": {
+    "tried": 36000,
+    "agree": 35418,
+    "oldClearNewBlocked": 0,
+    "artInsideOldCover": 0,
+    "newClearOldBlocked": 582,
+    "standOffMax": 0.52587890625,
+    "standOffMean": 0.12760416666666666,
+    "spurious": 0
+   },
+   "moves": {
+    "tried": 18000,
+    "agree": 16660,
+    "freed": 267,
+    "freedMax": 5.043531540428151,
+    "oldThroughArt": 2,
+    "spurious": 0,
+    "bothHitSlideDiffers": 1071,
+    "slideDiffMax": 5.219125739592415
+   },
+   "support": {
+    "tried": 3555,
+    "agree": 2750,
+    "oldHigher": 805,
+    "newHigher": 0,
+    "floatMax": 11.365978991337926,
+    "floatMean": 0.5394518387755132,
+    "newHigherMax": 0
+   },
+   "sight": {
+    "tried": 4000,
+    "agree": 3885,
+    "oldOnlyBlocked": 115,
+    "newOnlyBlocked": 0,
+    "newOnlyBlockedOutsideArt": 0
+   },
+   "protected": {
+    "paths": 4,
+    "poses": 14,
+    "newlyBlocked": [],
+    "newlyCleared": []
+   }
+  },
+  "memory": {
+   "oldMeasured": 1978924,
+   "neoMeasured": 363692,
+   "neoFormat": 101920
+  },
+  "speed": {
+   "diver.clearance": {
+    "old": 19.776965000000075,
+    "neo": 12.876302500000065
+   },
+   "diver.move.frame": {
+    "old": 15.118782499999952,
+    "neo": 13.195655000000102
+   },
+   "diver.move.long": {
+    "old": 30.244900000000143,
+    "neo": 26.077397500000075
+   },
+   "diver.support": {
+    "old": 16.709312500000237,
+    "neo": 6.574167499999817
+   },
+   "diver.sight": {
+    "old": 135.61943499999984,
+    "neo": 64.80744000000072
+   },
+   "diver.poses": {
+    "old": 400,
+    "neo": 400
+   },
+   "medium.clearance": {
+    "old": 21.014150000000882,
+    "neo": 11.118487499999219
+   },
+   "medium.move.frame": {
+    "old": 17.69531000000029,
+    "neo": 13.021972499999492
+   },
+   "medium.move.long": {
+    "old": 70.12742249999974,
+    "neo": 69.11659750000013
+   },
+   "medium.support": {
+    "old": 12.753647499999943,
+    "neo": 5.326344999999719
+   },
+   "medium.sight": {
+    "old": 178.9056275000007,
+    "neo": 128.60866999999985
+   },
+   "medium.poses": {
+    "old": 400,
+    "neo": 400
+   }
+  },
+  "bowlFloat": [
+   {
+    "dish": "basin.dish_north.dish",
+    "old": {
+     "samples": 127,
+     "mean": 0.5085795879477375,
+     "p50": 0.4958049942904381,
+     "p95": 0.937063671776798,
+     "max": 1.3521808103930653
+    },
+    "neo": {
+     "samples": 127,
+     "mean": 0.01638669788870651,
+     "p50": 0.0045700688923489,
+     "p95": 0.0065651882163138,
+     "max": 0.6950641219619627
+    }
+   },
+   {
+    "dish": "basin.dish_centre.dish",
+    "old": {
+     "samples": 99,
+     "mean": 0.5522859413634175,
+     "p50": 0.5624579007638317,
+     "p95": 0.9346722609191147,
+     "max": 1.079634760358715
+    },
+    "neo": {
+     "samples": 99,
+     "mean": 0.004791480263656003,
+     "p50": 0.004608739343439083,
+     "p95": 0.006236827454245031,
+     "max": 0.006378960519555221
+    }
+   },
+   {
+    "dish": "basin.dish_south.dish",
+    "old": {
+     "samples": 136,
+     "mean": 0.5199957945896543,
+     "p50": 0.4992362311473926,
+     "p95": 1.0617445393340859,
+     "max": 1.2742070816859155
+    },
+    "neo": {
+     "samples": 136,
+     "mean": 0.04366099115230531,
+     "p50": 0.004674662712659483,
+     "p95": 0.007746916675785087,
+     "max": 1.6215582809159628
+    }
+   }
+  ]
+ },
+ "a1": {
+  "label": "A1 set pieces",
+  "before": {
+   "boxes": 5195,
+   "note": "slab boxes within 0.35 m of the art"
+  },
+  "after": {
+   "triangles": 14436,
+   "boxes": 71,
+   "samples": 0,
+   "bytes": 356436,
+   "sharedBytes": 0
+  },
+  "probe": {
+   "clearance": {
+    "tried": 36000,
+    "agree": 35840,
+    "oldClearNewBlocked": 0,
+    "artInsideOldCover": 0,
+    "newClearOldBlocked": 160,
+    "standOffMax": 0.08984375,
+    "standOffMean": 0.0298583984375,
+    "spurious": 0
+   },
+   "moves": {
+    "tried": 18000,
+    "agree": 17091,
+    "freed": 127,
+    "freedMax": 4.921342576081543,
+    "oldThroughArt": 3,
+    "spurious": 0,
+    "bothHitSlideDiffers": 779,
+    "slideDiffMax": 5.2467847663032385
+   },
+   "support": {
+    "tried": 4057,
+    "agree": 3560,
+    "oldHigher": 497,
+    "newHigher": 0,
+    "floatMax": 13.355551884793158,
+    "floatMean": 0.29756670419024145,
+    "newHigherMax": 0
+   },
+   "sight": {
+    "tried": 4000,
+    "agree": 3940,
+    "oldOnlyBlocked": 60,
+    "newOnlyBlocked": 0,
+    "newOnlyBlockedOutsideArt": 0
+   },
+   "protected": {
+    "paths": 5,
+    "poses": 10,
+    "newlyBlocked": [],
+    "newlyCleared": []
+   }
+  },
+  "memory": {
+   "oldMeasured": 2185260,
+   "neoMeasured": -563136,
+   "neoFormat": 356436
+  },
+  "speed": {
+   "diver.clearance": {
+    "old": 35.074507500003165,
+    "neo": 13.689925000003313
+   },
+   "diver.move.frame": {
+    "old": 29.754222499996104,
+    "neo": 12.82630749999953
+   },
+   "diver.move.long": {
+    "old": 42.99672250000185,
+    "neo": 28.07807000000139
+   },
+   "diver.support": {
+    "old": 28.01990250000017,
+    "neo": 6.722992499999236
+   },
+   "diver.sight": {
+    "old": 176.65372250000019,
+    "neo": 61.29930999999942
+   },
+   "diver.poses": {
+    "old": 400,
+    "neo": 400
+   },
+   "medium.clearance": {
+    "old": 33.51826250000158,
+    "neo": 13.041410000000724
+   },
+   "medium.move.frame": {
+    "old": 26.96371999999883,
+    "neo": 17.384659999997893
+   },
+   "medium.move.long": {
+    "old": 73.65361749999465,
+    "neo": 117.90397499999926
+   },
+   "medium.support": {
+    "old": 18.780687500002387,
+    "neo": 5.5874149999999645
+   },
+   "medium.sight": {
+    "old": 183.86301250000542,
+    "neo": 107.99156249999214
+   },
+   "medium.poses": {
+    "old": 400,
+    "neo": 400
+   }
+  }
+ },
+ "colonnade.columns": {
+  "label": "CA-1 colonnade, columns",
+  "before": {
+   "boxes": 20153,
+   "note": "rock boxes plus 0.5 m collar columns"
+  },
+  "after": {
+   "triangles": 0,
+   "boxes": 20153,
+   "samples": 0,
+   "bytes": 1606464,
+   "sharedBytes": 0
+  },
+  "probe": {
+   "clearance": {
+    "tried": 16000,
+    "agree": 16000,
+    "oldClearNewBlocked": 0,
+    "artInsideOldCover": 0,
+    "newClearOldBlocked": 0,
+    "standOffMax": 0,
+    "standOffMean": 0,
+    "spurious": 0
+   },
+   "moves": {
+    "tried": 8000,
+    "agree": 7700,
+    "freed": 0,
+    "freedMax": 0,
+    "oldThroughArt": 0,
+    "spurious": 4,
+    "bothHitSlideDiffers": 296,
+    "slideDiffMax": 4.686124264339862
+   },
+   "support": {
+    "tried": 2771,
+    "agree": 2300,
+    "oldHigher": 471,
+    "newHigher": 0,
+    "floatMax": 0.2816549626038629,
+    "floatMean": 0.06993474723054235,
+    "newHigherMax": 0
+   },
+   "sight": {
+    "tried": 4000,
+    "agree": 3999,
+    "oldOnlyBlocked": 1,
+    "newOnlyBlocked": 0,
+    "newOnlyBlockedOutsideArt": 0
+   },
+   "protected": {
+    "paths": 8,
+    "poses": 2,
+    "newlyBlocked": [],
+    "newlyCleared": []
+   }
+  },
+  "memory": {
+   "oldMeasured": 8307684,
+   "neoFormat": 1606464,
+   "neoShared": 0
+  },
+  "speed": {
+   "diver.clearance": {
+    "old": 10.086982499997248,
+    "neo": 3.2340450000083365
+   },
+   "diver.move.frame": {
+    "old": 11.866005000010773,
+    "neo": 2.4739874999977474
+   },
+   "diver.move.long": {
+    "old": 49.51404249999541,
+    "neo": 9.04419250000501
+   },
+   "diver.support": {
+    "old": 11.252440000007482,
+    "neo": 2.6274149999881047
+   },
+   "diver.sight": {
+    "old": 30.426584999986517,
+    "neo": 3.2748724999873957
+   },
+   "diver.poses": {
+    "old": 400,
+    "neo": 400
+   }
+  }
+ },
+ "colonnade.heightfield": {
+  "label": "CA-1 colonnade, heightfield",
+  "before": {
+   "boxes": 20153,
+   "note": "rock boxes plus 0.5 m collar columns"
+  },
+  "after": {
+   "triangles": 0,
+   "boxes": 2313,
+   "samples": 41623,
+   "bytes": 364231,
+   "sharedBytes": 0
+  },
+  "probe": {
+   "clearance": {
+    "tried": 16000,
+    "agree": 15994,
+    "oldClearNewBlocked": 0,
+    "artInsideOldCover": 0,
+    "newClearOldBlocked": 6,
+    "standOffMax": 0.1064453125,
+    "standOffMean": 0.041341145833333336,
+    "spurious": 0
+   },
+   "moves": {
+    "tried": 8000,
+    "agree": 7640,
+    "freed": 5,
+    "freedMax": 0.513603139450538,
+    "oldThroughArt": 0,
+    "spurious": 4,
+    "bothHitSlideDiffers": 351,
+    "slideDiffMax": 4.686124264339862
+   },
+   "support": {
+    "tried": 2771,
+    "agree": 2300,
+    "oldHigher": 471,
+    "newHigher": 0,
+    "floatMax": 0.2816549626038629,
+    "floatMean": 0.06993474723054235,
+    "newHigherMax": 0
+   },
+   "sight": {
+    "tried": 4000,
+    "agree": 3999,
+    "oldOnlyBlocked": 1,
+    "newOnlyBlocked": 0,
+    "newOnlyBlockedOutsideArt": 0
+   },
+   "protected": {
+    "paths": 8,
+    "poses": 2,
+    "newlyBlocked": [],
+    "newlyCleared": []
+   }
+  },
+  "memory": {
+   "oldMeasured": 8352428,
+   "neoFormat": 364231,
+   "neoShared": 0
+  },
+  "speed": {
+   "diver.clearance": {
+    "old": 9.374307500002033,
+    "neo": 2.3850374999892665
+   },
+   "diver.move.frame": {
+    "old": 11.351919999997335,
+    "neo": 2.593882500004838
+   },
+   "diver.move.long": {
+    "old": 46.64576250001119,
+    "neo": 9.879070000006323
+   },
+   "diver.support": {
+    "old": 10.697944999992615,
+    "neo": 2.5083300000005693
+   },
+   "diver.sight": {
+    "old": 28.331982500003505,
+    "neo": 3.2973224999841477
+   },
+   "diver.poses": {
+    "old": 400,
+    "neo": 400
+   }
+  },
+  "collarFloat": {
+   "old": {
+    "samples": 600,
+    "mean": 0.08894062447364522,
+    "p50": 0.06554308250507646,
+    "p95": 0.20604875067144945,
+    "max": 0.8030035139221035
+   },
+   "neo": {
+    "samples": 600,
+    "mean": 0.061555949480408906,
+    "p50": 0.013184376934290754,
+    "p95": 0.20398782955204453,
+    "max": 0.8030035139221035
+   }
+  }
+ },
+ "colonnade.shell": {
+  "label": "CA-1 colonnade, shell",
+  "before": {
+   "boxes": 20153,
+   "note": "rock boxes plus 0.5 m collar columns"
+  },
+  "after": {
+   "triangles": 83084,
+   "boxes": 0,
+   "samples": 41623,
+   "bytes": 1462435,
+   "sharedBytes": 512736
+  },
+  "probe": {
+   "clearance": {
+    "tried": 16000,
+    "agree": 15804,
+    "oldClearNewBlocked": 114,
+    "artInsideOldCover": 114,
+    "newClearOldBlocked": 82,
+    "standOffMax": 0.17822265625,
+    "standOffMean": 0.06335746951219512,
+    "spurious": 0
+   },
+   "moves": {
+    "tried": 8000,
+    "agree": 6824,
+    "freed": 84,
+    "freedMax": 0.9287303777840492,
+    "oldThroughArt": 22,
+    "spurious": 0,
+    "bothHitSlideDiffers": 1070,
+    "slideDiffMax": 3.857795079116242
+   },
+   "support": {
+    "tried": 2688,
+    "agree": 337,
+    "oldHigher": 1352,
+    "newHigher": 999,
+    "floatMax": 1.910679010666989,
+    "floatMean": 0.13721327192263652,
+    "newHigherMax": 1.0440007907926478
+   },
+   "sight": {
+    "tried": 4000,
+    "agree": 3950,
+    "oldOnlyBlocked": 43,
+    "newOnlyBlocked": 7,
+    "newOnlyBlockedOutsideArt": 0
+   },
+   "protected": {
+    "paths": 8,
+    "poses": 2,
+    "newlyBlocked": [],
+    "newlyCleared": []
+   }
+  },
+  "memory": {
+   "oldMeasured": 8349876,
+   "neoFormat": 1462435,
+   "neoShared": 512736
+  },
+  "speed": {
+   "diver.clearance": {
+    "old": 9.347539999998844,
+    "neo": 2.604205000006914
+   },
+   "diver.move.frame": {
+    "old": 10.854647500000283,
+    "neo": 2.3111224999956903
+   },
+   "diver.move.long": {
+    "old": 47.4242200000117,
+    "neo": 25.58554000001095
+   },
+   "diver.support": {
+    "old": 11.07159999999567,
+    "neo": 1.571532500001922
+   },
+   "diver.sight": {
+    "old": 29.591174999986833,
+    "neo": 4.165499999999156
+   },
+   "diver.poses": {
+    "old": 400,
+    "neo": 400
+   }
+  },
+  "collarFloat": {
+   "old": {
+    "samples": 600,
+    "mean": 0.08894062447364522,
+    "p50": 0.06554308250507646,
+    "p95": 0.20604875067144945,
+    "max": 0.8030035139221035
+   },
+   "neo": {
+    "samples": 600,
+    "mean": 0.02702976800689487,
+    "p50": 0.005061573156073251,
+    "p95": 0.03652542773410872,
+    "max": 3.1391107715392828
+   }
+  }
+ },
+ "canopy": {
+  "label": "LC Canopy root caves (chunks on two routes)",
+  "before": {
+   "boxes": 0,
+   "note": "LC chunk colliders (triangles, Uint32 indices, 32-byte nodes, copied positions)"
+  },
+  "after": {
+   "triangles": 362861,
+   "boxes": 0,
+   "samples": 0,
+   "bytes": 6328426,
+   "sharedBytes": 1909104
+  },
+  "probe": {
+   "clearance": {
+    "tried": 16000,
+    "agree": 16000,
+    "oldClearNewBlocked": 0,
+    "artInsideOldCover": 0,
+    "newClearOldBlocked": 0,
+    "standOffMax": 0,
+    "standOffMean": 0,
+    "spurious": 0
+   },
+   "moves": {
+    "tried": 8000,
+    "agree": 7837,
+    "freed": 0,
+    "freedMax": 0,
+    "oldThroughArt": 0,
+    "spurious": 0,
+    "bothHitSlideDiffers": 163,
+    "slideDiffMax": 1.4889160030587683
+   },
+   "support": {
+    "tried": 2603,
+    "agree": 2603,
+    "oldHigher": 0,
+    "newHigher": 0,
+    "floatMax": 0,
+    "floatMean": 0,
+    "newHigherMax": 0
+   },
+   "sight": {
+    "tried": 4000,
+    "agree": 4000,
+    "oldOnlyBlocked": 0,
+    "newOnlyBlocked": 0,
+    "newOnlyBlockedOutsideArt": 0
+   },
+   "protected": {
+    "paths": 2,
+    "poses": 0,
+    "newlyBlocked": [],
+    "newlyCleared": []
+   }
+  },
+  "memory": {
+   "lcFormat": 14489129,
+   "neoFormat": 6328426,
+   "neoShared": 1909104,
+   "chunks": 47
+  },
+  "speed": {
+   "diver.clearance": {
+    "old": 8.76325999999608,
+    "neo": 10.17892750000101
+   },
+   "diver.move.frame": {
+    "old": 3.8334650000069814,
+    "neo": 2.8353099999912956
+   },
+   "diver.move.long": {
+    "old": 59.33075999999346,
+    "neo": 23.428142499997193
+   },
+   "diver.support": {
+    "old": 1.8738424999901326,
+    "neo": 1.9994100000076287
+   },
+   "diver.sight": {
+    "old": 7.759335000009742,
+    "neo": 7.902020000001357
+   },
+   "diver.poses": {
+    "old": 400,
+    "neo": 400
+   },
+   "creel.clearance": {
+    "old": 50.904705000011745,
+    "neo": 51.2858574999882
+   },
+   "creel.move.frame": {
+    "old": 13.421927500003221,
+    "neo": 12.0446875000016
+   },
+   "creel.move.long": {
+    "old": 377.7476349999961,
+    "neo": 247.0666925000114
+   },
+   "creel.support": {
+    "old": 2.362184999983583,
+    "neo": 2.4327849999826867
+   },
+   "creel.sight": {
+    "old": 21.994215000013355,
+    "neo": 22.07500999998956
+   },
+   "creel.poses": {
+    "old": 400,
+    "neo": 400
+   }
+  }
+ }
+}

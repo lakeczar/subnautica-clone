@@ -1,7 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { assertDisjointFootprints, CAVE_SOURCES, EXTERIOR, MIN_ROCK } from "../src/content/regions/caves.js";
-import { caveShell, caveVolume } from "../src/content/regions/caveGeometry.js";
+import { caveVolume, shellSeamProblems } from "../src/content/regions/caveGeometry.js";
 import { HUB_CAVE_SOURCES } from "../src/content/regions/hubCaves.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { LEGACY_PRESERVE } from "../src/content/regions/terrain.js";
@@ -155,12 +155,8 @@ test("smoke: the collar meets the heightfield every 8 m of footprint edge, and t
       assert.ok(outside >= def.source.baseY, `${def.id}: floor below baseY at ${u}, ${oz}`);
       assert.ok(Number.isFinite(world.supportHeight(u, z, 1000)), `${def.id}: no collar support at ${u}, ${z}`);
     }
-    const m = caveShell(def, "coarse");
-    for (let i = 0; i < m.positions.length / 3; i++) {
-      const p = vertex(m, i);
-      if (Math.abs(p.x - f.minX) > 1e-6 && Math.abs(p.x - f.maxX) > 1e-6 && Math.abs(p.z - f.minZ) > 1e-6 && Math.abs(p.z - f.maxZ) > 1e-6) continue;
-      assert.ok(Math.abs(p.y - worldFloor(p.x, p.z)) < 1e-4, `${def.id} coarse: collar vertex ${p.y.toFixed(2)} vs floor`);
-    }
+    // The coarse seam meets the floor: on it, or through a skirt (COL-1 R6).
+    assert.deepEqual(shellSeamProblems(def, "coarse", worldFloor), []);
   }
 });
 

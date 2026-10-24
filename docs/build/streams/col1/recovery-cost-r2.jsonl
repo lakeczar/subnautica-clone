@@ -1,0 +1,8 @@
+{"triangles":324,"centre":{"x":0,"y":0,"z":0},"medianMs":2.595778000000003,"maxMs":4.8211530000000025,"perCall":{"tried":27,"sweeps":1},"distance":2.3592268764380138,"clear":true}
+{"triangles":324,"centre":{"x":0.1,"y":0.2,"z":0.3},"medianMs":0.9129679999999993,"maxMs":0.9296890000000033,"perCall":{"tried":27,"sweeps":1},"distance":2.0319880552692373,"clear":true}
+{"triangles":6240,"centre":{"x":0,"y":0,"z":0},"medianMs":2.7732050000000044,"maxMs":5.2681070000000005,"perCall":{"tried":27,"sweeps":1},"distance":2.3723680477590388,"clear":true}
+{"triangles":6240,"centre":{"x":0.1,"y":0.2,"z":0.3},"medianMs":2.0784189999999967,"maxMs":2.132928000000007,"perCall":{"tried":40,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"triangles":25280,"centre":{"x":0,"y":0,"z":0},"medianMs":7.124845999999991,"maxMs":16.665498000000014,"perCall":{"tried":27,"sweeps":1},"distance":2.3590956821557545,"clear":true}
+{"triangles":25280,"centre":{"x":0.1,"y":0.2,"z":0.3},"medianMs":5.106648000000007,"maxMs":5.337717999999995,"perCall":{"tried":40,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"triangles":39600,"centre":{"x":0,"y":0,"z":0},"medianMs":9.681408000000033,"maxMs":9.687801000000036,"perCall":{"tried":27,"sweeps":1},"distance":2.3562218774433625,"clear":true}
+{"triangles":39600,"centre":{"x":0.1,"y":0.2,"z":0.3},"medianMs":6.298763000000008,"maxMs":6.669655999999975,"perCall":{"tried":40,"sweeps":1},"distance":2.0489096641540523,"clear":true}
