@@ -4,7 +4,7 @@ import { deflateSync } from "node:zlib";
 import { seededStream } from "../src/content/regions/noise.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { bakeChunkBytes, bakeTargets } from "../src/render/biomes/bake.js";
-import { setTerrainStore, terrainFactory } from "../src/render/biomes/terrain.js";
+import { setTerrainStore, terrainFactory, terrainFallbackStats } from "../src/render/biomes/terrain.js";
 import { createTerrainStore, terrainFileName } from "../src/render/biomes/terrainAssets.js";
 import { decodeTerrain } from "../src/render/biomes/terrainCodec.js";
 import type { ChunkRecipe, MeshRecipe } from "../src/render/kit/types.js";
@@ -49,7 +49,8 @@ test("s2.terrain decodes from the store in small steps and falls back to live wi
         await new Promise(res => setImmediate(res)); // a frame boundary: lets the fetch land
       }
     };
-    const fine = await run(c, "fine");
+    const start = terrainFallbackStats().builds, fine = await run(c, "fine");
+    assert.equal(terrainFallbackStats().builds, start, "a decoded chunk is no live fallback");
     assert.equal(fine.recipe.meshes[0]!.positions.length, live(c, "fine")[0]!.positions.length, "baked fine recipe");
     // The decode is split across steps (deterministic); the wall-clock bound only
     // catches a decode that stops yielding, with headroom for a loaded host.
@@ -59,9 +60,17 @@ test("s2.terrain decodes from the store in small steps and falls back to live wi
     const fetches = store.stats.fetches;
     await run(c, "coarse");
     assert.equal(store.stats.fetches, fetches, "coarse decodes from the cached file");
-    // No file: the live tessellator is the fallback.
-    const other = SAMPLE[0]!, fallback = await run(other, "coarse");
+    // Decoded builds never count as the live fallback (COL-1 R8-2).
+    const before = terrainFallbackStats().builds;
+    // No file: the live tessellator is the fallback, counted and reported.
+    const other = SAMPLE[0]!, warn = console.warn, said: string[] = [];
+    console.warn = (...a: unknown[]) => { said.push(a.join(" ")); };
+    let fallback: Awaited<ReturnType<typeof run>>;
+    try { fallback = await run(other, "coarse"); } finally { console.warn = warn; }
     assert.equal(fallback.recipe.meshes[0]!.positions.length, live(other, "coarse")[0]!.positions.length);
+    assert.equal(terrainFallbackStats().builds, before + 1);
+    assert.deepEqual(terrainFallbackStats().recent.slice(-1), [`${other.id} coarse`]);
+    assert.equal(said.filter(l => l.includes(`live build of ${other.id}`)).length, 1);
   } finally { setTerrainStore(null); }
 });
 

@@ -1065,7 +1065,8 @@ function segmentsTangle(P: ArrayLike<number>, h: number, a: number, b: number, c
  * triangle of the shell; every edge a seam face uses is shared coherently.
  * The mesher's outward winding (`surfaceNets`) holds for the final mesh,
  * which COL-1's collision takes as its orientation. Throws otherwise. */
-function snapToFloor(mesh: MeshRecipe, target: Float64Array, f: Rect, spans: readonly SharedSpan[], floor: FloorFunction, id: string): MeshRecipe {
+/** Exported for its tests only (COL-1 R8-3); `generateShell` is its one caller. */
+export function snapToFloor(mesh: MeshRecipe, target: Float64Array, f: Rect, spans: readonly SharedSpan[], floor: FloorFunction, id: string): MeshRecipe {
   const P = mesh.positions as Float32Array, nv = P.length / 3;
   const onSpan = (v: number): boolean => spans.some(s => spanDistance(s, P[v * 3]!, P[v * 3 + 2]!) < COLLAR_EDGE);
   // The collar sides: axis, coordinate, outward normal along the axis. In

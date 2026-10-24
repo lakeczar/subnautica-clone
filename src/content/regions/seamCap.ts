@@ -25,7 +25,8 @@ export interface PlanePoint { readonly u: number; readonly y: number }
  * list of directed edges (from, to), any order, summing to closed cycles.
  * Throws, naming `label`, if the boundary crosses itself, covers anywhere
  * twice, or the triangles fail to tile the region exactly. */
-export function capTriangles(edges: readonly number[], at: (v: number) => PlanePoint, label: string): number[] {
+export function capTriangles(edges: readonly number[], at: (v: number) => PlanePoint, label: string,
+  triangulate: (outer: readonly number[], holes: readonly (readonly number[])[], at: (v: number) => PlanePoint) => number[] = earcut): number[] {
   const boundary = cancel(edges, label);
   if (!boundary.length) return [];
   const crossing = firstCrossing(boundary, at);
@@ -34,7 +35,7 @@ export function capTriangles(edges: readonly number[], at: (v: number) => PlaneP
   const regions = nestLoops(loops, at, label);
   const out: number[] = [];
   for (const r of regions) {
-    const tris = earcut(r.outer, r.holes, at);
+    const tris = triangulate(r.outer, r.holes, at);
     for (let t = 0; t < tris.length; t += 3) {
       const a = tris[t]!, b = tris[t + 1]!, c = tris[t + 2]!, s = cross(at(a), at(b), at(c));
       if (s === 0) continue;
@@ -46,10 +47,16 @@ export function capTriangles(edges: readonly number[], at: (v: number) => PlaneP
   return out;
 }
 
-/** How `triangles` fail to tile exactly the signed region `edges` bound:
- * each triangle's winding sign matches the region's winding at its centroid,
- * no two overlap, and their signed area equals the region's (Green's
- * theorem on the edges). Empty when they tile it. */
+/** How `triangles` fail to tile exactly the signed region `edges` bound.
+ * They tile it when (1) their directed boundary, as a chain, is the given
+ * boundary: both are split at every vertex lying on a segment (collinear
+ * subdivisions), opposite pieces cancel (shared interior edges, pinches),
+ * and what remains must match piece for piece (COL-1 R8-1); (2) each
+ * triangle's sign is the region's winding at its centroid; (3) no two
+ * overlap. With (1), the triangles' summed winding equals the region's
+ * everywhere; (2) and (3) then make each point covered once, by the right
+ * sign. The signed area (Green's theorem) is a cheap extra check. Empty
+ * when they tile it. */
 export function capProblems(edges: readonly number[], triangles: readonly number[], at: (v: number) => PlanePoint): string[] {
   const out: string[] = [];
   let green = 0, scale = 0;
@@ -67,6 +74,7 @@ export function capProblems(edges: readonly number[], triangles: readonly number
     if (w !== Math.sign(s)) out.push(`triangle ${t / 3} is wound ${Math.sign(s)} where the region's winding is ${w}`);
     boxes.push({ t, u0: Math.min(a.u, b.u, c.u), u1: Math.max(a.u, b.u, c.u), y0: Math.min(a.y, b.y, c.y), y1: Math.max(a.y, b.y, c.y) });
   }
+  out.push(...chainDifference(edges, triangles, at));
   // Areas carry Float32 positions' rounding: compare relative to the plane's scale.
   const tolerance = 1e-9 * Math.max(1, scale * scale) * Math.max(1, triangles.length);
   if (Math.abs(signed - green) > Math.max(1e-6, tolerance)) out.push(`signed area ${signed} against the region's ${green}`);
@@ -81,6 +89,45 @@ export function capProblems(edges: readonly number[], triangles: readonly number
     }
   }
   return out;
+}
+
+/** Where the triangles' directed boundary differs from `edges`, both read as
+ * 1-chains: every segment split at each vertex of either set lying on it
+ * (within 1 nm of the line, strictly between its ends), pieces keyed by
+ * their end positions, opposite pieces cancelled. */
+function chainDifference(edges: readonly number[], triangles: readonly number[], at: (v: number) => PlanePoint): string[] {
+  const points = new Map<string, PlanePoint>(), key = (p: PlanePoint): string => `${p.u},${p.y}`;
+  const segs: [PlanePoint, PlanePoint, number][] = [];
+  for (let e = 0; e < edges.length; e += 2) segs.push([at(edges[e]!), at(edges[e + 1]!), 1]);
+  for (let t = 0; t < triangles.length; t += 3) for (let k = 0; k < 3; k++) segs.push([at(triangles[t + k]!), at(triangles[t + (k + 1) % 3]!), -1]);
+  for (const [p, q] of segs) { points.set(key(p), p); points.set(key(q), q); }
+  const sorted = [...points.values()].sort((a, b) => a.u - b.u);
+  const net = new Map<string, number>();
+  const add = (p: PlanePoint, q: PlanePoint, w: number): void => {
+    const kp = key(p), kq = key(q);
+    if (kp === kq) return;
+    const [k, s] = kp < kq ? [`${kp}|${kq}`, w] : [`${kq}|${kp}`, -w];
+    const n = (net.get(k) ?? 0) + s;
+    if (n) net.set(k, n); else net.delete(k);
+  };
+  for (const [p, q, w] of segs) {
+    const du = q.u - p.u, dy = q.y - p.y, len2 = du * du + dy * dy;
+    if (!len2) continue;
+    const lo = Math.min(p.u, q.u), hi = Math.max(p.u, q.u), on: [number, PlanePoint][] = [];
+    // Points within the segment's u range (binary search to its start).
+    let i = 0, j = sorted.length;
+    while (i < j) { const m = (i + j) >> 1; if (sorted[m]!.u < lo) i = m + 1; else j = m; }
+    for (; i < sorted.length && sorted[i]!.u <= hi; i++) {
+      const r = sorted[i]!, s = ((r.u - p.u) * du + (r.y - p.y) * dy) / len2;
+      if (s <= 0 || s >= 1) continue;
+      if (Math.abs(du * (r.y - p.y) - dy * (r.u - p.u)) <= 1e-9 * Math.sqrt(len2)) on.push([s, r]);
+    }
+    on.sort((a, b) => a[0] - b[0]);
+    let from = p;
+    for (const [, r] of on) { add(from, r, w); from = r; }
+    add(from, q, w);
+  }
+  return [...net].slice(0, 5).map(([k, n]) => `the faces' boundary differs from the seam's along ${k} (by ${n})`);
 }
 
 /** Twice the signed area of (a, b, c): positive counter-clockwise. */

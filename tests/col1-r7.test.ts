@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 import { caveDef } from "../src/content/regions/caves.js";
-import { buildCave, caveShell, clipMeshToRect } from "../src/content/regions/caveGeometry.js";
+import { buildCave, caveShell, clipMeshToRect, snapToFloor } from "../src/content/regions/caveGeometry.js";
 import { DEEP_CAVES } from "../src/content/regions/caves/deep.js";
 import { capProblems, capTriangles, type PlanePoint } from "../src/content/regions/seamCap.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
@@ -133,4 +133,46 @@ test("R7 construction: the validator catches overlapping faces and a face wound 
   assert.deepEqual(capProblems(square, [0, 1, 2, 0, 2, 3], at), []);
   assert.match(capProblems(square, [0, 1, 2, 0, 2, 3, 0, 1, 3], at).join(" "), /overlap/);
   assert.match(capProblems(square, [0, 2, 1, 0, 2, 3], at).join(" "), /wound/);
+});
+
+// --- R8 -------------------------------------------------------------------------------------
+
+/** Sol R8's notch: a 4 x 4 square with a 0.5 x 3 notch, and an equal-area,
+ * zero-overlap, correctly signed triangulation that fills the notch and
+ * leaves a corner of the region bare. */
+const NOTCH: PlanePoint[] = [[0, 0], [4, 0], [4, 4], [2.25, 4], [2.25, 1], [1.75, 1], [1.75, 4], [0, 4]].map(([u, y]) => ({ u: u!, y: y! }));
+const notchEdges = NOTCH.flatMap((_, i) => [i, (i + 1) % NOTCH.length]), notchAt = (v: number): PlanePoint => NOTCH[v]!;
+const NOTCH_WRONG = [0, 1, 4, 0, 2, 7, 0, 4, 5, 1, 2, 4, 2, 5, 4];
+
+test("R8-1: the validator refuses an equal-area triangulation with the wrong boundary (the notch), and an empty one of a tiny strip", () => {
+  assert.equal(signedArea(NOTCH_WRONG, notchAt), 14.5);
+  assert.match(capProblems(notchEdges, NOTCH_WRONG, notchAt).join(" "), /boundary differs/);
+  assert.deepEqual(capProblems(notchEdges, capTriangles(notchEdges, notchAt, "notch"), notchAt), []);
+  // A Float32-scale strip, 2 m by 0.98 mm: no triangles at all must not pass.
+  const strip: PlanePoint[] = [{ u: 1500, y: -1500 }, { u: 1502, y: -1500 }, { u: 1502, y: -1499.9990234375 }, { u: 1500, y: -1499.9990234375 }];
+  const stripEdges = [0, 1, 1, 2, 2, 3, 3, 0], stripAt = (v: number): PlanePoint => strip[v]!;
+  assert.match(capProblems(stripEdges, [], stripAt).join(" "), /boundary differs/);
+  assert.deepEqual(capProblems(stripEdges, capTriangles(stripEdges, stripAt, "strip"), stripAt), []);
+  // Collinear subdivisions and a pinch still match: the square from four points on each side, and the pinched pair.
+  const sq: PlanePoint[] = [{ u: 0, y: 0 }, { u: 1, y: 0 }, { u: 2, y: 0 }, { u: 2, y: 1 }, { u: 2, y: 2 }, { u: 1, y: 2 }, { u: 0, y: 2 }, { u: 0, y: 1 }], sqAt = (v: number): PlanePoint => sq[v]!;
+  const sqEdges = sq.flatMap((_, i) => [i, (i + 1) % sq.length]);
+  assert.deepEqual(capProblems(sqEdges, [0, 2, 4, 0, 4, 6], sqAt), [], "triangles spanning collinear boundary vertices");
+});
+
+test("R8-1: construction enforces the validator: a triangulator that returns the notch's wrong faces is refused", () => {
+  assert.throws(() => capTriangles(notchEdges, notchAt, "notch", () => NOTCH_WRONG), /don't tile their region[\s\S]*boundary differs/);
+});
+
+test("R8-3: the snap never collapses a cut edge to a point (the guard's own case)", () => {
+  // A triangle with an edge in the side plane x = 0; snapping (0, 1, 1) up to y = 2 would put it on (0, 2, 1).
+  const m = { name: "guard", positions: new Float32Array([0, 1, 1, 0, 2, 1, 1, 1, 1]), normals: new Float32Array([0, 0, 1, 0, 0, 1, 0, 0, 1]),
+    colors: new Float32Array(12), indices: new Uint16Array([0, 1, 2]) };
+  const r = snapToFloor(m, new Float64Array([2, NaN, NaN]), { minX: 0, maxX: 3, minZ: 0, maxZ: 3 }, [], () => 2, "guard");
+  assert.equal(r.positions[1], 1, "the vertex stays");
+  const P = r.positions, I = r.indices;
+  for (let t = 0; t < I.length / 3; t++) {
+    const a = I[t * 3]! * 3, b = I[t * 3 + 1]! * 3, c = I[t * 3 + 2]! * 3;
+    const e1 = [P[b]! - P[a]!, P[b + 1]! - P[a + 1]!, P[b + 2]! - P[a + 2]!], e2 = [P[c]! - P[a]!, P[c + 1]! - P[a + 1]!, P[c + 2]! - P[a + 2]!];
+    assert.ok(Math.hypot(e1[1]! * e2[2]! - e1[2]! * e2[1]!, e1[2]! * e2[0]! - e1[0]! * e2[2]!, e1[0]! * e2[1]! - e1[1]! * e2[0]!) > 0, `face ${t} has no area`);
+  }
 });

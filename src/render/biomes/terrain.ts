@@ -69,9 +69,20 @@ export function terrainStore(): TerrainStore | null {
   return store;
 }
 
+/** Live builds the game fell back to: a store was set (a browser) but had
+ * no usable file for the chunk (missing, failed or refused bake). Such a
+ * build tessellates and builds cave shells synchronously between yields, on
+ * the main thread: a production compromise until WK-1's sliced or worker
+ * builder (COL-1 R8-2). Pulled, not pushed (convention 6); each one also
+ * logs one line. A normal build with its bake never comes here. */
+const fallback = { builds: 0, recent: [] as string[] };
+export function terrainFallbackStats(): { readonly builds: number; readonly recent: readonly string[] } {
+  return { builds: fallback.builds, recent: [...fallback.recent] };
+}
+
 /** `s2.terrain`: decodes the chunk's baked recipe when a store is set and has
  * the file (fetch and decode are async and sliced by `due()`), otherwise
- * builds it live. Both paths give the same recipe up to the codec's
+ * builds it live (counted, see `terrainFallbackStats`). Both paths give the same recipe up to the codec's
  * quantization; the live path is the bake's source and the test oracle. */
 export const terrainFactory: ChunkArtFactory = {
   id: "s2.terrain",
@@ -84,6 +95,10 @@ export const terrainFactory: ChunkArtFactory = {
       // each step only checks whether the fetch has landed.
       while (!file.settled) yield;
       if (file.bytes) return { meshes: yield* decodeTerrain(file.bytes, rect, chunk.id, lod, ctx.due), instances: [] };
+      fallback.builds++;
+      fallback.recent.push(`${chunk.id} ${lod}`);
+      if (fallback.recent.length > 16) fallback.recent.shift();
+      console.warn(`terrain: live build of ${chunk.id} (${lod}) on the main thread: no usable baked file (${fallback.builds} so far)`);
     }
     return yield* liveTerrain(ctx, chunk, lod);
   },
