@@ -301,24 +301,27 @@ const firstItem = (d: Driver, kind: string): string => {
   return i.id;
 };
 
-/** LS-1 1b: the hub spur by Dart, from the apron over both steps (`route.hub.spur`), to
- * the keeper's racks on the second step: read the planting card (the planter plan, on
- * the main path, no decode) and take a staple cutting, then home to the cradle. */
-const SPUR_TO_RACKS = [{ x: -14, y: -10, z: -318 }, { x: 18, y: -12, z: -342 }, { x: 40, y: -20, z: -366 }, { x: 80, y: -31, z: -400 },
-  { x: 133, y: -34, z: -432 }, { x: 180, y: -38, z: -460 }] as const;
+/** LS-1 1b: the hub spur by Dart. Out of the cradle to the Canopy route head, south
+ * over the reef flats to the spur, then up its steps by the hub caves' craft parking
+ * (apron shelf, first step summit, second step summit). On foot at the keeper's racks:
+ * read the planting card (the planter plan, on the main path, no decode) and take a
+ * staple cutting. Home the same way to the cradle. Each leg is `pilotTo`'s swept plan:
+ * straight where clear, over the flats and the step's knob where not. */
+const SPUR_PARKING = [{ x: 40, y: -16, z: -364 }, { x: 72, y: -34, z: -400 }, { x: 166, y: -46, z: -462 }] as const;
 function keepersRacks(d: Driver): void {
   const dart = d.vehicle("dart")!;
   reach(d, dart.id);
   boardAt(d, dart);
-  pilotTo(d, "to the spur apron", SPUR_TO_RACKS[0]);
-  fly(d, { id: "the spur to the keeper's racks", source: "S2 route.hub.spur to the second step", points: SPUR_TO_RACKS.map((q) => ({ ...q })) });
+  fly(d, "dart_out");
+  SPUR_PARKING.forEach((q, i) => pilotTo(d, `up the spur, stop ${i + 1}`, q));
   leaveCraft(d);
   recordRead(d, "hub_racks_card");
   if (!d.state.knowledge.blueprints.includes("bp_cultivation")) throw new Blocked("The planting card granted no planter plan", where(d.state));
   gather(d, "hub_racks_cups", 1);
   returnToCraft(d, d.vehicle("dart")!);
-  fly(d, { id: "the spur home", source: "S2 route.hub.spur reversed", points: [...SPUR_TO_RACKS].reverse().map((q) => ({ ...q })) });
-  pilotTo(d, "home to the cradle", { x: 20, y: -1.6, z: -21 });
+  [...SPUR_PARKING].reverse().slice(1).forEach((q, i) => pilotTo(d, `down the spur, stop ${i + 1}`, q));
+  pilotTo(d, "back to the Canopy route head", { ...CANOPY_BASIN_ROUTE.upper[0] });
+  fly(d, "dart_home");
   dockAndService(d, d.vehicle("dart")!);
 }
 
