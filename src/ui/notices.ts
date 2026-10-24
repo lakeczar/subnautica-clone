@@ -7,6 +7,8 @@ import type { GameEvent, GameState, NoticeContext, NoticeOptions, Vec3 } from ".
 // saved state is involved. Ongoing danger remains in the separate hazard area.
 export const NOTICE_SECONDS = { action: 2.5, refusal: 4, hazard: 6, error: 12, system: 3, release: 2.5, call: 3 } as const;
 export const DAMAGE_SECONDS = { aftermath: 3, pulse: 1 } as const;
+/** Central priority of a play-timeline storage warning: below hazards (3) and game-save warnings (4). */
+export const TIMELINE_PRIORITY = 2.5;
 export type ThreatDamage = Extract<GameEvent, { type: "threat-damage" }>;
 export type DamageTarget = ThreatDamage["target"];
 export interface DamageFeedback {
@@ -42,7 +44,8 @@ export interface PresentedNotice extends NoticeOptions {
 export class EncounterPresentation {
   result: ActionResult | null = null;
   central: PresentedNotice | null = null;
-  status: { message: string; expiresAt: number } | null = null;
+  /** The status line: confirmations, and a timeline warning that couldn't be central. */
+  status: { message: string; expiresAt: number; error?: boolean; context?: NoticeContext } | null = null;
   damage: DamageFeedback | null = null;
   private bittenThisStep = false;
   private mode: ThreatMode | null = null;
@@ -70,19 +73,41 @@ export class EncounterPresentation {
     // A confirmed local write resolves its obsolete failure/reminder. System
     // successes (including exports) cannot establish local-save recovery.
     if ((channel === "system" || channel === "persistence") && !error) {
-      // A game save's success resolves only a game-save failure, never the play timeline's.
-      if (channel === "persistence" && this.central?.channel === "persistence" && this.central.context !== "timeline" && options.context !== "timeline") this.central = null;
-      this.status = { message, expiresAt: now + NOTICE_SECONDS.system * 1000 };
+      // A success resolves only the failure of its own store: a game save's never
+      // the play timeline's (SIM-1b), a timeline commit's never the game save's.
+      if (channel === "persistence") {
+        const timeline = options.context === "timeline";
+        if (this.central?.channel === "persistence" && (this.central.context === "timeline") === timeline) this.central = null;
+        if (timeline && this.status?.context === "timeline") this.status = null;
+      }
+      // A timeline warning moved to the status line outlasts other confirmations until it expires.
+      if (!this.status?.error) this.status = { message, expiresAt: now + NOTICE_SECONDS.system * 1000,
+        ...(options.context ? { context: options.context } : {}) };
       return;
     }
-    const priority = channel === "persistence" ? 4 : channel === "hazard" ? 3 : error ? 2 : 1;
-    // Suppressed alerts are dropped; there is no hidden queue to replay.
-    const currentPriority = this.menuVisible && this.central?.channel === "hazard" ? 0 : this.central?.priority ?? 0;
-    if (priority < currentPriority) return;
+    const timeline = channel === "persistence" && options.context === "timeline";
+    // The play timeline's storage warning yields to urgent hazards and to game-save warnings.
+    const priority = timeline ? TIMELINE_PRIORITY : channel === "persistence" ? 4 : channel === "hazard" ? 3 : error ? 2 : 1;
     const wall = channel === "persistence" || error && channel !== "hazard";
-    this.central = { ...options, channel, message, error, priority,
-      activeLeft: channel === "hazard" ? NOTICE_SECONDS.hazard : NOTICE_SECONDS.action,
-      expiresAt: wall ? now + NOTICE_SECONDS.error * 1000 : null };
+    const expiresAt = wall ? now + NOTICE_SECONDS.error * 1000 : null;
+    // Suppressed alerts are dropped; there is no hidden queue to replay. A
+    // timeline warning that can't be central stays readable on the status line.
+    const currentPriority = this.menuVisible && this.central?.channel === "hazard" ? 0 : this.central?.priority ?? 0;
+    if (priority < currentPriority) {
+      if (timeline) this.status = { message, expiresAt: expiresAt!, error: true, context: "timeline" };
+      return;
+    }
+    if (timeline && this.status?.context === "timeline") this.status = null;
+    this.replaceCentral({ ...options, channel, message, error, priority,
+      activeLeft: channel === "hazard" ? NOTICE_SECONDS.hazard : NOTICE_SECONDS.action, expiresAt });
+  }
+
+  /** A displaced timeline warning moves to the status line for the rest of its lifetime. */
+  private replaceCentral(next: PresentedNotice): void {
+    const old = this.central;
+    if (old?.context === "timeline" && old.channel === "persistence" && next.context !== "timeline" && old.expiresAt !== null)
+      this.status = { message: old.message, expiresAt: old.expiresAt, error: true, context: "timeline" };
+    this.central = next;
   }
 
   /** Only the current, rendered pilot guidance can cover an exit result. A
@@ -112,10 +137,10 @@ export class EncounterPresentation {
       if (!valid || !notice.release && notice.context && covered.has(notice.context)) this.central = null;
     }
     if (!e.refuge && mode === "disengage" && this.mode !== null && this.mode !== "idle" && this.mode !== "disengage") {
-      if ((this.central?.priority ?? 0) <= 3) this.central = {
+      if ((this.central?.priority ?? 0) <= 3) this.replaceCentral({
         message: "Calls fading", error: false, channel: "hazard", context: "threat", priority: 3,
         release: true, activeLeft: NOTICE_SECONDS.release, expiresAt: null,
-      };
+      });
     }
     if (e.refuge || mode === "idle" || mode === "disengage") this.call = null;
     this.mode = mode;

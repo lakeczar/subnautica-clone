@@ -17,7 +17,9 @@ import type { TimelineCommit, TimelineRecords, TimelineStoragePort } from "../si
 import type { WriterLockPort } from "../save/writer-lock.js";
 import type { GameState } from "../sim/types.js";
 
-export type Say = (message: string, error: boolean) => void;
+/** "resolved": a commit succeeded, so a timeline storage warning shown earlier no longer holds (R2 F4). */
+export type Tone = "error" | "info" | "resolved";
+export type Say = (message: string, tone: Tone) => void;
 const EXPORT = "Export the timeline from the menu to keep it.";
 /** A commit pending this long is said. */
 const WAITING_MS = 2000;
@@ -29,6 +31,8 @@ export class LiveTimeline {
   private closed = false;
   private waiting: ReturnType<typeof setTimeout> | null = null;
   private warned = new Set<string>();
+  /** A retryable failure was said and no commit has succeeded since. */
+  private failing = false;
   /** Notes not yet in a committed journal, by the sequence that holds each. */
   private notes: number[] = [];
   /** Why this timeline is no longer saved (null: it is). */
@@ -44,7 +48,7 @@ export class LiveTimeline {
     options: RecorderOptions, say: Say, changed: () => void): LiveTimeline {
     const journal = new TimelineJournal(storage, lock, session.id), stored = journal.load(options);
     if (stored.kind === "loaded") return new LiveTimeline(stored.recorder, journal, say, changed, null);
-    if (stored.kind === "protected") say(`The local play-timeline store can't be read (${stored.error}). It is left as it is, and this session's timeline is kept in memory only. ${EXPORT} Repair play timeline, in the menu, replaces the store.`, true);
+    if (stored.kind === "protected") say(`The local play-timeline store can't be read (${stored.error}). It is left as it is, and this session's timeline is kept in memory only. ${EXPORT} Repair play timeline, in the menu, replaces the store.`, "error");
     return new LiveTimeline(createRecorder(session, options), journal, say, changed, stored.kind === "protected" ? stored.error : null);
   }
   /** The store is protected: the menu offers its repair. */
@@ -57,9 +61,9 @@ export class LiveTimeline {
   note(s: GameState, text: string, saveRef?: string): string | null {
     const no = addNote(this.recorder, s, text, new Date().toISOString(), saveRef);
     if (no) return no;
-    if (this.memoryOnly) { this.say(`Note kept in memory only: ${this.memoryOnly}. ${EXPORT}`, true); return null; }
+    if (this.memoryOnly) { this.say(`Note kept in memory only: ${this.memoryOnly}. ${EXPORT}`, "error"); return null; }
     this.notes.push(this.recorder.seq);
-    this.say("Saving note…", false);
+    this.say("Saving note…", "info");
     // Queued behind a pending commit: its own "waiting" notice, if that commit is still pending later.
     if (this.saving) this.armWaiting();
     this.save(s);
@@ -102,7 +106,7 @@ export class LiveTimeline {
     if (this.waiting) return;
     this.waiting = setTimeout(() => {
       this.waiting = null;
-      if (!this.closed && this.saving) this.say(`Waiting to save the play timeline… It is kept in memory meanwhile.`, false);
+      if (!this.closed && this.saving) this.say(`Waiting to save the play timeline… It is kept in memory meanwhile.`, "info");
     }, WAITING_MS);
   }
   private clearWaiting(): void {
@@ -115,16 +119,19 @@ export class LiveTimeline {
     if (this.closed) return;
     for (const d of r.dropped) this.say(d.reason === "room"
       ? `To make room, the play timeline of ${d.label}${d.notes ? `, with ${d.notes} note${d.notes === 1 ? "" : "s"},` : ""} was removed.`
-      : `The play timeline of ${d.label}, with ${d.notes} note${d.notes === 1 ? "" : "s"}, was replaced; only the last expedition's timeline is kept besides this one.`, false);
+      : `The play timeline of ${d.label}, with ${d.notes} note${d.notes === 1 ? "" : "s"}, was replaced; only the last expedition's timeline is kept besides this one.`, "info");
     if (r.ok) {
       if (repairing) {
         this.memoryOnly = null;
         this.changed();
-        this.say("The local play-timeline store was replaced. This expedition's timeline is saved again.", false);
+        this.say("The local play-timeline store was replaced. This expedition's timeline is saved again.", "resolved");
       }
       const saved = this.notes.filter((seq) => seq <= r.seq);
       this.notes = this.notes.filter((seq) => seq > r.seq);
-      if (saved.length) this.say(saved.length === 1 ? "Note saved to the play timeline." : `${saved.length} notes saved to the play timeline.`, false);
+      if (saved.length) this.say(saved.length === 1 ? "Note saved to the play timeline." : `${saved.length} notes saved to the play timeline.`, "resolved");
+      else if (this.failing && !repairing) this.say("The play timeline is saved again.", "resolved");
+      this.failing = false;
+      this.warned.clear();
       return;
     }
     if (r.code === "cancelled") return;
@@ -134,7 +141,7 @@ export class LiveTimeline {
       this.changed();
       this.say(r.code === "conflict"
         ? `The play-timeline store changed since it was exported, so nothing was replaced. Repair play timeline exports it again.${pending} ${EXPORT}`
-        : `The play-timeline store wasn't replaced (${r.error}). Nothing was changed; Repair play timeline can be tried again.${pending} ${EXPORT}`, true);
+        : `The play-timeline store wasn't replaced (${r.error}). Nothing was changed; Repair play timeline can be tried again.${pending} ${EXPORT}`, "error");
       return;
     }
     // Conflict, protection or no coordination: memory only, no retry. A refused lock or a
@@ -147,10 +154,11 @@ export class LiveTimeline {
         ? `The play timeline changed in another tab, so this tab keeps its timeline in memory only.${pending} ${EXPORT}`
         : r.code === "protected"
           ? `The local play-timeline store can't be read (${r.error}), so this timeline is kept in memory only.${pending} ${EXPORT} Repair play timeline, in the menu, replaces the store.`
-          : `The play timeline can't be saved here (${r.error}), so it is kept in memory only.${pending} ${EXPORT}`, true);
+          : `The play timeline can't be saved here (${r.error}), so it is kept in memory only.${pending} ${EXPORT}`, "error");
     } else if (pending || !this.warned.has(r.code)) {
       this.warned.add(r.code);
-      this.say(`The play timeline couldn't be saved (${r.error}), so it is in memory only for now.${pending} Saving is tried again at the next save. ${EXPORT}`, true);
+      this.failing = true;
+      this.say(`The play timeline couldn't be saved (${r.error}), so it is in memory only for now.${pending} Saving is tried again at the next save. ${EXPORT}`, "error");
     }
   }
 }

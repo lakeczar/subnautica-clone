@@ -18,7 +18,9 @@ import type { WriterLockPort } from "../src/save/writer-lock.js";
 
 // The real HUD, loaded before the loader redirects app.ts's view imports to the test double.
 import { HudView } from "../src/ui/hud.js";
-import { EncounterPresentation } from "../src/ui/notices.js";
+import { EncounterPresentation, NOTICE_SECONDS } from "../src/ui/notices.js";
+import { cueHome, miteScatter } from "../src/sim/ecology/cues.js";
+import { completeOpening } from "../src/sim/progression.js";
 register("./app-loader.js", import.meta.url);
 const { SiltwakeApp } = await import("../src/runtime/app.js");
 
@@ -419,6 +421,103 @@ test("SIM-1b R1-F5: a game save's success resolves its own failure notice, never
   p.notify("Saved locally", false, { channel: "persistence" }, 1);
   assert.equal(p.central?.message, "The play timeline is kept in memory only.");
   p.notify("Saving failed.", true, { channel: "persistence" }, 2);
+  assert.equal(p.status?.message, "The play timeline is kept in memory only.", "the displaced timeline warning stays readable");
   p.notify("Saved locally", false, { channel: "persistence" }, 3);
   assert.equal(p.central, null, "a game save's own failure is resolved");
+  assert.equal(p.status?.message, "The play timeline is kept in memory only.", "the timeline's is not");
+});
+
+const TIMELINE_WARNING = { channel: "persistence", context: "timeline" } as const;
+const PLUME = { channel: "hazard", context: "ecology" } as const;
+const PLUME_CAPTION = "Ember mites are leaving the chimney lip. The plume vents within seconds; stay clear of the column.";
+
+for (const order of ["warning first", "hazard first"] as const)
+  test(`SIM-1b R2-F3: a timeline warning never suppresses an urgent hazard caption (${order}); both stay readable`, () => {
+    const p = new EncounterPresentation();
+    const warn = (now: number) => p.notify("The play timeline is in memory only for now.", true, TIMELINE_WARNING, now);
+    const plume = (now: number) => p.notify(PLUME_CAPTION, false, PLUME, now);
+    if (order === "warning first") { warn(0); plume(1); } else { plume(0); warn(1); }
+    assert.equal(p.central?.message, PLUME_CAPTION);
+    assert.equal(p.status?.message, "The play timeline is in memory only for now.");
+    assert.equal(p.status?.error, true);
+    // A routine confirmation doesn't push the warning off the status line; expiry does.
+    p.notify("Exported.", false, { channel: "system" }, 2);
+    assert.equal(p.status?.message, "The play timeline is in memory only for now.");
+    p.expire(1 + NOTICE_SECONDS.error * 1000);
+    assert.equal(p.status, null);
+  });
+
+for (const order of ["timeline first", "game save first"] as const)
+  test(`SIM-1b R2-F3: game-save and timeline warnings are both readable (${order}); each success resolves only its own`, () => {
+    const p = new EncounterPresentation();
+    const game = (now: number) => p.notify("Game progress could not be saved. Export save before closing.", true, { channel: "persistence" }, now);
+    const timeline = (now: number) => p.notify("The play timeline couldn't be saved.", true, TIMELINE_WARNING, now);
+    if (order === "timeline first") { timeline(0); game(1); } else { game(0); timeline(1); }
+    assert.equal(p.central?.message, "Game progress could not be saved. Export save before closing.");
+    assert.equal(p.status?.message, "The play timeline couldn't be saved.");
+    // R2-F4: the timeline's success resolves the timeline warning only.
+    p.notify("The play timeline is saved again.", false, TIMELINE_WARNING, 2);
+    assert.equal(p.central?.message, "Game progress could not be saved. Export save before closing.");
+    assert.equal(p.status?.message, "The play timeline is saved again.");
+    p.notify("Saved locally", false, { channel: "persistence" }, 3);
+    assert.equal(p.central, null);
+  });
+
+test("SIM-1b R2-F4: a timeline success resolves its central failure warning, by context, not by wording", () => {
+  const p = new EncounterPresentation();
+  p.notify("The play timeline is in memory only for now.", true, TIMELINE_WARNING, 0);
+  p.notify("Note saved to the play timeline.", false, { channel: "system" }, 1);
+  assert.equal(p.central?.message, "The play timeline is in memory only for now.", "a system notice resolves nothing");
+  p.notify("Note saved to the play timeline.", false, TIMELINE_WARNING, 2);
+  assert.equal(p.central, null);
+  assert.equal(p.status?.message, "Note saved to the play timeline.");
+});
+
+/** Steps the app at the chimney lip until the live ecology cue is delivered. */
+function plumeCue(f: ReturnType<typeof browserFixture>, app: AppSeams, hud: ReturnType<typeof realHud>): void {
+  const s = app.state;
+  if (s.opening.phase < 4) completeOpening(s);
+  s.player.pose.position = { ...cueHome("rift_mites_lip") };
+  let t = s.tick + 1;
+  while (!(miteScatter(t).scatter >= 0.5 && miteScatter(t - 1).scatter < 0.5)) t++;
+  s.tick = t - 4;
+  for (let i = 0; i < 30 && hud.presentation.central?.context !== "ecology"; i++) f.frames(1);
+  assert.equal(hud.presentation.central?.message, PLUME_CAPTION, "the live cue is delivered");
+}
+
+for (const order of ["warning first", "cue first"] as const)
+  test(`SIM-1b R2-F3/F4: the live chimney-lip cue and a timeline warning in the app (${order}); a later commit resolves the warning`, async () => {
+    const f = browserFixture();
+    const hud = realHud();
+    const app = await newGame(f);
+    try {
+      const fail = async () => {
+        const write = f.storage.setItem.bind(f.storage);
+        f.storage.setItem = (k: string, v: string) => { if (k === TIMELINE_JOURNAL_KEY) throw new DOMException("full", "QuotaExceededError"); write(k, v); };
+        await saveTimeline(app);
+        f.storage.setItem = write;
+      };
+      if (order === "warning first") { await fail(); plumeCue(f, app, hud); } else { plumeCue(f, app, hud); await fail(); }
+      assert.equal(hud.presentation.central?.message, PLUME_CAPTION);
+      assert.match(hud.presentation.status?.message ?? "", /play timeline couldn't be saved.*in memory only for now/);
+      await saveTimeline(app);
+      assert.equal(hud.presentation.central?.message, PLUME_CAPTION, "the hazard is untouched");
+      assert.equal(hud.presentation.status?.message, "The play timeline is saved again.");
+    } finally { hud.restore(); app.dispose(); f.restore(); }
+  });
+
+test("SIM-1b R2-F4: a successful repair resolves the protection warning in the app", async () => {
+  const f = browserFixture();
+  withDownloads(f);
+  f.storage.setItem(TIMELINE_JOURNAL_KEY, "{bad");
+  const hud = realHud();
+  const app = await newGame(f);
+  try {
+    assert.match(hud.presentation.central?.message ?? "", /play-timeline store can't be read/);
+    GameView.current.actions.repairTimeline();
+    GameView.current.actions.confirm(); await settled();
+    assert.equal(app.live.protected, false);
+    assert.equal(hud.presentation.central, null, "the obsolete warning is resolved");
+    assert.equal(hud.presentation.status?.message, "The local play-timeline store was replaced. This expedition's timeline is saved again.");
+  } finally { hud.restore(); app.dispose(); f.restore(); }
 });

@@ -20,7 +20,7 @@ import { GameView } from "../ui/view.js";
 import type { PanelKind } from "../ui/view.js";
 import { exportTimelineText, observe, recordSystemsEvents } from "../sim/timeline/recorder.js";
 import type { TimelineRecorder } from "../sim/timeline/recorder.js";
-import { LiveTimeline } from "./liveTimeline.js";
+import { LiveTimeline, type Tone } from "./liveTimeline.js";
 import { controlsActive } from "../sim/timeline/activity.js";
 import { regionAtPoint, regionAtPosition } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
@@ -495,13 +495,15 @@ export class SiltwakeApp {
     try { storage = window.localStorage; } catch { /* memory only */ }
     // What opening says is delivered once entry is complete (after the session's own entry notices),
     // so a protection or memory-only warning is the one left showing (SIM-1b R1 F5).
-    const opening: [string, boolean][] = [];
+    const opening: [string, Tone][] = [];
     let opened = false;
-    const say = (message: string, error: boolean): void => {
-      if (!opened) opening.push([message, error]);
-      // A timeline storage failure is a persistence warning (it outranks system notices), kept
-      // apart from the game save's own: a later game save never resolves it.
-      else if (!this.disposed) this.view.notify(message, error, error ? { channel: "persistence", context: "timeline" } : { channel: "system" });
+    const say = (message: string, tone: Tone): void => {
+      if (!opened) opening.push([message, tone]);
+      // A timeline storage failure is a persistence warning in its own context: below urgent
+      // hazards and game-save warnings, never resolved by a game save, resolved by a timeline
+      // commit that succeeds (SIM-1b R2 F3/F4).
+      else if (!this.disposed) this.view.notify(message, tone === "error",
+        tone === "info" ? { channel: "system" } : { channel: "persistence", context: "timeline" });
     };
     this.live = LiveTimeline.open(storage, this.writerLock, { id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION },
       { regionAt: (x: number, z: number) => regionAtPoint(x, z) }, say,
@@ -509,7 +511,7 @@ export class SiltwakeApp {
     const live = this.live;
     queueMicrotask(() => {
       opened = true;
-      if (this.live === live) for (const [message, error] of opening) say(message, error);
+      if (this.live === live) for (const [message, tone] of opening) say(message, tone);
     });
     this.view.timelineRepair(this.live.protected);
     this.timelineSaved = this.state.tick;

@@ -505,6 +505,7 @@ export class HudView {
     } else this.toast.textContent = "";
     const chip = this.get("system-status"), status = this.presentation.status;
     chip.hidden = !status;
+    chip.classList.toggle("error", status?.error ?? false);
     if (chip.textContent !== (status?.message ?? "")) chip.textContent = status?.message ?? "";
     window.clearTimeout(this.noticeTimer);
     const expiry = this.presentation.nextExpiry;
