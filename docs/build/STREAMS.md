@@ -1125,3 +1125,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Fixes:** the `stepBoundary` realpath boundary (repo or its own `node_modules`, checked at submit and again in the runner); faithful signals (128+signo; a stop always wins); the v1 parser accepts `--machine` and `--artifact`; queued progress prints only on change, plus every 5 min. B43 added.
   - **Checks:** units 55/55, B 11/11, suites 23/27/43 through the queue, fast on the 4070.
   - **Part 2** (the STEW-2 alias, `cgroup-scope.mjs`, `package.json` composition) waits for STEW-2 on root. R6 on the composed candidate is the install decision.
+- **STEW-2 R2 fixes done at `313dc2a1`** (code `14e1ed2`):
+  - **Fixes:** one literal wrapper shape with explicit `--machine`; all `X:direct` bodies are grammar-expressible node steps; v1 admission is tied to the exact `SILTWAKE_HEAVY_SCOPE` unit, and unproven claims refuse with 75; `machineFor` is the one machine policy for the guard and the gate.
+  - **Checks:** fast 1,653/1,653, heavy 67, a dry run.
+  - **Review:** short Sol R3 running (`siltwake-stew2-review-r3-sol-313dc2a`).
