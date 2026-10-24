@@ -77,6 +77,39 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
 - **Also:** every browser quota form (QuotaExceededError, NS_ERROR_DOM_QUOTA_REACHED, codes 22 and 1014) against a non-quota refusal; the `saveRef` round trip; and "a steady commit writes the journal only".
 - **Checked against the reviewed code:** the R6 store tests (F1, F2, F3/F4, F5) fail against `f6fee338`'s store, and the R6 app tests for F3, F6 and F7 fail against its live timeline. All pass here.
 
+### SIM-1b R1 (Sol 6.1 xhigh, `docs/build/reviews/SIM-1B-SOL-XHIGH-R1.md` on `review/sim-1b-r1`)
+
+- **F1 (P1), a failed repair deleted protected data:** a repair now stages its chunks under numbers no stored key uses, so it never overwrites the protected chunks. Cleanup after a failed attempt removes only keys that attempt created, and never the version 1 record. v1 goes only after a committed journal supersedes it. The repair's export now includes every chunk key's raw value as well as the journal and v1, and its conflict check compares all of them.
+  - Regression: a refusal at each of the first six writes, with quota and permission errors, for a valid v1 and for this expedition's own chunks. The exported records stay identical, protection holds, every crash image is either the protected records or the repaired store, and a retry repairs.
+  - App regression: the v1 record is kept, and the notice "Nothing was changed" is now true.
+- **F2 (P1), the reader wasn't total:**
+  - **One validator:** `validTimeline` (`report.ts`) validates an already-parsed value and never throws; `parseTimeline` is `JSON.parse` plus it, and diagnostics no longer stringify untrusted values.
+  - **Depth limit:** untrusted JSON nesting deeper than 32 (real records nest about 7 deep) is refused, so no later clone or stringify can overflow the stack.
+  - **Head checks:** the journal must have both head properties; chunk numbers, `nextChunk`, `seq` and `notes` must be non-negative safe integers; `folded` must be a prefix of `chunks`; and the open chunk can hold at most 1,001 events.
+  - **Partition check:** after restoration, chunk numbers must be unique and below `nextChunk`, sealed chunks must be exactly 1,000 events, and summaries must come before events. Otherwise the result is `protected`, not `loaded`.
+  - **`load()` is total by construction.**
+  - Regressions: a v1 `version` with a null `toString` and one nested 4,000 deep, `nextChunk` set to −1 and to 2⁶⁰, a missing `current` or `previous`, and an event with a field nested 4,000 deep. Each is protected, with zero writes, and no commit lands over it. App: Continue onto the hostile v1 offers the repair.
+- **F3 (P2):** one chunk validator, `parseChunk`, covers both representations (events, or a summary including its kept notes and their `saveRef`) through `validTimeline`. It is used for whole-head reads, fold checks and the quota plan alike. Regression: a fold target holding `{"kept":[]}` or a summary whose kept note has `saveRef: 7` is protected, with zero mutations.
+- **F4 (P2):**
+  - **Steady commits:** a steady commit now changes no committed chunk before its journal. It writes new chunks, then the journal (the commit point), then its folds. A fold left unwritten leaves the chunk holding its events, the same history, which the reader accepts.
+  - **Quota pressure:** once quota pressure is known, everything the plan may fold or drop is read whole before the first fold: this expedition's committed chunks and the previous head. Then quota retries fold first, which frees room.
+  - Regressions: a full-window rotation with a damaged previous, and damage beyond the first fold target; both are protected with storage unchanged. A refused post-journal fold still commits, and reloads whole.
+- **F5 (P2):** the app opens the new timeline after resetting the outgoing presentation. Its entry notices are delivered once entry completes, after the session's own entry notices.
+  - **Channel change:** a timeline storage failure is now a persistence warning (`channel: "persistence"`, new `NoticeContext` `"timeline"`). A system error could never be shown over the session-only persistence warning. A game save's success no longer resolves a timeline warning.
+  - Regressions: the real `HudView` and `EncounterPresentation`, with DOM stubbed, show the warning after New, Continue, import and session-only entry. A unit test covers the resolution rule.
+- **Model-based fault harness** (`tests/timeline-model-support.ts`; coordinator's ask):
+  - **Operations:** seeded random sequences over three expeditions and a version 1 record (none, own, another's or broken): notes; events (rotation included); commits; faults at random write and read indices; quota pressure; re-entry; another tab's commit; repair (with faults); and random malformed corruption of the journal, heads, chunks and v1. The corruptions include shapes, wrong types, negative, huge and unsafe counters, and nesting 5,000 deep.
+  - **Invariants, after every step:**
+    - nothing throws;
+    - a fresh reader of each expedition loads exactly its last successful commit's notes, each once, or, only when something was corrupted, reports protected;
+    - a refused commit changes no byte, and a failed repair leaves the exported records and protection as they were;
+    - storage's own guard fails on any removal of a key the stored journal names, or of v1 before a stored journal supersedes it;
+    - an ok commit's `seq` is the recorder's, and its notes reload at once;
+    - an expedition the store held before a commit and lost after it is reported dropped.
+  - **Scale:** 24 fixed seeds in the fast tier (`timeline-model.test.ts`), and 2,000 sequences of 40 steps in the heavy tier (`timeline-model.heavy.test.ts`, `SILTWAKE_TIMELINE_SEQUENCES` to change). A failure prints its seed and the last 25 steps; `SILTWAKE_TIMELINE_SEED=<seed>` reruns one.
+  - **Findings during development:** one, in the harness's own drop accounting (a session lost to a corrupted v1 record isn't a commit's drop).
+- **Cancelled:** the 4070 gate tickets submitted at `5314f3ef` were still queued when R1 landed, and were cancelled so a changed tree couldn't run them locally. The gate is rerun at the R1 head.
+
 ## What changed
 
 **`stepGameInPlace(s, commands, world): GameEvent[]`** (`src/sim/step.ts`) is the step, and it mutates `s`.

@@ -189,8 +189,13 @@ export class TimelineJournal {
       return this.refuse("a stored timeline chunk is missing");
     const v1 = base.v1Superseded ? { kind: "absent" as const } : this.legacy();
     if (v1.kind === "unreadable") return this.refuse(`the version 1 record is unreadable (${v1.error})`);
-    // A repair stages its chunks under numbers no stored key uses, so failing leaves the protected records whole.
-    if (replacing) renumber(rec, keys, chunkKey(this.session, 0).slice(0, -1));
+    // A repair stages its chunks under numbers no stored key uses and the old journal (if it parses)
+    // doesn't name, so failing, or a crash, leaves the protected records whole.
+    if (replacing) {
+      const raw = this.read(TIMELINE_JOURNAL_KEY), old = raw.kind === "present" ? parseJournal(raw.value) : null;
+      const named = old && typeof old !== "string" ? [old.current, old.previous].flatMap((h) => h?.session.id === this.session ? h.chunks : []) : [];
+      renumber(rec, keys, chunkKey(this.session, 0).slice(0, -1), named);
+    }
     const numbers = [...rec.rotated.map((r) => r.n), ...rec.sealed.map((c) => c.n)];
     if (numbers.some((n) => n === undefined) || new Set(numbers).size !== numbers.length) return failed("invalid", "timeline chunk numbers collide");
     const own = [base.current, base.previous].find((h) => h?.session.id === this.session) ?? null;
@@ -340,9 +345,11 @@ const liveKeys = (j: Journal | null): Set<string> =>
   new Set(j ? [j.current, j.previous].flatMap((h) => h ? h.chunks.map((n) => chunkKey(h.session.id, n)) : []) : []);
 const sameRecords = (a: TimelineRecords, b: TimelineRecords): boolean => a.journal === b.journal && a.v1 === b.v1 &&
   Object.keys(a.chunks).length === Object.keys(b.chunks).length && Object.entries(a.chunks).every(([k, v]) => b.chunks[k] === v);
-/** Gives the recorder's chunks numbers above every stored key under `prefix` (one session's chunks). */
-function renumber(rec: TimelineRecorder, keys: readonly string[], prefix: string): void {
-  let next = Math.max(rec.nextChunk, ...keys.filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length)) + 1).filter(Number.isSafeInteger));
+/** Gives the recorder's chunks numbers above every stored key under `prefix` (one session's chunks)
+ * and every number in `taken`. */
+function renumber(rec: TimelineRecorder, keys: readonly string[], prefix: string, taken: readonly number[]): void {
+  let next = Math.max(rec.nextChunk, ...taken.map((n) => n + 1),
+    ...keys.filter((k) => k.startsWith(prefix)).map((k) => Number(k.slice(prefix.length)) + 1).filter(Number.isSafeInteger));
   for (const r of rec.rotated) r.n = next++;
   for (const c of rec.sealed) c.n = next++;
   rec.nextChunk = next;

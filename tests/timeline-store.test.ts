@@ -937,3 +937,21 @@ test("R1-F4: a steady commit changes no committed chunk before its journal; a fo
   assert.ok(order.indexOf(TIMELINE_JOURNAL_KEY) < order.findIndex((k) => k.endsWith("|0")), "the fold comes after the journal");
   reloadsWhole(storage, a.rec, a.s, "a fold left unwritten");
 });
+
+test("R1-F1: a repair never stages a chunk under a number the old journal names, even when that key is gone (model seed 66769815)", async () => {
+  const storage = new Storage(), a = session("A");
+  a.add(TIMELINE_CHUNK_EVENTS * 2 + 10);
+  assert.ok((await commit(tab(storage, "A"), a.rec, a.s)).ok);
+  const named: number[] = journalOf(storage).current.chunks;
+  storage.data.delete(chunkKeysOf(storage, "A").find((k) => k.endsWith(`|${Math.max(...named)}`))!);
+  const j = new TimelineJournal(storage, new TestWriterLock(), "A");
+  assert.equal(j.load().kind, "protected");
+  const x = session("A");
+  x.add(TIMELINE_CHUNK_EVENTS * 3);
+  const writes: string[] = [];
+  const set = storage.setItem.bind(storage);
+  storage.setItem = (k: string, v: string) => { writes.push(k); set(k, v); };
+  assert.ok((await j.repair(x.rec, x.s, new AbortController().signal, j.records() as TimelineRecords)).ok);
+  for (const n of named) assert.ok(!writes.includes(`siltwake.timeline.v2|A|${n}`), `staged under ${n}, which the old journal names`);
+  reloadsWhole(storage, x.rec, x.s, "repaired");
+});
