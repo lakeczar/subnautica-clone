@@ -187,6 +187,28 @@ const SCENARIOS = {
     await page.waitForTimeout(5200); r.checks.gripped = (await read()).notices; await shot("clamp-aboard");
     r.notices = await noticesSince(r.noticesFrom); await context.close();
   },
+  async carrier() {
+    const { r, context } = await load("carrier");
+    await shot("aboard");
+    const console_ = async () => {
+      await page.keyboard.press("Tab"); await page.waitForTimeout(600);
+      await press("button[data-action='carrier-panel']", "Hearthline console");
+    };
+    await console_();
+    r.checks.before = await panelText(); await shot("console-before-refit");
+    await press("button[data-command-key*='reconfigure']:not([disabled])", "Refit berths");
+    r.checks.refit = await panelText(); await shot("console-mixed");
+    // Each lock cycle runs in play (the panel pauses the game): close it, wait, reopen.
+    for (let n = 0; n < 2; n++) {
+      await press("button[data-command-key*='capture']:not([disabled])", `Recover craft ${n + 1}`);
+      await closePanel(); await page.waitForTimeout(16000);
+      await console_();
+    }
+    r.checks.after = await panelText(); await shot("both-berthed");
+    await closePanel();
+    await turnTo(((await read()).bearing * Math.PI / 180) + Math.PI * 0.5, -5); await shot("mixed-rooms");
+    r.notices = await noticesSince(r.noticesFrom); await context.close();
+  },
   async outpost() {
     const { r, context } = await load("outpost");
     await shot("outpost-in-world");

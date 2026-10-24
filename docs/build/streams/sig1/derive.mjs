@@ -122,4 +122,28 @@ const hullOf = (s, hull) => {
   inst.player.pose.yaw = (Math.atan2(-4, 3) + Math.PI * 2) % (Math.PI * 2); inst.player.pose.pitch = -0.25;
   write("outpost", inst, { outpost, position: o.position });
 }
+// 7. Hearthline: the berth extension fitted at its supported dock; the Mantle (medium) and the
+// Dart (compact) waiting clear of each other off the lock mouth; the diver aboard by the berth panel.
+{
+  const s = library(), h = s.fleet.vehicles.find((v) => v.hull === "hearthline");
+  const { launchPoint, localToWorld } = await import(B + "src/sim/carrier.js");
+  const { HULL_COLLIDERS } = await import(B + "src/content/registry.js");
+  fit(s, h, ["hearthline_berth_extension"]);
+  const right = { x: Math.cos(h.pose.yaw), z: Math.sin(h.pose.yaw) };
+  for (const [hull, side] of [["mantle", 1], ["dart", -1]]) {
+    const v = s.fleet.vehicles.find((x) => x.hull === hull);
+    v.berth = null; v.velocity = { x: 0, y: 0, z: 0 }; v.pose.yaw = h.pose.yaw; v.pose.pitch = 0;
+    const lp = launchPoint(h, v);
+    const spot = [9, 10, 11, 12].flatMap((d) => [0, -1, 1, -2].map((dy) => ({ x: lp.x + right.x * side * d, y: lp.y + dy, z: lp.z + right.z * side * d })))
+      .find((p) => world.clearance(p, HULL_COLLIDERS[hull]));
+    if (!spot) throw new Error(`no clear water for the ${hull} by the lock mouth`);
+    v.pose.position = spot;
+  }
+  const local = { x: 4.2, y: 4, z: 6.3 };
+  s.player.controlledVehicleId = null; s.player.mode = "interior"; s.player.interiorId = h.id;
+  s.player.interiorPose = { frame: "carrier-local", position: local };
+  s.player.pose = { frame: "world", position: localToWorld(local, h), yaw: (h.pose.yaw + Math.PI) % (Math.PI * 2), pitch: 0 };
+  s.player.velocity = { x: 0, y: 0, z: 0 };
+  write("carrier", s, { carrier: h.id, configuration: s.fleet.docking.configuration });
+}
 writeFileSync(path.join(out, "plan.json"), JSON.stringify(plan, null, 2));
