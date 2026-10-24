@@ -1206,3 +1206,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Convention 9 amended:** only acceptance numbers are exclusive; microbenchmarks use CPU time and allocations on normal seats; duet A/Bs; no compiling in exclusive windows.
   - **SCHED-5 approved:** instrument the drain and backfill waste first, build only if it pays; after SCHED-4/4b.
   - **The full heavy tier goes into the root gate** (`--machine any`), later affected-only plus a nightly run; this is **STEW-3**, together with stored per-file heavy results and the `test-tier` "override is not budget evidence" label.
+- **Asset-pipeline debate decided** (`docs/build/research/ASSET-PIPELINE-DECISION.md`):
+  - **Tooling:** Blender 5.2.3 LTS, portable, driven by Opus `bpy` scripts in an Option A session over SSH stdio (no exposed listener; MCP optional later). Clean queued rebuilds on a pinned canonical builder are authoritative, with exact canonical-pack reproducibility.
+  - **Into the game:** offline bake conversion into a versioned cel-pack extension (asset-local quantisation, classes, rigid parts); no runtime loader; imported art gets a budget share inside 256/256; provenance manifests.
+  - **Ownership:** AP-1 (new) authors and converts; WK-1 the bake integration; the SCHED builder the session reservation (externally enforced).
+  - **Order:** first a single module or prop end to end, then the owner's three-tier bake-off on one ENV-1 room.
+  - **When:** the seam lands after WK-1 and CW-1, before wave B.
