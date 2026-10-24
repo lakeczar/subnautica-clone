@@ -103,7 +103,8 @@ for (const mode of modes) {
       assert.ok(at.get(`${n} start`)! >= pooledEnd, `${n} started after every pooled file ended`);
       assert.match(row(n), /ok {2}\[timing; CPU wait: job [\d.?]+%, host [\d.]+%\]$/, out.stdout);
     }
-    const [a, c] = [`timed-a-${tag}`, `timed-c-${tag}`].map((n) => [at.get(`${n} start`)!, at.get(`${n} end`)!]);
+    const span2 = (n: string): [number, number] => [at.get(`${n} start`)!, at.get(`${n} end`)!];
+    const [a, c] = [span2(`timed-a-${tag}`), span2(`timed-c-${tag}`)];
     assert.ok(a[1] <= c[0] || c[1] <= a[0], "the two timing files never overlapped");
     assert.match(row(`pooled-b-${tag}`), /\bok$/, "a pooled file's row is unchanged");
   });
