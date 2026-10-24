@@ -782,6 +782,11 @@ export interface KitCaveStream {
   evict(cluster: number): void;
   /** Cave-inside water at `p` (current masking): false outside every footprint. */
   inside(p: Readonly<Vec3>): boolean;
+  /** Clusters whose rect meets the box, written to `out[0 .. count)`; returns
+   * the count. A grid query, allocation-free once `out` has grown (R2-4). */
+  clustersNear(minX: number, minZ: number, maxX: number, maxZ: number, out: number[]): number;
+  /** The clusters built now, however they were built (streamer or query). */
+  readonly resident: readonly number[];
   /** The safety net (STR-10): build `cluster` now, unsliced, and log it. Never
    * expected in ordinary travel, where the streamer builds ahead. */
   finishNow(cluster: number, cause: UnslicedFinish["cause"]): void;
@@ -807,6 +812,8 @@ export interface CaveWorld extends WorldQueries {
   readonly kitCaves: KitCaveStream;
 }
 
+/** Cluster grid cell, metres. */
+const CLUSTER_CELL = 128;
 /** Boxes made per construction slice. */
 const SOLID_SLICE = 1024;
 /** Collar columns of a record onto `out`, as `Solid`s named as W1's adapter
@@ -922,6 +929,28 @@ export function kitCaveWorld(options: Omit<CaveWorldOptions, "caves"> & {
     return { index, members, caves: members.map(m => m.id), rect: r, world: null, build: null, boxes: 0 };
   });
   const clusterOf = new Map<KitCaveEntry, Cluster>(clusters.flatMap(c => c.members.map(m => [m, c] as const)));
+  // Cluster lookup grid (rects, band included), and the built clusters.
+  const clusterGrid = new Map<number, number[]>(), clusterMark = new Uint32Array(clusters.length);
+  let clusterStamp = 0;
+  const resident: number[] = [];
+  const clusterKey = (ix: number, iz: number): number => (ix + 32768) * 65536 + (iz + 32768);
+  for (const c of clusters)
+    for (let ix = Math.floor(c.rect.minX / CLUSTER_CELL); ix <= Math.floor(c.rect.maxX / CLUSTER_CELL); ix++)
+      for (let iz = Math.floor(c.rect.minZ / CLUSTER_CELL); iz <= Math.floor(c.rect.maxZ / CLUSTER_CELL); iz++) {
+        const k = clusterKey(ix, iz);
+        (clusterGrid.get(k) ?? clusterGrid.set(k, []).get(k)!).push(c.index);
+      }
+  // clustersNear's query, reused (no closure per call).
+  const NO_OUT: number[] = [];
+  const near = { n: 0, out: NO_OUT, minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+  const considerNear = (i: number): void => {
+    if (clusterMark[i] === clusterStamp) return;
+    clusterMark[i] = clusterStamp;
+    const r = clusters[i]!.rect;
+    if (r.minX <= near.maxX && r.maxX >= near.minX && r.minZ <= near.maxZ && r.maxZ >= near.minZ) near.out[near.n++] = i;
+  };
+  const built = (c: Cluster): void => { resident.push(c.index); };
+  const dropped = (c: Cluster): void => { const i = resident.indexOf(c.index); if (i >= 0) { resident[i] = resident[resident.length - 1]!; resident.pop(); } };
   // Footprint lookup grid.
   const grid = new Map<number, KitCaveEntry[]>();
   const cellKey = (ix: number, iz: number): number => (ix + 32768) * 65536 + (iz + 32768);
@@ -980,7 +1009,7 @@ export function kitCaveWorld(options: Omit<CaveWorldOptions, "caves"> & {
   const finish = (c: Cluster): void => {
     c.build ??= construct(c);
     for (let r = c.build.next(); ; r = c.build.next()) if (r.done) { c.world = r.value; break; }
-    c.build = null; stats.built++; stats.residentBoxes += c.boxes;
+    c.build = null; stats.built++; stats.residentBoxes += c.boxes; built(c);
   };
   const unsliced: UnslicedFinish[] = [];
   const finishNow = (c: Cluster, cause: UnslicedFinish["cause"]): void => {
@@ -1015,7 +1044,7 @@ export function kitCaveWorld(options: Omit<CaveWorldOptions, "caves"> & {
         for (;;) {
           const before = now(), r = c.build.next();
           stats.maxStepMs = Math.max(stats.maxStepMs, now() - before);
-          if (r.done) { c.world = r.value; c.build = null; stats.built++; stats.residentBoxes += c.boxes; break; }
+          if (r.done) { c.world = r.value; c.build = null; stats.built++; stats.residentBoxes += c.boxes; built(c); break; }
           if (now() - start >= budgetMs) return;
         }
         if (now() - start >= budgetMs) return;
@@ -1024,8 +1053,18 @@ export function kitCaveWorld(options: Omit<CaveWorldOptions, "caves"> & {
     evict(i) {
       const c = clusters[i]!;
       c.build?.return(undefined as never); c.build = null;
-      if (c.world) { c.world = null; stats.evicted++; stats.residentBoxes -= c.boxes; }
+      if (c.world) { c.world = null; stats.evicted++; stats.residentBoxes -= c.boxes; dropped(c); }
     },
+    clustersNear(minX, minZ, maxX, maxZ, out) {
+      if (++clusterStamp === 0xffffffff) { clusterMark.fill(0); clusterStamp = 1; }
+      near.n = 0; near.out = out; near.minX = minX; near.minZ = minZ; near.maxX = maxX; near.maxZ = maxZ;
+      const x0 = Math.floor(minX / CLUSTER_CELL), x1 = Math.floor(maxX / CLUSTER_CELL), z0 = Math.floor(minZ / CLUSTER_CELL), z1 = Math.floor(maxZ / CLUSTER_CELL);
+      if ((x1 - x0 + 1) * (z1 - z0 + 1) > clusterGrid.size) for (let i = 0; i < clusters.length; i++) considerNear(i);
+      else for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) { const b = clusterGrid.get(clusterKey(ix, iz)); if (b) for (let k = 0; k < b.length; k++) considerNear(b[k]!); }
+      near.out = NO_OUT;
+      return near.n;
+    },
+    resident,
     inside(p) {
       const e = at(p.x, p.z);
       return !!e && p.y < e.ceiling && insideKitCave(records.record(e.id), p);

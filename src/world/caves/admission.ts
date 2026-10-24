@@ -61,8 +61,9 @@ export function createCaveRuntime(o: CaveRuntimeOptions) {
   let holdingSince = -1, lastSafe: Vec3 | null = null;
   /** Lifetime diagnostics of this runtime (not reset with a session). */
   const stats = { holdFrames: 0, admissionBuilds: 0, rescues: 0, refuges: 0 };
-  const near = (box: Aabb): number[] => stream.clusters.filter(c => c.rect.minX < box.max.x + reach && c.rect.maxX > box.min.x - reach &&
-    c.rect.minZ < box.max.z + reach && c.rect.maxZ > box.min.z - reach).map(c => c.index);
+  // Clusters within reach of the actor: a grid query into a reused buffer (R2-4).
+  const nearBuffer: number[] = [];
+  const near = (box: Aabb): number => stream.clustersNear(box.min.x - reach, box.min.z - reach, box.max.x + reach, box.max.z + reach, nearBuffer);
   return {
     stats,
     get lastSafe(): Vec3 | null { return lastSafe; },
@@ -78,8 +79,9 @@ export function createCaveRuntime(o: CaveRuntimeOptions) {
     update(actor: Aabb, feet: Vec3, eye: Vec3, now: number): CaveHold {
       let holding = false, message = "", relocate: CaveRelocation | null = null;
       // Kit caves: build what the actor reaches, or hold until its data lands.
-      const clusters = near(actor);
-      for (const i of clusters) {
+      const count = near(actor);
+      for (let k = 0; k < count; k++) {
+        const i = nearBuffer[k]!;
         if (stream.ready(i)) continue;
         if (stream.available(i) || o.canGenerate()) { stream.finishNow(i, "admission"); stats.admissionBuilds++; }
         else { holding = true; message = "Loading cave…"; }
@@ -97,7 +99,7 @@ export function createCaveRuntime(o: CaveRuntimeOptions) {
       if (!holding) {
         holdingSince = -1;
         // A safe exterior pose: no cave near, open water, clear.
-        if (!clusters.length && outsideBiomes && feet.y < -0.5 && o.clear(feet)) lastSafe = { ...feet };
+        if (count === 0 && outsideBiomes && feet.y < -0.5 && o.clear(feet)) lastSafe = { ...feet };
         return { holding: false, message: "", relocate: null, state: "clear" };
       }
       stats.holdFrames++;

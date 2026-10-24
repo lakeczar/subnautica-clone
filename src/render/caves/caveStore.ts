@@ -92,9 +92,14 @@ export function httpCaveStore(base: string, options: CaveStoreOptions): CaveStor
     light(id) { const f = fields.get(id); if (!f) start(id); return f ?? null; },
     lightSettled: id => fields.has(id) || absent.has(id),
     retainLight(ids) {
-      const wanted = new Set(ids.slice(0, keep));
-      for (const id of ids.slice(0, keep)) start(id);
-      for (const [id, f] of fields) if (!wanted.has(id)) { fields.delete(id); stats.lightBytes -= f.data.byteLength + f.rock.data.byteLength; }
+      // No per-frame allocation: the wanted ids are the first `keep` (a short list).
+      const n = Math.min(keep, ids.length);
+      for (let k = 0; k < n; k++) start(ids[k]!);
+      for (const [id, f] of fields) {
+        let wanted = false;
+        for (let k = 0; k < n && !wanted; k++) wanted = ids[k] === id;
+        if (!wanted) { fields.delete(id); stats.lightBytes -= f.data.byteLength + f.rock.data.byteLength; }
+      }
     },
     stats,
   };

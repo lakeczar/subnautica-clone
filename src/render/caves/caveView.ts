@@ -92,12 +92,12 @@ export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[
     stream(light, upload) {
       near = light;
       if (live) return;
-      for (const id of light) source.field(id);
+      for (let k = 0; k < light.length; k++) source.field(light[k]!);
       // One texture set filling at a time, nearest first, a slab budget per
       // frame (CaveLighting.prepare), and never more caves than the texture
       // cache keeps (more would evict and re-upload forever).
-      for (const id of upload.slice(0, UPLOAD_AHEAD)) {
-        const f = source.field(id);
+      for (let k = 0; k < upload.length && k < UPLOAD_AHEAD; k++) {
+        const f = source.field(upload[k]!);
         if (f && !lighting.has(f)) { lighting.prepare(f); break; }
       }
     },

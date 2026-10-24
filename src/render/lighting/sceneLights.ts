@@ -92,6 +92,10 @@ interface Entry {
   /** Each cluster's reach, strength and colour (instance-independent), by
    * whether the mesh is attached (moving) or frozen. */
   params: { attached: boolean; list: readonly Omit<PointLight, "x" | "y" | "z">[] } | null;
+  /** A moving mesh's lights, one mutable light per cluster and instance,
+   * made once and moved in place each frame (R2-4), and where the
+   * round-robin refresh of a large one resumes. */
+  moving: { lights: { x: number; y: number; z: number }[]; next: number } | null;
   active: boolean;
 }
 
@@ -160,11 +164,39 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     }
     if (!clusters.length) return true;
     const instances = m.thinInstanceCount > 0 ? m.thinInstanceGetWorldMatrices() : null;
-    entries.set(mesh.uniqueId, { mesh, clusters, instances, world: null, placing: null, params: null, active: true });
+    entries.set(mesh.uniqueId, { mesh, clusters, instances, world: null, placing: null, params: null, moving: null, active: true });
     mesh.onDisposeObservable.addOnce(() => entries.delete(mesh.uniqueId));
     return true;
   };
   const scratch = new Matrix(), p = new Vector3();
+  /** Lights a moving mesh refreshes per frame; a larger one refreshes a
+   * round-robin window (every light stays sent; positions catch up within a
+   * few frames), so one unit is bounded without cutting its art. */
+  const MOVING_PER_FRAME = 2048;
+  const moveLights = (e: Entry, world: Matrix, instances: readonly (Matrix | null)[], params: readonly Omit<PointLight, "x" | "y" | "z">[]): PointLight[] => {
+    const clusters = e.clusters, total = instances.length * clusters.length;
+    if (!e.moving || e.moving.lights.length > total) e.moving = { lights: [], next: 0 };
+    const lights = e.moving.lights;
+    if (lights.length < total) {
+      // Made a bounded number a frame (only lights made so far are sent).
+      for (let made = 0; made < MOVING_PER_FRAME && lights.length < total; made++) {
+        const i = lights.length;
+        lights.push({ x: 0, y: 0, z: 0, ...params[i % clusters.length]! });
+        moveOne(e, i, world, instances);
+      }
+      return lights as PointLight[];
+    }
+    const count = Math.min(total, MOVING_PER_FRAME);
+    for (let k = 0; k < count; k++) { moveOne(e, e.moving.next, world, instances); e.moving.next = (e.moving.next + 1) % total; }
+    return e.moving.lights as PointLight[];
+  };
+  const moveOne = (e: Entry, i: number, world: Matrix, instances: readonly (Matrix | null)[]): void => {
+    const clusters = e.clusters, n = Math.floor(i / clusters.length), c = clusters[i % clusters.length]!, matrix = instances[n];
+    const m = matrix ? matrix.multiplyToRef(world, scratch) : world;
+    Vector3.TransformCoordinatesFromFloatsToRef(c.x, c.y, c.z, m, p);
+    const l = e.moving!.lights[i]!;
+    l.x = p.x; l.y = p.y; l.z = p.z;
+  };
   /** Lights placed between checks of the placement budget. */
   const PLACE_CHECK = 256;
   /** The entry's world lights. A frozen mesh's are placed once and cached,
@@ -178,6 +210,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     if (!e.params || e.params.attached === frozen) e.params = { attached: !frozen, list: e.clusters.map(c => lightFromCluster(c, !frozen)) };
     const params = e.params.list, clusters = e.clusters;
     const world = e.mesh.computeWorldMatrix(!frozen), instances = e.instances ?? [null];
+    if (!frozen) return moveLights(e, world, instances, params);
     const job = frozen ? (e.placing ??= { out: [], next: 0, cluster: 0 }) : { out: [] as PointLight[], next: 0, cluster: 0 };
     let sinceCheck = 0;
     for (; job.next < instances.length; job.next++, job.cluster = 0) {

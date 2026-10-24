@@ -277,3 +277,46 @@ test("STR-13 for terrain: only files the manifest lists are fetched, and a manif
   assert.equal(stale.bytes, null);
   assert.deepEqual(stale.asked, ["manifest.json"]);
 });
+
+test("R2-4: the stream tick touches only the clusters near the viewer and its heading, not the roster, and reuses its frame", () => {
+  // A fake stream: a roster of clusters on a 100 m lattice, the viewer at the origin.
+  const roster = (side: number) => {
+    const clusters = [] as { index: number; caves: string[]; rect: Rect }[];
+    for (let i = 0; i < side; i++) for (let j = 0; j < side; j++) {
+      const x = i * 100 - (side * 50), z = j * 100 - (side * 50);
+      clusters.push({ index: clusters.length, caves: [`c${clusters.length}`], rect: { minX: x, maxX: x + 20, minZ: z, maxZ: z + 20 } });
+    }
+    let gets = 0;
+    const counted = new Proxy(clusters, { get(t, k, r) { if (typeof k === "string" && /^\d+$/.test(k)) gets++; return Reflect.get(t, k, r); } });
+    const stream = {
+      clusters: counted, resident: [] as number[], stats: { syncBuilds: 0, built: 0, evicted: 0, maxStepMs: 0, residentBoxes: 0 },
+      ready: () => false, available: () => true, step() {}, evict() {}, inside: () => false, finishNow() {}, unsliced: [], onUnsliced: null,
+      clustersNear(minX: number, minZ: number, maxX: number, maxZ: number, out: number[]) {
+        let n = 0;
+        for (const c of clusters) if (c.rect.minX <= maxX && c.rect.maxX >= minX && c.rect.minZ <= maxZ && c.rect.maxZ >= minZ) out[n++] = c.index;
+        return n;
+      },
+    };
+    return { stream: stream as unknown as Parameters<typeof createKitStreamer>[0], gets: () => gets, footprints: new Map(clusters.map(c => [c.caves[0]!, c.rect])) };
+  };
+  const measure = (side: number) => {
+    const r = roster(side), s = createKitStreamer(r.stream, r.footprints);
+    const first = s.update({ x: 0, y: -30, z: 0 }, { x: 0, y: 0, z: 0 });
+    const before = r.gets(), second = s.update({ x: 0, y: -30, z: 0 }, { x: 0, y: 0, z: 0 });
+    assert.equal(second, first, "one frame object, reused");
+    assert.equal(second.wanted, first.wanted, "its arrays reused");
+    return { gets: r.gets() - before, wanted: second.wanted.length };
+  };
+  const small = measure(11), large = measure(33); // 121 and 1,089 clusters, both covering the 360 m prefetch
+  assert.equal(small.wanted, large.wanted, "the same clusters are near the viewer");
+  assert.equal(large.gets, small.gets, `cluster reads per tick: ${small.gets} of 121, ${large.gets} of 1,089`);
+});
+
+test("R2-4: the cave world's cluster query returns exactly the clusters whose rects meet the box", () => {
+  const w = gameWorld().kitCaves, out: number[] = [];
+  for (const [x, z, r] of [[-300, -100, 80], [600, -700, 400], [0, 0, 5], [1100, -1300, 250], [-2000, 2000, 10]] as const) {
+    const n = w.clustersNear(x - r, z - r, x + r, z + r, out);
+    const want = w.clusters.filter(c => c.rect.minX <= x + r && c.rect.maxX >= x - r && c.rect.minZ <= z + r && c.rect.maxZ >= z - r).map(c => c.index);
+    assert.deepEqual(out.slice(0, n).sort((a, b) => a - b), want, `${x},${z} ± ${r}`);
+  }
+});
