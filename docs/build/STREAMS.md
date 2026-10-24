@@ -790,3 +790,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Canary:** exclusive canary 261024-040242-6f8a was placed in the slice, boost applied, not disturbed, with steal, faults and swap reported per job.
   - **Notified:** REC-1 (fixed-pose A/B go) and CW-1 (remeasure after R2 fixes).
 - **Recording-feedback research:** Sol report on `research/recording-feedback` (`60196347`, pushed). The Opus independent view is running (`siltwake-evidence-feedback-opus-view`).
+- **REC-1 R3** (Sol on `becc169f`, report on `review/rec-1-r3` `31378375`): REQUEST CHANGES, 4 P2s and 1 P3. The clock passes (204/204).
+  - **Findings:** an encoder throw kills the serial queue; a locked older recording is credited as removed; encoder drops are invisible to completeness and strips; the inclusive cost is unestablished (a cheap fixed-pose plan of 2 pairs × 30–60 s, now under TST-16); the "conclusive" label.
+  - **Scope:** kept narrow; the Opus pack-format ideas are held for the owner's decision.
+- **Opus recording-feedback view** at `e5738b9b` on `research/recording-feedback-opus` (pushed). It recommends plan B: a play debrief plus a health split in REC-2, reading habits now, and an owner playtest protocol. DIRECTION rule changes await owner approval.
