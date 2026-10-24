@@ -55,17 +55,17 @@ function decode(ff, file) {
   return { times, ids };
 }
 /** R2-7's verdict from a run's raw facts and recording: every frame dated within its picture's lifetime. */
-function judgeClock(raw, rec, failed) {
+function judgeClock(raw, rec, failed, label = "clock") {
   // The export's own header (the live one may already name a segment begun after the cutoff).
   const header = JSON.parse(readFileSync(path.join(rec, "header.json"), "utf8"));
   const ff = decoder(), draws = raw.draws, cutoff = header.exported.cutoff, pauses = raw.pauses ?? [];
   const inPause = (T) => pauses.some((p) => T >= p.from && T <= p.to);
   const lastDrawBefore = (T) => { let k = null; for (const d of draws) if (d.t <= T) k = d; return k; };
-  if (!ff) { failed.push("clock: no ffmpeg here decodes VP9 with showinfo; judge this run with --decode where one does"); return { undecoded: true }; }
+  if (!ff) { failed.push(`${label}: no ffmpeg here decodes VP9 with showinfo; judge this run with --decode where one does`); return { undecoded: true }; }
   const byId = new Map(draws.map((d, i) => [d.id, { t: d.t, next: draws[i + 1]?.t ?? Infinity }]));
   const segments = [];
   for (const seg of header.video?.segments ?? []) {
-    const file = path.join(rec, seg.file), fixed = `${file}.remux.webm`;
+    const file = path.join(rec, seg.file), fixed = `${file}.remux${path.extname(file)}`;
     if (!remux(file, fixed)) { segments.push({ ...seg, error: "remux failed" }); continue; }
     const { times, ids } = decode(ff, fixed);
     const frames = times.map((pt, i) => {
@@ -80,16 +80,18 @@ function judgeClock(raw, rec, failed) {
       firstT: frames[0]?.T ?? null, lastT: frames.at(-1)?.T ?? null });
   }
   const lastT = Math.max(...segments.map((s) => s.lastT ?? -Infinity));
-  if (!segments.length) failed.push("clock: no video segments");
-  for (const s of segments) if (s.error || s.misdated || !s.frames || s.frames !== s.barcodes) failed.push(`clock: ${s.file} ${s.error ?? `${s.misdated} of ${s.frames} frames misdated (${s.barcodes} barcodes)`}`);
-  if (!(lastT >= cutoff - 1000 / 12 - 2)) failed.push(`clock: the video ends at ${lastT}, before the export cutoff ${cutoff}`);
+  if (!segments.length) failed.push(`${label}: no video segments`);
+  for (const s of segments) if (s.error || s.misdated || !s.frames || s.frames !== s.barcodes) failed.push(`${label}: ${s.file} ${s.error ?? `${s.misdated} of ${s.frames} frames misdated (${s.barcodes} barcodes)`}`);
+  if (!(lastT >= cutoff - 1000 / 12 - 2)) failed.push(`${label}: the video ends at ${lastT}, before the export cutoff ${cutoff}`);
   return { decoder: ff, segments, cutoff, lastT, reachesCutoff: lastT >= cutoff - 1000 / 12 - 2 };
 }
 
 if (arg("decode")) {
   const dir = arg("decode"), raw = JSON.parse(readFileSync(path.join(dir, "raw.json"), "utf8")), result = JSON.parse(readFileSync(path.join(dir, "adverse.json"), "utf8"));
-  result.failed = result.failed.filter((f) => !f.startsWith("clock:"));
+  result.failed = result.failed.filter((f) => !f.startsWith("clock:") && !f.startsWith("h264 clock:"));
   result.clock = { ...result.clock, ...judgeClock(raw, path.join(dir, "recording"), result.failed) };
+  if (existsSync(path.join(dir, "raw-h264.json")) && result.h264?.checked !== false)
+    result.h264 = { ...result.h264, ...judgeClock(JSON.parse(readFileSync(path.join(dir, "raw-h264.json"), "utf8")), path.join(dir, "h264"), result.failed, "h264 clock") };
   writeFileSync(path.join(dir, "adverse.json"), JSON.stringify(result, null, 1));
   console.log(JSON.stringify({ failed: result.failed, segments: result.clock.segments?.map((s) => `${s.file}: ${s.frames} frames, ${s.misdated} misdated`), reachesCutoff: result.clock.reachesCutoff }));
   process.exit(result.failed.length ? 1 : 0);
@@ -124,7 +126,7 @@ const server = createServer((req, res) => {
 });
 await new Promise((r) => server.listen(0, "127.0.0.1", r));
 const origin = `http://127.0.0.1:${server.address().port}`;
-const result = { clock: null, workers: null, encodeThrow: null, removals: null, backpressure: null, timeline: null, dpr2: null, errors: [], failed: [] };
+const result = { clock: null, workers: null, h264: null, encodeThrow: null, removals: null, backpressure: null, timeline: null, dpr2: null, errors: [], failed: [] };
 /** Draws a barcoded picture every 83 ms for `ms`, the capture told after every frame (as the game does); returns the draws. Runs in the page. */
 const DRAW = `async (cap, ms) => {
   const canvas = document.getElementById("c"), x = canvas.getContext("2d"), draws = [], t0 = performance.now();
@@ -139,8 +141,9 @@ const DRAW = `async (cap, ms) => {
   return draws;
 }`;
 /** A phase in the page, bounded: a hang is a recorded failure, not a stalled job. */
-const phase = async (name, fn) => {
+const phase = async (name, fn, url = null) => {
   console.log(`[adverse] ${name}`);
+  if (url) await c.page.goto(url);
   let timer;
   try { return await Promise.race([fn(), new Promise((_, no) => { timer = setTimeout(() => no(new Error(`${name}: no answer in 120 s`)), 120_000); })]); }
   catch (e) {
@@ -261,6 +264,26 @@ try {
   result.workers = { alive: workers.length, latestExportBytes: await c.page.evaluate(() => window.lastExport) };
   if (workers.length > 1) result.failed.push(`workers: ${workers.length} spool workers alive after four retirements`);
   if (!(result.workers.latestExportBytes > 0)) result.failed.push("workers: the latest completed recording did not export");
+
+  // --- R3b: H.264 in Matroska (software here: ?reccodec=avc), the same clock ---
+  const h264 = await phase("h264", () => c.page.evaluate(async ({ DRAW, zipOf }) => {
+    document.getElementById("c").getContext("2d");
+    const { FlightCapture } = await import("/modules/capture.js");
+    const cap = window.capR3 = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
+    const draws = await (0, eval)(DRAW)(cap, 5000);
+    return { zip: await (0, eval)(zipOf)(cap), draws, header: cap.header, warnings: cap.recorder.events.since(0).items.filter((e) => e.kind === "warning").map((e) => e.text) };
+  }, { DRAW, zipOf }), `${origin}/?recsegment=2000&reccodec=avc`);
+  if (h264) {
+    const dir = path.join(out, "h264");
+    writeFileSync(path.join(out, "h264.zip"), Buffer.from(h264.zip, "base64"));
+    unzip(path.join(out, "h264.zip"), dir);
+    const segs = JSON.parse(readFileSync(path.join(dir, "header.json"), "utf8")).video?.segments ?? [];
+    if (!segs.length) result.h264 = { checked: false, why: `no H.264 encoder in this browser: ${h264.warnings.slice(-1)[0] ?? "no segments"}` };
+    else {
+      writeFileSync(path.join(out, "raw-h264.json"), JSON.stringify({ draws: h264.draws, header: h264.header }));
+      result.h264 = { checked: true, files: segs.map((x) => x.file), ...judgeClock(h264, dir, result.failed, "h264 clock") };
+    }
+  }
 
   // --- R3-1: an encoder that throws leaves the spool working ------------------
   await c.page.goto(`${origin}/?r3=throw`);
@@ -408,6 +431,7 @@ try {
 }
 console.log(JSON.stringify({ failed: result.failed, clock: result.clock && { codec: result.clock.codec, hiddenSeen: result.clock.hiddenSeen, reachesCutoff: result.clock.reachesCutoff,
   segments: result.clock.segments?.map((s) => `${s.file}: ${s.frames} frames, ${s.misdated} misdated`) }, workers: result.workers,
+  h264: result.h264 && { checked: result.h264.checked, why: result.h264.why, files: result.h264.files?.length, segments: result.h264.segments?.map((x) => `${x.file}: ${x.frames} frames, ${x.misdated} misdated`) },
   encodeThrow: result.encodeThrow, removals: result.removals && { aBytes: result.removals.aBytes, aExport: result.removals.aExport, heldBytes: result.removals.heldBytes, refused: result.removals.removalRefused.length, bStopped: result.removals.bStopped },
   backpressure: result.backpressure && { gaps: result.backpressure.gaps.length, drops: result.backpressure.drops, complete: result.backpressure.complete, video: result.backpressure.video, held: result.backpressure.heldAtMid },
   timeline: result.timeline && { loadMs: result.timeline.loadMs, seekMs: result.timeline.seekMs, errors: result.timeline.errors.length }, dpr2: result.dpr2 }));

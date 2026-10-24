@@ -12,6 +12,7 @@
 import { FlightRecorder, FLIGHT_FORMAT, FLIGHT_VERSION, FRAME_COLUMNS, HOLD_CODES } from "./recorder.js";
 import type { FlightEvent, FlightSample, FlightSnapshot, SnapshotRequest } from "./recorder.js";
 import { zipBlob, type ZipEntry } from "./zip.js";
+import { encoderConfig, HARDWARE_CODECS } from "./webm.js";
 import { budgetFor, DEFAULT_BUDGET_BYTES, MIN_VIDEO_BUDGET_BYTES, planRetention, videoAllowed, type RetentionPlan, type StoredFile, type StoredKind } from "./retention.js";
 
 export type FlightMode = "off" | "driver" | "playtest";
@@ -35,9 +36,8 @@ export function flightMode(settings: FlightSettings, search = globalThis.locatio
 export const VIDEO_FPS = 12;
 export const VIDEO_SIZE = { width: 1280, height: 720 } as const;
 /** The software encoder's picture width (R3b: its CPU contends with the game's frame; the owner decides the fallback's size). */
-export const SOFTWARE_VIDEO_WIDTH = 1280;
-/** Hardware encoders tried first, at VIDEO_SIZE: they take the GPU's picture without a CPU readback. */
-const HARDWARE_CODECS = ["av01.0.04M.08", "vp09.00.10.08"];
+export const SOFTWARE_VIDEO_WIDTH = 960;
+
 const SNAPSHOT_SIZE = { width: 480, height: 270 } as const;
 /** Snapshots kept in memory for a driver that has not read them. */
 const SNAPSHOT_MEMORY = 600;
@@ -125,7 +125,7 @@ export class FlightCapture {
   private videoCodecs: string[] = ["vp9", "vp8"];
   private tryHardware = true;
   /** The encoder chosen for this recording (R3b): hardware at VIDEO_SIZE, else software at the fallback's width. Decided once, on the page. */
-  private videoPlan: { hardware: boolean; width: number } | null = null;
+  private videoPlan: { hardware: boolean; codec: string | null; width: number } | null = null;
   private videoWanted = false;
   private get videoWidth(): number { return this.videoPlan?.hardware ? VIDEO_SIZE.width : this.softwareWidth; }
   private minVideo = MIN_VIDEO_BUDGET_BYTES;
@@ -424,18 +424,19 @@ export class FlightCapture {
     this.video = v;
     this.recorder.event("session", `video started (WebCodecs, ${this.videoPlan.hardware ? "hardware" : "software"}, ${VIDEO_FPS} fps, ${v.segment.width}x${v.segment.height}, ${v.segment.file})`, { snapshot: false });
   }
-  /** Hardware or software, decided once (R3b): a hardware encoder at VIDEO_SIZE when the browser has one. */
+  /** Hardware or software, decided once (R3b): a hardware encoder at VIDEO_SIZE when the browser has one,
+   * AV1, then VP9, then H.264; else the software fallback. */
   private async planVideo(): Promise<void> {
-    let hardware = false;
+    let hardware = false, chosen: string | null = null;
     const probe = (globalThis as { VideoEncoder?: { isConfigSupported?(c: unknown): Promise<{ supported?: boolean }> } }).VideoEncoder?.isConfigSupported;
     if (this.tryHardware && probe) {
       for (const codec of HARDWARE_CODECS) {
         try {
-          if ((await probe.call(VideoEncoder, { codec, ...VIDEO_SIZE, bitrate: VIDEO_BITS, framerate: VIDEO_FPS, latencyMode: "realtime", hardwareAcceleration: "prefer-hardware" })).supported) { hardware = true; break; }
+          if ((await probe.call(VideoEncoder, { codec, ...VIDEO_SIZE, bitrate: VIDEO_BITS, framerate: VIDEO_FPS, latencyMode: "realtime", hardwareAcceleration: "prefer-hardware", ...encoderConfig(codec) })).supported) { hardware = true; chosen = codec; break; }
         } catch { /* not this one */ }
       }
     }
-    this.videoPlan = { hardware, width: hardware ? VIDEO_SIZE.width : this.softwareWidth };
+    this.videoPlan = { hardware, codec: chosen, width: hardware ? VIDEO_SIZE.width : this.softwareWidth };
     if (this.videoWanted && !this.stopped && !this.measurePaused) { this.videoWanted = false; this.setVideo(true); }
   }
   /** Measurement only (R3b, `?recmeasure=1`): paused, the recorder is off in place: its video segment
@@ -455,10 +456,12 @@ export class FlightCapture {
   /** A new segment file in the worker: a whole WebM, decodable alone, at the canvas's current aspect. */
   private newSegment(now: number): Video["segment"] {
     const s = this.spool!, index = this.segmentIndex++, size = this.scaled(this.videoWidth);
-    const file = `video/${String(index).padStart(3, "0")}.webm`;
+    // H.264 goes in Matroska; VP9, VP8 and AV1 in WebM (the same writer, its doctype by extension).
+    const avc = this.videoPlan?.hardware ? this.videoPlan.codec?.startsWith("avc1") : this.videoCodecs[0] === "avc";
+    const file = `video/${String(index).padStart(3, "0")}.${avc ? "mkv" : "webm"}`;
     this.segments.push({ file, start: null, end: null, ...size });
     this.stored.set(file, { session: this.session, file, kind: "video", bytes: 0 });
-    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, codecs: this.videoCodecs, hardware: this.videoPlan?.hardware === true });
+    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, codecs: this.videoCodecs, hardware: this.videoPlan?.hardware === true, hardwareCodec: this.videoPlan?.codec ?? null });
     return { file, index, start: null, began: now, ...size };
   }
   private videoHeader(): void {

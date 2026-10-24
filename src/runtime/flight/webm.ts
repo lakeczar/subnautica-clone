@@ -1,4 +1,4 @@
-/** REC-1 R2-7: a minimal live WebM writer for the in-game video. The encoder
+/** REC-1 R2-7: a minimal live WebM (Matroska, for H.264) writer for the in-game video. The encoder
  * (WebCodecs, in the spool worker) is given each picture with the page time it
  * shows; this writes its chunks with exactly those times, so a block's time in
  * the file plus the segment's origin is the page time of its picture. A stall,
@@ -8,9 +8,15 @@
  * (it is appended to as it goes), every Cluster is written whole with its
  * size, and there are no Cues (a pack's remux adds them). DOM-free. */
 
-export type WebmCodec = "V_VP9" | "V_VP8" | "V_AV1";
+export type WebmCodec = "V_VP9" | "V_VP8" | "V_AV1" | "V_MPEG4/ISO/AVC";
 
 const CLUSTER_MAX_MS = 30_000;
+
+/** Hardware encoders the page and the worker try first (R3b): they take the GPU's picture without a CPU
+ * readback. H.264 last: nearly every GPU has one (integrated ones included); it is written as Matroska (.mkv). */
+export const HARDWARE_CODECS = ["av01.0.04M.08", "vp09.00.10.08", "avc1.42001f"];
+/** WebCodecs' configuration for a codec string: H.264 as length-prefixed NAL units with its avcC (what Matroska carries). */
+export const encoderConfig = (codec: string): Record<string, unknown> => (codec.startsWith("avc1") ? { avc: { format: "avc" } } : {});
 
 /** EBML variable-size integer for an element's size. */
 function size(n: number): Uint8Array {
@@ -46,10 +52,10 @@ const UNKNOWN_SIZE = Uint8Array.from([0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 
 
 /** The file's start: the EBML header, an unknown-size Segment, Info (1 ms ticks) and the one video track
  * (with the encoder's decoder configuration as CodecPrivate when it gives one: AV1's av1C). */
-export function webmHead(codec: WebmCodec, width: number, height: number, codecPrivate?: Uint8Array): Uint8Array {
+export function webmHead(codec: WebmCodec, width: number, height: number, codecPrivate?: Uint8Array, docType: "webm" | "matroska" = "webm"): Uint8Array {
   const ebml = el([0x1a, 0x45, 0xdf, 0xa3],
     el([0x42, 0x86], uint(1)), el([0x42, 0xf7], uint(1)), el([0x42, 0xf2], uint(4)), el([0x42, 0xf3], uint(8)),
-    el([0x42, 0x82], ascii("webm")), el([0x42, 0x87], uint(4)), el([0x42, 0x85], uint(2)));
+    el([0x42, 0x82], ascii(docType)), el([0x42, 0x87], uint(4)), el([0x42, 0x85], uint(2)));
   const info = el([0x15, 0x49, 0xa9, 0x66], el([0x2a, 0xd7, 0xb1], uint(1_000_000)), el([0x4d, 0x80], ascii("siltwake")), el([0x57, 0x41], ascii("siltwake")));
   const track = el([0xae], el([0xd7], uint(1)), el([0x73, 0xc5], uint(1)), el([0x83], uint(1)), el([0x86], ascii(codec)),
     ...(codecPrivate?.length ? [el([0x63, 0xa2], codecPrivate)] : []),

@@ -5,7 +5,7 @@
 // machines, so a pack looks the same from either. No GPU is needed: the page
 // only draws images and text.
 import { execFileSync } from "node:child_process";
-import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, rmSync } from "node:fs";
+import { existsSync, mkdirSync, mkdtempSync, readdirSync, readFileSync, renameSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { findFfmpeg } from "./record.mjs";
@@ -35,18 +35,27 @@ const dataUrl = (file) => `data:image/${file.endsWith(".png") ? "png" : "jpeg"};
 
 /** Re-muxes a live WebM (the in-game writer's, piped ffmpeg's) so it has a duration and seeks (a stream copy). */
 export function remux(file, out) {
-  const ff = findFfmpeg();
-  if (!ff) return false;
-  try { execFileSync(ff, ["-hide_banner", "-loglevel", "error", "-i", file, "-c", "copy", "-y", out], { stdio: "pipe", timeout: 600000 }); return true; } catch { return false; }
+  // Playwright's ffmpeg remuxes WebM; H.264 (Matroska, MP4) wants the system's.
+  for (const ff of [findFfmpeg(), "ffmpeg"].filter(Boolean)) {
+    try { execFileSync(ff, ["-hide_banner", "-loglevel", "error", "-i", file, "-c", "copy", ...(out.endsWith(".mp4") ? ["-movflags", "+faststart"] : []), "-y", out], { stdio: "pipe", timeout: 600000 }); return true; } catch { /* the next */ }
+  }
+  return false;
+}
+/** A segment's seekable copy in place (its own container), and for H.264 in Matroska a playable .mp4 beside it (browsers do not play .mkv). */
+export function remuxSegment(file) {
+  const ext = path.extname(file), tmp = `${file}.tmp${ext}`;
+  if (remux(file, tmp)) renameSync(tmp, file);
+  if (ext === ".mkv") remux(file, file.replace(/\.mkv$/, ".mp4"));
 }
 /** Video duration in seconds, from ffmpeg's stderr. */
 export function videoSeconds(file) {
-  const ff = findFfmpeg();
-  if (!ff) return null;
-  let text = "";
-  try { execFileSync(ff, ["-hide_banner", "-i", file], { stdio: "pipe" }); } catch (e) { text = String(e.stderr ?? ""); }
-  const m = /Duration: (\d+):(\d+):([\d.]+)/.exec(text);
-  return m ? Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]) : null;
+  for (const ff of [findFfmpeg(), "ffmpeg"].filter(Boolean)) {
+    let text = "";
+    try { execFileSync(ff, ["-hide_banner", "-i", file], { stdio: "pipe" }); } catch (e) { text = String(e.stderr ?? ""); }
+    const m = /Duration: (\d+):(\d+):([\d.]+)/.exec(text);
+    if (m) return Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  }
+  return null;
 }
 
 /**
@@ -54,12 +63,18 @@ export function videoSeconds(file) {
  * scaled to w×h PNGs. Returns [{ file, vt }] (vt: video seconds).
  */
 export function extractFrames(video, from, seconds, fps, w, h) {
-  const ff = findFfmpeg();
-  if (!ff) throw new Error("no ffmpeg (system or Playwright's: npx playwright-core install ffmpeg)");
+  const ffs = [findFfmpeg(), "ffmpeg"].filter(Boolean);
+  if (!ffs.length) throw new Error("no ffmpeg (system or Playwright's: npx playwright-core install ffmpeg)");
   const dir = mkdtempSync(path.join(tmpdir(), "rec1-frames-"));
   const start = Math.max(0, from);
-  execFileSync(ff, ["-hide_banner", "-loglevel", "error", "-ss", start.toFixed(3), "-i", video, "-t", seconds.toFixed(3),
-    "-vf", `scale=${w}:${h}`, "-r", String(fps), "-f", "image2", path.join(dir, "%05d.png")], { stdio: "pipe", timeout: 300000 });
+  // Playwright's ffmpeg decodes VP8/VP9; H.264 (and AV1) want the system's.
+  for (const [i, ff] of ffs.entries()) {
+    try {
+      execFileSync(ff, ["-hide_banner", "-loglevel", "error", "-ss", start.toFixed(3), "-i", video, "-t", seconds.toFixed(3),
+        "-vf", `scale=${w}:${h}`, "-r", String(fps), "-f", "image2", path.join(dir, "%05d.png")], { stdio: "pipe", timeout: 300000 });
+      if (readdirSync(dir).some((f) => f.endsWith(".png"))) break;
+    } catch (e) { if (i === ffs.length - 1) throw e; }
+  }
   const files = readdirSync(dir).filter((f) => f.endsWith(".png")).sort();
   return { dir, frames: files.map((f, i) => ({ file: path.join(dir, f), vt: start + i / fps })), cleanup: () => rmSync(dir, { recursive: true, force: true }) };
 }

@@ -44,7 +44,9 @@ export function timelineHtml(r, a) {
   const segs = videoSegments(h).filter((x) => existsSync(path.join(r.rec, x.file)));
   const bytes = segs.reduce((n, x) => n + statSync(path.join(r.rec, x.file)).size, 0);
   const inline = bytes <= INLINE_VIDEO;
-  const videos = segs.map((x) => ({ src: inline ? `data:video/webm;base64,${readFileSync(path.join(r.rec, x.file)).toString("base64")}` : `recording/${x.file}`,
+  // H.264 segments play from their .mp4 copy (browsers do not play Matroska).
+  const playable = (f) => (f.endsWith(".mkv") && existsSync(path.join(r.rec, f.replace(/\.mkv$/, ".mp4"))) ? f.replace(/\.mkv$/, ".mp4") : f);
+  const videos = segs.map((x) => ({ src: inline ? `data:video/${playable(x.file).endsWith(".mp4") ? "mp4" : "webm"};base64,${readFileSync(path.join(r.rec, playable(x.file))).toString("base64")}` : `recording/${playable(x.file)}`,
     start: (x.start - t0) / 1000, end: x.end != null ? (x.end - t0) / 1000 : null }));
   const hasVideo = videos.length > 0;
   // Stretches without a fresh picture (R3-3): marked on the chart, and named over the video when the cursor is in one.

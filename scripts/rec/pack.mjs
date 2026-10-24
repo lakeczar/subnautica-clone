@@ -15,7 +15,7 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync, renameSync } from "node:fs";
 import path from "node:path";
 import { analyse, loadRecording, summaryJson, THRESHOLDS, HOLDING, videoSegments } from "./analyse.mjs";
-import { composeStrip, composer, extractFrames, remux, renderHtml, ensureDir, videoSeconds as videoSeconds_ } from "./imaging.mjs";
+import { composeStrip, composer, extractFrames, remuxSegment, renderHtml, ensureDir, videoSeconds as videoSeconds_ } from "./imaging.mjs";
 import { frameTimeSvg, memorySvg, pacingSvg, fmtTime } from "./charts.mjs";
 import { unzip } from "./unzip.mjs";
 import { timelineHtml } from "./timeline.mjs";
@@ -101,7 +101,7 @@ export async function buildPack(dir, opts = {}) {
   for (const s of videoSegments(h)) {
     const file = path.join(r.rec, s.file);
     if (!existsSync(file)) { videoSeconds[s.file] = null; continue; }
-    if (remux(file, `${file}.tmp.webm`)) renameSync(`${file}.tmp.webm`, file);
+    remuxSegment(file);
     videoSeconds[s.file] = videoSeconds_(file);
   }
   const a = analyse(r, THRESHOLDS, { videoSeconds });

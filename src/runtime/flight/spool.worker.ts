@@ -23,7 +23,7 @@
  *   { op: "video-close", id, final } → { videoClosed: id, file, frames, firstMs, lastMs }
  *   unprompted: { wrote: file, bytes } after each cluster; { failed: file, ... } as above. */
 import { crc32, zipLayout, type ZipLayoutEntry } from "./zip.js";
-import { WebmClusters, webmHead, type WebmCodec } from "./webm.js";
+import { encoderConfig, HARDWARE_CODECS, WebmClusters, webmHead, type WebmCodec } from "./webm.js";
 
 interface SyncHandle {
   getSize(): number;
@@ -41,7 +41,7 @@ type Message =
   | { op: "export"; dir: string; out: string; id: number }
   | { op: "barrier"; id: number }
   | { op: "release"; dir: string; id: number }
-  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; codecs?: string[]; hardware?: boolean }
+  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; codecs?: string[]; hardware?: boolean; hardwareCodec?: string | null }
   | { op: "video-frame"; t: number; bitmap?: ImageBitmap }
   | { op: "video-flush"; id: number }
   | { op: "video-close"; id: number; final: boolean };
@@ -134,24 +134,31 @@ function writeVideo(seg: Segment, bytes: Uint8Array): void {
   }
 }
 /** Software codecs by name, as the main thread orders them. */
-const CODECS: Record<string, [string, WebmCodec]> = { vp9: ["vp09.00.10.08", "V_VP9"], vp8: ["vp8", "V_VP8"] };
+const CODECS: Record<string, [string, WebmCodec]> = { vp9: ["vp09.00.10.08", "V_VP9"], vp8: ["vp8", "V_VP8"], avc: ["avc1.42001f", "V_MPEG4/ISO/AVC"] };
 /** Tried first: a hardware encoder takes the GPU's picture without a CPU readback and costs the page almost nothing (R3b). */
-const HARDWARE: [string, WebmCodec][] = [["av01.0.04M.08", "V_AV1"], ["vp09.00.10.08", "V_VP9"]];
-let hardware = false, head: { width: number; height: number } | null = null;
-async function openEncoder(width: number, height: number, fps: number, bitrate: number, order: readonly string[] = ["vp9", "vp8"], tryHardware = false): Promise<void> {
-  const size = `${width}x${height}:${tryHardware ? "hw," : ""}${order.join(",")}`;
+const WEBM_ID: Record<string, WebmCodec> = { av01: "V_AV1", vp09: "V_VP9", vp8: "V_VP8", avc1: "V_MPEG4/ISO/AVC" };
+const HARDWARE: [string, WebmCodec][] = HARDWARE_CODECS.map((c) => [c, WEBM_ID[c.split(".")[0]!]!]);
+let hardware = false, head: { width: number; height: number; docType: "webm" | "matroska" } | null = null;
+async function openEncoder(width: number, height: number, fps: number, bitrate: number, order: readonly string[] = ["vp9", "vp8"], tryHardware = false,
+  docType: "webm" | "matroska" = "webm", hardwareCodec: string | null = null): Promise<void> {
+  const size = `${width}x${height}:${tryHardware ? `hw ${hardwareCodec ?? "any"},` : ""}${order.join(",")}`;
+  head = { width, height, docType };
   if (encoder && encoder.state === "configured" && encoderSize === size) return;
   try { encoder?.close(); } catch { /* closed */ }
   encoder = null;
   if (typeof VideoEncoder === "undefined") throw new Error("this browser has no WebCodecs video encoder");
-  const tries: [string, WebmCodec, boolean][] = [...(tryHardware ? HARDWARE : []).map(([c, id]) => [c, id, true] as [string, WebmCodec, boolean]),
+  // The page chose the hardware codec (its file's container follows it); the others stay as fallbacks.
+  const hw = hardwareCodec ? [...HARDWARE.filter(([c]) => c === hardwareCodec), ...HARDWARE.filter(([c]) => c !== hardwareCodec)] : HARDWARE;
+  const tries: [string, WebmCodec, boolean][] = [...(tryHardware ? hw : []).map(([c, id]) => [c, id, true] as [string, WebmCodec, boolean]),
     ...order.map((k) => CODECS[k]).filter((x): x is [string, WebmCodec] => !!x).map(([c, id]) => [c, id, false] as [string, WebmCodec, boolean])];
-  for (const [c, id, hw] of tries) {
-    const config: VideoEncoderConfig = { codec: c, width, height, bitrate, framerate: fps, latencyMode: "realtime", hardwareAcceleration: hw ? "prefer-hardware" : "prefer-software" };
+  for (const [c, id, isHw] of tries) {
+    const config = { codec: c, width, height, bitrate, framerate: fps, latencyMode: "realtime", hardwareAcceleration: isHw ? "prefer-hardware" : "prefer-software", ...encoderConfig(c) } as VideoEncoderConfig;
     let ok = false;
     try { ok = (await VideoEncoder.isConfigSupported(config)).supported === true; } catch { ok = false; }
     if (!ok) continue;
-    codec = id; hardware = hw; head = { width, height };
+    // H.264 needs Matroska: a .webm file cannot carry it.
+    if (id === "V_MPEG4/ISO/AVC" && docType !== "matroska") continue;
+    codec = id; hardware = isHw;
     encoderSize = size;
     encoder = new VideoEncoder({
       output: (chunk, meta) => {
@@ -161,7 +168,7 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
         if (!seg.headWritten && head) {
           const description = meta?.decoderConfig?.description;
           const priv = description ? new Uint8Array(description instanceof ArrayBuffer ? description : (description as ArrayBufferView).buffer.slice(0)) : undefined;
-          writeVideo(seg, webmHead(codec, head.width, head.height, priv));
+          writeVideo(seg, webmHead(codec, head.width, head.height, priv, head.docType));
           seg.headWritten = true;
         }
         const bytes = new Uint8Array(chunk.byteLength);
@@ -177,7 +184,7 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
 }
 async function videoOpen(m: Extract<Message, { op: "video-open" }>): Promise<void> {
   try {
-    await openEncoder(m.width, m.height, m.fps, m.bitrate, m.codecs, m.hardware === true);
+    await openEncoder(m.width, m.height, m.fps, m.bitrate, m.codecs, m.hardware === true, m.file.endsWith(".mkv") ? "matroska" : "webm", m.hardwareCodec ?? null);
     const h = await handle(m.dir, m.file);
     h.truncate(0);
     const seg: Segment = { dir: m.dir, file: m.file, h, clusters: null as unknown as WebmClusters, origin: null, frames: 0, broken: false, headWritten: false };

@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp8|vp9,…] [--video-width W] [--alternate W]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp8|vp9,…] [--video-width W] [--alternate W] [--paused]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -76,7 +76,7 @@ function probeScript() {
 }
 
 const gpu0 = gpuInfo();
-const query = (mode === "off" ? "?rec=off" : mode === "playtest" ? `?rec=playtest${arg("video") === "off" ? "&recvideo=0" : ""}` : "?rec=driver") + (flag("no-timing") ? "&rectiming=0" : "") + (arg("alternate") ? "&recmeasure=1" : "") + (arg("codec") ? `&reccodec=${arg("codec")}` : "") + (arg("video-width") ? `&recvideowidth=${arg("video-width")}` : "");
+const query = (mode === "off" ? "?rec=off" : mode === "playtest" ? `?rec=playtest${arg("video") === "off" ? "&recvideo=0" : ""}` : "?rec=driver") + (flag("no-timing") ? "&rectiming=0" : "") + (arg("alternate") || flag("paused") ? "&recmeasure=1" : "") + (arg("codec") ? `&reccodec=${arg("codec")}` : "") + (arg("video-width") ? `&recvideowidth=${arg("video-width")}` : "");
 const result = { mode, video: videoOn, machine, commit, segment, errors: [], reached: [], skipped: [] };
 let exit = 0, g = null;
 try {
@@ -91,6 +91,9 @@ try {
   // is the same in every mode and a recorder's cost is not lost in the scene's.
   const holdS = Number(arg("hold", 0));
   if (holdS > 0) { await releaseAll(g); await g.page.waitForTimeout(HOLD_SETTLE_MS); }
+  // --paused: the recorder paused in place for the whole hold (R3b: shows a paused recorder costs what a page without one does).
+  if (flag("paused") && !(await g.page.evaluate(() => window.__siltwake.measure.pauseRecorder(true)))) throw new Error("--paused: the page refused to pause its recorder (playtest mode needed)");
+  if (flag("paused")) await g.page.waitForTimeout(3000); // the segment's last data drains before the measured window
   // Measured from here: the travel itself. Main-thread task time over the window
   // (CDP: every task, GC and the recorder's later tasks included) is the inclusive cost (R1-S1).
   await g.page.evaluate(() => window.__recProbe.reset());
