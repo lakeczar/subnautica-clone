@@ -19,7 +19,7 @@
 // frame times are labelled).
 import { createRequire } from "node:module";
 import { createServer } from "node:http";
-import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSync } from "node:fs";
+import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSync, utimesSync, closeSync, openSync } from "node:fs";
 import path from "node:path";
 import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
 import { streamTrace } from "./stream-trace.mjs";
@@ -121,7 +121,16 @@ const key = async (k, on) => { if (on && !held.has(k)) { held.add(k); await page
 const releaseAll = async () => { for (const k of [...held]) await key(k, false); };
 const wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
 let eye = 0;
+/** The queue's stall clock: touched from the measuring process while it reads the page (at most every 20 s). */
+let beatAt = 0;
+function beat() {
+  const f = process.env.SILTWAKE_JOB_HEARTBEAT, t = Date.now();
+  if (!f || t - beatAt < 20000) return;
+  beatAt = t;
+  try { utimesSync(f, t / 1000, t / 1000); } catch { try { closeSync(openSync(f, "a")); } catch {} }
+}
 async function read() {
+  beat();
   return page.evaluate(() => {
     const c = document.querySelector("#ocean").dataset, q = (s) => document.querySelector(s);
     const pitch = Number(/(-?\d+)/.exec(q("#pitch-cue")?.getAttribute("aria-label") ?? "Pitch 0")?.[1] ?? 0);
