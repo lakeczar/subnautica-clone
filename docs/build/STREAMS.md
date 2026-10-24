@@ -861,3 +861,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Fit:** viable as the "native NVENC recorder" route from the hw-encode research.
   - **Not adopted now:** factory-worker's browsers are headless on a display-less GPU (it would need an X server on the 3090, a VM change); the timing is wall-clock only, not page-time; and its docs warn that NVENC causes memory downclocking on NVIDIA drivers before 580 (factory-worker runs 550), which would distort 3090 frame evidence.
   - **Kept as the fallback** if the 540p software path is over budget on Linux. It would need owner/fleet approval for the X server and a 580+ driver.
+- **NVIDIA driver research in** (`research/nvidia-driver` `3079444c`, pushed):
+  - **Findings:** an upgrade isn't a demonstrated fix for the stalls and won't enable NVENC in Linux Chrome (no Vulkan Video encoder or NVENC backend in Chromium; nvidia-vaapi-driver is decode-only). Keep GL-EGL.
+  - **Cheap first steps on 550:** a task-owned GL shader disk cache with a cold/warm comparison (no VM change; handed to SIM-PERF-1); persistence mode and clock-lock diagnostics need root and owner approval.
+  - **Upgrade option, owner-approved maintenance only:** R595 production (595.112.07) via NVIDIA's Debian 13 APT repo, pinned, with a full guest rollback image. R580 has no Debian 13 vendor repo.
