@@ -30,6 +30,20 @@ export const mastNearby = (p: CraftProfile, surfaced: boolean, distanceToHost: n
 /** SYS-2 `OutpostRules.limitBonus`: the best network crafted (tiers do not stack). */
 export const outpostLimitBonus = (crafted: readonly string[]): number =>
   Math.max(0, ...crafted.filter(hostUpgradeId).map((id) => hostUpgrade(id).outpostBonus ?? 0));
+/** LS-1: a locker module's capacity, extension included. The one authority: container
+ * creation, the upgrade, the validator and the HUD all read it. */
+export const lockerModuleCapacity = (mods: ModuleUpgrades, itemId: string, base: number): number => {
+  const id = mods[itemId];
+  return Math.round(base * ((id && hostUpgrade(id).lockerFactor) || 1));
+};
+/** LS-1: whether this planter module carries a heated grow bed. */
+export const growBedFitted = (mods: ModuleUpgrades, itemId: string): boolean => {
+  const id = mods[itemId];
+  return !!id && hostUpgrade(id).growBed === true;
+};
+/** LS-1: the handheld ping's range: the best crafted lens, else the base range. */
+export const pingRange = (crafted: readonly string[], base: number): number =>
+  Math.max(base, ...crafted.filter(hostUpgradeId).map((id) => hostUpgrade(id).pingRange ?? 0));
 /** SYS-2 `chartView(…, { livePosition })`. */
 export const livePosition = (crafted: readonly string[]): boolean =>
   crafted.filter(hostUpgradeId).some((id) => hostUpgrade(id).livePosition === true);

@@ -66,6 +66,8 @@ export interface ItemStack {
   charge: number | null;
   provenance: "public" | "maintenance";
 }
+/** A plan kept from an older rule, with what earned it (a scan or a story discovery). */
+export interface LegacyGrant { blueprint: BlueprintId; source: { kind: "scan" | "discovery"; id: string } }
 export interface ContainerState {
   id: string;
   kind: "diver" | "locker" | "buoy" | "vehicle" | "cache" | "equipment";
@@ -148,6 +150,9 @@ export interface GameState {
     hintLevel: number;
     /** C4: what the player has watched of each world cycle (CY's observer). */
     cycles: CycleObservation[];
+    /** LS-1 (schema 8): plans earned under an older rule, each with the provenance that
+     * earned them (`save/legacyGrants.ts`). A permanent, narrow saved fact. */
+    legacyGrants: LegacyGrant[];
   };
   world: {
     resources: { id: SourceId; stock: number; reserve: number }[];
@@ -260,6 +265,8 @@ export type GameCommand =
   | { type: "install-host-module"; hostId: string; socket: string; itemId: string }
   | { type: "remove-host-module"; hostId: string; socket: string; to?: string }
   | { type: "start-decode"; hostId: string; socket: string; decodable: string }
+  /** LS-1: a code typed at a coded door's keypad. */
+  | { type: "enter-code"; door: string; code: string }
   | { type: "plant"; hostId: string; socket: string; seed: string }
   | { type: "harvest"; hostId: string; socket: string; to?: string; replant?: boolean }
   | { type: "place-beacon"; name: string }

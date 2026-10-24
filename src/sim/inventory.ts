@@ -16,6 +16,8 @@ import { HEARTHLINE_CONTAINERS } from "../content/fleet/hearthlineInterior.js";
 import type { Fitting, GameState, ItemStack, Vec3, VehicleState } from "./types.js";
 import { FIXED_HOSTS, HOST_REACH, moduleOfItem } from "../content/systems/hosts.js";
 import { stackable } from "../content/systems/items.js";
+import { LOST_SITE_CACHES } from "../content/systems/lostSites.js";
+import { SITE_CACHE_REACH, siteCacheOf } from "./systems/siteCaches.js";
 /** A beached Spindle's ramp reaches this far up the shore (C4). */
 export const SHORE_RAMP_REACH = 10;
 export const distance = (a: Vec3, b: Vec3): number =>
@@ -272,6 +274,9 @@ export function containerAccessible(s: GameState, id: string): boolean {
     );
   const cache = s.recovery.caches.find((c) => c.containerId === id);
   if (cache) return distance(s.player.pose.position, cache.position) < 4;
+  // LS-1: a lost site's finite cache opens within reach of its point.
+  const site = siteCacheOf(id);
+  if (site) return distance(s.player.pose.position, LOST_SITE_CACHES[site].position) < SITE_CACHE_REACH;
   const v = s.fleet.vehicles.find((v) => v.cargoId === id);
   // A berthed craft's hold opens from inside its carrier (the dry berth room).
   if (v?.berth && s.player.interiorId === v.berth.carrierId && s.fleet.docking?.transaction?.vehicleId !== v.id) return true;
@@ -304,6 +309,8 @@ export function containerLabel(s: GameState, id: string): string {
   if (outpost) return `${outpost.name} locker`;
   if (s.systems.sockets.some((e) => `${e.itemId}_locker` === id) ||
       s.inventory.items.some((i) => i.kind === "mod_locker" && `${i.id}_locker` === id)) return "locker module";
+  const site = siteCacheOf(id);
+  if (site) return LOST_SITE_CACHES[site].label.toLowerCase();
   if (s.inventory.containers.find((c) => c.id === id)?.kind === "cache") return "cargo cache";
   return id.replaceAll("_", " ");
 }

@@ -62,6 +62,7 @@ export const FRONTIER_SOURCES = {
 const SEED_FLOOR = {
   reef_staple_cuttings: -8.09, reef_ribbon_cuttings: -10.36, island_salve_fronds: -5.58,
   canopy_lumen_bulbs: -133.25, basin_pale_spores: -180.08,
+  hub_racks_cups: -48.4, hub_racks_fans: -48.4, hub_racks_fronds: -48.4, rift_kiln_tubers: -251.4,
 } as const satisfies Record<keyof typeof SYS2_SOURCES, number>;
 export const SEED_SOURCES = Object.fromEntries((Object.keys(SYS2_SOURCES) as (keyof typeof SYS2_SOURCES)[]).map((id) => {
   const s = SYS2_SOURCES[id];

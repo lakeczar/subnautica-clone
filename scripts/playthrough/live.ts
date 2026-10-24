@@ -301,6 +301,27 @@ const firstItem = (d: Driver, kind: string): string => {
   return i.id;
 };
 
+/** LS-1 1b: the hub spur by Dart, from the apron over both steps (`route.hub.spur`), to
+ * the keeper's racks on the second step: read the planting card (the planter plan, on
+ * the main path, no decode) and take a staple cutting, then home to the cradle. */
+const SPUR_TO_RACKS = [{ x: -14, y: -10, z: -318 }, { x: 18, y: -12, z: -342 }, { x: 40, y: -20, z: -366 }, { x: 80, y: -31, z: -400 },
+  { x: 133, y: -34, z: -432 }, { x: 180, y: -38, z: -460 }] as const;
+function keepersRacks(d: Driver): void {
+  const dart = d.vehicle("dart")!;
+  reach(d, dart.id);
+  boardAt(d, dart);
+  pilotTo(d, "to the spur apron", SPUR_TO_RACKS[0]);
+  fly(d, { id: "the spur to the keeper's racks", source: "S2 route.hub.spur to the second step", points: SPUR_TO_RACKS.map((q) => ({ ...q })) });
+  leaveCraft(d);
+  recordRead(d, "hub_racks_card");
+  if (!d.state.knowledge.blueprints.includes("bp_cultivation")) throw new Blocked("The planting card granted no planter plan", where(d.state));
+  gather(d, "hub_racks_cups", 1);
+  returnToCraft(d, d.vehicle("dart")!);
+  fly(d, { id: "the spur home", source: "S2 route.hub.spur reversed", points: [...SPUR_TO_RACKS].reverse().map((q) => ({ ...q })) });
+  pilotTo(d, "home to the cradle", { x: 20, y: -1.6, z: -21 });
+  dockAndService(d, d.vehicle("dart")!);
+}
+
 /** C4: the main-path kit plan and the signal rack at the workshop; a decoder and a
  * planter socketed at home, an upgrade fitted to the Creel, a lost site found by
  * Dart and its log set decoding in the background. */
@@ -327,13 +348,14 @@ const systems: Phase = {
       d.command({ type: "install-host-module", hostId: "island_workshop", socket: "s1", itemId: firstItem(d, "mod_relay") });
     }
     make(d, "outpost_kit_basic", "pod", REEF);
+    unload(d, "diver", "pod_locker", ["outpost_kit_basic"]);
+    // LS-1 1b: the planter plan is on the keeper's racks (the spur's second step); a staple
+    // cutting comes from the racks too, then the planter is built and planted at the pod.
+    keepersRacks(d);
     make(d, "mod_planter", "pod", ISLES);
-    // A staple cutting from the nursery beside the pod, planted in the pod's own socket.
-    gather(d, "reef_staple_cuttings", 1);
     enter(d, "pod");
     d.command({ type: "install-host-module", hostId: "home_pod", socket: "s0", itemId: firstItem(d, "mod_planter") });
     d.command({ type: "plant", hostId: "home_pod", socket: "s0", seed: "seed_staple_cup" });
-    unload(d, "diver", "pod_locker", ["outpost_kit_basic"]);
     // The pump house: within 10 m the Dart's pilot captures the site's records.
     const dart = d.vehicle("dart")!;
     reach(d, dart.id);

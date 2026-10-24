@@ -1,6 +1,7 @@
 /** Survey station and handheld ping: pure queries over SOURCES and the scan state.
  * A material is known once any source of it has been scanned or gathered; then
  * every source of that material in range is marked, including unvisited ones. */
+import { pingRange } from "../upgrades/hosts.js";
 import { SOURCE_RENEWAL, SOURCES } from "../../content/registry.js";
 import { PING_RANGE, SURVEY_TIERS } from "../../content/systems/navigation.js";
 import { distance, equipped } from "../inventory.js";
@@ -82,6 +83,8 @@ export function stationSurvey(s: GameState, sys: SystemsState, hostId: string, t
 }
 /** The scanner's short-range handheld ping from the diver or the craft they pilot. */
 export function handheldPing(s: GameState): StationResult {
-  if (!equipped(s, "essential_tools")) return { refusal: "The ping needs the scanner.", range: PING_RANGE, marks: [] };
-  return { refusal: null, range: PING_RANGE, marks: surveyQuery({ origin: s.player.pose.position, range: PING_RANGE, scans: s.knowledge.scans, resources: s.world.resources, renewal: s.world.renewal }) };
+  // LS-1: a crafted ping lens extends the range (one authority, `pingRange`).
+  const range = pingRange(s.knowledge.crafted, PING_RANGE);
+  if (!equipped(s, "essential_tools")) return { refusal: "The ping needs the scanner.", range, marks: [] };
+  return { refusal: null, range, marks: surveyQuery({ origin: s.player.pose.position, range, scans: s.knowledge.scans, resources: s.world.resources, renewal: s.world.renewal }) };
 }

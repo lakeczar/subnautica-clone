@@ -1,10 +1,12 @@
 import { createEcology } from "./ecology/ecology.js";
 import { STOP_IDS, STOP_LOCKER_CU, WORKING_STOPS } from "../content/stops.js";
-import { HULLS, PLACES, SOURCES, THREAT_HOME } from "../content/registry.js";
+import { HULLS, ITEMS, PLACES, SOURCES, THREAT_HOME } from "../content/registry.js";
+import type { ItemKind } from "../content/registry.js";
 import type { GameState, VehicleState, Vec3 } from "./types.js";
 import { initialRenewal } from "./renewal.js";
 import { createStory } from "./story/state.js";
 import { createSystems } from "./systems/state.js";
+import { SITE_CACHE_IDS, siteCacheContainer, siteCacheItems } from "./systems/siteCaches.js";
 import { initialRuntime } from "./upgrades/tools.js";
 export function createGame(): GameState {
   return {
@@ -32,7 +34,8 @@ export function createGame(): GameState {
     },
     opening: { phase: 0, phaseTicks: 0 },
     inventory: {
-      items: [],
+      // LS-1: the lost sites' finite caches start full (fixed item IDs, outside the sequence).
+      items: SITE_CACHE_IDS.flatMap(siteCacheItems),
       containers: [
         { id: "diver", kind: "diver", capacity: 16, ownerId: "player" },
         { id: "equipment", kind: "equipment", capacity: 0, ownerId: "player" },
@@ -65,6 +68,7 @@ export function createGame(): GameState {
           const { locker, stores = [] } = WORKING_STOPS[id];
           return [...(locker ? [locker] : []), ...stores].map((c) => ({ id: c, kind: "locker" as const, capacity: STOP_LOCKER_CU, ownerId: id }));
         }),
+        ...SITE_CACHE_IDS.map((id) => siteCacheContainer(id, (k) => ITEMS[k as ItemKind].cu)),
       ],
       buoy: {
         itemId: null,
@@ -81,6 +85,7 @@ export function createGame(): GameState {
       crafted: [],
       hintLevel: 0,
       cycles: [],
+      legacyGrants: [],
     },
     world: {
       resources: Object.entries(SOURCES).map(([id, s]) => ({

@@ -4,10 +4,10 @@ import { carrierInteriorSolids } from "../sim/carrier.js";
 import { createWorldQueries } from "../sim/world.js";
 import { record, validState } from "./validation.js";
 import { addNewContent } from "./content.js";
-import { bridgeSchema6 } from "./bridge6.js";
-export const SAVE_SCHEMA_VERSION = 7 as const;
+import { bridgeSchema7 } from "./bridge7.js";
+export const SAVE_SCHEMA_VERSION = 8 as const;
 /** The one previous schema this build converts (DIRECTION: the immediately previous only). */
-export const BRIDGED_SCHEMA_VERSION = 6 as const;
+export const BRIDGED_SCHEMA_VERSION = 7 as const;
 export const MAX_SAVE_BYTES = 1_048_576;
 export interface SaveMetadata {
   sessionId: string;
@@ -29,7 +29,7 @@ const date = (v: unknown): v is string =>
   new Date(v).toISOString() === v;
 /** Schemas older than the bridge belong to earlier development builds. Their
  * converters are retired; see docs/build/streams/S7.md. */
-const OLDER_BUILD_SCHEMAS = [1, 2, 3, 4, 5];
+const OLDER_BUILD_SCHEMAS = [1, 2, 3, 4, 5, 6];
 function blockedCarrierInterior(s: GameState): boolean {
   return s.player.interiorPose?.frame === "carrier-local" && !createWorldQueries(carrierInteriorSolids(s), () => -200)
     .clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 });
@@ -56,12 +56,12 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
   if (OLDER_BUILD_SCHEMAS.includes(d.schemaVersion as number))
     return {
       ok: false,
-      error: `This save was made by an older development build (schema ${String(d.schemaVersion)}). This build loads schema 7 saves and converts schema 6 saves only. Keep the original file; it has not been changed.`,
+      error: `This save was made by an older development build (schema ${String(d.schemaVersion)}). This build loads schema 8 saves and converts schema 7 saves only. Keep the original file; it has not been changed.`,
     };
   if (d.schemaVersion !== SAVE_SCHEMA_VERSION && d.schemaVersion !== BRIDGED_SCHEMA_VERSION)
     return {
       ok: false,
-      error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 7 and converts schema 6 only. Keep the original file.`,
+      error: `Save schema ${typeof d.schemaVersion === "number" || typeof d.schemaVersion === "string" ? String(d.schemaVersion).slice(0, 24) : "(unrecognized)"} is unsupported. This build reads schema 8 and converts schema 7 only. Keep the original file.`,
     };
   if (d.contentVersion !== CONTENT_VERSION)
     return {
@@ -99,7 +99,7 @@ export function decodeSave(text: string): Result<SaveEnvelope> {
   };
   // Content added since the save was written starts at New Game's first state;
   // everything else, including the completed rosters, is then validated strictly.
-  const bridged = d.schemaVersion === SAVE_SCHEMA_VERSION ? { ok: true as const, value: d.state as GameState } : bridgeSchema6(d.state);
+  const bridged = d.schemaVersion === SAVE_SCHEMA_VERSION ? { ok: true as const, value: d.state as GameState } : bridgeSchema7(d.state);
   if (!bridged.ok) return bridged;
   const added = addNewContent(bridged.value);
   if (!added.ok) return added;
@@ -123,7 +123,7 @@ export function createEnvelope(
 }
 export function encodeSave(save: SaveEnvelope): Result<string> {
   if (save.schemaVersion !== SAVE_SCHEMA_VERSION || save.contentVersion !== CONTENT_VERSION)
-    return { ok: false, error: "This build writes schema 7 / expedition.7 only. Decode an older save before writing it." };
+    return { ok: false, error: "This build writes schema 8 / expedition.7 only. Decode an older save before writing it." };
   let text: string;
   try {
     text = JSON.stringify(save, null, 2);

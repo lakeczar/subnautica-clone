@@ -2,6 +2,7 @@
  * Hearthline all expose the same `SocketHost` view, and modules install and
  * remove through one rule set. Installed module items leave the inventory and
  * return under the same ID, so the work keyed to them (decodes, crops) follows. */
+import { lockerModuleCapacity } from "../upgrades/hosts.js";
 import { HEARTHLINE_SOCKETS } from "../../content/fleet/hearthlineInterior.js";
 import { CARRIER_OCCUPANTS, FIXED_HOSTS, HOST_REACH, MODULES, moduleOfItem, OUTPOST_TIERS } from "../../content/systems/hosts.js";
 import type { FixedHostId, ModuleKind } from "../../content/systems/hosts.js";
@@ -177,7 +178,7 @@ export function installModule(s: GameState, sys: SystemsState, hostId: string, s
   forgetRemembered(sys, itemId);
   syncCarrierSocket(s, host, socketId, carrierOccupantName(socketId, module));
   if (module === "locker" && !s.inventory.containers.some((c) => c.id === moduleLockerId(itemId)))
-    s.inventory.containers.push({ id: moduleLockerId(itemId), kind: "locker", capacity: MODULES.locker.lockerCu, ownerId: itemId });
+    s.inventory.containers.push({ id: moduleLockerId(itemId), kind: "locker", capacity: lockerModuleCapacity(sys.moduleUpgrades, itemId, MODULES.locker.lockerCu), ownerId: itemId });
   s.feedback = `${MODULES[module].label} installed at ${host.label}.`;
   return null;
 }

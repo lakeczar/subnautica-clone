@@ -108,6 +108,8 @@ export type DoorId = "island.cold_store_hatch" | "basin.vault_door";
  * in the journal. The main path never needs a door. */
 export interface CodedDoor {
   label: string; code: string; record: string; owner: string; placed: boolean;
+  /** Where its keypad is; the owner sets it when it places the door. */
+  position?: Point;
   /** Deduction doors: the code's characters shown at the door, `·` for the ones the record gives. */
   atDoor?: string;
   /** Deduction doors: the journal's line for what the record gives. */
@@ -150,7 +152,7 @@ export const CB_DECODABLES = {
   },
   isles_strain_gauge_log: {
     label: "Gauge logger", site: "isles_strain_gauges", region: "island_chain", size: "log",
-    gates: ["isles_gauge_logger", "note_tide_sheet"], blueprints: [], story: false,
+    gates: ["isles_gauge_logger", "note_tide_sheet"], blueprints: ["bp_ping_lens"], story: false,
     reveals: [
       cave("isles_storm_arch", "Storm arch", { x: 1130, y: -14.3, z: 134 }, 60),
       { ...cave("isles_headland_root", "Root stair under the headland", { x: 1012, y: -31.8, z: -72 }, 60), category: "hint" },
@@ -192,7 +194,7 @@ export const CB_DECODABLES = {
   },
   rift_borehole_log: {
     label: "Drill logger", site: "rift_borehole_site", region: "thermal_rift", size: "log",
-    gates: ["rift_borehole_logger", "note_drill_crew"], blueprints: [], story: false,
+    gates: ["rift_borehole_logger", "note_drill_crew"], blueprints: ["bp_heated_grow_bed"], story: false,
     reveals: [
       cave("rift_west_tube", "West tube", { x: -300, y: -287.5, z: -1000 }),
     ],
@@ -262,6 +264,25 @@ export const CB_DECODABLES = {
     ],
   },
 } as const satisfies Record<string, LostSiteDecodable>;
+
+/** Finite caches at placed lost sites (LS-1 1b, reward contracts): one fixed cache
+ * container each, holding authored contents, opened by taking from it. Never a reserve
+ * cell (strict validation keeps those to the crafted pair) and never a frontier
+ * material beyond the tier rule's tastes. A save that lacks a cache's container gains
+ * it full (`save/content.ts`): it cannot have been opened. */
+export type CacheItem = "structural_alloy" | "silica_glass" | "flex_membrane" | "buoyant_resin" | "conductive_crust" | "meal" | "field_salve" | "bio_cell" | "glow_lure" | "nav_beacon";
+export interface LostSiteCache { site: PlacedLostSiteId; label: string; position: Point; contents: Readonly<Partial<Record<CacheItem, number>>> }
+export const LOST_SITE_CACHES = {
+  canopy_basket_bins: { site: "canopy_basket_site", label: "Basket bins", position: { x: 761.5, y: -108.1, z: -101.5 },
+    contents: { buoyant_resin: 6, conductive_crust: 4 } },
+  basin_pump_spares: { site: "basin_pump_heads_site", label: "Pump spares cabinet", position: { x: 241.5, y: -259.7, z: -761.5 },
+    contents: { structural_alloy: 3, flex_membrane: 2 } },
+  meridian_wild_crop: { site: "meridian_allotments_site", label: "Wild crop in the troughs", position: { x: 1151.5, y: -599.5, z: -1251.5 },
+    contents: { meal: 4 } },
+} as const satisfies Record<string, LostSiteCache>;
+export type LostSiteCacheId = keyof typeof LOST_SITE_CACHES;
+/** The container a site cache lives in. */
+export const siteCacheContainerId = (id: LostSiteCacheId): string => `cache:${id}`;
 
 /** Authored, not yet in the world: each waits on `blockedBy`. Their decodes join
  * `CB_DECODABLES` when the row is placed; until then nothing here is findable. */

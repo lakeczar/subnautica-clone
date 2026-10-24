@@ -11,6 +11,7 @@
  *   system bay (SYS-1); SYS-2's socket map is checked against that.
  * - **Lost sites**: the content bible's sites are found by swimming up to them.
  * - **Commands** call SYS-2's rules directly; each refusal changes nothing. */
+import { enterCode } from "./systems/doors.js";
 import { DECODABLES, decodeLog, DECODER_LOCAL_RANGE, LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import type { DecodableId } from "../content/systems/decodes.js";
 import { isSeed } from "../content/systems/cultivation.js";
@@ -26,7 +27,7 @@ import { effectiveRating, vehicleProfile } from "./fittings.js";
 import { hostPowerState, hostDrainStep } from "./power/hosts.js";
 import type { HostCell, HostPowerInput } from "./power/hosts.js";
 import { cellTransfer, dockCharge } from "./power/charging.js";
-import { decoderSpeed, livePosition, MAST_REACH, outpostLimitBonus } from "./upgrades/hosts.js";
+import { decoderSpeed, growBedFitted, livePosition, MAST_REACH, outpostLimitBonus } from "./upgrades/hosts.js";
 import { surveyModuleTier } from "./hostUpgrades.js";
 import { RADIO_MAST } from "./upgrades/tools.js";
 import {
@@ -37,8 +38,11 @@ import type { HostPower, OutpostSiteQuery, SiteSample, SocketHost, SystemsEvent 
 import type { DecoderContext } from "./systems/decoder.js";
 import type { GameCommand, GameEvent, GameState, Vec3, WorldQueries } from "./types.js";
 
-const poweredModules = (host: SocketHost): number =>
-  host.sockets.filter((k) => k.occupant?.module && MODULES[k.occupant.module].needsPower).length;
+/** The host's powered modules, per item (LS-1): a module that needs power, or a planter
+ * carrying a heated grow bed, whose heater the host drain bills like any other. */
+const poweredModules = (s: GameState, host: SocketHost): number =>
+  host.sockets.filter((k) => k.occupant?.module && (MODULES[k.occupant.module].needsPower ||
+    (k.occupant.module === "planter" && !!k.occupant.itemId && growBedFitted(s.systems.moduleUpgrades, k.occupant.itemId)))).length;
 function cellsIn(s: GameState, host: SocketHost): HostCell[] {
   return s.inventory.items.filter((i) => host.lockers.includes(i.containerId) && (i.kind === "reserve_cell" || i.kind === "bio_cell"))
     .map((i) => ({ id: i.id, kind: i.kind as HostCell["kind"], charge: i.charge ?? 0 }));
@@ -46,7 +50,7 @@ function cellsIn(s: GameState, host: SocketHost): HostCell[] {
 function powerInput(s: GameState, host: SocketHost): HostPowerInput {
   const carrier = host.kind === "carrier" ? s.fleet.vehicles.find((v) => `carrier:${v.id}` === host.id) : undefined;
   return {
-    available: host.available, poweredModules: poweredModules(host),
+    available: host.available, poweredModules: poweredModules(s, host),
     power: host.kind === "carrier" ? "carrier" : host.power,
     ...(host.power === "cells" ? { cells: cellsIn(s, host) } : {}),
     ...(carrier ? { carrier: { charge: carrier.charge, disabled: carrier.disabled } } : {}),
@@ -224,6 +228,12 @@ export function systemsCommand(s: GameState, c: GameCommand, world: WorldQueries
     case "upgrade-outpost": return upgradeOutpost(s, sys, c.outpostId);
     case "install-host-module": return carrierSocketRefusal(s, c.hostId) ?? installModule(s, sys, c.hostId, c.socket, c.itemId);
     case "remove-host-module": return removeModule(s, sys, c.hostId, c.socket, c.to);
+    case "enter-code": {
+      const r = enterCode(s, c.door, c.code);
+      if (!r.ok) return r.message;
+      s.feedback = r.message;
+      return null;
+    }
     case "start-decode": {
       const host = hostById(s, sys, c.hostId);
       if (host && !hostPower(host, s)) return `${host.label} has no power for a decoder: ${hostPowerReason(s, host) ?? ""}`.trim();

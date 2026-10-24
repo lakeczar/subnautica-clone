@@ -17,6 +17,8 @@ export interface SeedDefinition {
   growSeconds: number;
   region: RegionId;
   sampling: Sampling;
+  /** Grows only with warmth (LS-1): a heated grow bed, or a planter on a thermal host. */
+  heat?: true;
 }
 export const SEEDS = {
   seed_staple_cup: { label: "Staple cups", role: "food", produce: "meal", quantity: 2, growSeconds: 360, region: "refuge_reef", sampling: "hand" },
@@ -24,6 +26,8 @@ export const SEEDS = {
   seed_ribbon_fan: { label: "Ribbon fan", role: "material", produce: "flex_membrane", quantity: 3, growSeconds: 420, region: "refuge_reef", sampling: "hand" },
   seed_lumen_bulb: { label: "Lumen bulb", role: "power", produce: "bio_cell", quantity: 1, growSeconds: 600, region: "suspended_garden", sampling: "hand" },
   seed_pale_spore: { label: "Pale crust", role: "material", produce: "conductive_crust", quantity: 2, growSeconds: 540, region: "silt_basin", sampling: "specimen" },
+  // LS-1: three meals, but it needs warmth: a heated grow bed, or a planter at a thermal outpost.
+  seed_kiln_tuber: { label: "Kiln tuber", role: "food", produce: "meal", quantity: 3, growSeconds: 480, region: "thermal_rift", sampling: "hand", heat: true },
 } as const satisfies Partial<Record<Sys2ItemKind, SeedDefinition>>;
 export type SeedKind = keyof typeof SEEDS;
 export const SEED_KINDS = Object.keys(SEEDS) as SeedKind[];

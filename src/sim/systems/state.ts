@@ -6,8 +6,8 @@ import { REGIONS } from "../../content/registry.js";
 import type { RegionId } from "../../content/registry.js";
 import { isSeed } from "../../content/systems/cultivation.js";
 import type { SeedKind } from "../../content/systems/cultivation.js";
-import { isDecodable } from "../../content/systems/decodes.js";
-import type { DecodableId } from "../../content/systems/decodes.js";
+import { DOOR_IDS, isDecodable } from "../../content/systems/decodes.js";
+import type { DecodableId, DoorId } from "../../content/systems/decodes.js";
 import { HEARTHLINE_SOCKETS } from "../../content/fleet/hearthlineInterior.js";
 import { CARRIER_OCCUPANTS, FIXED_HOSTS, moduleOfItem, OUTPOST_TIER_ORDER, OUTPOST_TIERS } from "../../content/systems/hosts.js";
 import type { OutpostTier } from "../../content/systems/hosts.js";
@@ -68,12 +68,14 @@ export interface SystemsState {
   chart: string[];
   /** SIG-1: module item ID → the host upgrade fitted to it (decoder lattice, survey array). */
   moduleUpgrades: Record<string, HostUpgradeId>;
+  /** LS-1 (schema 8): coded doors opened at their keypads; an open door stays open. */
+  opened: DoorId[];
 }
 
 export function createSystems(): SystemsState {
   return {
     outposts: [], packed: [], sockets: [], found: [], decoded: [], decodes: [], planters: [], traps: [],
-    beacons: [], beaconsOff: [], categoriesOff: [], chart: [], moduleUpgrades: {},
+    beacons: [], beaconsOff: [], categoriesOff: [], chart: [], moduleUpgrades: {}, opened: [],
   };
 }
 
@@ -91,13 +93,15 @@ const POWER: readonly string[] = ["solar", "thermal", "cells", "plant"];
  * against the inventory (module and kit IDs) belong to the composed validator. */
 export function validSystems(v: unknown): v is SystemsState {
   if (!record(v) || !exactKeys(v, ["outposts", "packed", "sockets", "found", "decoded", "decodes", "planters", "traps",
-    "beacons", "beaconsOff", "categoriesOff", "chart", "moduleUpgrades"])) return false;
+    "beacons", "beaconsOff", "categoriesOff", "chart", "moduleUpgrades", "opened"])) return false;
   const { moduleUpgrades, ...lists } = v;
   if (!record(moduleUpgrades) || !Object.entries(moduleUpgrades).every(([k, u]) => id(k) && hostUpgradeId(u) && HOST_UPGRADES[u].scope === "module"))
     return false;
   const arrays = Object.values(lists);
   if (!arrays.every(Array.isArray)) return false;
   const s = v as unknown as SystemsState;
+  // LS-1 (schema 8): known door IDs, each once. No decode prerequisite: a guessed code opens a door.
+  if (!s.opened.every((d) => (DOOR_IDS as readonly string[]).includes(d)) || !unique(s.opened)) return false;
   if (!s.outposts.every((o) => record(o) && exactKeys(o as never, ["id", "tier", "name", "position", "region", "power"]) &&
     id(o.id) && OUTPOST_TIER_ORDER.includes(o.tier) && name(o.name) && vec(o.position) &&
     (o.region === null || Object.hasOwn(REGIONS, o.region)) && POWER.includes(o.power))) return false;

@@ -52,6 +52,9 @@ import { instanceProblems } from "../sim/systems/instances.js";
 import { moduleOfItem, MODULES as SYS2_MODULES, OUTPOST_TIERS } from "../content/systems/hosts.js";
 import { hostUpgrade } from "../content/upgrades/hosts.js";
 import { DECODABLES } from "../content/systems/decodes.js";
+import { LEGACY_GRANTS, legacyRow, legacySourceHeld } from "./legacyGrants.js";
+import { lockerModuleCapacity } from "../sim/upgrades/hosts.js";
+import type { LegacyGrant } from "../sim/types.js";
 const TICK = 2147483647;
 /** A saved tag aim names its target kind and ID (`sim/signatures.ts`). */
 const TAG_TARGET = /^(agent|cue|site|source):[a-zA-Z0-9_.:-]{1,96}$/;
@@ -296,7 +299,12 @@ export function validState(value: unknown): value is GameState {
       "crafted",
       "hintLevel",
       "cycles",
+      "legacyGrants",
     ]) ||
+    // LS-1 (schema 8): each entry a LEGACY_GRANTS row, at most once (provenance is checked below).
+    !array(k.legacyGrants, LEGACY_GRANTS.length, (v) => exact(v, ["blueprint", "source"]) && exact(v.source, ["kind", "id"]) &&
+      !!legacyRow(v as unknown as LegacyGrant)) ||
+    new Set((k.legacyGrants as LegacyGrant[]).map((g) => `${g.blueprint}|${g.source.kind}|${g.source.id}`)).size !== (k.legacyGrants as unknown[]).length ||
     // CY's validObservation per world cycle, each cycle once, never ahead of the clock.
     !array(k.cycles, WORLD_CYCLES.length, (v) => {
       const c = WORLD_CYCLE_BY_ID.get((v as { cycleId?: string })?.cycleId ?? "");
@@ -642,7 +650,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
     // C4 (SYS-2): each deployed outpost's locker; each locker module's own locker, carried or installed.
     ...s.systems.outposts.map((o) => [`${o.id}_locker`, "locker", OUTPOST_TIERS[o.tier].lockerCu, o.id]),
     ...[...items.filter((i) => i.kind === "mod_locker").map((i) => i.id), ...s.systems.sockets.filter((e) => e.kind === "mod_locker").map((e) => e.itemId)]
-      .map((itemId) => [`${itemId}_locker`, "locker", SYS2_MODULES.locker.lockerCu, itemId]),
+      // LS-1: a locker extension's capacity, through the one authority.
+      .map((itemId) => [`${itemId}_locker`, "locker", lockerModuleCapacity(s.systems.moduleUpgrades, itemId, SYS2_MODULES.locker.lockerCu), itemId]),
     // SIG-1: each Creel cargo pod owns its container, fitted, carried or dropped.
     ...items.filter((i) => i.kind === "creel_drop_pod").map((i) => [podContainerId(i.id), "locker", DROP_POD.cu, i.id]),
   ];
@@ -778,7 +787,13 @@ function semantic(s: GameState, fresh: GameState): boolean {
         s.world.resources.find((n) => n.id === r.id)!.stock >= renewalCap(r.id)))
       return false;
   // Plans follow from every story discovery (C01–C06, records, journals) plus technical records.
-  const expectedBlueprints = new Set<string>(blueprints(storyView(s).discoveries));
+  const discoveries = storyView(s).discoveries;
+  const expectedBlueprints = new Set<string>(blueprints(discoveries));
+  // LS-1 (schema 8): a legacy grant counts only while its source is held.
+  for (const g of k.legacyGrants) {
+    if (!legacySourceHeld(g, k.scans, discoveries.map((d) => d.id))) return false;
+    expectedBlueprints.add(g.blueprint);
+  }
   for (const scan of k.scans) if (techRecord(scan)) for (const bp of TECH_RECORDS[scan].blueprints) expectedBlueprints.add(bp);
   // C4: decoded lost-site data grants its plans.
   for (const d of s.systems.decoded) for (const bp of DECODABLES[d].blueprints) expectedBlueprints.add(bp);

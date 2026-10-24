@@ -2,7 +2,7 @@
  * advances only from the fixed step, never from menus, saves or rendering. */
 import { FIXED_SECONDS } from "../clock.js";
 import type { GameState } from "../types.js";
-import { advanceGrowth } from "./cultivation.js";
+import { advanceGrowth, growthRate } from "./cultivation.js";
 import { advanceDecodes } from "./decoder.js";
 import type { DecodeCompletion, DecoderContext } from "./decoder.js";
 import { visitChart } from "./navigation.js";
@@ -20,6 +20,6 @@ export function advanceSystems(s: GameState, sys: SystemsState, ctx: DecoderCont
   const cells = visitChart(sys, s.player.pose.position);
   if (cells.length) events.push({ type: "chart-explored", cells });
   for (const completion of advanceDecodes(s, sys, seconds, ctx)) events.push({ type: "decoded", completion });
-  for (const seed of advanceGrowth(sys, seconds)) events.push({ type: "crop-ready", seed });
+  for (const seed of advanceGrowth(sys, seconds, (p) => growthRate(s, sys, p, ctx.power))) events.push({ type: "crop-ready", seed });
   return events;
 }

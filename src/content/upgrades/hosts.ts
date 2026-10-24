@@ -12,8 +12,8 @@ export interface HostUpgradeDefinition {
   readonly line: string;
   readonly tier: ReachTier;
   readonly scope: "module" | "knowledge";
-  /** SYS-2 module kind it improves (`module` scope). */
-  readonly module?: "decoder" | "survey";
+  /** SYS-2 module kind it improves (`module` scope). LS-1 adds lockers and planters. */
+  readonly module?: "decoder" | "survey" | "locker" | "planter";
   readonly cost: Partial<Record<CostKind, number>>;
   readonly plan: string;
   /** Decoder work multiplier (SYS-2 `decoderSpeed`). */
@@ -24,6 +24,13 @@ export interface HostUpgradeDefinition {
   readonly outpostBonus?: number;
   /** Live position on the chart (SYS-2 `chartView(…, { livePosition })`). */
   readonly livePosition?: true;
+  /** LS-1: a locker module's capacity multiplier (`lockerModuleCapacity`). */
+  readonly lockerFactor?: number;
+  /** LS-1: a heated grow bed in this planter (`growBedFitted`): faster growth and one more
+   * produce for non-power crops while the host has power; its heater is a powered module. */
+  readonly growBed?: true;
+  /** LS-1: the handheld ping's range in metres (`pingRange`). */
+  readonly pingRange?: number;
   readonly benefit: string;
 }
 
@@ -64,6 +71,23 @@ export const HOST_UPGRADES = {
     label: "Deep outpost network", line: "outposts", tier: 3, scope: "knowledge",
     cost: { structural_alloy: 5, conductive_crust: 2, brine_lattice: 1 }, plan: "bp_deep_service", outpostBonus: 2,
     benefit: "Run two more field outposts at once.",
+  },
+  // LS-1 lost-site rewards (docs/build/streams/LS-1.md, reward contracts).
+  locker_extension_1: {
+    label: "Locker extension", line: "locker", tier: 1, scope: "module", module: "locker",
+    cost: { structural_alloy: 3, buoyant_resin: 2 }, plan: "bp_locker_extension", lockerFactor: 1.5,
+    benefit: "This locker module holds half again as much.",
+  },
+  grow_bed_1: {
+    label: "Heated grow bed", line: "planter", tier: 2, scope: "module", module: "planter",
+    // A thermal-core heater under glass, crust traces, a membrane liner.
+    cost: { thermal_core: 1, silica_glass: 2, conductive_crust: 2, flex_membrane: 1 }, plan: "bp_heated_grow_bed", growBed: true,
+    benefit: "While the host has power, food, medicine and material crops grow twice as fast here and yield one more. Power crops gain nothing. The heater draws power.",
+  },
+  ping_lens_1: {
+    label: "Ping lens", line: "ping", tier: 1, scope: "knowledge",
+    cost: { silica_glass: 2, structural_alloy: 1, conductive_crust: 1 }, plan: "bp_ping_lens", pingRange: 60,
+    benefit: "Your handheld ping reaches 60 m.",
   },
   chart_live_position: {
     label: "Chart position fix", line: "chart", tier: 1, scope: "knowledge",

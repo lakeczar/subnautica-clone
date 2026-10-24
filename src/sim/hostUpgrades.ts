@@ -13,7 +13,9 @@ import { moduleOfItem } from "../content/systems/hosts.js";
 import { applySpend, available, costText, labelOf, planSpend } from "./inventory.js";
 import type { SpendPlan } from "./inventory.js";
 import { hostById, hostLocal, workContainers } from "./systems/hosts.js";
-import { moduleUpgradePreview, surveyTier } from "./upgrades/hosts.js";
+import { lockerModuleCapacity, moduleUpgradePreview, surveyTier } from "./upgrades/hosts.js";
+import { MODULES as SYS2_MODULES } from "../content/systems/hosts.js";
+import { moduleLockerId } from "./systems/hosts.js";
 import type { GameCommand, GameEvent, GameState } from "./types.js";
 
 export interface HostUpgradeOffer {
@@ -28,18 +30,20 @@ export type HostUpgradeOutcome =
   | { ok: true; hostId: string; itemId: string; upgrade: HostUpgradeId; message: string }
   | { ok: false; message: string };
 
-/** The installed module in one socket, if it is a decoder or survey module. */
-function moduleIn(s: GameState, hostId: string, socket: string): { itemId: string; kind: "decoder" | "survey" } | null {
+type UpgradableModule = "decoder" | "survey" | "locker" | "planter";
+const UPGRADABLE: readonly string[] = ["decoder", "survey", "locker", "planter"];
+/** The installed module in one socket, if it takes a module upgrade (LS-1 adds lockers and planters). */
+function moduleIn(s: GameState, hostId: string, socket: string): { itemId: string; kind: UpgradableModule } | null {
   const entry = s.systems.sockets.find((e) => e.hostId === hostId && e.socket === socket);
   const kind = entry ? moduleOfItem(entry.kind) : null;
-  return entry && (kind === "decoder" || kind === "survey") ? { itemId: entry.itemId, kind } : null;
+  return entry && kind && UPGRADABLE.includes(kind) ? { itemId: entry.itemId, kind: kind as UpgradableModule } : null;
 }
 /** One upgrade for one socket's module: the exact payment and the refusal, if any. */
 export function hostUpgradeOffer(s: GameState, hostId: string, socket: string, upgrade: HostUpgradeId): HostUpgradeOffer {
   const d = hostUpgrade(upgrade), host = hostById(s, s.systems, hostId), module = moduleIn(s, hostId, socket);
   const base = { upgrade, label: d.label, benefit: d.benefit, cost: costText(d.cost) };
   const empty: SpendPlan = { lines: [], missing: {} };
-  if (!host || !module) return { ...base, refusal: "Install a decoder or survey module in this socket first.", plan: empty };
+  if (!host || !module) return { ...base, refusal: "Install a decoder, survey, locker or planter module in this socket first.", plan: empty };
   if (!hostLocal(s, host)) return { ...base, refusal: `Work at ${host.label} to fit it.`, plan: empty };
   const bins = workContainers(s, s.systems, host);
   const plan = planSpend(s, d.cost, bins, "listed");
@@ -63,6 +67,11 @@ export function upgradeHostModule(s: GameState, hostId: string, socket: string, 
   const module = moduleIn(s, hostId, socket)!;
   applySpend(s, offer.plan);
   s.systems.moduleUpgrades = { ...s.systems.moduleUpgrades, [module.itemId]: upgrade };
+  // LS-1: a locker extension grows that module's own container, in place (one capacity authority).
+  if (module.kind === "locker") {
+    const box = s.inventory.containers.find((c) => c.id === moduleLockerId(module.itemId));
+    if (box) box.capacity = lockerModuleCapacity(s.systems.moduleUpgrades, module.itemId, SYS2_MODULES.locker.lockerCu);
+  }
   return { ok: true, hostId, itemId: module.itemId, upgrade,
     message: `${offer.label} fitted · ${offer.benefit} Spent ${offer.plan.lines.map((l) => `${l.quantity} × ${labelOf(l.kind)}`).join(", ")}.` };
 }
