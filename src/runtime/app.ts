@@ -2,6 +2,8 @@ import { armTarget, fittedCabin } from "../sim/fleet.js";
 import { craftActions } from "../sim/signatures.js";
 import { SiltwakeAudio } from "../audio/director.js";
 import { StepFault, StepGuard } from "../sim/stepGuard.js";
+import { PHASE, StepCosts, stepMeter } from "../sim/stepCosts.js";
+import type { StepCostSnapshot } from "../sim/stepCosts.js";
 import { gameWorld } from "../sim/world.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
@@ -147,6 +149,9 @@ export class SiltwakeApp {
   /** SIM-1: the live state steps in place; a throw restores it (development
    * builds also check every 10th checkpoint's replay against the live state). */
   private readonly guard = new StepGuard({ verifyEvery: DEV ? 10 : 0 });
+  /** SIM-PERF-1: each fixed step's time by phase, the app's own work included.
+   * Pulled on demand (`stepCosts()`); recording allocates nothing per step. */
+  private readonly costs = new StepCosts();
   /** Local-only play timeline (SYS-2, C4): never in the save, never sent. */
   private timeline: TimelineRecorder | null = null;
   private timelineSaved = 0;
@@ -349,6 +354,9 @@ export class SiltwakeApp {
       },
       options,
     );
+    // FORK(step-costs-global): a pulled diagnostic global beside REC-1's `__siltwake` hook;
+    // retire in whichever of REC-1 and SIM-PERF-1 merges second (as `__siltwake.steps()`).
+    (globalThis as { __siltwakeStepCosts?: () => StepCostSnapshot }).__siltwakeStepCosts = () => this.stepCosts();
     this.frameId = requestAnimationFrame((now) => this.frame(now));
   }
 
@@ -366,35 +374,9 @@ export class SiltwakeApp {
     if (this.disposed) return;
     this.clock.advance(now, this.active, () => {
       if (!this.state || !this.active) return;
-      const gesture = this.sampleGesture();
-      const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
-      this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
-      // SIM-1: the live state steps in place; the guard keeps a throw atomic.
-      let result: { state: GameState; events: GameEvent[] };
-      try {
-        result = { state: this.state, events: this.guard.step(this.state, [...controls, ...gesture], this.world) };
-      } catch (error) {
-        this.simulationFault(error);
-        return;
-      }
-      this.events(result.events);
-      this.observeTimeline(result.state, [...controls, ...gesture], result.events);
-      this.observeAscent(result.events);
-      this.observeThrust(result.events);
-      this.view.presentationStep(result.state);
-      this.validateGesture();
-      for (const event of result.events)
-        if (
-          event.type === "foundation-boundary" &&
-          now - this.lastBoundaryNotice > 6000
-        ) {
-          this.view.notify(
-            "World edge · open ocean beyond. Turn back toward the regions.",
-            false, { channel: "system" },
-          );
-          this.lastBoundaryNotice = now;
-        }
-      this.session.autosave();
+      stepMeter.active = this.costs;
+      this.costs.open();
+      try { this.step(now); } finally { this.costs.close(this.state?.tick ?? 0); }
     });
     const target = this.active && this.state ? aimedInteraction(this.state, this.world) : null;
     const preview = this.active && this.state && !target ? reachPreview(this.state, this.world) : null;
@@ -438,6 +420,49 @@ export class SiltwakeApp {
     this.frameId = requestAnimationFrame((time) => this.frame(time));
   }
 
+  /** One fixed simulation step with this frame's input, marked phase by phase (SIM-PERF-1). */
+  private step(now: number): void {
+    if (!this.state || !this.active) return;
+    const costs = this.costs;
+    const gesture = this.sampleGesture();
+    const controls = this.helm.apply(this.state, this.input?.sample() ?? []);
+    this.forwardThrust = controls.find(c => c.type === "move")?.forward ?? 0;
+    costs.mark(PHASE.input);
+    // SIM-1: the live state steps in place; the guard keeps a throw atomic.
+    let result: { state: GameState; events: GameEvent[] };
+    try {
+      result = { state: this.state, events: this.guard.step(this.state, [...controls, ...gesture], this.world) };
+    } catch (error) {
+      this.simulationFault(error);
+      return;
+    }
+    this.events(result.events);
+    costs.mark(PHASE.events);
+    this.observeTimeline(result.state, [...controls, ...gesture], result.events);
+    costs.mark(PHASE.timelineSave);
+    this.observeAscent(result.events);
+    this.observeThrust(result.events);
+    this.view.presentationStep(result.state);
+    this.validateGesture();
+    for (const event of result.events)
+      if (
+        event.type === "foundation-boundary" &&
+        now - this.lastBoundaryNotice > 6000
+      ) {
+        this.view.notify(
+          "World edge · open ocean beyond. Turn back toward the regions.",
+          false, { channel: "system" },
+        );
+        this.lastBoundaryNotice = now;
+      }
+    costs.mark(PHASE.presentation);
+    this.session.autosave();
+    costs.mark(PHASE.autosave);
+  }
+
+  /** Where the fixed steps' time has gone this page (SIM-PERF-1), read on demand. */
+  stepCosts(): StepCostSnapshot { return this.costs.snapshot(); }
+
   private syncSessionUi(): void {
     if (this.disposed) return;
     this.view.slot(this.repository.status, this.state !== null);
@@ -473,6 +498,7 @@ export class SiltwakeApp {
     observe(this.timeline, s, { input, waiting });
     const systems = events.flatMap((e) => e.type === "systems" ? [e.event] : []);
     if (systems.length) recordSystemsEvents(this.timeline, s, systems);
+    this.costs.mark(PHASE.timeline);
     if (s.tick - this.timelineSaved >= 600) this.saveTimeline();
   }
   /** The whole timeline under its one key, in one atomic write (SIM-1a; incremental storage is
@@ -901,6 +927,9 @@ export class SiltwakeApp {
     this.disposed = true;
     this.paused = true;
     cancelAnimationFrame(this.frameId);
+    if (stepMeter.active === this.costs) stepMeter.active = null;
+    const g = globalThis as { __siltwakeStepCosts?: () => StepCostSnapshot };
+    if (g.__siltwakeStepCosts) delete g.__siltwakeStepCosts;
     this.abort.abort();
     this.session.dispose();
     this.input?.dispose();
