@@ -1,6 +1,6 @@
 # SIG-1: every craft's signature identity, live, plus visible outposts
 
-Branch `t3/sig-1-signatures`, from root `1662e5a0` (SIM-1a merged). Brief: the compromise verdict's plan row 9 (ART-09, UI-01, TST-11) and the steward verdict's F12, F17 and F05.
+Branch `t3/sig-1-signatures`, from root `1662e5a0` (SIM-1a merged). **Accepted and merged:** stage 0 at `7df4c8ab`, stage 1 at `2901fed1` (R3, Sol `9a7c44dc`; `npm run gate` 10/10). Brief: the compromise verdict's plan row 9 (ART-09, UI-01, TST-11) and the steward verdict's F12, F17 and F05.
 
 ## Stage 0: one inventory authority (steward F12)
 
@@ -262,3 +262,9 @@ Every catalogue upgrade now has a recipe, and none is inert. Each is felt in pla
   - two consecutive saves with the same hull and item IDs but different fittings rebuild the art and dispose the old;
   - a hull moved through 239, 241, 250, 255 and 241 m keeps the same art, which is released at 265 m.
 - **Checks** (`fb8a5d59`, RTX 4070 Laptop): `npm test` **1,475/1,475**; the field-kit NullEngine test passes.
+
+## Open items (after the merge at `2901fed1`)
+- **Tow and pod paths:** a towed hull and a dropped pod are placed on the ordinary hull sweep, not on solved paths; a snagged tow releases. Root fix in NAV-1.
+- **No sonar wavefront:** the sweep shows only flares at each opening, timed to its front. Owed to the atmosphere pass or a later visual stream.
+- **`armTarget`'s roster scan:** the Creel's tool arms scan the source roster per call, B1's existing rule. Root fix when CW-1's `WorldQueries.dataInBox` lands.
+- **`FORK(stream-drivers)`:** `docs/build/streams/sig1/play.mjs`, with `run-4070.sh`, `derive.mjs` and `check.sh`, stays on the guard's driver allowlist until REC-2's one driver library retires it.
