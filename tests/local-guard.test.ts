@@ -139,7 +139,7 @@ test("each entry point runs the same command again through the queue, in the for
 });
 
 test("the direct package scripts refuse outside a job, pointing at the routed one", () => {
-  for (const [script, hint] of [["build:direct", "npm run build"], ["test:fast:direct", "npm run test:fast"], ["typecheck:direct", "npm run typecheck"], ["playthrough:direct", "npm run playthrough"]]) {
+  for (const [script, hint] of [["build:direct", "npm run build"], ["test:fast:direct", "npm run test:fast"], ["typecheck:direct", "npm run typecheck"], ["playthrough:direct", "npm run playthrough"]] as const) {
     const { queue, calls } = standIn();
     const r = run(["npm", "run", script], agentEnv({ SILTWAKE_HEAVY_CHECK: queue }));
     assert.equal(r.status, G.REFUSED_EXIT, script);

@@ -13,6 +13,22 @@ import { pathToFileURL } from "node:url";
 // queued steps they follow, and each is reported from that job's per-step results
 // and judged on its receipt. Where it is admitted (a job, alickers, the override)
 // they run directly.
+interface Step { id: string; queue?: string[]; run: string[] }
+interface Receipt { code: number; stopReason?: string | null; label?: string | null; pending?: boolean;
+  context?: { disturbed?: boolean } | null; evidence?: { commit: string | null; bound: boolean; why?: string | null } }
+interface Result { id: string; problems: string[]; s: number }
+interface Gate {
+  GATE: Step[];
+  BATCH_QUEUE: string[];
+  routeSteps(steps: Step[], batched: boolean): ({ step: Step } | { batch: Step[] })[];
+  batchResults(ids: string[], inner: Result[] | null, receipt: Receipt | null, commit: string): Result[];
+  parseBatch(lines: string[]): Result[] | null;
+}
+const G = await import(pathToFileURL(resolve("scripts/gate.mjs")).href) as Gate;
+const head = execFileSync("git", ["rev-parse", "HEAD"], { encoding: "utf8" }).trim();
+const good = (over: Partial<Receipt> = {}): Receipt => ({ code: 0, stopReason: null, label: null, context: null, evidence: { commit: head, bound: true, why: null }, ...over });
+const ids = (only: string[]) => G.GATE.filter((s) => only.includes(s.id));
+const shape = (units: ReturnType<Gate["routeSteps"]>) => units.map((u) => "step" in u ? u.step.id : `[${u.batch.map((s) => s.id).join(",")}]`);
 
 test("routing: the batch follows the queued steps a batched step comes after; the rest keep their order", () => {
   const economy = G.GATE.filter((s) => s.id.startsWith("economy:")).map((s) => s.id);
