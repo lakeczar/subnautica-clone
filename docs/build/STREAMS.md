@@ -798,3 +798,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **REC-1b**, a short follow-up after REC-1 merges: two verdicts in `summary.json`; no strips for unjudged hitches; pacing suppressed on traversal and short runs; one control strip; fixed views tagged by region and system for subset capture.
   - **REC-2, before the first owner playtest (after OP-1):** one pacing model (`analyseTimeline`, deleting the `analyse.mjs` heuristic); major/minor new things; the note context snapshot; `debrief.md` plus a ribbon with a tension trace and moment cards; a separate `health.md`; then the shared driver.
 - **Owner request (2026-10-24): each note also saves the full game state.** Added to REC-2's note-context item: at each feedback-key note, embed a save (existing codec; the largest save today is 44 KiB) in the flight recording. Agents can then load the exact moment, reproduce it, test fixes from it, and keep it as a regression save (via SAVE-1's library format).
+- **SIG-1 stage 1 done at `416441bc`**:
+  - **Contents:** nine signatures live with typed outcomes; module host upgrades; visible outposts, fish trap and tools; the HUD craft action bar; the Cargo filter; the HUB-2-01 control; save schema 7 with an additive bridge6 (schema 5 refused, bridge5 deleted).
+  - **Checks:** npm test 1,472/1,472, heavy 465/465 (3 unattributed OOM kills to investigate), 6 economy scripts, playthrough 8/8 equal to stage 0, browser on both GPUs.
+  - **Open:** the Spindle isn't built by any route.
+  - **Review:** Sol R1 running (`siltwake-sig1-stage1-review-sol-416441b`).
