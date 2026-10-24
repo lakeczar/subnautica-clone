@@ -599,7 +599,8 @@ export class SiltwakeApp {
       // A recording turned on mid-session reads the timeline from now, not what passed while it was off.
       this.flightTimeline.start(this.timeline);
       // The renderer's per-part timing and GPU timer queries feed the frame rows; `?rectiming=0` (measurement only) leaves them off.
-      this.renderer.timing = new URLSearchParams(globalThis.location?.search ?? "").get("rectiming") !== "0";
+      this.flightTiming = new URLSearchParams(globalThis.location?.search ?? "").get("rectiming") !== "0";
+      this.renderer.timing = this.flightTiming;
       this.flightStartedAt = performance.now();
       // GPU timer queries cost the page each frame: a player's recording samples one frame in eight; a driver's measures every one (R3b).
       this.renderer.gpuEvery = mode === "playtest" ? 8 : 1;
@@ -644,7 +645,8 @@ export class SiltwakeApp {
     if (!this.flight || new URLSearchParams(globalThis.location?.search ?? "").get("recmeasure") !== "1") return false;
     this.flightPaused = on;
     this.flight.pauseForMeasurement(on);
-    if (this.renderer) this.renderer.timing = !on;
+    // Resuming restores the recording's own timing setting (`?rectiming=0` stays off).
+    if (this.renderer) this.renderer.timing = !on && this.flightTiming;
     return true;
   }
   /** The owner-PC check (`?rec=playtest&recmeasure=1&reccheck=SECONDS`, R3b): see flight/ownercheck.ts. */
@@ -652,6 +654,7 @@ export class SiltwakeApp {
   private ownerCheckTried = false;
   private flightStartedAt = 0;
   private flightSampling = true;
+  private flightTiming = true;
   private startOwnerCheck(): void {
     const q = new URLSearchParams(globalThis.location?.search ?? ""), seconds = Number(q.get("reccheck"));
     if (!(seconds > 0) || q.get("recmeasure") !== "1" || this.flight?.mode !== "playtest") return;
