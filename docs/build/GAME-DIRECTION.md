@@ -31,6 +31,16 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 - **Empty travel** is no more than **about 90 seconds between points of interest, at the speed of the best craft you'd normally have on that leg.**
   - **A spacing guide, not the letter of the law** (owner, 2026-10-24). As you progress, longer journeys may take longer. The rule keeps things well spaced out.
   - **For checks:** the empty-travel limit may grow with progression and journey length, and a long leg is reported for judgement rather than auto-failed. The 15–20 minute new-content rule and "no decode-only waiting" stay the hard gates.
+  - **Deliberate quiet stretches** (owner, 2026-10-24):
+    - **Marking:** designers may mark a journey as deliberately atmospheric, giving its kind and purpose. The kinds include:
+      - a colourful environment;
+      - a large natural formation, such as a sea-treader-style path later in the game;
+      - something beautiful to look at;
+      - a descent;
+      - an approach to a silhouette;
+      - a breather after a big moment.
+    - **Reporting:** marked stretches are reported as intended quiet, not as empty travel. The owner's playtest tags judge them.
+    - **Limits:** something must change along the way (light, depth, sound, silhouette, current, creatures). A repeated chore is never excused by a mark.
   - **Tension counts while it's live:** sneaking past a predator you can hear counts as something happening only while its warning cue plays.
 - **Late-game needs are inferred from evidence, not handed over** (owner, 2026-10-24).
   - **How:** a player can work out what a late task needs from what they've seen: machines visibly built from a material, a rare decoded log, cryptic messages.
