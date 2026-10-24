@@ -75,6 +75,20 @@ Review `0f6b3b2a` on `review/sched-3-r2`, by Sol on `fa2078a2`: REQUEST CHANGES,
   - **B37 (E4):** remote recovery after the payload started keeps the frozen goal, with `ran:true`.
   - **Policy units:** `invocationEnv` with npm's own exports and the queue's variables excluded, `resolveMachine` with local configuration, and `buildOnly` with options.
 
+- **Checks** at `a01066f2`, all through the queue (nothing local):
+  - **One `--class standard --machine 3090 --review` job** (`261024-171517-cc5c`), with the job's variables cleared and the suites run directly in the job's own scope (no wrapper scope):
+    - policy, contention and config units **48/48**;
+    - SCHED-1 **23/23**;
+    - SCHED-2 **27/27**, S11, S17, S20 and S22 included, which F4 fixes;
+    - SCHED-2b **37/37**.
+  - **Fast tier:** `--machine 4070`, ticket `261024-171517-0994`, exit 0, 149 files.
+  - **Negative control** (ticket `261024-175008-4a53`, the R1 code `fa2078a2` with only the new SCHED-2b test file): B34, B35, B36 and B37 all fail, each at its finding:
+    - B34: no routing reason;
+    - B35: "declares no --artifact dist";
+    - B36: `ran`, `planned` and `machine` wrong;
+    - B37: the recovered result has no `goal`.
+  - **A first control attempt was invalid:** it copied the new test library, which imports `machineCpus`.
+
 ## R1 review responses
 
 Review `6f49c776` on `review/sched-3-r1`, by Sol on `86744a72`: REQUEST CHANGES, one P1, one P2 and one P3; not installed. Coordinator's decisions applied.
