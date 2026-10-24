@@ -729,8 +729,46 @@ The heightfield variant's p95 comes from its rock boxes, not the collar: on the 
 - Speed after R1 (see the tables' note).
 - **The art/collar visual seam** (see *Compromises*) and save-load integration are stage B's composed check. So are endpoint safety across the composed world (see *R1 response*) and LC's endpoint debt above.
 
-## Stage B, when CW-1 merges
-1. Compose structures through `composeStaticWorld` (vistas, dishes, the sites), with `guards: [LEGACY_PRESERVE]`, and drop `VISTA_SOLIDS` and the dish boxes from `SOLIDS`.
-2. Kit caves through `staticCaveCollider`, collars as `collarHeightfield`, rock as the shell (or boxes, per the call above), in CW-1's composer. Cave slides through `slideMove`.
-3. `depenetrate` on save load before the first tick (ART-07), falling back to the rescue path when it returns null.
-4. Retire the collar columns and the box sets; port the dish and vista tests to the static world.
+## Stage B plan (draft; no code until CW-1 is on root)
+Stage B puts the game's world queries on one collision model: COL-1's `StaticCollider`, with its shapes, heightfields and boxes. It retires the box sets beside it. Inputs are stage A's findings above, the compromise verdict (ART-01, -02, -03, -07, CAV-03, CAV-20), the FORK register (`lc-box-collider`: retiring it is an acceptance condition), and CW-1's cost evidence.
+
+**CW-1's cost evidence.** A diver step inside the deep caves' composed collision costs about **380 µs**, against **34 µs** outside (`caves-deep-perf`): about 11×. The cost is the per-cluster composite: about 11k rock boxes plus 0.5 m collar columns per cave, on an 8 m grid. Stage A's oracle measured the static collider on the same scenes:
+- per-frame moves are as fast or faster than the W1 composite;
+- the composer alone is 3–5× faster with identical boxes;
+- the heightfield turns 1.53 MiB of collar boxes into 356 KiB.
+
+**Target:** a deep diver step within 2× of outside, measured `--class exclusive`.
+
+**Retirement list** (each becomes a FORK closure in the same commit that removes it):
+1. **W1 kit cave composite** (`sim/world.ts`). `CaveDef.rock` boxes as collision; collar columns (`collarSolids`, `rockOnlyRecord`); the 8 m `CAVE_INDEX_CELL` composite over `createWorldQueries`. Each cluster's composite becomes one `StaticCollider`:
+   - the fine shell's shapes, oriented by provenance;
+   - `collarHeightfield`;
+   - the exterior solids round it, as boxes.
+
+   This keeps CW-1's `KitCaveStream` API (clusters, sliced `step`, `evict`, `finishNow`, `unsliced`, stats).
+2. **CW-1's collision pack format.** `collision.bin` changes from rock boxes and quantised collar columns to the compact shape and heightfield buffers. Those are typed arrays only, so they can cross a worker boundary (convention 5). Fetched per cluster like the light fields if the whole pack is too big (see risks).
+3. **`lc-box-collider`** (`world/caves/large/boxCollider.ts`): the kit-as-`CaveCollider` adapter. With (1), one composer serves kit caves and cave biomes.
+4. **Structure boxes in `SOLIDS`:** `VISTA_SOLIDS` and the dish cover boxes (DISH-1's 4,855 solids). They move to `composeStaticWorld` with `artMembers`, guarded by `LEGACY_PRESERVE`.
+5. **The duplicate composer.** W1's composite and LC's `composeCaveWorld` answer support outside a footprint differently (up to 0.28 m) and differ on 4 of 8,000 skin-contact moves. Stage B keeps one composer, LC's, with slides through `slideMove`, which carries stage A's tie and ghost-contact fixes.
+6. **Inside-solid camera workaround** (ART-07): `depenetrate` runs on save load before the first tick, against the fully composed world. It falls back to the rescue path when it returns null.
+
+**Kept:** `CaveDef.rock` stays as a content product where other code reads it (light field, cave material, scatter, tests: 74 references on CW-1). Only its use as collision goes. LC-2's biome stays LC's until LC-2 adopts `compactBiome`.
+
+**Order** (each step oracle-checked against the previous world: no route, tether, park or work pose newly blocked; no new illegal end):
+- **B0:** baseline, measured exclusive on root + CW-1: `caves-deep-perf`, the dish, A1, colonnade and Apron oracles, and CW-1's traversal step meter.
+- **B1:** structures on `composeStaticWorld` (item 4). This is the smallest blast radius. Port the dish and vista tests to the static world.
+- **B2:** kit cave clusters on the static collider, with a new pack format (items 1 and 2), sliced build preserved. Rebake and verify `collision.bin`.
+- **B3:** one composer (items 3 and 5), with cave slides through `slideMove`; retire `boxCollider.ts`.
+- **B4:** `depenetrate` on load (item 6), with the rescue fallback; save-load tests on SAVE-1 library saves.
+- **B5:** restore the bent art against the exact collider. Stage C if B overruns.
+  - ART-01: A1's bow and round sections.
+  - ART-02: the dish standing feeds and one rim breach, with NAV-1 for moved paths.
+  - ART-03: the bowl's 1 m tolerance becomes its 144 triangles.
+
+**Risks:**
+- **Pack size.** All 55 fine shells are about 2.3 M triangles and 1.2 M vertices. In the compact format that's tens of MiB raw, against `collision.bin`'s 2.5 MiB compressed today.
+  - **Mitigation:** measure first (B0). Stream per cluster with a byte-bounded resident set (convention 8). If needed, a collision LOD of the shell, decided on measured art distance, never on a box cover.
+- **Bounds and ownership semantics.** The static world keeps the exterior's bounds policy, and composed recovery must stay inside the owned footprint. Stage A's adapters don't answer `depenetrate`; B4 recovers against the fully composed world.
+- **Support differences** between composers change where actors rest beside caves (up to 0.28 m). The oracle reports them, and protected poses must not move.
+- **Merge overlap with SIM-1** (live state in place) in `sim/world.ts`: coordinate the order with SIM-1's owner.
+- **Performance claims** come only from `--class exclusive`, with the steal-aware frame classes.
