@@ -278,35 +278,7 @@ try {
   // SIM-PERF-1 (SIMPERF_HOST=1): on its own thread, a 1 ms CLOCK_MONOTONIC canary (a gap
   // means this whole process, on another vCPU, did not run), every vCPU's steal from
   // /proc/stat and the vCPU the renderer's main thread is on, every 10 ms (epoch ms).
-  const host = process.env.SIMPERF_HOST ? new Worker(`
-    const { parentPort } = require("node:worker_threads"), fs = require("node:fs");
-    const late = [], steal = [], where = [], states = [], last = [], sleeper = new Int32Array(new SharedArrayBuffer(4));
-    let stateWas = "";
-    let pid = null, stop = false, prev = performance.timeOrigin + performance.now(), n = 0, cpuWas = -1;
-    parentPort.on("message", (m) => { if (m === "stop") stop = true; else pid = m; });
-    const tick = () => {
-      if (stop) { parentPort.postMessage({ late, steal, where, states }); return; }
-      Atomics.wait(sleeper, 0, 0, 1);
-      const now = performance.timeOrigin + performance.now();
-      if (now - prev > 3) late.push([prev, +(now - prev).toFixed(2)]);
-      prev = now;
-      // Every 2 ms: the renderer main thread's state (R running, S sleeping, D disk/fault) and wait channel.
-      if (pid && n % 2 === 0) try {
-        const f = fs.readFileSync("/proc/" + pid + "/task/" + pid + "/stat", "utf8"), st = f.slice(f.lastIndexOf(")") + 2, f.lastIndexOf(")") + 3);
-        // The syscall it is in (wchan is hidden on this kernel); "running" when in user space.
-        const sc = st === "R" ? "" : fs.readFileSync("/proc/" + pid + "/task/" + pid + "/syscall", "utf8").split(" ")[0];
-        const w = { "0": "read", "1": "write", "7": "poll", "16": "ioctl", "46": "sendmsg", "47": "recvmsg", "202": "futex", "230": "nanosleep", "232": "epoll_wait", "270": "pselect", "271": "ppoll", "281": "epoll_pwait" }[sc] ?? sc.trim();
-        const key = st + " " + w; if (key !== stateWas) { states.push([now, st, w]); stateWas = key; }
-      } catch {}
-      if (++n % 10 === 0) {
-        try { for (const line of fs.readFileSync("/proc/stat", "utf8").split("\n")) { const m = /^cpu(\d+) /.exec(line); if (!m) continue;
-          const c = +m[1], v = +line.trim().split(/\s+/)[8]; if (last[c] !== undefined && v > last[c]) steal.push([now, c, v - last[c]]); last[c] = v; } } catch {}
-        if (pid) try { const f = fs.readFileSync("/proc/" + pid + "/task/" + pid + "/stat", "utf8"); const c = +f.slice(f.lastIndexOf(")") + 2).split(" ")[36];
-          if (c !== cpuWas) { where.push([now, c]); cpuWas = c; } } catch {}
-      }
-      setImmediate(tick);
-    };
-    tick();`, { eval: true }) : null;
+  const host = process.env.SIMPERF_HOST ? new Worker(new URL("./simperf-host-worker.mjs", import.meta.url)) : null;
   if (host && sched.pid) host.postMessage(sched.pid);
   const markAt = await page.evaluate(() => { window.__siltwakePerf.length = 0; window.__gaps.length = 0; performance.mark("cw1-align"); return performance.now(); });
   const started = performance.now(), syncAtStart = records.sync ?? 0, pendingAtStart = records.lightPendingFrames ?? 0;
