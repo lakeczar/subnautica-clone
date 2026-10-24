@@ -64,6 +64,20 @@ The coordinator's decision: stop extending lists, and fix the mechanism so npm c
   - **Policy units:** `intentEnv`, `resolveMachine` with intent, the runner's `resolveScript` on this repository's own scripts, and `portableEnv`.
   - The test contexts drop the test runner's own `NODE_TEST_CONTEXT`.
 
+- **Checks**, all through the queue:
+  - **`bf32c80e`, `--class standard --machine 3090 --review`** (ticket `261024-184943-2ad0`): SCHED-1 **23/23**, then its test 9 alone, three times, 3/3.
+  - **`ebd2784f`** (ticket `261024-183232-55ea`; the later commit changes only SCHED-1's test 9):
+    - units **49/49**;
+    - the new and rewritten tests B28 and B34–B40, **8/8**;
+    - SCHED-2 **27/27**;
+    - SCHED-2b **40/40**;
+    - SCHED-1 22/23, with test 9 failing. Its cause:
+      - test 9 killed the holder as soon as it claimed the ticket, sometimes before the command started;
+      - that is now correctly "not started: its holder died before the command started" (F3), where the old code always said "killed";
+      - the test now waits for the command's start, as its purpose ("the holder is killed while the job runs") needs.
+  - **Fast tier:** `--machine 4070`, ticket `261024-182514-2fab`, exit 0, 149 files, at `0c684b50` (the later commits change only test files).
+  - **A first run at `0c684b50` failed B28, B34, B38 and B39:** Node's test runner sets `NODE_TEST_WORKER_ID` in each test process, and the intent check took it for the submitter's. The test contexts now drop every `NODE_TEST_*` (`ebd2784f`).
+
 ## R2 review responses
 
 Review `0f6b3b2a` on `review/sched-3-r2`, by Sol on `fa2078a2`: REQUEST CHANGES, P1, P2 and P3, plus the coordinator's new F4. All R1 repros were fixed (9/9). Not installed.
