@@ -40,7 +40,8 @@ for (const [name, ticket] of rows) {
   const p = s?.parts ?? {}, mx = (n) => f1(p[n]?.max);
   const lb = s?.longByCause ?? {};
   // Reclassified with the shared rule: needs the stolen-time samples (CW-1 harness at e60108f1+).
-  const cls = s && (s.long ?? []).some(l => l.thread?.stolenMs !== undefined) ? (() => {
+  // A run with no long frame at all is judged trivially (nothing to excuse).
+  const cls = s && ((s.long ?? []).length === 0 || s.long.some(l => l.thread?.stolenMs !== undefined || l.raw)) ? (() => {
     const n = { host: 0, "host-stopped": 0, mixed: 0, clean: 0, unsampled: 0 };
     let raw = 0, byHost = 0, byStopped = 0, ours = 0, legacy = false;
     for (const l of s.long ?? []) {

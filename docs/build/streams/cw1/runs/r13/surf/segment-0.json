@@ -1,0 +1,419 @@
+{
+ "commit": "64bf2565",
+ "label": "RTX 3090 (factory-worker)",
+ "segment": 0,
+ "caves": [
+  "isles_surf_cave"
+ ],
+ "reached": [
+  "isles_surf_cave"
+ ],
+ "skipped": [],
+ "shots": [
+  "s0-01-isles_surf_cave.jpg"
+ ],
+ "views": [],
+ "errors": [],
+ "holds": [],
+ "long": [],
+ "unsliced": [],
+ "recoveries": 4,
+ "power": [],
+ "stalls": [
+  {
+   "t": 136.2,
+   "label": "cruise#11",
+   "short": 10,
+   "at": "346,-27,124",
+   "target": [
+    351.8,
+    -19.4,
+    124
+   ],
+   "bearing": 95,
+   "pitch": 0,
+   "headingErr": -0.04,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 99% · 27 / 350 m",
+   "notices": ""
+  },
+  {
+   "t": 144,
+   "label": "cruise#11",
+   "short": 9.8,
+   "at": "346,-26,124",
+   "target": [
+    351.8,
+    -19.4,
+    124
+   ],
+   "bearing": 95,
+   "pitch": 0,
+   "headingErr": -0.04,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 99% · 27 / 350 m",
+   "notices": ""
+  },
+  {
+   "t": 151.5,
+   "label": "cruise#11",
+   "short": 9.6,
+   "at": "346,-26,124",
+   "target": [
+    351.8,
+    -19.4,
+    124
+   ],
+   "bearing": 95,
+   "pitch": 0,
+   "headingErr": -0.04,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 99% · 27 / 350 m",
+   "notices": ""
+  },
+  {
+   "t": 193.3,
+   "label": "cruise#17",
+   "short": 56.8,
+   "at": "463,0,36",
+   "target": [
+    519.8,
+    -1.5,
+    36
+   ],
+   "bearing": 90,
+   "pitch": 0,
+   "headingErr": 0,
+   "keys": [
+    "KeyW",
+    "ShiftLeft"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 53 F · eat meal DART 92% power Hull 96% · 1 / 350 m Service here · Tab",
+   "notices": ""
+  }
+ ],
+ "reentries": [],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 5259,
+  "playableMs": 26862,
+  "collisionPackMs": 4398.4000000059605,
+  "records": true
+ },
+ "seconds": 191.2,
+ "powerEnd": {
+  "charge": 91,
+  "cellsLeft": 2,
+  "air": "craft",
+  "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 53 F · eat meal DART 91% power Hull 96% · 10 / 350 m",
+  "at": "565,-9,112",
+  "planned": {
+   "segment": 0,
+   "metres": 1247,
+   "calls": [],
+   "cruise": false,
+   "outPercent": 7.7,
+   "homePercent": 1.1,
+   "havePercent": 135,
+   "viable": true
+  },
+  "homeOk": true
+ },
+ "trace": {
+  "rotations": 2,
+  "chunksWithDataLoss": 0,
+  "events": 71728,
+  "megabytes": 12.6
+ },
+ "gcTraceAligned": true,
+ "gcTraceNames": [
+  "V8.GC_HEAP_EXTERNAL_PROLOGUE",
+  "MinorGC",
+  "V8.GC_HEAP_PROLOGUE",
+  "V8.GCScavenger",
+  "V8.GC_SCAVENGER_COMPLETE_SWEEP_ARRAY_BUFFERS",
+  "V8.GC_TIME_TO_SAFEPOINT",
+  "V8.GC_SCAVENGER",
+  "V8.GC_HEAP_PROLOGUE_SAFEPOINT",
+  "V8.GC_SCAVENGER_SCAVENGE",
+  "V8.GC_SCAVENGER_SCAVENGE_WEAK_GLOBAL_HANDLES_IDENTIFY",
+  "V8.GC_SCAVENGER_TRACED_HANDLES_COMPUTE_WEAKNESS_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_COLLECT_OLD_TO_NEW_PAGES",
+  "V8.GC_SCAVENGER_SCAVENGE_PARALLEL_PHASE",
+  "V8.GC_SCAVENGER_SCAVENGE_ROOTS",
+  "V8.GC_SCAVENGER_BACKGROUND_SCAVENGE_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_WEAK_GLOBAL_HANDLES_PROCESS",
+  "V8.GC_SCAVENGER_TRACED_HANDLES_RESET_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_FINALIZE",
+  "V8.GC_SCAVENGER_SCAVENGE_RESTORE_AND_QUARANTINE_PINNED",
+  "V8.GC_SCAVENGER_FREE_REMEMBERED_SET",
+  "V8.GC_SCAVENGER_SWEEP_ARRAY_BUFFERS",
+  "V8.GC_SCAVENGER_RESIZE_NEW_SPACE",
+  "V8.GC_HEAP_EPILOGUE_SAFEPOINT",
+  "V8.GC_MINOR_MS_BACKGROUND_SWEEPING",
+  "V8.GC_HEAP_EPILOGUE",
+  "V8.GC_BACKGROUND_YOUNG_ARRAY_BUFFER_SWEEP",
+  "V8.GCTraceGCNVP",
+  "V8.GC_HEAP_DUMP_STATISTICS",
+  "V8.GC_Heap_Stats",
+  "V8.GC_HEAP_EXTERNAL_EPILOGUE",
+  "V8.GCIncrementalMarkingStart",
+  "V8.GC_HEAP_ENSURE_SWEEPING_COMPLETED",
+  "V8.GC_MC_INCREMENTAL_START",
+  "V8.GC_MC_INCREMENTAL_EXTERNAL_PROLOGUE",
+  "V8.GC_MC_MARK_EMBEDDER_PROLOGUE",
+  "V8.GC_MC_MARK_ROOTS",
+  "V8.GC_MC_BACKGROUND_MARKING",
+  "V8.GC_MC_INCREMENTAL_EXTERNAL_EPILOGUE",
+  "V8.GCIncrementalMarking"
+ ],
+ "stepCosts": null,
+ "frames": {
+  "count": 11474,
+  "p50": 16.7,
+  "p95": 16.8,
+  "p99": 16.8,
+  "max": 16.8,
+  "over33": 0,
+  "over50": 0
+ },
+ "work": {
+  "p50": 2.5,
+  "p95": 4.3,
+  "p99": 7,
+  "max": 26.7,
+  "over33": 0
+ },
+ "ncpu": 8,
+ "host": {
+  "canaryGaps": 119,
+  "canaryMaxMs": 18.55
+ },
+ "longByCause": {
+  "over34": 0,
+  "streaming": 0,
+  "streamingOver34": 0,
+  "host": 0,
+  "hostStopped": 0,
+  "mixed": 0,
+  "clean": 0,
+  "unsampled": 0,
+  "streamingHost": 0,
+  "streamingHostStopped": 0,
+  "streamingOurs": 0,
+  "simulation": 0,
+  "noWork": 0,
+  "gcShaped": 0,
+  "streamingGcShaped": 0
+ },
+ "parts": {
+  "chunks": {
+   "p99": 2.6,
+   "max": 23.7
+  },
+  "regions": {
+   "p99": 0.3,
+   "max": 0.6
+  },
+  "caves": {
+   "p99": 0.2,
+   "max": 3.6
+  },
+  "caveWanted": {
+   "p99": 0.1,
+   "max": 0.1
+  },
+  "caveBuild": {
+   "p99": 0.1,
+   "max": 3.6
+  },
+  "caveEvict": {
+   "p99": 0,
+   "max": 0.1
+  },
+  "caveLightList": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "caveTexture": {
+   "p99": 0.1,
+   "max": 0.1
+  },
+  "caveUpload": {
+   "p99": 0,
+   "max": 0.2
+  },
+  "caveView": {
+   "p99": 0.1,
+   "max": 0.5
+  },
+  "chunkUpdates": {
+   "p99": 1,
+   "max": 2
+  },
+  "chunkPlan": {
+   "p99": 0.2,
+   "max": 2.6
+  },
+  "chunkDrop": {
+   "p99": 0.1,
+   "max": 0.3
+  },
+  "chunkBuild": {
+   "p99": 1.7,
+   "max": 23.5
+  },
+  "chunkUpload": {
+   "p99": 0.1,
+   "max": 4.5
+  },
+  "chunkDisplay": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "chunkEvict": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "chunkDispose": {
+   "p99": 0,
+   "max": 0.1
+  },
+  "chunkDisposeMax": {
+   "p99": 0,
+   "max": 0
+  },
+  "lights": {
+   "p99": 0.4,
+   "max": 0.7
+  },
+  "optics": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "lightScan": {
+   "p99": 0.1,
+   "max": 0.4
+  },
+  "lightCached": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "lightMoving": {
+   "p99": 0.1,
+   "max": 0.1
+  },
+  "lightPlacing": {
+   "p99": 0,
+   "max": 0.1
+  },
+  "lightSentLag": {
+   "p99": 0,
+   "max": 0
+  },
+  "lightLagWorst": {
+   "p99": 0,
+   "max": 0
+  },
+  "lightPlace": {
+   "p99": 0.2,
+   "max": 0.4
+  },
+  "lightSelect": {
+   "p99": 0.2,
+   "max": 0.2
+  },
+  "render": {
+   "p99": 1.9,
+   "max": 10.6
+  },
+  "sim": {
+   "p99": 1,
+   "max": 3.2
+  }
+ },
+ "lightLag": {
+  "framesLagging": 0,
+  "nearestM": null,
+  "worstSentFrames": 0,
+  "worstSentWithin30m": 0
+ },
+ "streamingMax": {
+  "chunks": 23.7,
+  "caves": 3.6
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 0,
+  "built": 16,
+  "evicted": 7,
+  "boxes": 84661,
+  "stepMs": 2.5,
+  "buildMs": 3.6,
+  "pending": 0,
+  "missing": 0,
+  "uploads": 3,
+  "lightBytes": 3002040,
+  "textureBytes": 1645176,
+  "records": true,
+  "recordsMs": 4398.4000000059605,
+  "lightPendingFrames": 0,
+  "maxAllocMs": 0.1,
+  "maxWriteMs": 0.1,
+  "restarts": 0,
+  "active": "isles_surf_cave",
+  "lightPending": false,
+  "presents": 12774,
+  "settling": false,
+  "lightFailed": false
+ },
+ "pageOrigin": 1792866719504.3,
+ "thread": {
+  "pid": "1235134",
+  "samples": 37450
+ },
+ "gc": {
+  "collections": 565,
+  "byKind": {
+   "MinorGC": 272,
+   "V8.GCScavenger": 272,
+   "MajorGC": 12,
+   "V8.GCFinalizeMC": 9
+  },
+  "maxPauseMs": 12.81,
+  "over16": []
+ },
+ "gate": {
+  "pass": true,
+  "failures": [],
+  "travelSync": 0,
+  "loadSync": 0,
+  "travelLightPending": 0
+ },
+ "memory": {
+  "residentCpuMiB": 47.7,
+  "residentGpuMiB": 35.1,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 227.7
+ }
+}

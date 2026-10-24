@@ -1,0 +1,8 @@
+heavy-check: 261024-184823-e4b4 admitted after 11m14s as standard: 2 cpu, 3072 MiB; runs to its end; stops if silent for 15m00s (or touch $SILTWAKE_JOB_HEARTBEAT), at the 4h00m runaway ceiling
+canopy-over-geared: over-geared@canopy-entry from a7ca60548f7c (same-version, 91 commits back); earned in 79.5 min of play by 388 commands after creel@divide
+  passed over 2901fed12d31: not in da1c83b0b838's history (another branch, or newer)
+  passed over ac734b0de129: not in da1c83b0b838's history (another branch, or newer)
+  passed over e86e89a2d015: not in da1c83b0b838's history (another branch, or newer)
+# light selection replay at da1c83b0; save over-geared@canopy-entry.json
+{"frame":372329,"camera":[655.98,-310.354,-1215.498],"browserSelectMs":63.7,"browserCandidates":9305,"replayCandidates":7217,"settled":true,"chunksSettled":true,"selectMs":{"p50":0.065,"p99":0.085,"max":0.095},"updateMsEach":0.105,"cpuMsEach":0.151,"atBrowserCount":{"candidates":9305,"p50":0.09,"p99":0.105,"max":0.116}}
+{"frame":377462,"camera":[639.563,-323.19,-1221.142],"browserSelectMs":102.4,"browserCandidates":9092,"replayCandidates":7004,"settled":true,"chunksSettled":true,"selectMs":{"p50":0.059,"p99":0.086,"max":0.171},"updateMsEach":0.092,"cpuMsEach":0.137,"atBrowserCount":{"candidates":9092,"p50":0.09,"p99":0.113,"max":0.13}}

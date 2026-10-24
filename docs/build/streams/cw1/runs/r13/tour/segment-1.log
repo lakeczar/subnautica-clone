@@ -1,0 +1,36 @@
+[5.4s] renderer ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)
+[27.2s] cold start {"titleMs":5196,"playableMs":26720,"collisionPackMs":4263.0999999940395,"records":true}
+[28.2s] loaded {"cam":[19.172,-0.505,-19.822],"depth":1.2,"vitals":"O₂ 100% Dart air HEALTH 100 FOOD 59 F · eat meal DART 100% power Hull 100% · 1 / 350 m Service here · Tab"}
+[28.2s] renderer main thread 1067986
+[28.2s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 59 F · eat meal DART 100% power Hull 100% · 1 / 350 m Service here · Tab at 19,-1,-20 depth 1.2
+[43.2s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 58 F · eat meal DART 99% power Hull 100% · 5 / 350 m at -59,-5,-55 depth 5.6
+[58.2s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 58 F · eat meal DART 98% power Hull 100% · 22 / 350 m at -143,-21,-143 depth 22.2
+[73.3s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 57 F · eat meal DART 98% power Hull 100% · 89 / 350 m at -189,-89,-226 depth 89.5
+[88.3s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 57 F · eat meal DART 97% power Hull 100% · 148 / 350 m at -199,-147,-335 depth 147.9
+[103.3s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 56 F · eat meal DART 96% power Hull 100% · 143 / 350 m at -213,-142,-316 depth 143
+[118.3s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 56 F · eat meal DART 95% power Hull 100% · 87 / 350 m at -233,-86,-202 depth 87.3
+[133.4s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 100% · 31 / 350 m at -275,-30,-161 depth 31.3
+[148.4s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 100% · 19 / 350 m at -357,-18,-85 depth 19
+[154.1s] at reef_pumphouse_undercut active light reef_pumphouse_undercut depth 15.5
+[154.2s] screenshot /work/tmp/cw1/r13-tour/s1-01-reef_pumphouse_undercut.jpg
+[163.4s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 54 F · eat meal DART 93% power Hull 100% · 8 / 350 m at -385,-7,-36 depth 8
+[176.5s] at reef_bellhole active light reef_bellhole depth 20.2
+[178.5s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 54 F · eat meal DART 92% power Hull 100% · 21 / 350 m at -446,-20,51 depth 21.4
+[191.3s] at reef_archlet active light reef_archlet depth 15.2
+[222.5s] error TimeoutError: locator.click: Timeout 30000ms exceeded.
+Call log:
+  - waiting for locator('#continue')
+    - locator resolved to <button hidden="" id="continue" class="primary" data-action="continue">Continue ↗</button>
+  - attempting click action
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+    - waiting 20ms
+    2 × waiting for element to be visible, enabled and stable
+      - element is not visible
+    - retrying click action
+      - waiting 100ms
+    56 × waiting for element to be visible, enabled and stable
+       - element is not visible
+     - retrying click action
+       - waiting 500ms

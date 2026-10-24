@@ -1,6 +1,14 @@
 # CW-1: every authored cave in the game, streamed without pauses (handoff)
 
-Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Root merged again at `21a1652` (SIM-1a, TST-16, SIG-1 stage 0, STEW-1). Code: **`3652c703`** after review R2 (this handoff is the docs-only commit after it). The game code is unchanged since `5d9425f4`, where the full gate passed; later commits are the harness, its evidence and this handoff. The clean remeasure ran at `3779f59c` (r10). The targeted remeasure of its failures ran on the fixes at `6ca73311` (r12). Reviews: R1 `review/cw-1-r1` (`docs/build/reviews/CW-1-SOL-XHIGH-R1.md`), R2 `review/cw-1-r2` (`docs/build/reviews/CW-1-SOL-XHIGH-R2.md`).
+Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Root merged again at `21a1652` (SIM-1a, TST-16, SIG-1 stage 0, STEW-1). Code: **`64bf2565`** after review R3 (game and harness), harness fix `da1c83b0`; this handoff is the docs-only commit after them. Runs:
+- the clean remeasure at `3779f59c` (r10);
+- the targeted remeasure of its failures at `6ca73311` (r12);
+- R3's single rerun at `64bf2565` (r13), with tour 1 at harness `da1c83b0` on the same build.
+
+Reviews:
+- R1 `review/cw-1-r1` (`docs/build/reviews/CW-1-SOL-XHIGH-R1.md`);
+- R2 `review/cw-1-r2` (`docs/build/reviews/CW-1-SOL-XHIGH-R2.md`);
+- R3 `review/cw-1-r3` (`docs/build/reviews/CW-1-SOL-XHIGH-R3.md`).
 
 ## Outcome
 All **55** authored small and medium caves are in the real game: the Fanvault and W2's four hub caves, CA-1's 18 Reef and Isles caves, CA-2's 12 Canopy and Basin groups, and CA-3's 20 Rift, Divide and Meridian sources. The browser never generates a cave: collision and light are baked, streamed ahead by proximity and heading, built in time slices and evicted behind and far first. At 1920×1080 on the RTX 3090, the driving ran from earned library saves by ordinary keys: an 8-segment Dart tour from `tour-ready`, and the 800 m Creel from `canopy-over-geared`, with service calls and reserve cells.
@@ -15,7 +23,14 @@ All **55** authored small and medium caves are in the real game: the Fanvault an
 **Targeted remeasure of every failed segment on the fixes (r12, `6ca73311`):** 41 of 41 stops, 0 holds, 0 unsliced builds, 0 dark cave frames.
 - Light placement p99 0.2 ms, worst 4.8 ms outside host frames.
 - No moving light ever lagged.
-- **All 8 pass the stolen-time gate.** One of them, tour 7, passes only because a single frame is classed **host-stopped, GPU unknown**: most of the VM stopped, our threads on CPU for 8.2 ms. That is stated plainly below and its class is listed separately.
+- **Under the provable gate (R3-1): 3 of 8 proven** (tours 0 and 5, hop 2, which had no streaming frame to excuse). The other five passed only by excuses the provable rule can't make from aggregates, so they were unresolved and were rerun.
+
+**R3's rerun (r13, `64bf2565`), judged by the provable gate:**
+- **Pass, nothing excused:** tours 3, 4 and 7 (the Isles surf cave included) and the surf hop. Each had 0 streaming frames over 34 ms.
+- **Deep 2: fail.** All 7 Meridian caves reached, but two light-selection frames (63.7 and 102.4 ms) can't be proven host. A quiet headless replay of selection at those two poses measures 0.06–0.17 ms (`runs/r13/select-replay.txt`). They're very likely steal on the renderer's own vCPU, which the canary rule can't confirm; a renderer-vCPU canary is proposed for R4.
+- **Tour 1 (the R3-2 and R3-3 segment): fail on one frame.** It reached 12/12 caves through the hub caves of R3-2's probe, with no frame in a cave with its light unbound. All three re-entries (F5, Escape, Export, Import) revealed with the cave's own light bound after about 0.4 s. It fails on one unsampled streaming frame: 95.2 ms of region activation. The same route at r10 never exceeded 0.8 ms there, and the sampler itself froze for 84 ms in that frame.
+
+**Proven per segment, the strict rule throughout:** 7 of the 9 judged segments pass (tours 0, 3, 4, 5 and 7, hop 2, the surf hop); deep 2 and tour 1 fail (*Traversal*).
 
 ## What changed
 - **Registration (`caves.ts`).** `CAVE_SOURCES` lists every cave. CA-2's groups build through `groupDef` (their edge-shelf floor, one memo) and draw in their own style (`caveShellOf`). CA-3's join through a data-only `caves/deepCaves.ts` (no simulation import, so no cycle). `caves/authored.ts` no longer imports values from `caves.ts` (the cycle would have put `EXTERIOR` in its dead zone); `assertDisjointFootprints` moved to `caveGeometry.ts` and is re-exported.
@@ -96,6 +111,26 @@ All **55** authored small and medium caves are in the real game: the Fanvault an
       - Sixty moving meshes (6,000 lights) stay within 2,048 + 32 per mesh a frame, and all are made and sent (6,000 moved in one frame before).
       - A moving mesh beside the eye never lags and sent lights are always current, while 60 far meshes absorb the lag (`cw1-scene-lights.heavy`).
     - **Settled allocation** (an earlier fix in this round, from the SAVE-1 alloc profile): a settled scene-lights frame had allocated 62 KiB, growing with the meshes. It's now a constant 3.3 KiB: a dense entry list walked by index, cached lights copied untimed, the frame's candidate array written by index (emptying it each frame had dropped and regrown its storage), closure-free cluster parameters, and uniforms written without `splice`.
+- **Review R3's three findings** (branch `review/cw-1-r3`, `docs/build/reviews/CW-1-SOL-XHIGH-R3.md`).
+  - **One upload scheduler (R3-2).** `CaveLighting` owns every fill.
+    - **Order:** `caveView.update` spends the frame's budget on the active cave's field first, then on the prefetch wishes in order. `stream()` only records the wishes.
+    - **Progress is kept:** each partial fill keeps its progress (at most two in progress; the oldest one no longer asked for is dropped first, never one in the current order). Prefetch and activation can no longer cancel each other's work. The review's probe had 120/120 frames pending and 0 completed uploads, with 15.7 MB written and thrown away.
+    - **Byte cap:** a slab is written only if it fits what is left of the budget. The one defined allowance: a plane larger than the whole budget is written alone, as a frame's first write; otherwise such a field could never progress.
+    - **Tests** (`cw1-cave-light-upload`):
+      - a cold active field with a different first prefetch wish, non-cubic dimensions and a heading change: it binds within its byte count's worth of frames, no frame is over budget, and no partial is restarted;
+      - through the real cave view, a camera in `hub_step_arch` with the streamer's wishes in the review's order;
+      - the cap and its allowance.
+  - **No cave revealed unlit (R3-3).**
+    - **Bound to the pose:** readiness is the presented pose's. Entry counts it only from a frame presented since entry (`GameRenderer.presents`), and keeps presenting the entered pose behind the cover while admission holds. Settle is judged after this pose's cave update (`settleStep`), not the previous pose's.
+    - **At their bounds, an explicit safe outcome:**
+      - **entry:** it moves to safe water (the remembered open water, else the refuge), with a notice, and waits there; if even that pose stays unlit, it keeps the loading cover with a message, the menu freed (load another save, or Continue to retry), and Resume refused;
+      - **settle:** it stays dark (`caveLightFailed`) and the app moves to safe water once.
+    - **Tests:**
+      - **app boundary** (`cw1-entry`): a ready previous pose then a cold cave; a delayed light (4 s); never ready at the cave (moved, then lit, then plays); never ready anywhere (cover with a message, never plays); a failed settle (back to the remembered open water, once);
+      - **view and renderer:** a jump from a cached cave to an uncached one reads pending for the new pose in the same update; `settleStep` at and inside its bound.
+    - **Browser:** `CW1_REENTER` re-enters at chosen caves by ordinary input (F5, Escape, Continue), and the traversal gate fails a reveal with the cave's light pending.
+  - **Provable frame attribution (R3-1).** The fix the review asks for, shared with SIM-PERF-1's step classifier (`step-class.mjs`, folded). Its rules are in *What decides a long frame*.
+    - **Tests** (`frame-class.test.mjs`, 16): the review's three counterexamples (a sleeping GPU thread's vCPU stolen while the renderer works; a migration inside a delayed interval; a frame inside one long bracket with its steal before it); SIM-PERF-1's two R1 cases; a sleeping thread's last-run vCPU; an internal sampler gap; no thread states; the canary required; the GPU-wait path; host-stopped needing the VM provably stopped and our threads idle; and r12 tours 3 and 7's boundary arithmetic, neither of which survives the lower bound. `step-class.test.mjs` (9) for steps.
 - **Light placement resumes.** One streamed scatter mesh's thousands of thin-instance lights were placed in one go (37–111 ms). Placement now resumes across frames: 64 instances per budget check, no per-instance matrix allocation.
 - **Tests.** New `cw1-streaming` (fast, 13), `cw1-caves.heavy` (whole world, sheltered caves, every lane near a cave), `cw1-bake.heavy` (CA-1's bake probe over every cave chunk: borders at all LOD pairs, shells, scatter, codec). Tests that assumed one registered cave, or composed CA-2's groups beside the registry, now use the registry once (CA-2 and CA-3 suites compose the game's own world); CA-3's thickness rule allows edge-clipped boxes; the shelf-race escape reads the masked flow; `regions-art` allows pit-cut coarse chunks up to 3,000 vertices (worst 2,529).
 
@@ -120,18 +155,28 @@ Task-owned headless Chrome, ANGLE GL-EGL, **1920×1080**, the built game (`dist`
 - the camera, with any jump;
 - every hold change and HUD notice.
 
-**What decides a long frame (R2 follow-up).** The renderer and GPU process main threads are sampled every 5 ms: CPU time, runnable wait, faults, the vCPU each is on, and every vCPU's steal from `/proc/stat`.
-- **Stolen time, following the threads.** For each 5 ms interval, the steal on the vCPU the renderer's main thread was on, or on the GPU main thread's vCPU, whichever is larger (overlapping time counts once). Moving between vCPUs is followed.
-- **The remainder decides.** Gap minus stolen time, against the 34 ms budget. Steal never excuses a frame by itself.
-  - **host:** steal, and the remainder within budget;
-  - **mixed:** steal, but the remainder still over budget; ours;
-  - **clean:** no steal above the 10 ms jiffy, over budget; ours;
-  - **unsampled:** no thread samples; ours.
-- **The gate fails on any streaming frame that isn't host.** Every run reports all four counts, for all frames and for streaming ones.
+**What decides a long frame (R3-1, provable).** A frame is excused only by stolen time that provably fell inside it, on a thread that could be delayed by it (`frame-class.mjs`, shared by the traversal, the summaries and the evidence table; the same proof rules as SIM-PERF-1's `step-class.mjs` for simulation steps).
+- **What's sampled:**
+  - every 5 ms: the renderer's and GPU process main threads' CPU time and vCPU, and every vCPU's steal from `/proc/stat` (10 ms jiffies);
+  - always on: a canary thread waking every 1 ms, and the renderer thread's state and syscall every 2 ms (`simperf-host-worker.mjs`).
+
+  Every long frame keeps these raw rows (±20 ms), so any verdict can be re-judged from the JSON.
+- **What counts:**
+  - an interval wholly inside the frame counts in full; a boundary interval counts only the steal that can't fit in its outside part;
+  - the renderer's vCPU counts only while it was runnable throughout; the GPU process's vCPU counts only while the renderer waited in a futex throughout;
+  - one jiffy off the total;
+  - capped at the canary's own stall in the frame (a VM pause stalls it too).
+- **Uncertain, never cleared** (counted as ours): a migration, a sampler gap over 12 ms, samples further than 12 ms from an edge (unsampled), a sleeping thread's last vCPU, and no thread states.
+- **Classes:**
+  - **host:** excused time brings the frame within 34 ms;
+  - **host-stopped:** most of the VM provably stopped (per-vCPU inside steal, a jiffy off each, at least half of span × vCPUs), the canary stalled for half the frame, our threads within budget on CPU, and no GPU busy evidence ("GPU unknown");
+  - **mixed, clean, unsampled:** ours.
+- **The gate fails on any streaming frame that is ours.** Recorded r10 and r12 frames have no raw rows. They're judged only by the labelled legacy rule (an upper bound), and a pass that rests on a legacy excuse is reported **unresolved**.
 - **The kernel point (correction).** Review notes said the off-CPU frames weren't steal because `PARAVIRT_TIME_ACCOUNTING` is off. That was wrong: here stolen time sometimes appears as the thread's run time and sometimes not, so only per-vCPU sampling can tell.
+- **A consequence:** a host pause stalls the 5 ms sampler too. So under this rule many long frames are unsampled or mixed, and a segment passes only when its streaming work never runs long. Tours 3, 4 and 7 and the surf hop did.
 
 **Why: the host pauses the whole VM.** A diagnostic run of tour 3's route (`CW1_PROFILE=1` plus per-vCPU steal, `runs/diag/d1`) found:
-- **every long frame was inside a host pause:** all 20 frames over 34 ms coincided with 410–670 ms of steal across the 8 vCPUs in a 100 ms gap, most of the VM paused for about the length of the frame. The host's average is 2–16 ms per 100 ms;
+- **every sampled long frame was inside a host pause:** all 20 sampled frames over 34 ms (3 more were unsampled) coincided with 410–670 ms of steal across the 8 vCPUs in a 100 ms gap, most of the VM paused for about the length of the frame. The host's average is 2–16 ms per 100 ms;
 - **none came without steal**, and five had the renderer's own vCPU stolen for at least half the gap;
 - **the profiler saw no JS in them:** mostly `(idle)`, because the thread wasn't running.
 
@@ -186,7 +231,7 @@ The pauses land in whichever part of our frame is running. That is why R1's and 
 - **D1:** tour 3's route with the CPU profile and per-vCPU steal. It found the host pauses above. Its profiler overhead cost the driver three caves.
 - **D2:** tour 0's route with the full trace. The drive completed, but the trace overflowed Node's string limit, which is why tracing is now streamed.
 
-**Targeted remeasure on the fixes, 3090, `6ca73311` (r12)** (`runs/r12`, the same layout).
+**Targeted remeasure on the fixes, 3090, `6ca73311` (r12)** (`runs/r12`, the same layout). Judged then by the stolen-time rule, which R3-1 showed is an upper bound: this table's excuses are **legacy**. Under the provable rule, tours 0 and 5 and hop 2 pass (nothing to excuse); tours 3, 4 and 7, deep 2 and the surf hop were **unresolved** and are rerun in r13.
 - **What ran:** every segment that failed in r10 (tours 0, 3, 4, 5 and 7, deep 2, hop 2, the surf hop), on plans re-derived with the lateral margin (the tour segments cover the same caves).
 - **Totals:** 80 min, 286,493 frames, **41 of 41 stops**, 0 holds, 0 unsliced builds, 0 dark cave frames.
 - **Streaming frames over 34 ms:** 5 in all. Host removes 4. Host-stopped (GPU unknown) removes 1, tour 7's. **0 are ours.**
@@ -206,6 +251,47 @@ The pauses land in whichever part of our frame is running. That is why R1's and 
 | Surf hop | 15:01 | 1/1 | 1 → −1, −0 → 0 | 5 / 1 / 0 / 1 | 0.3 / 1.1 | 0 | 1.6 / 5.5 | yes (steal 5.52%) | pass |
 
 **Functional check of the streamed trace** (surf hop, `gpu` class, `CW1_TRACE=1`, `runs/r12/func`): 2 rotations, 0 chunks with data loss, 2.6 M events, 484 MB read without materialising the trace. The GC slices aligned on `Renderer/CrRendererMain`, and it reached the surf cave.
+
+**R3's single rerun, 3090, `64bf2565` (r13)** (`runs/r13`: results, logs, receipts with TST-16 context, evidence and summary tables, re-entry screenshots). Every frame is judged by the provable gate from its raw rows. Six exclusive tickets were submitted at 16:13 UTC, plus one more for tour 1 at 18:36 UTC after a harness fix:
+- **The extra tour 1 ticket:** the first tour 1 attempt failed on two harness bugs. Its re-entry clicked Continue, which the menu hides while a session runs, and the always-on canary worker then kept the errored run from exiting. Fixed at `da1c83b0`; the same build was used.
+- **Checks first:** `caves-deep-perf` exceeded its bound under three-way test concurrency (437.6 µs) and passes alone at the same commit (380.9 µs). The bound is unchanged.
+
+| Segment | Admitted UTC | Caves | Long frames: host / host-stopped / mixed / clean / unsampled | Streaming over 34 ms, ours | Steal max % (5 s) | Gate |
+|---|---|---|---|---|---|---|
+| Tour 3 | 17:31 | 5/5 | 0 / 0 / 7 / 0 / 10 | 0 | 3.8 | **pass** |
+| Tour 4 | 17:47 | 4/4 | 0 / 1 / 10 / 0 / 8 | 0 | 3.8 | **pass** |
+| Tour 7 | 18:02 | 4/4 (surf cave included) | 0 / 2 / 8 / 0 / 3 | 0 | 4.0 | **pass** |
+| Deep 2 | 18:16 | 7/7 | 0 / 2 / 12 / 0 / 3 | 2 (light selection 63.7 and 102.4 ms, mixed) | 3.3 | **fail** |
+| Surf hop | 18:31 | 1/1 | no frame over 34 ms | 0 | 3.9 | **pass** |
+| Tour 1, with re-entry (`r13b`) | 19:04 | 12/12; 3 re-entries revealed lit (0.4 s cover each) | 0 / 2 / 9 / 0 / 4 | 1 (region activation 95.2 ms, unsampled) | 5.7 (DISTURBED) | **fail** |
+| Tour 1, first attempt | 17:05 | 3/3 before the harness error | – | – | 3.7 | harness failure, superseded |
+
+**Across the rerun:**
+- No moving light lagged in any segment.
+- No frame was drawn in a cave with its light unbound: R3-2's hub caves included, and the frames behind each re-entry's cover counted apart (0).
+
+**Deep 2's frames are not selection work, by measurement:**
+- **In the browser:** the renderer was runnable on vCPU 3 throughout, 103.8 ms on CPU in a 100 ms frame, and vCPU 3 shows about 100 ms of steal over the bracket. The VM lost 489–620 ms. The canary, on another vCPU, stalled only about 23 ms.
+- **In a quiet replay** (headless, non-exclusive, at the same commit; `select-replay.mjs`, `runs/r13/select-replay.txt`): the real world art was streamed at each recorded camera pose, and the real `SceneLights` settled with 7,217 and 7,004 candidates. Selection costs p99 0.085 ms (max 0.17 ms). At the browser's own counts (9,305 and 9,092, with the creature mesh's 1,201 lights missing from world art), synthetic candidates select in at most 0.13 ms. A whole light update costs 0.15 ms of CPU.
+- **So:** the browser's 63.7 and 102.4 ms are 600–900× the measured cost. This is very likely steal confined to the renderer's vCPU, which the canary rule can't confirm. Deep 2 stays a failure (the coordinator's ruling); see the R4 proposal.
+
+**Tour 1's frame:** 95.2 ms of legacy region activation, unsampled (the harness's own sampler froze for 84 ms in it; VM-wide steal 630 ms), at (−396, −7, −25) on the Reef approach, before any re-entry. The same route at r10 never spent more than 0.8 ms on region activation. It stands as a failure under the rule.
+
+- **Proposal for R4: a canary that follows the renderer's vCPU** (not implemented; Sol to review the method first).
+  - **Why:** r13 deep 2's two failing frames had the renderer runnable on one vCPU throughout (vCPU 3: 103.8 ms on CPU in a 100 ms frame, about 100 ms of steal on that vCPU). The VM as a whole lost 489–620 ms, but the canary, on another vCPU, stalled only about 23 ms. The canary rule therefore can never excuse steal confined to the renderer's own vCPU, however large.
+  - **Design:**
+    - **A second, co-located canary:** a mostly sleeping waker thread in the harness's worker, re-pinned (`sched_setaffinity` through `taskset -p -c <cpu> <tid>`) to the vCPU the renderer's main thread was on at each 5 ms sample.
+    - **How it measures:** it sleeps 1 ms and records late wakes, as the canary does. When the host steals that vCPU, it can't wake either. It shares the vCPU with the renderer only for its wakes (microseconds), never for work.
+  - **Its own cost, measured and reported:**
+    - CPU per second and per frame;
+    - wake latency on an idle pinned vCPU (its quiet-run baseline, which bounds how small a stall it can certify);
+    - its effect on frame time: an A/B on one segment, with and without it.
+  - **Negative controls that must stay "ours":**
+    - an injected 60 ms busy loop on the renderer's main thread (a page hook in a test build) with the co-located canary on the same vCPU, which wakes late only by the busy loop's preemption bound, not by tens of ms;
+    - a sleeping renderer whose last vCPU is stolen;
+    - steal on another vCPU only.
+  - **The cap:** excused time stays at most the co-located canary's own stall overlapping the frame, as now, alongside the existing proof rules: inside steal only, pro-rated boundaries, one jiffy off, migrations and gaps uncertain.
+  - **If R4 accepts it:** implement it, run the controls, and **one** deep-2 exclusive rerun. If deep 2 still can't be proven, it goes in the merge record as an open measurement compromise. Its root fix is the fleet host-pinning change, pending a reboot time. **No CPU-time-based excuse is added.**
 
 **Not ours, but noted:**
 - **Presentation-side gaps:** the remaining mixed and clean long frames are non-streaming. Each had 3–8 ms of frame work and no steal on our two sampled threads, but large steal elsewhere in the VM. That points to presentation-side gaps (compositor) outside the threads the harness samples.
@@ -281,19 +367,22 @@ Screenshots (`docs/build/streams/cw1/shots/`):
   - ![](cw1/views/s1-03-seam-archlet-side.webp)
 
 ## Checks
-At `5d9425f4`. The game code is identical at the handoff head: later commits touch only `docs/build/streams/cw1/` (the harness, its evidence) and this handoff. Fast tier, heavy tier, economy and playthrough ran on the second worker (`scripts/alickers-job.sh`, tested SHA recorded); the bake and build were queued on factory-worker.
-- **Fast tier:** 1,488/1,488, including `cw1-entry`, `cw1-slicing`, `cw1-streaming` (R2-4's roster test, the cluster query), `world-residency` (amortised disposal, phases covering the whole update) and `world-budget`.
-- **Heavy tier:** 66 files, 478 tests, 0 failures, including:
-  - `cw1-cave-light-upload` (R2-1, now heavy-tier by TT-1's guard: `CaveLighting` reaches Babylon's math);
-  - `cw1-scene-lights` (R2-3 histories, R2-5 cache, the frame-wide moving budget, nearest-first priority);
-  - `cave-light`.
-  
-  CA-3's `caves-deep-perf` timing bound passed. Its 400 µs bound was not loosened.
+At `64bf2565` (R3), through heavy-check with `--machine any` (receipts bound to the commit); the build ran on the second worker. Later commits touch only `docs/build/streams/cw1/` (the harness, its evidence) and this handoff.
+- **Fast tier:** 1,492/1,492, including:
+  - `cw1-entry`: R1 and R2, plus R3-3's ready-previous-pose, delayed, never-ready-at-the-cave, never-ready-anywhere and failed-settle cases;
+  - `cw1-slicing`, `cw1-streaming`, `world-residency`, `world-budget`.
+- **Heavy tier:** every file passes, including `cw1-cave-light-upload` (R2-1 and R3-2's scheduler, view, cap and jump cases, `settleStep`), `cw1-scene-lights` and `cave-light`.
+  - CA-3's `caves-deep-perf` exceeded its 400 µs bound only under three-way test concurrency (437.6 µs). Alone at the same commit it passes at 380.9 µs, matching R1's 378–390 µs alone. The bound is not loosened. It's flaky under concurrency, for CA-3.
+- **Harness unit tests:** `frame-class.test.mjs` 16/16 (R3-1's controls), `step-class.test.mjs` 9/9.
 - **Economy, the root gate's six steps:** campaign, m1, m2-a, m2-b1, progression curve and upgrade economy pass.
 - **Playthrough:** all eight scenarios complete with no blockers.
 - **Bake:** `bake-terrain --verify` at `686e19d5`: **276/276** files equal the live bytes (220 chunks, 1 collision pack, 55 light fields). The bake's sources are unchanged since.
-- **Build and provenance:** `npm run build` at `6ca73311` (on the second worker, because factory-worker's queue had it 27th behind exclusive jobs). The bundle carries the bake's source hash `866d9186…`, equal to the bake's.
-- **Root gate:** `npm run gate` on root after merging is the coordinator's, as R2 asked.
+- **Build and provenance:** `npm run build` at `64bf2565` (the second worker). The bundle carries the bake's source hash `866d9186…`, equal to the bake's.
+- **Root gate:** `npm run gate` on root after merging is the coordinator's.
+
+**Merge notes:**
+- **The CW-1/SIM-PERF-1 resolution:** `sampleHazards` and `hazardsAt` are resolved at `74f51bc6` (Sol-verified, 35,175 comparisons).
+- **Rebake on merge:** whichever of CW-1 and COL-1 merges second must rebake and verify `collision.bin` and the associated manifests, terrain and light assets from the resolved composed source (R3). Neither branch's old pack should be carried into the merged build.
 
 ## Adverse cases
 - **Resting in a sheltered cave (CA-3 R1).** A diver idle 15 s in the crest hollow shelter at cycle 40 s, and in the lintel galleries: moved under 0.6 m, health 100, brine 0. Unmasked control: carried over 2 m (`cw1-caves.heavy`).
@@ -301,12 +390,16 @@ At `5d9425f4`. The game code is identical at the handoff head: later commits tou
 
 ## Compromises (each with its root fix and cost)
 - **The frame gate depends on attributing host pauses.**
-  - **What happened:** this VM's host stops most of the VM for 70–120 ms several times a minute. Every long frame of the diagnostic run sat in one.
-  - **The gate's rule:** subtract the time stolen from our two main threads and judge the remainder. A frame is excused as **host-stopped** only when most of the VM stopped and our threads were within budget on CPU. Without GPU busy data, that class says "GPU unknown". It's listed apart, and it removes exactly one gate failure (r12 tour 7).
+  - **What happened:** this VM's host stops most of the VM, or single vCPUs, for 70–120 ms several times a minute.
+  - **What the gate does:** it excuses only provable steal (*What decides a long frame*), and doubt counts as ours.
+  - **Two of nine segments fail under it:**
+    - **deep 2:** two light-selection frames that a quiet replay shows aren't selection work. They're very likely steal on the renderer's own vCPU, which the off-vCPU canary can't confirm.
+    - **tour 1:** one unsampled region-activation frame, which the same route at r10 never showed.
   - **Root fixes:**
-    - the host itself, a fleet question the coordinator has raised with the owner;
-    - GPU timer queries (or a GPU-process trace of the device wait) on long frames, so host-stopped needn't say "GPU unknown" (S, harness);
-    - sampling the compositor's thread too, so presentation-side gaps can be attributed (S).
+    - the host's pinning change, a fleet question raised with the owner and pending a reboot time;
+    - the renderer-vCPU canary, proposed for R4 (*Traversal*), and one deep-2 rerun if accepted. If deep 2 still can't be proven, it goes in the merge record as an open measurement compromise. No CPU-time-based excuse will be added;
+    - GPU timer queries on long frames, so host-stopped needn't say "GPU unknown" (S);
+    - sampling the compositor thread, for presentation-side gaps (S).
 - **Chunk residency planning, a known over-slice (convention 4).**
   - **What happened:** the residency's plan phase (wanted chunks, frontier and admission) is now timed. Across the targeted remeasure its p99 is 0.2 ms, but single frames reached **6.9 ms** (tour 3) and **4.5 ms** (tour 5). That's over the 2 ms slice, well under the 34 ms frame budget.
   - **Unresolved:** those frames weren't long, so the harness recorded no stolen-time sample for them. Whether they're steal or planning can't be told.
@@ -337,7 +430,11 @@ At `5d9425f4`. The game code is identical at the handoff head: later commits tou
   - **Root fix:** shells as per-cave assets shared across LODs (S/M) if download size matters.
 
 ## Missing evidence
-- **GPU busy time on long frames:** with none, host-stopped frames say "GPU unknown" (one in r12).
-- **A kernel off-CPU stack** for frames where our threads sleep without measured steal, such as r12 tour 7's (eBPF, root, a fleet question).
-- **The sliced chunk plan:** the plan phase's single-frame maxima (6.9 ms) can't yet be told apart from steal, since those frames weren't long.
+- **Deep 2 and tour 1 proven under the strict rule:** their failing frames are reported as failures (*Traversal*), pending the R4 canary and the host's pinning change.
+- **GPU busy time on long frames:** with none, host-stopped frames say "GPU unknown".
+- **A kernel off-CPU stack** for frames where our threads sleep without measured steal (eBPF, root, a fleet question).
+- **The sliced chunk plan:** the plan phase's single-frame maxima (6.9 ms) can't yet be told apart from steal (WK-1's follow-up).
+- **Rendered-pixel proof of R3-3 from inside a cold cave:**
+  - **What the screenshots show** (`runs/r13/rerun/*reenter*.jpg`): each re-entry from its stop just outside the mouth, right after the reveal (the "Imported and saved locally." notice visible). The step arch's passage is shaded with its amber lights, the archlet glows, and the glimmer crack's embers show; none has the exterior look.
+  - **What they don't show:** these caves' light was already cached. A cold-cave entry under real GPU upload delay is covered by the app-boundary tests, not by a browser run that forces the delay.
 - **Lookout:** a lookout shot from the built lookout (OP-1).

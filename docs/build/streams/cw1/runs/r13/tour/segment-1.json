@@ -1,0 +1,52 @@
+{
+ "commit": "64bf2565",
+ "label": "RTX 3090 (factory-worker)",
+ "segment": 1,
+ "caves": [
+  "reef_pumphouse_undercut",
+  "reef_bellhole",
+  "reef_archlet",
+  "reef_wrackhollow",
+  "reef_lantern_grotto",
+  "hub_apron_hollow",
+  "hub_step_arch",
+  "hub_glimmer_crack",
+  "basin_fracture_pocket",
+  "basin_culvert_north",
+  "hub_crown_shaft",
+  "basin_dish_lee_vault"
+ ],
+ "reached": [
+  "reef_pumphouse_undercut",
+  "reef_bellhole",
+  "reef_archlet"
+ ],
+ "skipped": [],
+ "shots": [
+  "s1-01-reef_pumphouse_undercut.jpg"
+ ],
+ "views": [],
+ "errors": [
+  "locator.click: Timeout 30000ms exceeded.\nCall log:\n  - waiting for locator('#continue')\n    - locator resolved to <button hidden=\"\" id=\"continue\" class=\"primary\" data-action=\"continue\">Continue ↗</button>\n  - attempting click action\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n    - waiting 20ms\n    2 × waiting for element to be visible, enabled and stable\n      - element is not visible\n    - retrying click action\n      - waiting 100ms\n    56 × waiting for element to be visible, enabled and stable\n       - element is not visible\n     - retrying click action\n       - waiting 500ms\n\n    at reenter (/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05/docs/build/streams/cw1/traverse.mjs:48:35)\n    at async file:///home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05/docs/build/streams/cw1/traverse.mjs:385:38"
+ ],
+ "holds": [],
+ "long": [],
+ "unsliced": [],
+ "recoveries": 0,
+ "power": [],
+ "stalls": [],
+ "reentries": [],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 5196,
+  "playableMs": 26720,
+  "collisionPackMs": 4263.0999999940395,
+  "records": true
+ },
+ "gate": {
+  "pass": false,
+  "failures": [
+   "the run did not finish"
+  ]
+ }
+}
