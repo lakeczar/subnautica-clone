@@ -15,6 +15,8 @@ Branch `t3/sim-1-inplace-step`, from root `feat/siltwake-first-expedition`. It w
 
 ## SIM-1b: the incremental play-timeline journal
 
+**Status: accepted.** R4 (Sol 6.1 xhigh, `df9e4b03`) accepted it, and it is merged into root (`feat/siltwake-first-expedition`) as `e86e89a2`. When this was written that merge was local, and it is pushed once its gate passes on the 4070. Follow-up, logged by R4: `timeline-model-regressions.test.ts` uses 5.8 s CPU, over the fast-file warning target of 5 s but under the 10 s budget.
+
 Branch `t3/sim-1b-timeline-journal`, rebuilt on root `96255382` (SIM-1a, SIG-1, STEW-1, TST-16) from the parked `f6fee338` (kept as `backup/sim-1b-f6fee338`). The spec is contract v2, plus the coordinator's R5 decisions and R6 rulings. It replaces SIM-1a's whole-export save; the compromise SIM-1a filed is closed by this.
 
 **What a save costs now:** `scripts/timeline-save-bench.mjs`, run at `989c3786` via the queue on `--machine 4070` (RTX 4070 Laptop, alickers, a shared desktop host, so the times are indicative). The bench fills the full 20,000-event window (22,595 events recorded: 20 sealed chunks, 595 open, 2 folded), then saves 60 times about 10 s of play apart. Character counts are exact.
