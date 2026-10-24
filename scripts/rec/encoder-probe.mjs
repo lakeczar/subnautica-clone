@@ -1,7 +1,7 @@
 // REC-1 R3b: which video encoders this machine's Chrome really offers WebCodecs
 // (BROWSER-HW-VIDEO-ENCODE-SOL §10, probes 1 and 3).
 //
-//   node scripts/rec/encoder-probe.mjs --out DIR [--launch NAME=FLAGS ...] [--chrome BIN] [--pw DIR]   (a gpu job)
+//   node scripts/rec/encoder-probe.mjs --out DIR [--launch NAME=FLAGS ...] [--env K=V ...] [--chrome BIN] [--pw DIR]   (a gpu job)
 //
 // For each launch (by default the run's own GPU flags; more with --launch, e.g.
 // "vaapi=--enable-features=AcceleratedVideoEncoder"):
@@ -28,6 +28,8 @@ const CODECS = { "AV1": "av01.0.05M.08", "VP9": "vp09.00.31.08", "VP8": "vp8", "
 const SIZES = [[1280, 720], [960, 540]];
 const LAUNCHES = [{ name: "the run's flags", args: [] }];
 for (let i = 0; i < args.length; i++) if (args[i] === "--launch") { const [name, ...flags] = args[i + 1].split("="); LAUNCHES.push({ name, args: [flags.join("=")].filter(Boolean) }); }
+// --env K=V (repeatable): environment for every launch (e.g. LIBVA_DRIVER_NAME=d3d12 on WSL).
+const ENV = Object.fromEntries(args.flatMap((a, i) => (a === "--env" ? [args[i + 1].split(/=(.*)/s).slice(0, 2)] : [])));
 
 const WORKER = `onmessage = async ({ data: { codecs, sizes } }) => {
   const rows = [];
@@ -69,7 +71,7 @@ const origin = `http://127.0.0.1:${server.address().port}/`;
 const result = { launches: [] };
 try {
   for (const launch of LAUNCHES) {
-    const c = await composer({ gpu: true, args: launch.args, chrome: arg("chrome"), pw: arg("pw") });
+    const c = await composer({ gpu: true, args: launch.args, env: Object.keys(ENV).length ? ENV : undefined, chrome: arg("chrome"), pw: arg("pw") });
     try {
       const cdp = await c.page.context().newCDPSession(c.page);
       const version = await cdp.send("Browser.getVersion");
@@ -110,7 +112,7 @@ try {
         gpuPage = { encodeLines: lines.filter((l) => /video ?encode|accelerated video encode/i.test(l)).slice(0, 12), videoAcceleration: at >= 0 ? lines.slice(at, at + 40).filter((l) => /encode|profile/i.test(l)) : null,
           glRenderer: lines.find((l) => /^GL_RENDERER/.test(l)) ?? null };
       } catch (e) { gpuPage = { error: e.message }; }
-      result.launches.push({ name: launch.name, args: launch.args, chrome: version.product, revision: version.revision, userAgent: version.userAgent, support, trials, gpuPage });
+      result.launches.push({ name: launch.name, args: launch.args, env: ENV, chrome: version.product, revision: version.revision, userAgent: version.userAgent, support, trials, gpuPage });
       console.log(JSON.stringify({ launch: launch.name, chrome: version.product, hardware: support.filter((r) => r["prefer-hardware"] === true).map((r) => `${r.codec} ${r.size} ${r.bitrateMode}`),
         trials: trials.map((t) => `${t.codec} ${t.preference}: ${t.outputs ?? 0}/60 ${t.identity}${t.error ? ` (${t.error})` : ""}`) }));
     } finally { await c.close(); }

@@ -21,10 +21,10 @@ export async function composer(opts = {}) {
   const { chromium } = createRequire(pw)("playwright-core");
   // A label on the command line finds this browser's processes (/proc), for measurements that need them.
   const label = `--siltwake-composer=${process.pid}-${Date.now()}`;
-  // opts.gpu: the run's GPU flags instead of software rendering (a GPU job's lease needed); opts.args: more flags.
+  // opts.gpu: the run's GPU flags instead of software rendering (a GPU job's lease needed); opts.args: more flags; opts.env: more environment.
   if (opts.gpu) { const { requireGpuLease } = await import("../heavy/gpu-lease.mjs"); requireGpuLease("a REC-1 GPU probe"); }
   const gl = wrapper ? [] : opts.gpu ? ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"];
-  const browser = await chromium.launch({ executablePath: chrome, headless: true, timeout: 30000,
+  const browser = await chromium.launch({ executablePath: chrome, headless: true, timeout: 30000, ...(opts.env ? { env: { ...process.env, ...opts.env } } : {}),
     ...(wrapper ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}), args: [...gl, ...(opts.args ?? []), label] });
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 })).newPage();
   const browserPid = readdirSync("/proc").filter((d) => /^\d+$/.test(d)).map(Number).find((p) => {
