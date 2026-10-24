@@ -1064,3 +1064,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **LS-1 stage 1a R1** (Sol on `5288deb5`, report on `review/ls-1-1a-r1` `9de5917e`): REQUEST CHANGES.
   - **Verified:** 9/9 routes, 139 matching saves, identical timelines, relay solvency, the scout drone's 12 m capture accepted.
   - **Findings:** P1 the new records never reach the rendered journal; P2 aggregate debt hides new regressions (now per-gap identified debt, ratcheting down, with owners); P2 most `waitFor` calls lack causes (now required at the API, with the baseline recomputed); P2 decoded text bypasses door-code withholding (now one placement-aware authority).
+- **PACE-1 plan done at `671b0ecb`** (from LS-1's run outputs):
+  - **Diagnosis:** most debt is bot ordering (the carrier used as a 9-crossing ferry, the pod buffer last, one-recipe gathering, eating trips, a 16-min ceramic trip). The real structure: the ending's needs can only be met at home (assemblies made only at the workshop or crown; 4 common materials with no source past the Basin), so a 41-min loop remains with best play. The measure also misses landmarks and works and ending beats.
+  - **Fixes (no timer, speed or quantity changes):** a district bench for the two assemblies; three district sources; resin→ceramic recipe swaps; the Rift ledger grants the power-assembly plan; works and ending steps count as beats.
+  - **Stages:** 1 the bot plays sensibly (`later.ts` plus a stock planner); 2 a self-sufficient district finale; 3 marks on still-empty legs.
+  - **Projection:** the Creel's longest gap 51→15 min or less, the carrier's 95→15 or less.
+  - **Cost:** the main path gets about 1 h shorter, so the 10 h floor rests on content (no padding).
+  - **Review:** Sol plan R1 running (`siltwake-pace1-plan-review-r1-sol-671b0ec`).
