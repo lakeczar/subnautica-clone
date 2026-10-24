@@ -1161,3 +1161,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **New thread:** a top-level Opus discussion thread, "Rest stations and dry rooms: discussion with Alek". It writes `/work/tmp/rest-debate/DECISIONS.md` and reports back here.
   - **Lesson:** "discussion" with the owner means an interactive thread.
 - **Owner: Option A adopted** for asset work. Agents stay on factory-worker and drive Blender or an MCP on alickers over the SSH lane, under a queue session reservation, with a scratch checkout and a one-time owner install. It goes into the asset debate's resource list.
+- **Owner approved a critical-path priority lane (SCHED-4):** coordinator-owned `priority set|clear`; marked tickets jump normal ones at admission with a starvation guard; never preempts and never touches exclusive draining; honoured by both lanes. Queued for the SCHED builder after SCHED-3 R6 and install. Cause: CW-1's heavy A/B `ce36` waited 13+ min for CPU.
+- **CW-1 status (23:02Z):**
+  - **Done:** the handoff has the R4 response, the r14 table and the provisional-integration compromises.
+  - **The r14 tour rerun:** it found one streaming frame that is ours (`lightPlace` 52 ms).
+  - **Pending:** the composed heavy-peak A/B (`ce36`, queued for CPU). The coordinator is watching it and will wake CW-1 when it finishes.
