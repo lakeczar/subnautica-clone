@@ -1105,3 +1105,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Checks:** fast 1,649/1,649; heavy; a 20-command dry run; a real routed typecheck.
   - **Review:** Sol R2 running (`siltwake-stew2-review-r2-sol-2136b02`), including SCHED-3 `package.json` composition.
   - **SCHED-3 follow-ups:** adopt `cgroup-scope.mjs`; stop the queued progress flood (once a second in `heavy-check run`).
+- **SCHED-3 R5** (Sol on `7aa88a3d`, report on `review/sched-3-r5` `36018341`, with the exact post-install canary): REQUEST CHANGES, not installed.
+  - **Findings:** P1 committed symlinks to external npm escape the grammar; P2 signal exits are unfaithful (TERM during the final step yields 0); P2 `test:heavy --machine any` breaks the v1 fallback. Also, STEW-2's guard wrappers would bring npm back inside the runner.
+  - **Decisions:** a `realpath` boundary (repo sources and its own `node_modules`); faithful signal handling; the v1 parser accepts `--machine`; adopt `cgroup-scope.mjs`; quiet the queued-progress output.
+  - **Merge order:** STEW-2 first, then SCHED-3 rebases and adds a guard-wrapper alias that expands `X:direct` under the grammar. R6 on the composed candidate is the install decision.
