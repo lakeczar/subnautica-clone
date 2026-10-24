@@ -40,6 +40,8 @@ export interface KitStreamFrame {
   /** Wanted clusters not yet built. */
   readonly pending: number;
   readonly buildMs: number;
+  /** Measurement: the update's own passes, ms (scoring the clusters, eviction, ranking the caves' light). */
+  readonly passMs: { readonly score: number; readonly evict: number; readonly light: number };
 }
 
 const rectDistance = (r: Rect, x: number, z: number): number =>
@@ -51,6 +53,7 @@ export function createKitStreamer(stream: KitCaveStream, footprints: ReadonlyMap
   return {
     options: o,
     update(viewer: Readonly<Vec3>, velocity: Readonly<Vec3>): KitStreamFrame {
+      const t0 = now();
       const ahead = { x: viewer.x + velocity.x * o.lookAhead, z: viewer.z + velocity.z * o.lookAhead };
       const speed = Math.hypot(velocity.x, velocity.z);
       const scored = stream.clusters.map(c => {
@@ -62,7 +65,7 @@ export function createKitStreamer(stream: KitCaveStream, footprints: ReadonlyMap
       const wanted = scored.filter(s => s.rank <= o.prefetch).sort((a, b) => a.rank - b.rank || a.index - b.index).map(s => s.index);
       const start = now();
       stream.step(wanted, o.budgetMs, now);
-      const buildMs = now() - start;
+      const buildMs = now() - start, t1 = now();
       const keep = new Set(wanted), evicted: number[] = [];
       for (const s of scored) if (stream.ready(s.index) && !keep.has(s.index) && ((s.here > o.evict && s.behind) || s.here > o.evictFar)) {
         stream.evict(s.index); evicted.push(s.index);
@@ -75,10 +78,12 @@ export function createKitStreamer(stream: KitCaveStream, footprints: ReadonlyMap
           stream.evict(s.index); evicted.push(s.index);
         }
       }
+      const t2 = now();
       const caves = [...footprints].map(([id, r]) => ({ id, d: Math.min(rectDistance(r, viewer.x, viewer.z), rectDistance(r, ahead.x, ahead.z)) }))
         .sort((a, b) => a.d - b.d);
+      const t3 = now();
       return {
-        wanted, evicted, buildMs,
+        wanted, evicted, buildMs, passMs: { score: start - t0, evict: t2 - t1, light: t3 - t2 },
         pending: wanted.filter(i => !stream.ready(i)).length,
         light: caves.filter(c => c.d <= o.lightRange).map(c => c.id),
         upload: caves.filter(c => c.d <= o.uploadRange).map(c => c.id),

@@ -499,7 +499,7 @@ export function createRenderer(
           buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
           uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
           jump, stepUnit: world?.maxStepUnit ?? null,
-          caveStep: +caveStepMs.toFixed(2), caveUploadMs: +caveUploadMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered,
+          caveStep: +caveStepMs.toFixed(2), cavePasses: streamFrame?.passMs ?? null, caveUploadMs: +caveUploadMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered,
           lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
         };
         canvas.dataset.meshes = String(scene.meshes.length);

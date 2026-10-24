@@ -139,7 +139,19 @@ async function shot(name) {
  * on a CPU, time runnable but waiting for one, and page faults, so a long
  * frame can be told apart: our own work (on CPU), preemption (waiting), or a
  * blocked thread (neither: IPC, a lock, I/O). */
-const sched = { pid: null, gpu: null, samples: [] };
+// Samples as typed-array columns (a 30-minute run takes about 360k of them;
+// arrays of arrays had pushed runs past their memory reservation).
+const COLS = 7; // time, run, wait, minor, major, gpu run, gpu wait
+const sched = { pid: null, gpu: null, n: 0, data: new Float64Array(COLS * 65536) };
+const sample = (i) => sched.data.subarray(i * COLS, i * COLS + COLS);
+/** The last sample at or before `t` (or the first at or after, `after`). */
+const sampleAt = (t, after) => {
+  let lo = 0, hi = sched.n - 1;
+  if (hi < 0) return null;
+  while (lo < hi) { const mid = (lo + hi + (after ? 0 : 1)) >> 1; if (after ? sched.data[mid * COLS] < t : sched.data[mid * COLS] > t) { if (after) lo = mid + 1; else hi = mid - 1; } else if (after) hi = mid; else lo = mid; }
+  const v = sched.data[lo * COLS];
+  return (after ? v >= t : v <= t) ? sample(lo) : null;
+};
 function findRenderer() {
   const procs = readdirSync("/proc").filter(d => /^\d+$/.test(d)).map(pid => {
     try { return { pid, cmd: readFileSync(`/proc/${pid}/cmdline`, "utf8"), stat: readFileSync(`/proc/${pid}/stat`, "utf8") }; } catch { return null; }
@@ -160,7 +172,9 @@ function sampleSched() {
     const f = readFileSync(`/proc/${sched.pid}/task/${sched.pid}/stat`, "utf8"), rest = f.slice(f.lastIndexOf(")") + 2).split(" ");
     // The GPU process's main thread too: busy while the renderer is blocked means the renderer waits on it.
     const g = sched.gpu ? readFileSync(`/proc/${sched.gpu}/task/${sched.gpu}/schedstat`, "utf8").split(" ").map(Number) : [0, 0];
-    sched.samples.push([performance.timeOrigin + performance.now(), run / 1e6, wait / 1e6, +rest[7], +rest[9], rest[0], g[0] / 1e6, g[1] / 1e6]);
+    if ((sched.n + 1) * COLS > sched.data.length) { const grown = new Float64Array(sched.data.length * 2); grown.set(sched.data); sched.data = grown; }
+    sched.data.set([performance.timeOrigin + performance.now(), run / 1e6, wait / 1e6, +rest[7], +rest[9], g[0] / 1e6, g[1] / 1e6], sched.n * COLS);
+    sched.n++;
   } catch { sched.pid = null; }
 }
 const quant = (s, f) => s.length ? +s[Math.min(s.length - 1, Math.floor(s.length * f))].toFixed(1) : null;
@@ -286,9 +300,9 @@ try {
     // Collections whose trace line arrived during the gap (or within 30 ms after it).
     const gcs = gcTrace.filter(x => x.at + x.pauseMs > at - g && x.at < at);
     // The main thread over the gap (epoch ms): on CPU, waiting to run, faults.
-    const t1 = data.origin + at, t0 = t1 - g, first = sched.samples.findLast?.(x => x[0] <= t0) ?? null, last = sched.samples.find(x => x[0] >= t1) ?? null;
+    const t1 = data.origin + at, t0 = t1 - g, first = sampleAt(t0, false), last = sampleAt(t1, true);
     const thread = first && last ? { spanMs: +(last[0] - first[0]).toFixed(1), onCpuMs: +(last[1] - first[1]).toFixed(1), waitingMs: +(last[2] - first[2]).toFixed(1),
-      minorFaults: last[3] - first[3], majorFaults: last[4] - first[4], gpuOnCpuMs: +(last[6] - first[6]).toFixed(1), gpuWaitingMs: +(last[7] - first[7]).toFixed(1) } : null;
+      minorFaults: last[3] - first[3], majorFaults: last[4] - first[4], gpuOnCpuMs: +(last[5] - first[5]).toFixed(1), gpuWaitingMs: +(last[6] - first[6]).toFixed(1) } : null;
     let hot = null;
     if (profileAt) {
       const counts = new Map();
@@ -320,7 +334,7 @@ try {
   result.stream = data.stream;
   // The page clock's epoch origin: long gaps at origin + at line up with outside samples (PSI, ps).
   result.pageOrigin = data.origin;
-  result.thread = { pid: sched.pid, samples: sched.samples.length };
+  result.thread = { pid: sched.pid, samples: sched.n };
   result.gc = { collections: gcTrace.length, byKind: gcTrace.reduce((m, x) => ({ ...m, [x.kind]: (m[x.kind] ?? 0) + 1 }), {}),
     maxPauseMs: Math.max(0, ...gcTrace.map(x => x.pauseMs)), over16: gcTrace.filter(x => x.pauseMs > 16).map(x => `${x.kind} ${x.pauseMs} ms at ${x.at.toFixed(0)}`) };
   // The gate: the travel's own unsliced builds (the counter, and the logged
