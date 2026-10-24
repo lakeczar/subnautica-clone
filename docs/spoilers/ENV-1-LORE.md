@@ -6,6 +6,12 @@
 
 The tell is something wrong that you read by eye. The log explains it. The twist (the survivors are asleep below, and Ren closed the return) **reverses the emotional sign** of what you saw: absence becomes waiting, and abandonment becomes care. Every interior is written so that its hindsight reading is *gentler and sadder* than its first reading, never crueller. The one exception is the dormitory's untagged bundle (below), which is meant to hurt.
 
+**Moved here from the owner-facing plan (Sol R1 F5).** Two rationales that had appeared in the plan's spoiler-safe text:
+- the twist changes what an interior's tell meant in hindsight (the reversal above);
+- the no-bodies, no-remains dressing rule also keeps the canon's exact casualty count of 20 + 6 (rule 3 below).
+
+The plan keeps only the dressing restrictions themselves.
+
 ## Rules for every ENV-1 interior
 
 1. **CONTENT_BIBLE_LORE's six rules apply to all dressing,** whether or not the interior is a lost site:
