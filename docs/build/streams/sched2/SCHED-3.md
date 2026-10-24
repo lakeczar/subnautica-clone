@@ -75,6 +75,14 @@ Review `6f49c776` on `review/sched-3-r1`, by Sol on `86744a72`: REQUEST CHANGES,
   - **B28, rewritten:** a registered `npm test` and a declared `--machine any` job go to the 4070. An unregistered one is routed with the printed reason, shown by status, the final line and the result. Dirty trees, local paths and build reads are routed with their own reasons. Explicit tags win, and quick stays here.
 - **Negative control:** with the R0 code (`86744a72`), B30, B31, B32 and B33 all fail.
 
+- **Checks** at `5b27ad57` (code `df808cfb`; the later commits change only SCHED-2b's tests, tool headers and docs), on root `aa82d905`:
+  - **SCHED-1 23/23 and SCHED-2 27/27:** local, sequential, at `df808cfb`.
+  - **SCHED-2b 33/33:** through the queue on the 3090 (ticket `261024-162415-978e`, `--class standard --machine 3090`, with the job's own variables cleared so the suite's calls aren't nested). The queue ran it between exclusive turns, never beside one.
+  - **Fast tier:** `--machine 4070`, ticket `261024-162419-0455`, exit 0, 149 files; the policy units, 36/36, are in it.
+  - **B28 to B33** passed 6/6 on their own first. No private units or processes were left behind.
+  - **Run history:** the first SCHED-2b run, local at `df808cfb`, failed B1, B3 and B5 before I stopped it. Those older remote-lane tests submitted arbitrary playthrough commands relying on the default `any`; under F1 they now declare `--machine any` (19 submissions).
+  - **Disturbance, reported at once:** that run, and the SCHED-2 run before it, overlapped REC-1's exclusive `261024-160911-4a2b` from 16:17:07 to 16:23:14 UTC. It started earlier than the announced window, while queued exclusives were visible. I stopped the suite and its leftover test scope.
+
 ## Checks (R0, at `79d6bc13`; history)
 
 At `79d6bc13`, on root `7479e188`:
