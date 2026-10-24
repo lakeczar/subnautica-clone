@@ -550,7 +550,9 @@ export function createRenderer(
           chunkWork: world ? Object.fromEntries(Object.entries(world.frameWork).map(([k, v]) => [k, +v.toFixed(2)])) : null, chunkDisposing: world?.disposing ?? 0,
           caveStep: +caveStepMs.toFixed(2), // The streamer reuses its pass timings: a copy per frame (wanted list, eviction, light lists).
           cavePasses: streamFrame ? { score: +streamFrame.passMs.score.toFixed(2), evict: +streamFrame.passMs.evict.toFixed(2), light: +streamFrame.passMs.light.toFixed(2) } : null, caveStream: +caveStreamMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered, lightsWalked: lights.stats.walked,
-          lightKinds: (({ cachedMs, movingMs, placingMs, moved, moving }) => ({ cached: +cachedMs.toFixed(2), moving: +movingMs.toFixed(2), placing: +placingMs.toFixed(2), moved, movingMeshes: moving }))(lights.stats.placing),
+          // Moving-light lag (CW-1): worst of a sent light and of any, in frames; nearest lagging moving mesh, m (-1: none).
+          lightKinds: (({ cachedMs, movingMs, placingMs, moved, moving, lagWorst, sentLag, lagNearest }) => ({ cached: +cachedMs.toFixed(2), moving: +movingMs.toFixed(2),
+            placing: +placingMs.toFixed(2), moved, movingMeshes: moving, lagWorst, sentLag, lagNearest: Number.isFinite(lagNearest) ? +lagNearest.toFixed(1) : -1 }))(lights.stats.placing),
           lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
         };
         canvas.dataset.meshes = String(scene.meshes.length);

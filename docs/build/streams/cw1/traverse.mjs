@@ -388,12 +388,19 @@ try {
     chunkUpdates: p => p.chunkWork?.updates, chunkPlan: p => p.chunkWork?.plan, chunkDrop: p => p.chunkWork?.drop, chunkBuild: p => p.chunkWork?.build, chunkUpload: p => p.chunkWork?.upload,
     chunkDisplay: p => p.chunkWork?.display, chunkEvict: p => p.chunkWork?.evict, chunkDispose: p => p.chunkWork?.dispose, chunkDisposeMax: p => p.chunkWork?.maxDispose,
     lights: p => p.lights, optics: p => p.optics, lightScan: p => p.lightScan,
-    lightCached: p => p.lightKinds?.cached, lightMoving: p => p.lightKinds?.moving, lightPlacing: p => p.lightKinds?.placing, lightPlace: p => p.lightPlace, lightSelect: p => p.lightSelect, render: p => p.render };
+    lightCached: p => p.lightKinds?.cached, lightMoving: p => p.lightKinds?.moving, lightPlacing: p => p.lightKinds?.placing,
+    lightSentLag: p => p.lightKinds?.sentLag, lightLagWorst: p => p.lightKinds?.lagWorst, lightPlace: p => p.lightPlace, lightSelect: p => p.lightSelect, render: p => p.render };
   result.parts = {};
   for (const [name, of] of Object.entries(PARTS)) {
     const v = data.perf.map(e => e.parts ? of(e.parts) ?? 0 : 0).sort((a, b) => a - b);
     result.parts[name] = { p99: quant(v, 0.99), max: v.length ? +v.at(-1).toFixed(2) : null };
   }
+  // Moving-light lag: the nearest distance at which any moving mesh lagged, and
+  // the worst lag of a sent light within 30 m (visible near the player).
+  const lagged = data.perf.map(e => e.parts?.lightKinds).filter(k => k && k.lagNearest >= 0);
+  result.lightLag = { framesLagging: lagged.length, nearestM: lagged.length ? Math.min(...lagged.map(k => k.lagNearest)) : null,
+    worstSentFrames: Math.max(0, ...data.perf.map(e => e.parts?.lightKinds?.sentLag ?? 0)),
+    worstSentWithin30m: Math.max(0, ...lagged.filter(k => k.lagNearest <= 30).map(k => k.sentLag)) };
   const sims = data.perf.map(e => e.sim ?? 0).sort((a, b) => a - b);
   result.parts.sim = { p99: quant(sims, 0.99), max: sims.length ? +sims.at(-1).toFixed(2) : null };
   result.streamingMax = data.perf.reduce((m, e) => ({ chunks: Math.max(m.chunks, e.parts?.chunks ?? 0), caves: Math.max(m.caves, e.parts?.caves ?? 0) }), { chunks: 0, caves: 0 });

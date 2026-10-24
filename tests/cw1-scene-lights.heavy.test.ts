@@ -127,3 +127,33 @@ test("CW-1: moving meshes share one frame budget for their lights: a frame moves
   assert.equal(made, MESHES * PER, "every moving light is made and sent within a few frames");
   lights.dispose(); scene.dispose(); engine.dispose();
 });
+
+test("CW-1: moving lights refresh nearest first: a moving mesh beside the eye never lags and what is sent is current; far meshes absorb the lag", async () => {
+  const engine = new NullEngine(), scene = new Scene(engine), cel = createCaveCelMaterial(scene);
+  const lights = createSceneLights(scene, cel, [{ setArray4() {}, setFloat() {} } as never]);
+  const mover = (name: string, x: number, z0: number, count: number): Mesh => {
+    const mesh = new Mesh(name, scene), pos: number[] = [], col: number[] = [], idx: number[] = [];
+    for (let v = 0; v < count; v++) { pos.push(x, -20, z0 + v * 8); col.push(0.4, 0.6, 1, -1); idx.push(v, v, v); }
+    mesh.material = cel; mesh.setVerticesData("position", pos); mesh.setVerticesData("color", col); mesh.setIndices(idx);
+    return mesh;
+  };
+  // Near: 40 lights within 6 m of the eye's line. Far: 60 meshes, 6,000 lights, 120-190 m off.
+  const near = mover("near-mover", 0, 0, 40), far: Mesh[] = [];
+  for (let m = 0; m < 60; m++) far.push(mover(`far-mover-${m}`, 120 + m, 0, 100));
+  await announced();
+  const eye = new Vector3(2, -20, 150);
+  let worstNearLag = 0, sawFarLag = false;
+  for (let f = 0; f < 60; f++) {
+    near.position.x = Math.sin(f / 5); for (const m of far) m.position.x = f * 0.05;
+    lights.update(null, eye, 1, 0);
+    const p = lights.stats.placing;
+    if (f > 5) {
+      assert.equal(p.sentLag, 0, `frame ${f}: a sent light lagged ${p.sentLag} frames`);
+      if (p.lagWorst > 0) { sawFarLag = true; assert.ok(p.lagNearest >= 110, `frame ${f}: lag at ${p.lagNearest} m (only the far meshes may lag)`); }
+    }
+    worstNearLag = Math.max(worstNearLag, p.lagNearest <= 6 ? p.lagWorst : 0);
+  }
+  assert.equal(worstNearLag, 0);
+  assert.ok(sawFarLag, "the budget was exceeded, so someone had to lag: the far meshes");
+  lights.dispose(); scene.dispose(); engine.dispose();
+});
