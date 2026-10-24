@@ -15,6 +15,8 @@ import type * as Support from "./timeline-model-support.js";
 const COUNT = Number(process.env.SILTWAKE_TIMELINE_SEQUENCES ?? 2000);
 /** Another seed range, for exploratory runs. */
 const BASE = Number(process.env.SILTWAKE_TIMELINE_SEED_BASE ?? 1_000_003);
+/** Heavy-range seeds tried per mutant until one catches it (0: none), for the detection report. */
+const MUTANT_SEEDS = Number(process.env.SILTWAKE_TIMELINE_MUTANT_SEEDS ?? 0);
 
 test(`the timeline journal keeps its invariants over ${COUNT} seeded fault sequences`, async () => {
   const failures: string[] = [];
@@ -97,7 +99,7 @@ test("the fast tier's regression scripts and seeds catch every known defect, and
   const sources: Sources = { store: readFileSync(join(root, "src/sim/timeline/store.ts"), "utf8"), report: readFileSync(join(root, "src/sim/timeline/report.ts"), "utf8") };
   const work = mkdtempSync(join(tmpdir(), "siltwake-timeline-mutants-"));
   t.after(() => rmSync(work, { recursive: true, force: true }));
-  const rows: string[] = [];
+  const rows: string[] = [], caughtBy = new Map<string, boolean>();
   for (const [name, mutate] of [["unchanged", (x: Sources) => x] as const, ...Object.entries(MUTANTS)]) {
     const dir = join(work, name), patched = mutate(sources);
     cpSync(join(build, "src"), join(dir, "src"), { recursive: true });
@@ -107,21 +109,27 @@ test("the fast tier's regression scripts and seeds catch every known defect, and
     for (const [file, text] of [["store", patched.store], ["report", patched.report]] as const)
       writeFileSync(join(dir, `src/sim/timeline/${file}.js`), ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText);
     const support = await import(pathToFileURL(join(dir, "tests/timeline-model-support.js")).href) as typeof Support;
-    let caught: string | null = null;
-    const run = async (r: Promise<Support.ModelResult>): Promise<Support.ModelResult> => {
-      try { return await r; } catch (error) { return { ok: false, name: "?", steps: 0, failure: `threw ${String(error)}`, log: [] }; }
+    const run = async (r: () => Promise<Support.ModelResult>): Promise<Support.ModelResult> => {
+      try { return await r(); } catch (error) { return { ok: false, name: "?", steps: 0, failure: `threw ${String(error)}`, log: [] }; }
     };
+    // Every catching script, the fast seeds that catch it and (optionally) the first heavy-range seed.
+    const scripts: string[] = [];
+    let first: string | null = null, seeds = 0, heavy: number | null = null;
     for (const script of support.REGRESSIONS) {
-      const r = await run(support.runScript(script));
-      if (!r.ok) { caught = `${r.name}: ${r.failure?.split("\n")[0]}`; break; }
+      const r = await run(() => support.runScript(script));
+      if (!r.ok) { scripts.push(r.name); first ??= `${r.name}: ${r.failure?.split("\n")[0]}`; }
     }
-    if (caught === null || name === "unchanged") for (const seed of support.FAST_SEEDS) {
-      const r = await run(support.runModel(seed, MODEL_STEPS));
-      if (!r.ok) { caught ??= `${r.name}: ${r.failure?.split("\n")[0]}`; break; }
+    for (const seed of support.FAST_SEEDS) {
+      const r = await run(() => support.runModel(seed, MODEL_STEPS));
+      if (!r.ok) { seeds++; first ??= `${r.name}: ${r.failure?.split("\n")[0]}`; }
     }
-    rows.push(`${name}: ${caught ?? "not caught"}`);
+    for (let i = 0; i < MUTANT_SEEDS && heavy === null; i++) if (!(await run(() => support.runModel(BASE + i * 104_729, MODEL_STEPS))).ok) heavy = i;
+    caughtBy.set(name, first !== null);
+    rows.push(`${name}: ${scripts.length} scripts [${scripts.join("; ")}], ${seeds}/${support.FAST_SEEDS.length} fast seeds` +
+      `${MUTANT_SEEDS ? `, first heavy seed index ${heavy ?? `none in ${MUTANT_SEEDS}`}` : ""}\n    first: ${first ?? "not caught"}`);
   }
   t.diagnostic(rows.join("\n"));
-  assert.equal(rows[0], "unchanged: not caught", "the unchanged sources pass");
-  for (const row of rows.slice(1)) assert.doesNotMatch(row, /: not caught$/, row);
+  console.log(rows.join("\n"));
+  assert.equal(caughtBy.get("unchanged"), false, `the unchanged sources pass: ${rows[0]}`);
+  for (const [name, caught] of caughtBy) if (name !== "unchanged") assert.ok(caught, `${name} is not caught`);
 });

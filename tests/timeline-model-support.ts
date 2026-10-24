@@ -40,7 +40,7 @@ import type { TimelineRecorder } from "../src/sim/timeline/index.js";
 import { analyseTimeline } from "../src/sim/timeline/report.js";
 import type { TimelineEvent } from "../src/sim/timeline/report.js";
 import { TimelineJournal } from "../src/sim/timeline/store.js";
-import type { TimelineCommit, TimelineLoad, TimelineRecords, TimelineStoragePort } from "../src/sim/timeline/store.js";
+import type { TimelineCommit, TimelineLoad, TimelineStoragePort } from "../src/sim/timeline/store.js";
 import { LiveTimeline } from "../src/runtime/liveTimeline.js";
 import type { WriterLockPort } from "../src/save/writer-lock.js";
 import { createGame } from "../src/sim/state.js";
