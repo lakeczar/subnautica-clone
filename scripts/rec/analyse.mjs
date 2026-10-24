@@ -179,7 +179,7 @@ export function analyse(r, t = THRESHOLDS, facts = {}) {
   const segs = videoSegments(header), v = header.video;
   const video = videoCoverage(segs, facts.videoSeconds, t0, t0 + durationS * 1000, header.retention?.videoGaps ?? []);
   check("video", v?.missing || v?.error ? "missing" : !segs.length ? (v ? "missing" : "absent") : video.status, v?.missing ?? v?.error
-    ?? (!segs.length ? (v ? "the header names no video with a start" : "off (an exclusive performance run keeps snapshots only)") : video.note));
+    ?? (!segs.length ? (v ? "the header names no video with a start" : "off (an exclusive performance run keeps snapshots only)") : `${video.note} (${videoSource(header)})`));
   check("frame times judged", judged ? "pass" : "unproven", judged ? "exclusive run" : "shared run: frame times are recorded, not performance evidence");
   // Flatness needs enough readings across the window (R1-F5); absent readings never pass.
   const mem = tab.length ? tab : heap, memKind = tab.length ? "renderer RSS" : "JS heap only";
@@ -335,6 +335,16 @@ export function pacing(r, rel) {
   return { share: Object.fromEntries(Object.entries(share).map(([k, v]) => [k, { s: Math.round(v), pct: Math.round((v / total) * 100) }])), playSeconds: Math.round(play), milestones, between, regions, spans };
 }
 
+/** How the video was captured, from the header, in a few words (R3b: a pack states its own capture quality). */
+export function videoSource(header) {
+  const v = header.video;
+  if (!v) return null;
+  if (v.source !== "game") return `${v.source ?? "driver"} ${v.fps ?? ""} fps`.trim();
+  const sizes = [...new Set((v.segments ?? []).map((x) => (x.width ? `${x.width}x${x.height}` : null)).filter(Boolean))];
+  const size = sizes.length ? sizes.join(", ") : v.size ? `${v.size.width}x${v.size.height}` : "";
+  return `in-game ${v.hardware ? "hardware" : "software"} ${(v.codec ?? "").replace(/^V_/, "") || "?"} ${size} ${v.fps} fps`.replace(/\s+/g, " ").trim();
+}
+
 /** Tier 0: the one-glance verdict, under 1 KB. */
 export function summaryJson(a, header) {
   const n = a.numbers, g = header.gpuDevice ?? {};
@@ -346,6 +356,7 @@ export function summaryJson(a, header) {
     machine: header.machine?.label ?? null, gpu: g.name ? `${g.name} ${g.driver}` : header.gpu?.renderer?.slice(0, 80) ?? null,
     browser: header.chrome ?? /Chrome\/[\d.]+/.exec(header.browser ?? "")?.[0] ?? null,
     commit: (header.commit ?? header.build?.commit ?? "").slice(0, 12) || null, build: header.build?.bundle ?? null,
+    video: videoSource(header),
   };
   return s;
 }

@@ -34,6 +34,10 @@ export function flightMode(settings: FlightSettings, search = globalThis.locatio
 
 export const VIDEO_FPS = 12;
 export const VIDEO_SIZE = { width: 1280, height: 720 } as const;
+/** The software encoder's picture width (R3b: its CPU contends with the game's frame; the owner decides the fallback's size). */
+export const SOFTWARE_VIDEO_WIDTH = 1280;
+/** Hardware encoders tried first, at VIDEO_SIZE: they take the GPU's picture without a CPU readback. */
+const HARDWARE_CODECS = ["av01.0.04M.08", "vp09.00.10.08"];
 const SNAPSHOT_SIZE = { width: 480, height: 270 } as const;
 /** Snapshots kept in memory for a driver that has not read them. */
 const SNAPSHOT_MEMORY = 600;
@@ -117,8 +121,13 @@ export class FlightCapture {
   private budget = DEFAULT_BUDGET_BYTES;
   private readonly ledger: Ledger;
   private readonly segmentMs: number;
-  private videoWidth: number = VIDEO_SIZE.width;
+  private softwareWidth: number = SOFTWARE_VIDEO_WIDTH;
   private videoCodecs: string[] = ["vp9", "vp8"];
+  private tryHardware = true;
+  /** The encoder chosen for this recording (R3b): hardware at VIDEO_SIZE, else software at the fallback's width. Decided once, on the page. */
+  private videoPlan: { hardware: boolean; width: number } | null = null;
+  private videoWanted = false;
+  private get videoWidth(): number { return this.videoPlan?.hardware ? VIDEO_SIZE.width : this.softwareWidth; }
   private minVideo = MIN_VIDEO_BUDGET_BYTES;
   private readonly restoreConsole: (() => void) | null = null;
   private readonly encoder = new TextEncoder();
@@ -140,9 +149,10 @@ export class FlightCapture {
     this.segmentMs = Number(q.get("recsegment")) || SEGMENT_MS;
     // Test overrides: a budget in MiB (then no minimum for video), and the segment length.
     if (Number(q.get("recbudget")) > 0) { this.budget = Number(q.get("recbudget")) * 1048576; this.minVideo = 0; }
-    // Measurement overrides (R3b): the video's width and codec order.
-    if (Number(q.get("recvideowidth")) >= 320) this.videoWidth = Math.round(Number(q.get("recvideowidth")) / 2) * 2;
-    if (q.get("reccodec")) this.videoCodecs = q.get("reccodec")!.split(",");
+    // Measurement overrides (R3b): the software fallback's width and codec order; ?rechw=0 skips hardware (as ?reccodec does).
+    if (Number(q.get("recvideowidth")) >= 320) this.softwareWidth = Math.round(Number(q.get("recvideowidth")) / 2) * 2;
+    if (q.get("reccodec")) { this.videoCodecs = q.get("reccodec")!.split(","); this.tryHardware = false; }
+    if (q.get("rechw") === "0") this.tryHardware = false;
     const gl = canvas.getContext("webgl2");
     const info = gl?.getExtension("WEBGL_debug_renderer_info");
     const script = document.querySelector<HTMLScriptElement>("script[type=module][src]")?.src ?? "";
@@ -394,11 +404,14 @@ export class FlightCapture {
    * finishes the current segment; on starts a new one. */
   setVideo(on: boolean, why = "video turned off"): void {
     if (!on) {
+      this.videoWanted = false;
       const v = this.video;
       if (v) { this.video = null; this.finishSegment(v, why, true); }
       return;
     }
     if (this.stopped || this.video) return;
+    // The encoder's plan first (an async question to the browser), then the video starts.
+    if (!this.videoPlan) { if (!this.videoWanted) { this.videoWanted = true; void this.track(this.planVideo()); } return; }
     const allowed = videoAllowed(this.mode, this.spool !== null, this.budget, this.minVideo);
     if (!allowed.ok) { this.recorder.event("warning", `warning: recording without video: ${allowed.why}`, { snapshot: false }); return; }
     // The video is encoded and written in the spool's worker: without it (a driver), the driver records its own.
@@ -409,8 +422,32 @@ export class FlightCapture {
     }
     const v: Video = { segment: this.newSegment(performance.now()), next: 0, frames: 0, inflight: 0, capturing: 0, skipped: 0, lastSent: -Infinity, paused: false };
     this.video = v;
-    this.recorder.event("session", `video started (WebCodecs, ${VIDEO_FPS} fps, ${v.segment.width}x${v.segment.height}, ${v.segment.file})`, { snapshot: false });
+    this.recorder.event("session", `video started (WebCodecs, ${this.videoPlan.hardware ? "hardware" : "software"}, ${VIDEO_FPS} fps, ${v.segment.width}x${v.segment.height}, ${v.segment.file})`, { snapshot: false });
   }
+  /** Hardware or software, decided once (R3b): a hardware encoder at VIDEO_SIZE when the browser has one. */
+  private async planVideo(): Promise<void> {
+    let hardware = false;
+    const probe = (globalThis as { VideoEncoder?: { isConfigSupported?(c: unknown): Promise<{ supported?: boolean }> } }).VideoEncoder?.isConfigSupported;
+    if (this.tryHardware && probe) {
+      for (const codec of HARDWARE_CODECS) {
+        try {
+          if ((await probe.call(VideoEncoder, { codec, ...VIDEO_SIZE, bitrate: VIDEO_BITS, framerate: VIDEO_FPS, latencyMode: "realtime", hardwareAcceleration: "prefer-hardware" })).supported) { hardware = true; break; }
+        } catch { /* not this one */ }
+      }
+    }
+    this.videoPlan = { hardware, width: hardware ? VIDEO_SIZE.width : this.softwareWidth };
+    if (this.videoWanted && !this.stopped && !this.measurePaused) { this.videoWanted = false; this.setVideo(true); }
+  }
+  /** Measurement only (R3b, `?recmeasure=1`): paused, the recorder is off in place: its video segment
+   * ends and the encoder is flushed and closed, nothing is captured or spooled, the worker is idle. */
+  pauseForMeasurement(on: boolean): void {
+    if (on === this.measurePaused) return;
+    this.measurePaused = on;
+    if (on) { this.videoWasOn = !!this.video || this.videoWanted; this.videoWanted = false; this.setVideo(false, "measurement pause"); }
+    else if (this.videoWasOn) this.setVideo(true);
+  }
+  private measurePaused = false;
+  private videoWasOn = false;
   private segmentIndex = 0;
   private readonly segments: SegmentRecord[] = [];
   private readonly finishing = new Set<string>();
@@ -421,7 +458,7 @@ export class FlightCapture {
     const file = `video/${String(index).padStart(3, "0")}.webm`;
     this.segments.push({ file, start: null, end: null, ...size });
     this.stored.set(file, { session: this.session, file, kind: "video", bytes: 0 });
-    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, codecs: this.videoCodecs });
+    s.worker.postMessage({ op: "video-open", dir: `${SPOOL_ROOT}/${this.session}`, file, ...size, fps: VIDEO_FPS, bitrate: VIDEO_BITS, codecs: this.videoCodecs, hardware: this.videoPlan?.hardware === true });
     return { file, index, start: null, began: now, ...size };
   }
   private videoHeader(): void {

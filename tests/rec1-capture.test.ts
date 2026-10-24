@@ -40,7 +40,7 @@ class FakeWorker {
       this.reply({ ack: bytes, file: m.file });
     } else if (m.op === "remove") this.reply(FakeWorker.refuseRemove?.(m) ? { removed: m.id, refused: "NoModificationAllowedError", error: "in use" } : { removed: m.id });
     else if (m.op === "release") this.reply({ released: m.id });
-    else if (m.op === "video-open") this.reply({ videoOpened: m.file, codec: "V_VP9" });
+    else if (m.op === "video-open") this.reply({ videoOpened: m.file, codec: (m as Msg & { hardware?: boolean }).hardware ? "V_AV1" : "V_VP9", hardware: (m as Msg & { hardware?: boolean }).hardware === true });
     else if (m.op === "video-frame") {
       const t = (m as Msg & { t: number }).t, answer = FakeWorker.videoAnswer?.(m as Msg & { t: number }) ?? "kept";
       if (answer === "throw") { this.reply({ videoError: "OperationError: the encoder threw" }); this.reply({ opFailed: "video-frame", error: "the encoder threw" }); }
@@ -57,6 +57,8 @@ class FakeWorker {
 /** Pictures whose encoding the test finishes (or fails) when it chooses. */
 const encodings: { resolve: (b: Blob) => void; reject: (e: Error) => void }[] = [];
 let older: { name: string; size: number }[] = [];
+/** Whether the fake browser has a hardware encoder. */
+let hardwareEncoder = false;
 
 function browser(search = ""): void {
   const g = globalThis as Record<string, unknown>;
@@ -80,7 +82,8 @@ function browser(search = ""): void {
     screen: { width: 1280, height: 720 }, devicePixelRatio: 1, crossOriginIsolated: false,
     addEventListener: () => {}, Worker: FakeWorker,
     createImageBitmap: async () => ({ width: 480, height: 270, close() {} }),
-    VideoEncoder: class {}, VideoFrame: class {},
+    VideoEncoder: class { static async isConfigSupported(c: { hardwareAcceleration?: string }) { return { supported: c.hardwareAcceleration !== "prefer-hardware" || hardwareEncoder }; } },
+    VideoFrame: class {},
     OffscreenCanvas: class { getContext() { return { transferFromImageBitmap() {} }; } convertToBlob() { return new Promise<Blob>((resolve, reject) => encodings.push({ resolve, reject })); } },
   });
 }
@@ -349,4 +352,42 @@ test("R3-2: a recording this page still holds (the latest completed, exportable)
     await a.retire();
     await b.retire();
   } finally { older = []; }
+});
+
+
+// --- R3b ----------------------------------------------------------------------
+
+const opens = (w: FakeWorker) => w.posted.filter((m) => m.op === "video-open") as (Msg & { width: number; height: number; hardware: boolean })[];
+
+test("R3b: a hardware encoder is preferred at 1280x720; without one, the software fallback's width; the header says which", async () => {
+  hardwareEncoder = true;
+  try {
+    const { c, worker } = await capture("", true);
+    await play(c, 0, 6);
+    assert.deepEqual(opens(worker).map((m) => [m.width, m.hardware]), [[1280, true]]);
+    const video = c.header.video as { hardware: boolean; codec: string };
+    assert.equal(video.hardware, true);
+    const { videoSource } = await import(pathToFileURL(path.resolve("scripts/rec/analyse.mjs")).href);
+    assert.match(videoSource(c.header), /^in-game hardware AV1 1280x720 12 fps$/);
+  } finally { hardwareEncoder = false; }
+  const { c, worker } = await capture("?recvideowidth=960", true);
+  await play(c, 0, 6);
+  assert.deepEqual(opens(worker).map((m) => [m.width, m.height, m.hardware]), [[960, 540, false]]);
+  const { videoSource } = await import(pathToFileURL(path.resolve("scripts/rec/analyse.mjs")).href);
+  assert.match(videoSource(c.header), /^in-game software VP9 960x540 12 fps$/);
+});
+
+test("R3b: the measurement pause is off in place: the segment ends and its encoder closes, nothing is spooled; resuming starts a new segment", async () => {
+  const { c, worker } = await capture("", true);
+  await play(c, 0, 12);
+  c.pauseForMeasurement(true);
+  await settle();
+  const closes = worker.posted.filter((m) => m.op === "video-close").length;
+  assert.equal(closes, 1, "the segment ended (its encoder flushed and closed)");
+  const before = worker.posted.length;
+  await new Promise((r) => setTimeout(r, 30));
+  assert.equal(worker.posted.length, before, "nothing posted while paused (the app also skips the recorder's frame work)");
+  c.pauseForMeasurement(false);
+  await play(c, 2000, 6);
+  assert.equal(opens(worker).length, 2, "a new segment after the pause");
 });

@@ -316,6 +316,7 @@ export class SiltwakeApp {
       pauseRecorder: (on) => {
         if (!this.flight || new URLSearchParams(globalThis.location?.search ?? "").get("recmeasure") !== "1") return false;
         this.flightPaused = on;
+        this.flight.pauseForMeasurement(on);
         if (this.renderer) this.renderer.timing = !on;
         return true;
       },

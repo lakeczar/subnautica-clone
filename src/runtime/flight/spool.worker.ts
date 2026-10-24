@@ -41,7 +41,7 @@ type Message =
   | { op: "export"; dir: string; out: string; id: number }
   | { op: "barrier"; id: number }
   | { op: "release"; dir: string; id: number }
-  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; codecs?: string[] }
+  | { op: "video-open"; dir: string; file: string; width: number; height: number; fps: number; bitrate: number; codecs?: string[]; hardware?: boolean }
   | { op: "video-frame"; t: number; bitmap?: ImageBitmap }
   | { op: "video-flush"; id: number }
   | { op: "video-close"; id: number; final: boolean };
@@ -138,13 +138,13 @@ const CODECS: Record<string, [string, WebmCodec]> = { vp9: ["vp09.00.10.08", "V_
 /** Tried first: a hardware encoder takes the GPU's picture without a CPU readback and costs the page almost nothing (R3b). */
 const HARDWARE: [string, WebmCodec][] = [["av01.0.04M.08", "V_AV1"], ["vp09.00.10.08", "V_VP9"]];
 let hardware = false, head: { width: number; height: number } | null = null;
-async function openEncoder(width: number, height: number, fps: number, bitrate: number, order: readonly string[] = ["vp9", "vp8"]): Promise<void> {
-  const size = `${width}x${height}:${order.join(",")}`;
+async function openEncoder(width: number, height: number, fps: number, bitrate: number, order: readonly string[] = ["vp9", "vp8"], tryHardware = false): Promise<void> {
+  const size = `${width}x${height}:${tryHardware ? "hw," : ""}${order.join(",")}`;
   if (encoder && encoder.state === "configured" && encoderSize === size) return;
   try { encoder?.close(); } catch { /* closed */ }
   encoder = null;
   if (typeof VideoEncoder === "undefined") throw new Error("this browser has no WebCodecs video encoder");
-  const tries: [string, WebmCodec, boolean][] = [...HARDWARE.map(([c, id]) => [c, id, true] as [string, WebmCodec, boolean]),
+  const tries: [string, WebmCodec, boolean][] = [...(tryHardware ? HARDWARE : []).map(([c, id]) => [c, id, true] as [string, WebmCodec, boolean]),
     ...order.map((k) => CODECS[k]).filter((x): x is [string, WebmCodec] => !!x).map(([c, id]) => [c, id, false] as [string, WebmCodec, boolean])];
   for (const [c, id, hw] of tries) {
     const config: VideoEncoderConfig = { codec: c, width, height, bitrate, framerate: fps, latencyMode: "realtime", hardwareAcceleration: hw ? "prefer-hardware" : "prefer-software" };
@@ -177,7 +177,7 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
 }
 async function videoOpen(m: Extract<Message, { op: "video-open" }>): Promise<void> {
   try {
-    await openEncoder(m.width, m.height, m.fps, m.bitrate, m.codecs);
+    await openEncoder(m.width, m.height, m.fps, m.bitrate, m.codecs, m.hardware === true);
     const h = await handle(m.dir, m.file);
     h.truncate(0);
     const seg: Segment = { dir: m.dir, file: m.file, h, clusters: null as unknown as WebmClusters, origin: null, frames: 0, broken: false, headWritten: false };
