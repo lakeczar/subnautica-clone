@@ -181,6 +181,11 @@ Opus 5.5 high. Branch `t3/stew-1-guard-rails`, on root `f0dc680` (SAVE-1 merged)
   - A target inside `src/sim` or `src/content` is now skipped, as checked by its own entry, only once it is established as an analysed TypeScript source.
   - Anything else there gets the same fail-closed verdict as elsewhere, and so does a lower target reached through another layer: JavaScript (`.js`, `.mjs`, `.cjs`), a missing module, an unsupported file. JSON data and erased types stay exempt.
   - **Tests** (disk-backed), each asserting its failure and chain: a static `.js`, a lazy `.mjs` and a required `.cjs`; a static `.mjs` across sim and content; missing static and lazy targets; an unsupported `.txt`; a lower `.mjs` reached through `src/world`. Analysed TypeScript and JSON in sim and content pass.
+- **R4 evidence:**
+  - **`npm run gate -- --machine 4070` at `f35e216`: exit 0, all 10 steps.** Both queued receipts carry `--review` and a clean waiter:
+    - bake `261023-234502-c4e2` (RTX 4070 Laptop (alickers, shared desktop host), bound to `f35e21662e`);
+    - playthrough `261023-235108-65e0` (RTX 4070 Laptop (alickers, shared desktop host), bound to `f35e21662e`), 8 of 8 complete, no blockers;
+  - `npm test`: 1,419 of 1,419. Guard about 0.9 s.
 - **What fails today**, re-run against the current heads:
   - Root, and the merge trees of CW-1, COL-1, SIM-1 and TST-16 with this branch, pass. COL-1's current head no longer has `col1/r7-shots.mjs` plumbing.
   - **REC-1's merge fails, correctly:** its new `docs/build/streams/rec1/r1/idle-video-experiment.mjs` has `chromium.launch`, `createServer` and `gpu-prep` outside `scripts/rec`. REC-1 resolves it on its side (coordinator). No allowlist entry was added.
