@@ -87,6 +87,12 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - **The low preset, when it comes:** a steady **30 fps at a reduced internal resolution**, keeping readable exits, warning poses, lamp reach and landmark silhouettes.
   - **Keep it reachable:** don't make choices that rule it out. Quality must stay scalable through settings (resolution scale, draw distance, effects), and memory and streaming budgets must stay parameterised rather than hard-wired to the 3090.
   - **Still open:** the representative integrated-GPU device is chosen later.
+  - **No battery mode and no frame-cap setting** (owner, 2026-10-24). The browser already paces frames to the display's refresh rate.
+- **High refresh rates** (owner, 2026-10-24): on 120 Hz-and-above displays, motion should look as smooth as the hardware allows.
+  - **The gap today:** the simulation steps at a fixed 60 Hz and the renderer draws the latest step without interpolation, so above 60 Hz frames repeat (and 144 Hz judders).
+  - **Fix:** render interpolation between the last two fixed steps (camera, craft, creatures, particles), with the simulation unchanged and deterministic.
+  - **When:** a small stream after CW-1 merges (CW-1 owns `renderer.ts` and `app.ts`).
+  - **Acceptance:** the 60 fps gate on the 3090 stays. Measure at 120 Hz (8.3 ms budget) as indicative, not a gate.
 - **Evidence:**
   - Functional results count from either machine, bound to the exact SHA tested.
   - 3090 exclusive numbers are the target.
