@@ -1,0 +1,43 @@
+[5.5s] renderer ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)
+[24.9s] cold start {"titleMs":5235,"playableMs":24472,"collisionPackMs":4323.4000000059605,"records":true}
+[25.9s] loaded {"cam":[69.273,-9.544,-58.416],"depth":11.4,"vitals":"O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 95% power Hull 100% · 11 / 800 m · hold 0/96 CU"}
+[26.0s] renderer main thread 292215
+[26.0s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 95% power Hull 100% · 11 / 800 m · hold 0/96 CU at 69,-10,-58 depth 11.4
+[39.1s] notice "Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). G spends 25 reserve-cell charge on a decoy pulse." at 70,-54,-61
+[41.0s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 93% power Hull 100% · 56 / 800 m · hold 0/96 CU at 77,-54,-67 depth 55.8
+[56.0s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 66 F · eat meal CREEL 89% power Hull 100% · 56 / 800 m · hold 0/96 CU at 152,-54,-124 depth 55.9
+[71.0s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 66 F · eat meal CREEL 86% power Hull 100% · 56 / 800 m · hold 0/96 CU at 222,-54,-177 depth 55.9
+[86.0s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 65 F · eat meal CREEL 83% power Hull 100% · 56 / 800 m · hold 0/96 CU at 294,-54,-229 depth 55.9
+[101.0s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 65 F · eat meal CREEL 80% power Hull 100% · 56 / 800 m · hold 0/96 CU at 368,-54,-285 depth 55.9
+[116.1s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 64 F · eat meal CREEL 77% power Hull 100% · 56 / 800 m · hold 0/96 CU at 441,-54,-336 depth 56
+[131.1s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 64 F · eat meal CREEL 73% power Hull 100% · 56 / 800 m · hold 0/96 CU at 512,-54,-390 depth 56
+[146.1s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 63 F · eat meal CREEL 70% power Hull 100% · 56 / 800 m · hold 0/96 CU at 586,-54,-446 depth 56
+[161.2s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 63 F · eat meal CREEL 67% power Hull 100% · 56 / 800 m · hold 0/96 CU at 657,-54,-498 depth 56
+[176.2s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 62 F · eat meal CREEL 64% power Hull 100% · 56 / 800 m · hold 0/96 CU at 731,-54,-552 depth 55.9
+[191.2s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 62 F · eat meal CREEL 60% power Hull 100% · 56 / 800 m · hold 0/96 CU at 804,-54,-605 depth 55.9
+[206.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 61 F · eat meal CREEL 57% power Hull 100% · 56 / 800 m · hold 0/96 CU at 875,-54,-658 depth 56
+[221.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 61 F · eat meal CREEL 54% power Hull 100% · 56 / 800 m · hold 0/96 CU at 950,-54,-714 depth 56
+[236.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 60 F · eat meal CREEL 51% power Hull 100% · 56 / 800 m · hold 0/96 CU at 1022,-54,-766 depth 55.9
+[251.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 60 F · eat meal CREEL 48% power Hull 100% · 60 / 800 m · hold 0/96 CU at 1078,-59,-818 depth 60.2
+[266.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 59 F · eat meal CREEL 46% power Hull 100% · 98 / 800 m · hold 0/96 CU at 1087,-97,-868 depth 98.6
+[281.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 59 F · eat meal CREEL 44% power Hull 100% · 137 / 800 m · hold 0/96 CU at 1097,-135,-918 depth 137.2
+[296.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 58 F · eat meal CREEL 41% power Hull 100% · 176 / 800 m · hold 0/96 CU at 1106,-174,-968 depth 175.6
+[311.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 58 F · eat meal CREEL 39% power Hull 100% · 214 / 800 m · hold 0/96 CU at 1116,-212,-1018 depth 213.9
+[326.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 57 F · eat meal CREEL 37% power Hull 100% · 252 / 800 m · hold 0/96 CU at 1126,-251,-1068 depth 252.3
+[341.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 57 F · eat meal CREEL 35% power Hull 100% · 294 / 800 m · hold 0/96 CU at 1132,-293,-1106 depth 294.4
+[356.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 56 F · eat meal CREEL 33% power Hull 100% · 348 / 800 m · hold 0/96 CU at 1132,-347,-1106 depth 348.4
+[371.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 56 F · eat meal CREEL 31% power Hull 100% · 403 / 800 m · hold 0/96 CU at 1132,-401,-1106 depth 402.8
+[386.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 55 F · eat meal CREEL 29% power Hull 100% · 457 / 800 m · hold 0/96 CU at 1132,-455,-1106 depth 456.8
+[401.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 55 F · eat meal CREEL 26% power Hull 100% · 511 / 800 m · hold 0/96 CU Service here · Tab at 1132,-509,-1106 depth 510.8
+[403.4s] power {"t":403.4,"action":"/^(Service|Charge at)/","why":"call at meridian_office","pressed":true,"at":"1132,-513,-1106","before":"O₂ 100% Creel air HEALTH 100 FOOD 55 F · eat meal CREEL 26% power Hull 100% · 513 / 800 m · hold 0/96 CU Service here · Tab","after":"O₂ 100% Creel air HEALTH 100 FOOD 55 F · eat meal CREEL 100% power Hull 100% · 515 / 800 m · hold 0/96 CU Service here · Tab"}
+[416.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 54 F · eat meal CREEL 97% power Hull 100% · 517 / 800 m · hold 0/96 CU at 1156,-515,-1163 depth 516.9
+[431.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 54 F · eat meal CREEL 94% power Hull 100% · 531 / 800 m · hold 0/96 CU at 1154,-529,-1243 depth 530.9
+[446.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 53 F · eat meal CREEL 91% power Hull 100% · 554 / 800 m · hold 0/96 CU at 1147,-553,-1324 depth 554.6
+[461.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 53 F · eat meal CREEL 87% power Hull 100% · 578 / 800 m · hold 0/96 CU at 1140,-576,-1404 depth 578.3
+[476.6s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 52 F · eat meal CREEL 85% power Hull 100% · 602 / 800 m · hold 0/96 CU at 1144,-600,-1471 depth 602
+[491.6s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 52 F · eat meal CREEL 82% power Hull 100% · 630 / 800 m · hold 0/96 CU at 1134,-628,-1479 depth 629.8
+[493.5s] at meridian_terrace_crack active light meridian_terrace_crack depth 623.4
+[493.5s] screenshot /work/tmp/cw1/r10-hops/s3-01-meridian_terrace_crack.jpg
+[496.9s] power end {"charge":82,"cellsLeft":2,"air":"craft","vitals":"O₂ 100% Creel air HEALTH 100 FOOD 51 F · eat meal CREEL 82% power Hull 100% · 618 / 800 m · hold 0/96 CU","at":"1143,-616,-1478","planned":{"segment":3,"metres":2337,"calls":["meridian_office"],"cruise":false,"outPercent":17.7,"homePercent":15.2,"havePercent":170,"viable":true},"homeOk":true}
+[506.0s] gate pass
+[506.0s] result {"frames":{"count":28297,"p50":16.7,"p95":16.7,"p99":16.8,"max":100.1,"over33":18,"over50":11},"longByCause":{"over34":16,"streaming":0,"streamingOver34":0,"simulation":0,"noWork":16,"gcShaped":0,"streamingGcShaped":0},"work":{"p50":2.7,"p95":3.9,"p99":7.8,"max":92.2,"over33":2},"parts":{"chunks":{"p99":4.4,"max":7.1},"regions":{"p99":0.2,"max":10.6},"caves":{"p99":0.1,"max":2.7},"caveWanted":{"p99":0.1,"max":0.2},"caveBuild":{"p99":0.1,"max":2.7},"caveEvict":{"p99":0.1,"max":0.2},"caveLightList":{"p99":0.1,"max":0.2},"caveTexture":{"p99":0.1,"max":0.4},"caveUpload":{"p99":0,"max":0.2},"caveView":{"p99":0.1,"max":0.2},"lights":{"p99":0.3,"max":1.5},"optics":{"p99":0.1,"max":0.8},"lightScan":{"p99":0.1,"max":1.2},"lightPlace":{"p99":0.2,"max":1.1},"lightSelect":{"p99":0.2,"max":0.6},"render":{"p99":1.3,"max":89.7},"sim":{"p99":1.2,"max":7}},"holds":0,"memory":{"residentCpuMiB":39.5,"residentGpuMiB":31.8,"regionMiB":12.7,"budgetMiB":256,"heapMiB":241.6},"stream":{"sync":0,"built":25,"evicted":17,"boxes":59167,"stepMs":2.5,"buildMs":4.1,"pending":0,"missing":0,"uploads":9,"lightBytes":2859792,"textureBytes":2859792,"records":true,"recordsMs":4323.4000000059605,"lightPendingFrames":0,"maxAllocMs":0.2,"maxWriteMs":0.1,"restarts":0}}

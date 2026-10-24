@@ -1,0 +1,498 @@
+{
+ "commit": "3779f59c",
+ "label": "RTX 3090 (factory-worker)",
+ "segment": 0,
+ "caves": [
+  "basin_buried_hut",
+  "divide_lee_burrow"
+ ],
+ "reached": [
+  "basin_buried_hut",
+  "divide_lee_burrow"
+ ],
+ "skipped": [],
+ "shots": [
+  "s0-01-basin_buried_hut.jpg"
+ ],
+ "views": [],
+ "errors": [],
+ "holds": [],
+ "long": [
+  {
+   "at": 240866,
+   "gap": 99.9,
+   "camera": "560.749,-262.547,-768.372",
+   "thread": {
+    "spanMs": 111.8,
+    "onCpuMs": 42.7,
+    "waitingMs": 0,
+    "minorFaults": 0,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 0.5,
+    "gpuWaitingMs": 0
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -0.7,
+   "gc": false,
+   "frame": {
+    "total": 45,
+    "sim": 0.3,
+    "steps": 1,
+    "save": 0,
+    "hud": 0,
+    "present": 44.6,
+    "parts": {
+     "regions": 0.2,
+     "lights": 0.2,
+     "optics": 0.1,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.1,
+     "lightSelect": 0,
+     "lightCount": 917,
+     "evicted": 11,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 42.2,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null,
+     "stepUnit": null,
+     "caveStep": 0,
+     "cavePasses": {
+      "score": 0,
+      "evict": 0,
+      "light": 0
+     },
+     "caveStream": 0,
+     "caveRetain": 0,
+     "caveView": 0,
+     "caveUpload": null,
+     "lightsIn": 950,
+     "lightsWalked": 258,
+     "lightSlow": null
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 242483,
+   "gap": 100,
+   "camera": "560.749,-268.367,-768.372",
+   "thread": {
+    "spanMs": 110.1,
+    "onCpuMs": 72.4,
+    "waitingMs": 0,
+    "minorFaults": 0,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 33.5,
+    "gpuWaitingMs": 0
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -0.7,
+   "gc": false,
+   "frame": {
+    "total": 75.5,
+    "sim": 0.4,
+    "steps": 1,
+    "save": 0,
+    "hud": 0,
+    "present": 75.1,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.2,
+     "optics": 0,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.1,
+     "lightSelect": 0,
+     "lightCount": 917,
+     "evicted": 11,
+     "chunks": 0.4,
+     "caves": 0,
+     "render": 72.3,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null,
+     "stepUnit": null,
+     "caveStep": 0,
+     "cavePasses": {
+      "score": 0,
+      "evict": 0,
+      "light": 0
+     },
+     "caveStream": 0,
+     "caveRetain": 0,
+     "caveView": 0,
+     "caveUpload": null,
+     "lightsIn": 950,
+     "lightsWalked": 258,
+     "lightSlow": null
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 245300,
+   "gap": 83.4,
+   "camera": "560.749,-278.567,-768.372",
+   "thread": {
+    "spanMs": 102,
+    "onCpuMs": 6.7,
+    "waitingMs": 0.1,
+    "minorFaults": 0,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 6.9,
+    "gpuWaitingMs": 0
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -0.8,
+   "gc": false,
+   "frame": {
+    "total": 78.3,
+    "sim": 0.6,
+    "steps": 2,
+    "save": 0,
+    "hud": 0,
+    "present": 77.7,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.2,
+     "optics": 0.1,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0,
+     "lightSelect": 0.1,
+     "lightCount": 917,
+     "evicted": 11,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 75.5,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null,
+     "stepUnit": null,
+     "caveStep": 0,
+     "cavePasses": {
+      "score": 0,
+      "evict": 0,
+      "light": 0
+     },
+     "caveStream": 0,
+     "caveRetain": 0,
+     "caveView": 0,
+     "caveUpload": null,
+     "lightsIn": 950,
+     "lightsWalked": 258,
+     "lightSlow": null
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 250749,
+   "gap": 66.7,
+   "camera": "560.749,-298.247,-768.372",
+   "thread": {
+    "spanMs": 75.5,
+    "onCpuMs": 7.8,
+    "waitingMs": 0,
+    "minorFaults": 0,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 12.8,
+    "gpuWaitingMs": 0
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -0.7,
+   "gc": false,
+   "frame": {
+    "total": 6.8,
+    "sim": 0.5,
+    "steps": 1,
+    "save": 0,
+    "hud": 0,
+    "present": 6.3,
+    "parts": {
+     "regions": 0,
+     "lights": 0.2,
+     "optics": 0.1,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0,
+     "lightSelect": 0.1,
+     "lightCount": 917,
+     "evicted": 13,
+     "chunks": 0.2,
+     "caves": 0.1,
+     "render": 3.6,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null,
+     "stepUnit": null,
+     "caveStep": 0.1,
+     "cavePasses": {
+      "score": 0,
+      "evict": 0,
+      "light": 0.1
+     },
+     "caveStream": 0,
+     "caveRetain": 0,
+     "caveView": 0,
+     "caveUpload": null,
+     "lightsIn": 950,
+     "lightsWalked": 251,
+     "lightSlow": null
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  }
+ ],
+ "unsliced": [],
+ "recoveries": 0,
+ "power": [],
+ "stalls": [],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 5162,
+  "playableMs": 25566,
+  "collisionPackMs": 4297.300000011921,
+  "records": true
+ },
+ "seconds": 307,
+ "powerEnd": {
+  "charge": 37,
+  "cellsLeft": 2,
+  "air": "craft",
+  "vitals": "O₂ 100% Creel air HEALTH 100 FOOD 57 F · eat meal CREEL 37% power Hull 100% · 386 / 800 m · hold 0/96 CU",
+  "at": "486,-384,-1084",
+  "planned": {
+   "segment": 0,
+   "metres": 1597,
+   "calls": [],
+   "cruise": false,
+   "outPercent": 58.5,
+   "homePercent": 3.8,
+   "havePercent": 165.7,
+   "viable": true
+  },
+  "homeOk": true
+ },
+ "gcTraceAligned": true,
+ "gcTraceNames": [
+  "V8.GC_HEAP_EXTERNAL_PROLOGUE",
+  "MinorGC",
+  "V8.GC_HEAP_PROLOGUE",
+  "V8.GCScavenger",
+  "V8.GC_TIME_TO_SAFEPOINT",
+  "V8.GC_SCAVENGER",
+  "V8.GC_HEAP_PROLOGUE_SAFEPOINT",
+  "V8.GC_SCAVENGER_SCAVENGE",
+  "V8.GC_SCAVENGER_SCAVENGE_WEAK_GLOBAL_HANDLES_IDENTIFY",
+  "V8.GC_SCAVENGER_TRACED_HANDLES_COMPUTE_WEAKNESS_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_COLLECT_OLD_TO_NEW_PAGES",
+  "V8.GC_SCAVENGER_SCAVENGE_PARALLEL_PHASE",
+  "V8.GC_SCAVENGER_SCAVENGE_ROOTS",
+  "V8.GC_SCAVENGER_BACKGROUND_SCAVENGE_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_WEAK_GLOBAL_HANDLES_PROCESS",
+  "V8.GC_SCAVENGER_TRACED_HANDLES_RESET_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_FINALIZE",
+  "V8.GC_SCAVENGER_SCAVENGE_RESTORE_AND_QUARANTINE_PINNED",
+  "V8.GC_SCAVENGER_FREE_REMEMBERED_SET",
+  "V8.GC_SCAVENGER_SWEEP_ARRAY_BUFFERS",
+  "V8.GC_SCAVENGER_RESIZE_NEW_SPACE",
+  "V8.GC_MINOR_MS_BACKGROUND_SWEEPING",
+  "V8.GC_HEAP_EPILOGUE_SAFEPOINT",
+  "V8.GC_BACKGROUND_YOUNG_ARRAY_BUFFER_SWEEP",
+  "V8.GC_HEAP_EPILOGUE",
+  "V8.GCTraceGCNVP",
+  "V8.GC_HEAP_DUMP_STATISTICS",
+  "V8.GC_Heap_Stats",
+  "V8.GC_HEAP_EXTERNAL_EPILOGUE",
+  "V8.GC_SCAVENGER_COMPLETE_SWEEP_ARRAY_BUFFERS",
+  "V8.GCPretenuringFeedback",
+  "V8.GCPretenuringSummary",
+  "V8.GC_SCAVENGER_BACKGROUND_TRACED_HANDLES_COMPUTE_WEAKNESS_PARALLEL",
+  "V8.GC_SCAVENGER_BACKGROUND_TRACED_HANDLES_RESET_PARALLEL",
+  "V8.GCDeoptMarkedAllocationSites",
+  "V8.GC_BACKGROUND_UNPARK",
+  "V8.GCIncrementalMarkingStart",
+  "V8.GC_HEAP_ENSURE_SWEEPING_COMPLETED",
+  "V8.GC_MC_INCREMENTAL_START"
+ ],
+ "frames": {
+  "count": 18470,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 100,
+  "over33": 4,
+  "over50": 4
+ },
+ "work": {
+  "p50": 3.1,
+  "p95": 5.1,
+  "p99": 7.4,
+  "max": 78.3,
+  "over33": 3
+ },
+ "longByCause": {
+  "over34": 4,
+  "streaming": 0,
+  "streamingOver34": 0,
+  "simulation": 0,
+  "noWork": 1,
+  "gcShaped": 0,
+  "streamingGcShaped": 0
+ },
+ "parts": {
+  "chunks": {
+   "p99": 4.5,
+   "max": 6.7
+  },
+  "regions": {
+   "p99": 0.2,
+   "max": 9.8
+  },
+  "caves": {
+   "p99": 0.1,
+   "max": 3
+  },
+  "caveWanted": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "caveBuild": {
+   "p99": 0.1,
+   "max": 2.9
+  },
+  "caveEvict": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "caveLightList": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "caveTexture": {
+   "p99": 0.1,
+   "max": 0.5
+  },
+  "caveUpload": {
+   "p99": 0,
+   "max": 0.2
+  },
+  "caveView": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "lights": {
+   "p99": 0.4,
+   "max": 1
+  },
+  "optics": {
+   "p99": 0.1,
+   "max": 0.3
+  },
+  "lightScan": {
+   "p99": 0.1,
+   "max": 0.8
+  },
+  "lightPlace": {
+   "p99": 0.2,
+   "max": 0.4
+  },
+  "lightSelect": {
+   "p99": 0.3,
+   "max": 0.4
+  },
+  "render": {
+   "p99": 1.7,
+   "max": 75.5
+  },
+  "sim": {
+   "p99": 1.1,
+   "max": 5.4
+  }
+ },
+ "streamingMax": {
+  "chunks": 6.7,
+  "caves": 3
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 0,
+  "built": 19,
+  "evicted": 9,
+  "boxes": 125410,
+  "stepMs": 2.6,
+  "buildMs": 3.1,
+  "pending": 0,
+  "missing": 0,
+  "uploads": 8,
+  "lightBytes": 3550272,
+  "textureBytes": 4348800,
+  "records": true,
+  "recordsMs": 4297.300000011921,
+  "lightPendingFrames": 0,
+  "maxAllocMs": 0.1,
+  "maxWriteMs": 0.1,
+  "restarts": 0
+ },
+ "pageOrigin": 1792835271358.7,
+ "thread": {
+  "pid": "199645",
+  "samples": 60113
+ },
+ "gc": {
+  "collections": 1837,
+  "byKind": {
+   "MinorGC": 907,
+   "V8.GCScavenger": 907,
+   "MajorGC": 12,
+   "V8.GCFinalizeMC": 11
+  },
+  "maxPauseMs": 42.78,
+  "over16": [
+   "MajorGC 42.78 ms at 111147"
+  ]
+ },
+ "gate": {
+  "pass": true,
+  "failures": [],
+  "travelSync": 0,
+  "loadSync": 0,
+  "travelLightPending": 0
+ },
+ "memory": {
+  "residentCpuMiB": 67.3,
+  "residentGpuMiB": 50.8,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 280.5
+ }
+}

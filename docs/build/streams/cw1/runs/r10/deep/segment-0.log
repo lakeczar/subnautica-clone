@@ -1,0 +1,32 @@
+[5.4s] renderer ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)
+[26.0s] cold start {"titleMs":5162,"playableMs":25566,"collisionPackMs":4297.300000011921,"records":true}
+[27.1s] loaded {"cam":[69.273,-9.544,-58.416],"depth":11.4,"vitals":"O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 95% power Hull 100% · 11 / 800 m · hold 0/96 CU"}
+[27.1s] renderer main thread 199645
+[27.1s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 95% power Hull 100% · 11 / 800 m · hold 0/96 CU at 69,-10,-58 depth 11.4
+[40.1s] notice "Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). G spends 25 reserve-cell charge on a decoy pulse." at 69,-53,-62
+[42.1s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 93% power Hull 100% · 56 / 800 m · hold 0/96 CU at 76,-54,-71 depth 55.9
+[57.1s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 66 F · eat meal CREEL 89% power Hull 100% · 56 / 800 m · hold 0/96 CU at 128,-54,-148 depth 55.9
+[72.2s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 66 F · eat meal CREEL 86% power Hull 100% · 56 / 800 m · hold 0/96 CU at 177,-54,-222 depth 55.9
+[87.2s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 65 F · eat meal CREEL 83% power Hull 100% · 56 / 800 m · hold 0/96 CU at 229,-54,-294 depth 56
+[102.2s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 65 F · eat meal CREEL 80% power Hull 100% · 56 / 800 m · hold 0/96 CU at 281,-54,-371 depth 55.9
+[117.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 64 F · eat meal CREEL 77% power Hull 100% · 56 / 800 m · hold 0/96 CU at 333,-54,-443 depth 56
+[132.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 64 F · eat meal CREEL 73% power Hull 100% · 56 / 800 m · hold 0/96 CU at 386,-54,-518 depth 55.9
+[147.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 63 F · eat meal CREEL 70% power Hull 100% · 56 / 800 m · hold 0/96 CU at 437,-54,-592 depth 55.9
+[162.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 63 F · eat meal CREEL 67% power Hull 100% · 56 / 800 m · hold 0/96 CU at 488,-54,-664 depth 56
+[177.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 62 F · eat meal CREEL 63% power Hull 100% · 56 / 800 m · hold 0/96 CU at 542,-54,-741 depth 56
+[192.3s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 62 F · eat meal CREEL 61% power Hull 100% · 88 / 800 m · hold 0/96 CU at 561,-87,-768 depth 88.3
+[207.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 61 F · eat meal CREEL 59% power Hull 100% · 142 / 800 m · hold 0/96 CU at 561,-141,-768 depth 142.3
+[222.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 61 F · eat meal CREEL 57% power Hull 100% · 196 / 800 m · hold 0/96 CU at 561,-195,-768 depth 196.3
+[237.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 60 F · eat meal CREEL 55% power Hull 100% · 251 / 800 m · hold 0/96 CU at 561,-249,-768 depth 250.6
+[252.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 60 F · eat meal CREEL 53% power Hull 100% · 305 / 800 m · hold 0/96 CU at 561,-303,-768 depth 304.6
+[267.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 59 F · eat meal CREEL 50% power Hull 100% · 359 / 800 m · hold 0/96 CU at 561,-357,-768 depth 358.6
+[270.1s] at basin_buried_hut active light basin_buried_hut depth 368.3
+[270.2s] screenshot /work/tmp/cw1/r10-deep/s0-01-basin_buried_hut.jpg
+[282.4s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 59 F · eat meal CREEL 47% power Hull 100% · 361 / 800 m · hold 0/96 CU at 548,-359,-834 depth 361.2
+[297.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 58 F · eat meal CREEL 44% power Hull 100% · 361 / 800 m · hold 0/96 CU at 530,-360,-921 depth 361.6
+[312.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 58 F · eat meal CREEL 41% power Hull 100% · 362 / 800 m · hold 0/96 CU at 513,-360,-1008 depth 361.9
+[327.5s] vitals [craft] O₂ 100% Creel air HEALTH 100 FOOD 57 F · eat meal CREEL 38% power Hull 100% · 369 / 800 m · hold 0/96 CU at 499,-368,-1084 depth 369.5
+[334.1s] at divide_lee_burrow active light divide_lee_burrow depth 386.3
+[334.1s] power end {"charge":37,"cellsLeft":2,"air":"craft","vitals":"O₂ 100% Creel air HEALTH 100 FOOD 57 F · eat meal CREEL 37% power Hull 100% · 386 / 800 m · hold 0/96 CU","at":"486,-384,-1084","planned":{"segment":0,"metres":1597,"calls":[],"cruise":false,"outPercent":58.5,"homePercent":3.8,"havePercent":165.7,"viable":true},"homeOk":true}
+[339.7s] gate pass
+[339.7s] result {"frames":{"count":18470,"p50":16.7,"p95":16.7,"p99":16.8,"max":100,"over33":4,"over50":4},"longByCause":{"over34":4,"streaming":0,"streamingOver34":0,"simulation":0,"noWork":1,"gcShaped":0,"streamingGcShaped":0},"work":{"p50":3.1,"p95":5.1,"p99":7.4,"max":78.3,"over33":3},"parts":{"chunks":{"p99":4.5,"max":6.7},"regions":{"p99":0.2,"max":9.8},"caves":{"p99":0.1,"max":3},"caveWanted":{"p99":0.1,"max":0.2},"caveBuild":{"p99":0.1,"max":2.9},"caveEvict":{"p99":0.1,"max":0.2},"caveLightList":{"p99":0.1,"max":0.2},"caveTexture":{"p99":0.1,"max":0.5},"caveUpload":{"p99":0,"max":0.2},"caveView":{"p99":0.1,"max":0.2},"lights":{"p99":0.4,"max":1},"optics":{"p99":0.1,"max":0.3},"lightScan":{"p99":0.1,"max":0.8},"lightPlace":{"p99":0.2,"max":0.4},"lightSelect":{"p99":0.3,"max":0.4},"render":{"p99":1.7,"max":75.5},"sim":{"p99":1.1,"max":5.4}},"holds":0,"memory":{"residentCpuMiB":67.3,"residentGpuMiB":50.8,"regionMiB":12.7,"budgetMiB":256,"heapMiB":280.5},"stream":{"sync":0,"built":19,"evicted":9,"boxes":125410,"stepMs":2.6,"buildMs":3.1,"pending":0,"missing":0,"uploads":8,"lightBytes":3550272,"textureBytes":4348800,"records":true,"recordsMs":4297.300000011921,"lightPendingFrames":0,"maxAllocMs":0.1,"maxWriteMs":0.1,"restarts":0}}

@@ -1,0 +1,91 @@
+{
+ "commit": "3779f59c",
+ "label": "RTX 3090 (factory-worker)",
+ "segment": 0,
+ "caves": [
+  "reef_gully_window",
+  "reef_drop_cathedral",
+  "fanvault",
+  "reef_fan_crawl",
+  "reef_shelf_lip",
+  "reef_pumphouse_undercut"
+ ],
+ "reached": [
+  "reef_gully_window",
+  "reef_drop_cathedral",
+  "fanvault",
+  "reef_fan_crawl",
+  "reef_shelf_lip",
+  "reef_pumphouse_undercut"
+ ],
+ "skipped": [],
+ "shots": [
+  "s0-01-reef_gully_window.jpg",
+  "s0-02-reef_shelf_lip.jpg"
+ ],
+ "views": [],
+ "errors": [
+  "Error: Cannot create a string longer than 0x1fffffe8 characters\n    at Buffer.toString (node:buffer:920:12)\n    at file:///work/tmp/cw1/traverse-trace.mjs:322:60"
+ ],
+ "holds": [],
+ "long": [],
+ "unsliced": [],
+ "recoveries": 1,
+ "power": [],
+ "stalls": [
+  {
+   "t": 324.9,
+   "label": "cruise#45",
+   "short": 20.1,
+   "at": "-19,-4,-76",
+   "target": [
+    -5.5,
+    -3.4,
+    -90.7
+   ],
+   "bearing": 44,
+   "pitch": 0,
+   "headingErr": -0.03,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 49 F · eat meal DART 85% power Hull 99% · 5 / 350 m",
+   "notices": ""
+  }
+ ],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 5216,
+  "playableMs": 25935,
+  "collisionPackMs": 4323.700000017881,
+  "records": true
+ },
+ "seconds": 382.9,
+ "powerEnd": {
+  "charge": 80,
+  "cellsLeft": 2,
+  "air": "craft",
+  "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 46 F · eat meal DART 80% power Hull 99% · 18 / 350 m",
+  "at": "-366,-17,-47",
+  "planned": {
+   "segment": 0,
+   "metres": 3227,
+   "calls": [],
+   "cruise": false,
+   "outPercent": 19.8,
+   "homePercent": 2.6,
+   "havePercent": 135,
+   "viable": true
+  },
+  "homeOk": true
+ },
+ "gate": {
+  "pass": false,
+  "failures": [
+   "the run did not finish"
+  ]
+ }
+}

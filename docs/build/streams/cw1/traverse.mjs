@@ -23,6 +23,7 @@ import { readFileSync, readdirSync, existsSync, statSync, mkdirSync, writeFileSy
 import path from "node:path";
 import { requireGpuLease } from "../../../../scripts/heavy/gpu-lease.mjs";
 import { streamTrace } from "./stream-trace.mjs";
+import { classify, OURS } from "./frame-class.mjs";
 import { Worker } from "node:worker_threads";
 requireGpuLease("CW-1 traversal");
 const require = createRequire(process.env.CW1_PW ?? "/work/tmp/gpu-prep/pw/");
@@ -447,18 +448,12 @@ try {
   // browser, reported but not streaming's.
   const streamingOf = (f) => (f?.parts ? (f.parts.chunks ?? 0) + (f.parts.caves ?? 0) + (f.parts.regions ?? 0) + (f.parts.lights ?? 0) : 0);
   for (const l of result.long) if (l.frame) l.streaming = l.frame.total > 16.7 && streamingOf(l.frame) >= 0.5 * l.frame.total;
-  // Host pauses never excuse a frame by themselves (CW-1 R2 follow-up): the
-  // time stolen from the renderer or GPU main thread is subtracted and the
-  // remainder judged against the 34 ms budget. Classes: "host" (stolen, and
-  // the remainder within budget), "mixed" (stolen, remainder still over:
-  // ours), "clean" (no steal above the 10 ms jiffy: ours), "unsampled" (no
-  // thread samples: cannot be cleared, ours).
-  for (const l of result.long) {
-    if (!l.thread) { l.cause = "unsampled"; l.remainderMs = l.gap; continue; }
-    const stolen = Math.min(l.gap, l.thread.stolenMs);
-    l.remainderMs = +(l.gap - stolen).toFixed(1);
-    l.cause = stolen <= 10 ? "clean" : l.remainderMs <= 34 ? "host" : "mixed";
-  }
+  // Each long frame's class (frame-class.mjs): stolen time subtracted, the
+  // remainder judged against 34 ms; host-stopped only when most of the VM
+  // stopped and our two main threads were within budget on CPU (the GPU's
+  // busy time is not measured here, so such a frame says "GPU unknown").
+  result.ncpu = NCPU;
+  for (const l of result.long) Object.assign(l, classify(l, NCPU));
   // SIM-PERF-1, the same rule for each simulation step over 8 ms (half a frame): the time stolen
   // from the renderer or GPU main thread inside the step (stolenBetween, CW-1's 5 ms intervals)
   // is subtracted; a remainder still over 8 ms is the game's.
@@ -478,11 +473,13 @@ try {
     streamingOver34: result.long.filter(l => l.streaming && l.gap > 34).length,
     // Frames over 34 ms by what remains once stolen time is taken out, all and streaming.
     host: result.long.filter(l => l.gap > 34 && l.cause === "host").length,
+    hostStopped: result.long.filter(l => l.gap > 34 && l.cause === "host-stopped").length,
     mixed: result.long.filter(l => l.gap > 34 && l.cause === "mixed").length,
     clean: result.long.filter(l => l.gap > 34 && l.cause === "clean").length,
     unsampled: result.long.filter(l => l.gap > 34 && l.cause === "unsampled").length,
     streamingHost: result.long.filter(l => l.streaming && l.gap > 34 && l.cause === "host").length,
-    streamingOurs: result.long.filter(l => l.streaming && l.gap > 34 && l.cause !== "host").length,
+    streamingHostStopped: result.long.filter(l => l.streaming && l.gap > 34 && l.cause === "host-stopped").length,
+    streamingOurs: result.long.filter(l => l.streaming && l.gap > 34 && OURS.has(l.cause)).length,
     simulation: result.long.filter(l => l.frame && !l.streaming && l.frame.sim >= 0.5 * l.frame.total && l.frame.total > 16.7).length,
     noWork: result.long.filter(l => !l.frame || l.frame.total <= 16.7).length,
     // Long gaps in which the heap shrank by over 2 MiB: a collection ran in them (whatever part it landed in).
@@ -529,6 +526,7 @@ try {
   // The gate: streaming frames whose remainder, after stolen time, is still over 34 ms.
   const ours = result.longByCause.streamingOurs;
   if (ours > 0) failures.push(`${ours} streaming frame(s) over 34 ms after stolen time (mixed, clean or unsampled)`);
+  if (result.longByCause.streamingHostStopped) note("gate", `${result.longByCause.streamingHostStopped} streaming frame(s) cleared as host-stopped (GPU unknown)`);
   // R2-2: a cave the craft is in whose light is not yet bound is drawn as open water; ordinary travel must have prefetched it.
   const travelLightPending = (data.stream.lightPendingFrames ?? 0) - pendingAtStart;
   if (travelLightPending > 0) failures.push(`${travelLightPending} frame(s) inside a cave whose light was not ready`);

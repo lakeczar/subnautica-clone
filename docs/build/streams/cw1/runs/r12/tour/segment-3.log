@@ -1,0 +1,59 @@
+[5.5s] renderer ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)
+[27.4s] cold start {"titleMs":5172,"playableMs":26870,"collisionPackMs":4305.5999999940395,"records":true}
+[28.4s] loaded {"cam":[19.172,-0.505,-19.822],"depth":1.2,"vitals":"O₂ 100% Dart air HEALTH 100 FOOD 59 F · eat meal DART 100% power Hull 100% · 1 / 350 m Service here · Tab"}
+[28.5s] renderer main thread 570425
+[28.5s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 59 F · eat meal DART 100% power Hull 100% · 1 / 350 m Service here · Tab at 19,-1,-20 depth 1.2
+[43.5s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 58 F · eat meal DART 99% power Hull 99% · 7 / 350 m at -59,-6,-54 depth 7.3
+[58.5s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 58 F · eat meal DART 98% power Hull 99% · 23 / 350 m at -145,-23,-144 depth 23.2
+[73.5s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 57 F · eat meal DART 98% power Hull 99% · 92 / 350 m at -190,-91,-231 depth 92
+[88.6s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 57 F · eat meal DART 97% power Hull 99% · 151 / 350 m at -199,-150,-342 depth 151.3
+[103.6s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 56 F · eat meal DART 96% power Hull 99% · 140 / 350 m at -214,-139,-310 depth 140.2
+[118.6s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 56 F · eat meal DART 95% power Hull 99% · 85 / 350 m at -232,-84,-198 depth 85.2
+[133.7s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 95% power Hull 99% · 8 / 350 m at -239,-7,-162 depth 7.8
+[148.7s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 99% · 5 / 350 m at -279,-4,-23 depth 5.4
+[163.7s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 54 F · eat meal DART 93% power Hull 99% · 5 / 350 m at -285,-4,88 depth 5.4
+[178.7s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 54 F · eat meal DART 92% power Hull 99% · 5 / 350 m at -141,-4,109 depth 5.4
+[193.7s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 53 F · eat meal DART 91% power Hull 99% · 5 / 350 m at 4,-4,120 depth 5.4
+[208.8s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 53 F · eat meal DART 90% power Hull 99% · 8 / 350 m at 144,-7,120 depth 8.2
+[223.8s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 52 F · eat meal DART 89% power Hull 99% · 49 / 350 m at 266,-49,120 depth 49.4
+[238.8s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 52 F · eat meal DART 89% power Hull 99% · 32 / 350 m at 348,-31,76 depth 32
+[253.8s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 51 F · eat meal DART 88% power Hull 99% · 21 / 350 m Service here · Tab at 407,-20,-30 depth 21.1
+[268.8s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 51 F · eat meal DART 87% power Hull 99% · 14 / 350 m at 472,-13,-149 depth 14.3
+[283.9s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 50 F · eat meal DART 86% power Hull 99% · 12 / 350 m at 537,-11,-97 depth 11.9
+[298.9s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 50 F · eat meal DART 85% power Hull 99% · 21 / 350 m at 605,-20,21 depth 21.1
+[313.9s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 49 F · eat meal DART 84% power Hull 99% · 29 / 350 m at 687,-28,118 depth 28.8
+[329.0s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 49 F · eat meal DART 84% power Hull 99% · 28 / 350 m at 833,-27,120 depth 28.3
+[344.0s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 48 F · eat meal DART 83% power Hull 99% · 11 / 350 m at 929,-10,41 depth 10.8
+[346.3s] at isles_headland_west active light isles_headland_west depth 7.4
+[346.3s] screenshot /work/tmp/cw1/r12-tour/s3-01-isles_headland_west.jpg
+[359.0s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 48 F · eat meal DART 82% power Hull 99% · 6 / 350 m at 873,-5,98 depth 6.4
+[374.0s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 47 F · eat meal DART 81% power Hull 99% · 6 / 350 m at 953,-5,120 depth 6.2
+[389.1s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 47 F · eat meal DART 80% power Hull 99% · 1 / 350 m at 1081,-1,147 depth 1.5
+[404.1s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 46 F · eat meal DART 80% power Hull 99% · 1 / 350 m at 1153,-0,82 depth 1.2
+[419.1s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 46 F · eat meal DART 79% power Hull 99% · 4 / 350 m at 1273,-3,5 depth 3.7
+[434.1s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 45 F · eat meal DART 78% power Hull 99% · 24 / 350 m at 1317,-23,-63 depth 23.6
+[449.1s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 45 F · eat meal DART 77% power Hull 99% · 79 / 350 m at 1222,-78,-125 depth 79.3
+[464.1s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 44 F · eat meal DART 76% power Hull 99% · 121 / 350 m at 1117,-120,-185 depth 121.3
+[479.1s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 44 F · eat meal DART 75% power Hull 99% · 134 / 350 m at 994,-133,-247 depth 134.3
+[494.1s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 43 F · eat meal DART 75% power Hull 99% · 99 / 350 m at 950,-98,-201 depth 99
+[509.2s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 43 F · eat meal DART 74% power Hull 99% · 32 / 350 m at 948,-31,-94 depth 32.5
+[519.3s] at isles_cove_undercut active light isles_cove_undercut depth 1.4
+[524.2s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 42 F · eat meal DART 73% power Hull 98% · 3 / 350 m at 964,-2,-48 depth 3.3
+[539.2s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 42 F · eat meal DART 72% power Hull 98% · 3 / 350 m at 849,-2,38 depth 3.4
+[554.2s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 41 F · eat meal DART 72% power Hull 98% · 4 / 350 m at 890,-3,92 depth 4.1
+[569.2s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 41 F · eat meal DART 71% power Hull 98% · 5 / 350 m at 1027,-4,130 depth 5.3
+[584.3s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 40 F · eat meal DART 70% power Hull 97% · 2 / 350 m at 1155,-1,132 depth 1.7
+[599.3s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 40 F · eat meal DART 69% power Hull 97% · 2 / 350 m at 1143,-1,-1 depth 2.4
+[614.3s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 39 F · eat meal DART 68% power Hull 97% · 18 / 350 m at 1062,-17,-83 depth 17.9
+[628.2s] at isles_cove_crawl active light isles_cove_crawl depth 15.4
+[629.4s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 39 F · eat meal DART 68% power Hull 97% · 16 / 350 m at 991,-15,-73 depth 16.2
+[644.4s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 38 F · eat meal DART 67% power Hull 97% · 39 / 350 m at 1036,-38,-127 depth 38.7
+[653.3s] at isles_headland_root active light isles_headland_root depth 29.4
+[659.4s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 38 F · eat meal DART 66% power Hull 97% · 16 / 350 m at 1048,-15,-72 depth 16.4
+[674.4s] vitals [craft] O₂ 100% Dart air HEALTH 100 FOOD 37 F · eat meal DART 65% power Hull 97% · 5 / 350 m at 1149,-4,13 depth 5.3
+[683.0s] at isles_east_ledge_cave active light isles_east_ledge_cave depth 19.4
+[683.1s] screenshot /work/tmp/cw1/r12-tour/s3-02-isles_east_ledge_cave.jpg
+[683.1s] power end {"charge":65,"cellsLeft":2,"air":"craft","vitals":"O₂ 100% Dart air HEALTH 100 FOOD 37 F · eat meal DART 65% power Hull 97% · 19 / 350 m","at":"1168,-18,41","planned":{"segment":3,"metres":5706,"calls":[],"cruise":false,"outPercent":35,"homePercent":4.1,"havePercent":135,"viable":true},"homeOk":true}
+[683.2s] trace {"rotations":7,"chunksWithDataLoss":0,"events":280810,"megabytes":49.8}
+[697.6s] gate pass
+[697.6s] result {"frames":{"count":39217,"p50":16.7,"p95":16.7,"p99":16.8,"max":116.8,"over33":17,"over50":14},"longByCause":{"over34":15,"streaming":1,"streamingOver34":1,"host":12,"mixed":2,"clean":1,"unsampled":0,"streamingHost":1,"streamingOurs":0,"simulation":0,"noWork":12,"gcShaped":1,"streamingGcShaped":0},"work":{"p50":3,"p95":4.1,"p99":5.5,"max":89.7,"over33":4},"parts":{"chunks":{"p99":0.3,"max":7},"regions":{"p99":0.2,"max":0.6},"caves":{"p99":0.2,"max":56.8},"caveWanted":{"p99":0.1,"max":4},"caveBuild":{"p99":0.1,"max":6.5},"caveEvict":{"p99":0,"max":0.2},"caveLightList":{"p99":0.1,"max":0.2},"caveTexture":{"p99":0.1,"max":0.5},"caveUpload":{"p99":0,"max":0.2},"caveView":{"p99":0.1,"max":56.7},"chunkUpdates":{"p99":1,"max":2},"chunkPlan":{"p99":0.2,"max":6.9},"chunkDrop":{"p99":0.1,"max":0.2},"chunkBuild":{"p99":0.1,"max":5.7},"chunkUpload":{"p99":0.1,"max":4},"chunkDisplay":{"p99":0.1,"max":0.4},"chunkEvict":{"p99":0.1,"max":0.3},"chunkDispose":{"p99":0.1,"max":0.5},"chunkDisposeMax":{"p99":0,"max":0.5},"lights":{"p99":0.5,"max":5.5},"optics":{"p99":0.1,"max":0.2},"lightScan":{"p99":0.1,"max":1.1},"lightCached":{"p99":0.1,"max":0.3},"lightMoving":{"p99":0,"max":0.1},"lightPlacing":{"p99":0,"max":4.6},"lightSentLag":{"p99":0,"max":0},"lightLagWorst":{"p99":0,"max":0},"lightPlace":{"p99":0.2,"max":4.8},"lightSelect":{"p99":0.3,"max":2.4},"render":{"p99":1.5,"max":86.8},"sim":{"p99":0.6,"max":3.6}},"holds":0,"memory":{"residentCpuMiB":47.9,"residentGpuMiB":35.3,"regionMiB":12.7,"budgetMiB":256,"heapMiB":280.2},"stream":{"sync":0,"built":35,"evicted":29,"boxes":80627,"stepMs":4.8,"buildMs":6.5,"pending":0,"missing":0,"uploads":44,"lightBytes":5517108,"textureBytes":3337524,"records":true,"recordsMs":4305.5999999940395,"lightPendingFrames":0,"maxAllocMs":0.2,"maxWriteMs":0.2,"restarts":0}}
