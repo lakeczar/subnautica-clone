@@ -11,15 +11,21 @@
 set -u
 out="${1:?usage: alickers-vaapi.sh OUT_DIR}"; mkdir -p "$out"
 cd "$(dirname "$0")/../.."
-if ! sudo -n true 2>/dev/null; then echo "NO_SUDO: sudo is not available non-interactively to $(whoami); nothing installed" | tee "$out/result.txt"; exit 3; fi
-dpkg-query -W -f='${Package} ${Version}\n' | sort > "$out/packages-before.txt"
-export DEBIAN_FRONTEND=noninteractive
-if ! timeout 900 sudo -n apt-get update -qq > "$out/apt.log" 2>&1 || ! timeout 1200 sudo -n -E apt-get install -y -qq --no-install-recommends mesa-va-drivers vainfo ffmpeg >> "$out/apt.log" 2>&1; then
-  echo "INSTALL_FAILED: $(tail -3 "$out/apt.log" | tr '\n' ' ')" | tee "$out/result.txt"; exit 4
+# Already installed (by someone with sudo): probe read-only.
+if dpkg-query -W mesa-va-drivers vainfo ffmpeg >/dev/null 2>&1; then
+  dpkg-query -W -f='${Package} ${Version}\n' mesa-va-drivers vainfo ffmpeg | tee "$out/installed.txt"
+  echo "packages already present: probing only"
+else
+  if ! sudo -n true 2>/dev/null; then echo "NO_SUDO: sudo is not available non-interactively to $(whoami); nothing installed" | tee "$out/result.txt"; exit 3; fi
+  dpkg-query -W -f='${Package} ${Version}\n' | sort > "$out/packages-before.txt"
+  export DEBIAN_FRONTEND=noninteractive
+  if ! timeout 900 sudo -n apt-get update -qq > "$out/apt.log" 2>&1 || ! timeout 1200 sudo -n -E apt-get install -y -qq --no-install-recommends mesa-va-drivers vainfo ffmpeg >> "$out/apt.log" 2>&1; then
+    echo "INSTALL_FAILED: $(tail -3 "$out/apt.log" | tr '\n' ' ')" | tee "$out/result.txt"; exit 4
+  fi
+  dpkg-query -W -f='${Package} ${Version}\n' | sort > "$out/packages-after.txt"
+  comm -13 "$out/packages-before.txt" "$out/packages-after.txt" > "$out/installed.txt"
+  echo "installed $(wc -l < "$out/installed.txt") packages: $(grep -E '^(mesa-va-drivers|vainfo|ffmpeg) ' "$out/installed.txt" | tr '\n' ';')"
 fi
-dpkg-query -W -f='${Package} ${Version}\n' | sort > "$out/packages-after.txt"
-comm -13 "$out/packages-before.txt" "$out/packages-after.txt" > "$out/installed.txt"
-echo "installed $(wc -l < "$out/installed.txt") packages: $(grep -E '^(mesa-va-drivers|vainfo|ffmpeg) ' "$out/installed.txt" | tr '\n' ';')"
 bash scripts/rec/vaapi-probe.sh "$out/vaapi"
 if [ -s "$out/vaapi/native-h264_vaapi.mkv" ]; then
   echo "native h264_vaapi encoded: trying Chrome's VA-API path"
