@@ -1076,3 +1076,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **90 s empty travel is a spacing guide, not law.** The limit scales with progression, and long legs are reported, not auto-failed; the 15–20 min gap and zero decode-only waits stay hard gates; a predator counts while its cue plays.
   - **Carrier hold-course on sailed lanes** for long, slow journeys, otherwise steer (a small stream after PACE-1 stage 2). Recorded in GAME-DIRECTION.
   - Sent to LS-1 and PACE-1. PACE-1 stage 2 also wires carrier fabrication.
+- **PACE-1 plan R1** (Sol on `671b0ecb`, report on `review/pace-1-r1` `0891ed9e`): REQUEST CHANGES; all four failures reproduced.
+  - **Findings:** P2 the air assembly's 2 lattice is only knowable in the district (the bot hides it by pre-budgeting 14); P2 the 41-min "best play" figure isn't a lower bound; P3 baseline summaries.
+  - **Decisions:** make the lattice need knowable before leaving the Divide (legibility, not a new source unless story-justified); delete the bot's secret pre-budget; add an adverse case starting from known-recipe stock only; scope the 41 min as an estimate. Recorder works and ending beats go to REC-2.
