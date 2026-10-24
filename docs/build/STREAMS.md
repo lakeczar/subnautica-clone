@@ -828,3 +828,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Rulings and tests:** the R6 rulings are in, and their regressions fail on f6fee338. Note events carry `saveRef` for REC-2.
   - **Gate:** running inside 4070 jobs.
   - **Review:** Sol R1 dispatched in parallel (`siltwake-sim1b-review-r1-sol-5314f3e`).
+- **SIM-1b R1** (Sol on `5314f3ef`, report on `review/sim-1b-r1` `61a2e4a4`): REQUEST CHANGES, 2 P1s and 3 P2s.
+  - **Findings:** a failed repair collects against the uncommitted empty journal and deletes data; the reader isn't total (malformed v1 throws, a header admits unreadable history); a malformed summary bypasses fold validation; quota retries mutate before protecting; entry clears the protection warning.
+  - **Decision:** fix all five, and add one seeded model-based fault-and-corruption harness that asserts the invariants after every step, to end the case-by-case rounds.
