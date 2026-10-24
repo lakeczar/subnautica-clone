@@ -865,3 +865,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Findings:** an upgrade isn't a demonstrated fix for the stalls and won't enable NVENC in Linux Chrome (no Vulkan Video encoder or NVENC backend in Chromium; nvidia-vaapi-driver is decode-only). Keep GL-EGL.
   - **Cheap first steps on 550:** a task-owned GL shader disk cache with a cold/warm comparison (no VM change; handed to SIM-PERF-1); persistence mode and clock-lock diagnostics need root and owner approval.
   - **Upgrade option, owner-approved maintenance only:** R595 production (595.112.07) via NVIDIA's Debian 13 APT repo, pinned, with a full guest rollback image. R580 has no Debian 13 vendor repo.
+- **Owner approves fleet option B (2026-10-24):** move ZFS write threads, remaining host kernel work and tailscaled to host CPUs 0–3. This needs boot parameters and a host reboot.
+  - **Evidence sent via the owner:** 6/16 exclusive runs disturbed by steal of 5–8.5%, five of them outside the backup window.
+  - **Before the reboot:** the coordinator pauses builders (WIP committed) and drains the queue once fleet names a time.
+  - **After:** health checks (3090 passthrough, queue), resume, then a before/after steal comparison on the same route.
