@@ -4,14 +4,16 @@ import { BASIN_GEOMETRY, CANOPY_MARGIN_RIBS, CANOPY_STOP, CREEL_SLIP_SOLIDS, LEG
 import { STRUCTURE_SOLIDS } from "../content/regions/structures.js";
 import { VISTA_SOLIDS } from "../content/vistas.js";
 import { worldFloor } from "../content/regions/worldFloor.js";
-import { cachedBuild, floorKey, nameFloor } from "../content/buildCache.js";
-import { caves, type CaveDef } from "../content/regions/caves.js";
+import { nameFloor } from "../content/buildCache.js";
+import { CAVE_SOURCES, type CaveDef } from "../content/regions/caves.js";
 import { LEGACY_PRESERVE } from "../content/regions/terrain.js";
 import { WORLD_ENVELOPE } from "../world/frame.js";
 import type { Rect } from "../world/types.js";
 import { legacyTerrainHeight, RESCUE_BENCH } from "./terrain.js";
 import type { Capsule, MovementOptions, Vec3, WorldQueries } from "./types.js";
-import { createSpatialIndex } from "../world/spatialIndex.js";
+import { buildSpatialIndex, createSpatialIndex } from "../world/spatialIndex.js";
+import { COLLAR_CELL as KIT_COLLAR_CELL, COLLAR_QUANTUM, COLLAR_SKIP, insideKitCave, KIT_CAVE_MAX_HALF, kitCaveRecord, liveKitCave,
+  rockOnlyRecord, type KitCaveCollision } from "../world/caves/kitCollision.js";
 import { solidEntries } from "../world/queries.js";
 import type { SpatialQuery } from "../world/types.js";
 import { actorBox, type BoxBounds, RIB_CONTACT_TOLERANCE, RIB_SLIDE_ITERATIONS, ribUpperHeight,
@@ -467,39 +469,57 @@ function broadPhase(solids: readonly Solid[], cellSize = 32): SpatialQuery<Solid
   }
   return index;
 }
-const grown = (box: { min: Vec3; max: Vec3 }, by: number): { min: Vec3; max: Vec3 } => ({
-  min: { x: box.min.x - by, y: box.min.y - by, z: box.min.z - by },
-  max: { x: box.max.x + by, y: box.max.y + by, z: box.max.z + by },
-});
+const ZERO_DELTA: Readonly<Vec3> = { x: 0, y: 0, z: 0 };
+/** A reusable box for a hot query's bounds (never retained past the query). */
+const scratchBox = (): { min: Vec3; max: Vec3 } => ({ min: { x: 0, y: 0, z: 0 }, max: { x: 0, y: 0, z: 0 } });
+const setBox = (out: { min: Vec3; max: Vec3 }, minX: number, minY: number, minZ: number, maxX: number, maxY: number, maxZ: number): { min: Vec3; max: Vec3 } => {
+  out.min.x = minX; out.min.y = minY; out.min.z = minZ; out.max.x = maxX; out.max.y = maxY; out.max.z = maxZ;
+  return out;
+};
 
 /** World queries over a solid roster. Rosters of `BROAD_PHASE_MIN` or more
  * solids narrow each call to the solids near it through a spatial index
  * (cost follows nearby solids, not the whole world); the narrow phase is the
  * same either way, so results are identical (tests/world-queries.test.ts).
  * `broadPhase: false` forces the full scan, for that comparison; `cellSize`
- * sets the index's X/Z cell (the cave composite uses a finer one).
+ * sets the index's X/Z cell (the cave composite uses a finer one); `index`
+ * is a prebuilt index of exactly this roster (a cave cluster's, built in
+ * slices).
  *
  * This is the raw world, with no caves. The game's exterior world, caves
  * included, is `gameWorld()`. */
 export function createWorldQueries(
   solids: readonly Solid[] = SOLIDS,
   floorHeight: (x: number, z: number) => number = surfaceHeight,
-  options: { broadPhase?: boolean; cellSize?: number } = {},
+  options: { broadPhase?: boolean; cellSize?: number; index?: SpatialQuery<Solid> } = {},
 ): WorldQueries {
   const worldTerrain = floorHeight === surfaceHeight || floorHeight === terrainHeight;
-  const index = options.broadPhase === false ? null : broadPhase(solids, options.cellSize);
-  const near = (box: { min: Vec3; max: Vec3 }): readonly Solid[] =>
-    index ? index.inBox(box, ["solid"]).map(e => e.data!) : solids;
+  const index = options.broadPhase === false ? null : options.index ?? broadPhase(solids, options.cellSize);
+  // The simulation queries these many times a tick (CW-1 measured 119 KiB of
+  // garbage a tick from support alone): each query site gathers into its own
+  // reusable array and bounds box. None calls another site while iterating.
+  /** How many of `out`'s first solids are near `box` (all `solids` without an index). */
+  const nearInto = (box: { min: Vec3; max: Vec3 }, out: Solid[]): number =>
+    index ? index.dataInBox(box, "solid", out) : solids.length;
+  const listOf = (out: Solid[]): readonly Solid[] => index ? out : solids;
+  const clearHits: Solid[] = [], supportHits: Solid[] = [], moveHits: Solid[] = [], sightHits: Solid[] = [];
+  const clearBox = scratchBox(), supportBox = scratchBox(), moveBox = scratchBox(), sightBox = scratchBox();
   return {
     lineOfSight(a, b, ignore = []) {
       if (!finitePoint(a) || !finitePoint(b)) return false;
       const length = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z);
       const steps = Math.max(1, Math.ceil(length / 0.15));
       if (!Number.isFinite(steps) || steps > 100000) return false;
-      const candidates = index ? index.alongSegment(a, b, BROAD_PHASE_MARGIN, ["solid"]).map(e => e.data!) : solids;
-      for (const solid of candidates) {
+      // The segment's bounds through the allocation-free box query (a superset
+      // of the old segment gather; the exact test below decides).
+      const m = BROAD_PHASE_MARGIN;
+      const count = index ? nearInto(setBox(sightBox, Math.min(a.x, b.x) - m, Math.min(a.y, b.y) - m, Math.min(a.z, b.z) - m,
+        Math.max(a.x, b.x) + m, Math.max(a.y, b.y) + m, Math.max(a.z, b.z) + m), sightHits) : solids.length;
+      const candidates = index ? sightHits : solids;
+      for (let k = 0; k < count; k++) {
+        const solid = candidates[k]!;
         if (!finitePoint(solid.min) || !finitePoint(solid.max) ||
-            AXES.some(axis => solid.min[axis] > solid.max[axis])) return false;
+            solid.min.x > solid.max.x || solid.min.y > solid.max.y || solid.min.z > solid.max.z) return false;
         if (ignore.includes(solid.id)) continue;
         const rib = canonicalRib(solid);
         if (rib ? segmentDistanceSquared(a, b, rib.a, rib.b) <= rib.radius ** 2
@@ -525,27 +545,34 @@ export function createWorldQueries(
       )
         return false;
       const box = actorBox(origin, capsule);
-      return !near(grown(box, BROAD_PHASE_MARGIN)).some((s) => {
-        if (!sweptBoxIntersects(box, { x: 0, y: 0, z: 0 }, s)) return false;
+      const m = BROAD_PHASE_MARGIN;
+      const count = nearInto(setBox(clearBox, box.min.x - m, box.min.y - m, box.min.z - m, box.max.x + m, box.max.y + m, box.max.z + m), clearHits);
+      const near = listOf(clearHits);
+      for (let k = 0; k < count; k++) {
+        const s = near[k]!;
+        if (!sweptBoxIntersects(box, ZERO_DELTA, s)) continue;
         const rib = canonicalRib(s);
-        if (rib) return segmentBoxClosest(rib.a, rib.b, box).distance < rib.radius - RIB_CONTACT_TOLERANCE;
-        return (
+        if (rib) { if (segmentBoxClosest(rib.a, rib.b, box).distance < rib.radius - RIB_CONTACT_TOLERANCE) return false; continue; }
+        if (
           origin.x + rx > s.min.x + 0.001 &&
           origin.x - rx < s.max.x - 0.001 &&
           origin.z + rz > s.min.z + 0.001 &&
           origin.z - rz < s.max.z - 0.001 &&
           origin.y + capsule.height > s.min.y + 0.001 &&
           origin.y + (capsule.bottom ?? 0) < s.max.y - 0.001
-        );
-      });
+        ) return false;
+      }
+      return true;
     },
     waterHeight: WATER_Y,
     groundHeight: floorHeight,
     supportHeight(x, z, fromY) {
       let height = floorHeight(x, z);
-      const column = { min: { x: x - BROAD_PHASE_MARGIN, y: -TALL, z: z - BROAD_PHASE_MARGIN },
-        max: { x: x + BROAD_PHASE_MARGIN, y: TALL, z: z + BROAD_PHASE_MARGIN } };
-      for (const solid of index && Number.isFinite(x) && Number.isFinite(z) ? near(column) : solids) {
+      const finite = !!index && Number.isFinite(x) && Number.isFinite(z);
+      const count = finite ? nearInto(setBox(supportBox, x - BROAD_PHASE_MARGIN, -TALL, z - BROAD_PHASE_MARGIN, x + BROAD_PHASE_MARGIN, TALL, z + BROAD_PHASE_MARGIN), supportHits) : solids.length;
+      const column = finite ? listOf(supportHits) : solids;
+      for (let k = 0; k < count; k++) {
+        const solid = column[k]!;
         const rib = canonicalRib(solid);
         if (rib) {
           if (x >= solid.min.x && x <= solid.max.x && z >= solid.min.z && z <= solid.max.z) {
@@ -576,8 +603,13 @@ export function createWorldQueries(
       // Slides never travel further than |delta| in total, so the actor box
       // grown by that length bounds every swept contact.
       const reach = Math.hypot(delta.x, delta.y, delta.z);
-      const candidates = index && Number.isFinite(reach)
-        ? near(grown(actorBox(origin, capsule), reach + BROAD_PHASE_MARGIN)) : solids;
+      let candidates: readonly Solid[] = solids, candidateCount = solids.length;
+      if (index && Number.isFinite(reach)) {
+        const a = actorBox(origin, capsule), r = reach + BROAD_PHASE_MARGIN;
+        // The move's own buffer: nothing inside the move gathers into it again.
+        candidates = moveHits;
+        candidateCount = nearInto(setBox(moveBox, a.min.x - r, a.min.y - r, a.min.z - r, a.max.x + r, a.max.y + r, a.max.z + r), moveHits);
+      }
       let position = { ...origin },
         remaining = { ...delta },
         hitSolid = false, clippedBoundary = false;
@@ -610,7 +642,8 @@ export function createWorldQueries(
           const hit = sweepTerrain(position, remaining, capsule, solid);
           if (hit && (!nearest || hit.t < nearest.t)) nearest = { ...hit, rib: false, stop: false };
         }
-        for (const solid of candidates) {
+        for (let k = 0; k < candidateCount; k++) {
+          const solid = candidates[k]!;
           if (!sweptBoxIntersects(box, remaining, solid)) continue;
           const rib = canonicalRib(solid);
           if (!rib && options?.separateBoxOverlaps) {
@@ -673,19 +706,23 @@ export function createWorldQueries(
   };
 }
 
-// --- Caves (W1) ---------------------------------------------------------------
+// --- Caves (W1; composed per cluster and streamed since CW-1) -----------------
 
 /** A cave as the world queries see it: its owned footprint, the depth below
- * which the heightfield steps aside, and its one-source rock. */
+ * which the heightfield steps aside, and its one-source rock. `def` lets the
+ * world read its inside water (current masking) and `ceiling` (its source's
+ * `topY`) its height: a shape wholly above the ceiling is the exterior's. */
 export interface CaveOwner {
   readonly id: string;
   readonly footprint: Rect;
   /** The heightfield steps aside below this inside the footprint. */
   readonly baseY: number;
   readonly rock: readonly Solid[];
+  readonly ceiling?: number;
+  readonly def?: CaveDef;
 }
 export const caveOwner = (def: CaveDef): CaveOwner =>
-  ({ id: def.id, footprint: def.replacementFootprints[0]!, baseY: def.source.baseY, rock: def.rock });
+  ({ id: def.id, footprint: def.replacementFootprints[0]!, baseY: def.source.baseY, rock: def.rock, ceiling: def.source.topY, def });
 
 export interface CaveWorldOptions {
   /** Exterior solids and the ORIGINAL exterior floor function. */
@@ -705,112 +742,379 @@ export const CAVE_SUB_SWEEP = 0.5;
  * boxes per cave, so 8 m cells (W1-PRE-06: diver move plus support 42.9 →
  * 18.9 µs against 32 m). */
 export const CAVE_INDEX_CELL = 8;
-const COLLAR_CELL = 0.5;
-const rectOverlaps = (r: Rect, b: BoxBounds, pad = 0): boolean =>
-  b.min.x < r.maxX + pad && b.max.x > r.minX - pad && b.min.z < r.maxZ + pad && b.max.z > r.minZ - pad;
+/** Exterior solids this far round a cluster's band join its composite: every
+ * query routed there stays well inside it (sight lines check every exterior
+ * solid separately). */
+const CLUSTER_SOLID_MARGIN = 32;
+/** Footprint lookup grid, metres. */
+const FOOTPRINT_CELL = 64;
 const owns = (r: Rect, x: number, z: number): boolean => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ;
 const union = (a: BoxBounds, b: BoxBounds): BoxBounds => ({
   min: { x: Math.min(a.min.x, b.min.x), y: Math.min(a.min.y, b.min.y), z: Math.min(a.min.z, b.min.z) },
   max: { x: Math.max(a.max.x, b.max.x), y: Math.max(a.max.y, b.max.y), z: Math.max(a.max.z, b.max.z) },
 });
+const grownRect = (r: Rect, by: number): Rect => ({ minX: r.minX - by, maxX: r.maxX + by, minZ: r.minZ - by, maxZ: r.maxZ + by });
 
-/** Exterior ground in the collar band as columns: each 0.5 m cell outside
- * every footprint, topped at the highest of nine floor samples plus 2 cm. */
-function collarColumns(cave: CaveOwner, floor: (x: number, z: number) => number, band: number,
-  all: readonly CaveOwner[]): Solid[] {
-  // Pure in the footprints, band and floor, so a named floor's columns may come from the build cache.
-  const key = floorKey("collar", floor, [cave.id, cave.baseY, cave.footprint, band, all.map(c => c.footprint)], import.meta.url);
-  return cachedBuild(key, () => generateCollarColumns(cave, floor, band, all));
+/** One kit cave in a cave world: what routing needs up front, and its
+ * collision record on demand (decoded from the bake, or built live). */
+export interface KitCaveEntry {
+  readonly id: string;
+  readonly footprint: Rect;
+  readonly baseY: number;
+  readonly ceiling: number;
+  /** The test's own rock boxes, kept as given (ids and all); otherwise the
+   * record's boxes become `<id>.rock.NNNN`, as `buildCave` names them. */
+  readonly solids?: readonly Solid[];
+}
+/** Where kit cave records come from: live generation (Node, tools, and the
+ * dev fallback) or the baked pack (the browser, CW-1). */
+export interface KitCaveRecords {
+  record(id: string): KitCaveCollision;
+  /** True when `record` would not generate (decoded already): cheap. */
+  has(id: string): boolean;
 }
 
-function generateCollarColumns(cave: CaveOwner, floor: (x: number, z: number) => number, band: number,
-  all: readonly CaveOwner[]): Solid[] {
-  const f = cave.footprint, out: Solid[] = [];
-  for (let x = f.minX - band; x < f.maxX + band - 1e-9; x += COLLAR_CELL)
-    for (let z = f.minZ - band; z < f.maxZ + band - 1e-9; z += COLLAR_CELL) {
-      if (all.some(c => owns(c.footprint, x + COLLAR_CELL / 2, z + COLLAR_CELL / 2))) continue;
-      let top = -Infinity, low = Infinity;
-      for (let i = 0; i <= 2; i++) for (let k = 0; k <= 2; k++) {
-        const h = floor(x + i * COLLAR_CELL / 2, z + k * COLLAR_CELL / 2);
-        top = Math.max(top, h); low = Math.min(low, h);
-      }
-      out.push({ id: `${cave.id}.collar.${out.length}`, min: { x, y: Math.min(cave.baseY, low - 4), z },
-        max: { x: x + COLLAR_CELL, y: top + 0.02, z: z + COLLAR_CELL } });
-    }
-  return out;
+/** Collision streaming for one cave world (CW-1). Caves whose bands come
+ * within reach of each other form one cluster with one composite, so any
+ * actor-sized query meets at most one. A cluster's composite is built on
+ * first use, or ahead of it in time slices by the streamer (`step`), and can
+ * be dropped again (`evict`): the composite is a pure function of its data,
+ * so the simulation's answers never depend on streaming. */
+export interface KitCaveStream {
+  readonly clusters: readonly { readonly index: number; readonly caves: readonly string[]; readonly rect: Rect }[];
+  ready(cluster: number): boolean;
+  /** Records for every cave of the cluster are decoded (no generation). */
+  available(cluster: number): boolean;
+  /** Advance the construction of `wanted` clusters, in order, for up to `budgetMs`. */
+  step(wanted: readonly number[], budgetMs: number, now: () => number): void;
+  evict(cluster: number): void;
+  /** Cave-inside water at `p` (current masking): false outside every footprint. */
+  inside(p: Readonly<Vec3>): boolean;
+  /** Clusters whose rect meets the box, written to `out[0 .. count)`; returns
+   * the count. A grid query, allocation-free once `out` has grown (R2-4). */
+  clustersNear(minX: number, minZ: number, maxX: number, maxZ: number, out: number[]): number;
+  /** The clusters built now, however they were built (streamer or query). */
+  readonly resident: readonly number[];
+  /** The safety net (STR-10): build `cluster` now, unsliced, and log it. Never
+   * expected in ordinary travel, where the streamer builds ahead. */
+  finishNow(cluster: number, cause: UnslicedFinish["cause"]): void;
+  /** The last `UNSLICED_LOG` unsliced finishes, oldest first. */
+  readonly unsliced: readonly UnslicedFinish[];
+  /** Called on every unsliced finish (the browser warns). */
+  onUnsliced: ((finish: UnslicedFinish) => void) | null;
+  /** `syncBuilds` counts every unsliced finish, whatever its cause. */
+  readonly stats: { syncBuilds: number; built: number; evicted: number; maxStepMs: number; residentBoxes: number };
+}
+/** One cluster built in a single unsliced pass: `query` when a collision query
+ * met a cluster the streamer had not built, `admission` when the cave runtime
+ * built one the actor reached before a frame stepped. */
+export interface UnslicedFinish {
+  readonly cluster: number;
+  readonly caves: readonly string[];
+  readonly cause: "query" | "admission";
+  readonly ms: number;
+}
+/** Unsliced finishes kept for inspection. */
+export const UNSLICED_LOG = 32;
+export interface CaveWorld extends WorldQueries {
+  readonly kitCaves: KitCaveStream;
 }
 
-/** The exterior world with caves (the W1 world-query contract).
+/** Cluster grid cell, metres. */
+const CLUSTER_CELL = 128;
+/** Boxes made per construction slice. */
+const SOLID_SLICE = 1024;
+/** Collar columns of a record onto `out`, as `Solid`s named as W1's adapter
+ * named them; yields every `SOLID_SLICE` boxes. */
+function* collarSolids(r: KitCaveCollision, out: Solid[]): Generator<void, void> {
+  const c = r.collar;
+  let n = 0;
+  for (let i = 0; i < c.nx; i++) for (let k = 0; k < c.nz; k++) {
+    const at = i * c.nz + k, top = c.top[at]!;
+    if (top === COLLAR_SKIP) continue;
+    const x = c.minX + i * KIT_COLLAR_CELL, z = c.minZ + k * KIT_COLLAR_CELL;
+    out.push({ id: `${r.id}.collar.${n++}`, min: { x, y: c.bottom[at]! / COLLAR_QUANTUM, z },
+      max: { x: x + KIT_COLLAR_CELL, y: top / COLLAR_QUANTUM, z: z + KIT_COLLAR_CELL } });
+    if (n % SOLID_SLICE === 0) yield;
+  }
+}
+function* rockSolids(r: KitCaveCollision, out: Solid[]): Generator<void, void> {
+  const b = r.rock;
+  for (let n = 0; n < b.length / 6; n++) {
+    out.push({ id: `${r.id}.rock.${String(n).padStart(4, "0")}`, min: { x: b[n * 6]!, y: b[n * 6 + 1]!, z: b[n * 6 + 2]! },
+      max: { x: b[n * 6 + 3]!, y: b[n * 6 + 4]!, z: b[n * 6 + 5]! } });
+    if ((n + 1) % SOLID_SLICE === 0) yield;
+  }
+}
+
+/** The exterior world with kit caves (the W1 world-query contract).
  * - **Full-shape ownership.** Inside a cave footprint only cave rock exists;
  *   outside it the exterior heightfield rules. A shape touching a footprint
- *   is tested against both owners over its WHOLE box, in clearance, in every
- *   sweep and in every slide. The exterior heightfield in a collar band round
- *   each footprint becomes conservative column solids, so the box sweep sees
- *   the ground under every corner. The band covers the largest admitted shape
- *   plus one sub-sweep and its slides; larger shapes are refused at a cave.
+ *   (below the cave's ceiling: CA-2's vertical test, so a carrier passing
+ *   well above a cave is the exterior's) is tested against both owners over
+ *   its WHOLE box, in clearance, in every sweep and in every slide. The
+ *   exterior heightfield in a collar band round each footprint becomes
+ *   conservative column solids, so the box sweep sees the ground under every
+ *   corner. The band covers the largest admitted shape plus one sub-sweep
+ *   and its slides; larger shapes are refused at a cave.
  * - **Ownership per sub-sweep.** A move whose swept envelope touches a cave
  *   advances in sub-sweeps of at most `CAVE_SUB_SWEEP`. Each picks its owner
- *   from its own slide envelope: the cave composite (every exterior solid,
- *   cave rock and collar, on the finer index) or the original exterior world.
+ *   from its own slide envelope: its cluster's composite (the exterior solids
+ *   round it, cave rock and collar, on the finer index) or the original
+ *   exterior world.
+ * - **Sight lines** touching caves must clear every exterior solid and each
+ *   touched cluster's composite (its rock, and the masked floor).
  * - **Legacy guards untouched.** Everything that does not touch a cave goes
  *   to the exterior world built with the ORIGINAL floor function, so its
  *   identity-keyed terrain columns and bench cut walls still apply. Caves and
  *   their band must keep clear of the guarded regions; construction throws.
- * - **Support from below.** `supportHeight` near a cave reads rock tops and
- *   collar columns at or below the actor, never the roof above it;
- *   `groundHeight` is the masked floor (`baseY − 1` inside a footprint).
+ * - **Support from below.** `supportHeight` inside a footprint reads rock
+ *   tops at or below the actor, never the roof above it. Outside every
+ *   footprint it is the exterior's own (CA-1: the collar columns' 0.5 m
+ *   steps would stall a walker beside a cave; cave rock never leaves its
+ *   footprint). `groundHeight` is the masked floor (`baseY − 1` inside).
  * Cabin, carrier and other local worlds stay plain `createWorldQueries`. */
-export function createCaveWorldQueries(options: CaveWorldOptions): WorldQueries {
-  const { solids, floor, caves: owners } = options, guards = options.guards ?? [LEGACY_PRESERVE];
-  const maxHalf = options.maxHalfExtent ?? 4.5;
+export function createCaveWorldQueries(options: CaveWorldOptions): CaveWorld {
+  const band = 2 * (options.maxHalfExtent ?? KIT_CAVE_MAX_HALF) + CAVE_SUB_SWEEP + 0.5;
+  const footprints = options.caves.map(c => c.footprint);
+  const byId = new Map(options.caves.map(c => [c.id, c]));
+  const records = new Map<string, KitCaveCollision>();
+  return kitCaveWorld({
+    ...options,
+    caves: options.caves.map(c => ({ id: c.id, footprint: c.footprint, baseY: c.baseY, ceiling: c.ceiling ?? Infinity,
+      ...(c.def ? {} : { solids: c.rock }) })),
+    records: {
+      has: id => records.has(id),
+      record(id) {
+        let r = records.get(id);
+        if (!r) {
+          const c = byId.get(id)!;
+          r = c.def ? kitCaveRecord(c.def, options.floor, footprints, band)
+            : rockOnlyRecord(c.id, c.footprint, c.baseY, c.rock, options.floor, footprints, band);
+          records.set(id, r);
+        }
+        return r;
+      },
+    },
+  });
+}
+
+/** The cave world over kit cave entries and a record source (see
+ * `createCaveWorldQueries` for the contract). */
+export function kitCaveWorld(options: Omit<CaveWorldOptions, "caves"> & {
+  readonly caves: readonly KitCaveEntry[];
+  readonly records: KitCaveRecords;
+}): CaveWorld {
+  const { solids, floor, caves: entries, records } = options, guards = options.guards ?? [LEGACY_PRESERVE];
+  const maxHalf = options.maxHalfExtent ?? KIT_CAVE_MAX_HALF;
   // A shape touching a footprint reaches 2 x its half-extent beyond it, and
   // one sub-sweep with its slides reaches CAVE_SUB_SWEEP further.
   const band = 2 * maxHalf + CAVE_SUB_SWEEP + 0.5;
-  for (const c of owners) for (const g of guards) {
+  for (const c of entries) for (const g of guards) {
     const f = c.footprint;
     if (f.minX - band < g.maxX && f.maxX + band > g.minX && f.minZ - band < g.maxZ && f.maxZ + band > g.minZ)
       throw new Error(`cave ${c.id}: footprint and collar band reach a legacy-guarded region`);
   }
   const exterior = createWorldQueries(solids, floor);
-  if (!owners.length) return exterior;
-  const masked = (x: number, z: number): number => {
-    for (const c of owners) if (owns(c.footprint, x, z)) return c.baseY - 1;
-    return floor(x, z);
+  // Clusters: caves whose bands come within two bands of each other, so an
+  // envelope (an actor box plus one sub-sweep, under 2 x band) never
+  // touches two clusters.
+  const parent = entries.map((_, i) => i);
+  const find = (i: number): number => parent[i] === i ? i : (parent[i] = find(parent[i]!));
+  for (let i = 0; i < entries.length; i++) for (let j = i + 1; j < entries.length; j++) {
+    const a = grownRect(entries[i]!.footprint, 2 * band + 2), b = entries[j]!.footprint;
+    if (a.minX < b.maxX && a.maxX > b.minX && a.minZ < b.maxZ && a.maxZ > b.minZ) parent[find(i)] = find(j);
+  }
+  const roots = [...new Set(entries.map((_, i) => find(i)))];
+  interface Cluster {
+    readonly index: number; readonly members: readonly KitCaveEntry[]; readonly caves: readonly string[]; readonly rect: Rect;
+    world: WorldQueries | null; build: Generator<void, WorldQueries> | null; boxes: number;
+  }
+  const clusters: Cluster[] = roots.map((root, index) => {
+    const members = entries.filter((_, i) => find(i) === root);
+    const r = members.map(m => grownRect(m.footprint, band)).reduce((a, b) => ({ minX: Math.min(a.minX, b.minX), maxX: Math.max(a.maxX, b.maxX),
+      minZ: Math.min(a.minZ, b.minZ), maxZ: Math.max(a.maxZ, b.maxZ) }));
+    return { index, members, caves: members.map(m => m.id), rect: r, world: null, build: null, boxes: 0 };
+  });
+  const clusterOf = new Map<KitCaveEntry, Cluster>(clusters.flatMap(c => c.members.map(m => [m, c] as const)));
+  // Cluster lookup grid (rects, band included), and the built clusters.
+  const clusterGrid = new Map<number, number[]>(), clusterMark = new Uint32Array(clusters.length);
+  let clusterStamp = 0;
+  const resident: number[] = [];
+  const clusterKey = (ix: number, iz: number): number => (ix + 32768) * 65536 + (iz + 32768);
+  for (const c of clusters)
+    for (let ix = Math.floor(c.rect.minX / CLUSTER_CELL); ix <= Math.floor(c.rect.maxX / CLUSTER_CELL); ix++)
+      for (let iz = Math.floor(c.rect.minZ / CLUSTER_CELL); iz <= Math.floor(c.rect.maxZ / CLUSTER_CELL); iz++) {
+        const k = clusterKey(ix, iz);
+        (clusterGrid.get(k) ?? clusterGrid.set(k, []).get(k)!).push(c.index);
+      }
+  // clustersNear's query, reused (no closure per call).
+  const NO_OUT: number[] = [];
+  const near = { n: 0, out: NO_OUT, minX: 0, minZ: 0, maxX: 0, maxZ: 0 };
+  const considerNear = (i: number): void => {
+    if (clusterMark[i] === clusterStamp) return;
+    clusterMark[i] = clusterStamp;
+    const r = clusters[i]!.rect;
+    if (r.minX <= near.maxX && r.maxX >= near.minX && r.minZ <= near.maxZ && r.maxZ >= near.minZ) near.out[near.n++] = i;
   };
-  const composite = createWorldQueries([
-    ...solids, ...owners.flatMap(c => c.rock), ...owners.flatMap(c => collarColumns(c, floor, band, owners)),
-  ], masked, { cellSize: CAVE_INDEX_CELL });
-  const touches = (box: BoxBounds): boolean => owners.some(c => rectOverlaps(c.footprint, box));
-  const inBand = (x: number, z: number): boolean => owners.some(c => owns(
-    { minX: c.footprint.minX - band, maxX: c.footprint.maxX + band, minZ: c.footprint.minZ - band, maxZ: c.footprint.maxZ + band }, x, z));
+  const built = (c: Cluster): void => { resident.push(c.index); };
+  const dropped = (c: Cluster): void => { const i = resident.indexOf(c.index); if (i >= 0) { resident[i] = resident[resident.length - 1]!; resident.pop(); } };
+  // Footprint lookup grid.
+  const grid = new Map<number, KitCaveEntry[]>();
+  const cellKey = (ix: number, iz: number): number => (ix + 32768) * 65536 + (iz + 32768);
+  for (const e of entries) {
+    const f = e.footprint;
+    for (let ix = Math.floor(f.minX / FOOTPRINT_CELL); ix <= Math.floor(f.maxX / FOOTPRINT_CELL); ix++)
+      for (let iz = Math.floor(f.minZ / FOOTPRINT_CELL); iz <= Math.floor(f.maxZ / FOOTPRINT_CELL); iz++) {
+        const k = cellKey(ix, iz);
+        (grid.get(k) ?? grid.set(k, []).get(k)!).push(e);
+      }
+  }
+  const at = (x: number, z: number): KitCaveEntry | null => {
+    if (!Number.isFinite(x) || !Number.isFinite(z)) return null;
+    for (const e of grid.get(cellKey(Math.floor(x / FOOTPRINT_CELL), Math.floor(z / FOOTPRINT_CELL))) ?? []) if (owns(e.footprint, x, z)) return e;
+    return null;
+  };
+  /** Clusters whose footprints a box touches below their ceiling. */
+  const touched = (box: BoxBounds): Cluster[] => {
+    if (![box.min.x, box.max.x, box.min.z, box.max.z].every(Number.isFinite)) return [];
+    const out: Cluster[] = [];
+    const x0 = Math.floor(box.min.x / FOOTPRINT_CELL), x1 = Math.floor(box.max.x / FOOTPRINT_CELL);
+    const z0 = Math.floor(box.min.z / FOOTPRINT_CELL), z1 = Math.floor(box.max.z / FOOTPRINT_CELL);
+    if ((x1 - x0 + 1) * (z1 - z0 + 1) > grid.size) {
+      for (const e of entries) consider(e);
+    } else for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) for (const e of grid.get(cellKey(ix, iz)) ?? []) consider(e);
+    return out;
+    function consider(e: KitCaveEntry): void {
+      const f = e.footprint;
+      if (box.min.x < f.maxX && box.max.x > f.minX && box.min.z < f.maxZ && box.max.z > f.minZ && box.min.y < e.ceiling) {
+        const c = clusterOf.get(e)!;
+        if (!out.includes(c)) out.push(c);
+      }
+    }
+  };
+  const masked = (x: number, z: number): number => {
+    const e = at(x, z);
+    return e ? e.baseY - 1 : floor(x, z);
+  };
+  // Exterior solids only, for sight lines (the floor never blocks here).
+  const solidsOnly = createWorldQueries(solids, () => -1e9);
+  const stats = { syncBuilds: 0, built: 0, evicted: 0, maxStepMs: 0, residentBoxes: 0 };
+  function* construct(c: Cluster): Generator<void, WorldQueries> {
+    const near = grownRect(c.rect, CLUSTER_SOLID_MARGIN);
+    const roster: Solid[] = solids.filter(s => s.min.x <= near.maxX && s.max.x >= near.minX && s.min.z <= near.maxZ && s.max.z >= near.minZ);
+    const recs: KitCaveCollision[] = [];
+    for (const m of c.members) { recs.push(records.record(m.id)); yield; }
+    for (const [i, m] of c.members.entries()) {
+      if (m.solids) roster.push(...m.solids); else yield* rockSolids(recs[i]!, roster);
+      yield;
+    }
+    for (const r of recs) { yield* collarSolids(r, roster); yield; }
+    const index = yield* buildSpatialIndex(solidEntries(roster), CAVE_INDEX_CELL);
+    c.boxes = roster.length;
+    return createWorldQueries(roster, masked, { cellSize: CAVE_INDEX_CELL, index });
+  }
+  const finish = (c: Cluster): void => {
+    c.build ??= construct(c);
+    for (let r = c.build.next(); ; r = c.build.next()) if (r.done) { c.world = r.value; break; }
+    c.build = null; stats.built++; stats.residentBoxes += c.boxes; built(c);
+  };
+  const unsliced: UnslicedFinish[] = [];
+  const finishNow = (c: Cluster, cause: UnslicedFinish["cause"]): void => {
+    const started = performance.now();
+    finish(c);
+    const f: UnslicedFinish = { cluster: c.index, caves: c.caves, cause, ms: +(performance.now() - started).toFixed(2) };
+    stats.syncBuilds++;
+    unsliced.push(f);
+    if (unsliced.length > UNSLICED_LOG) unsliced.shift();
+    kitCaves.onUnsliced?.(f);
+  };
+  /** The cluster's composite, built now if the streamer has not (counted and logged). */
+  const ready = (c: Cluster): WorldQueries => {
+    if (!c.world) finishNow(c, "query");
+    return c.world!;
+  };
   const halfExtent = (s: Capsule): number => Math.max(s.halfWidth ?? s.radius, s.halfLength ?? s.radius);
   const envelope = (p: Vec3, d: Vec3, shape: Capsule): BoxBounds => {
     const e = union(actorBox(p, shape), actorBox({ x: p.x + d.x, y: p.y + d.y, z: p.z + d.z }, shape)), r = Math.hypot(d.x, d.y, d.z);
     return { min: { x: e.min.x - r, y: e.min.y - r, z: e.min.z - r }, max: { x: e.max.x + r, y: e.max.y + r, z: e.max.z + r } };
   };
+  const kitCaves: KitCaveStream = {
+    clusters: clusters.map(c => ({ index: c.index, caves: c.caves, rect: c.rect })),
+    ready: i => clusters[i]!.world !== null,
+    available: i => clusters[i]!.members.every(m => records.has(m.id)),
+    step(wanted, budgetMs, now) {
+      const start = now();
+      for (const i of wanted) {
+        const c = clusters[i]!;
+        if (c.world) continue;
+        c.build ??= construct(c);
+        for (;;) {
+          const before = now(), r = c.build.next();
+          stats.maxStepMs = Math.max(stats.maxStepMs, now() - before);
+          if (r.done) { c.world = r.value; c.build = null; stats.built++; stats.residentBoxes += c.boxes; built(c); break; }
+          if (now() - start >= budgetMs) return;
+        }
+        if (now() - start >= budgetMs) return;
+      }
+    },
+    evict(i) {
+      const c = clusters[i]!;
+      c.build?.return(undefined as never); c.build = null;
+      if (c.world) { c.world = null; stats.evicted++; stats.residentBoxes -= c.boxes; dropped(c); }
+    },
+    clustersNear(minX, minZ, maxX, maxZ, out) {
+      if (++clusterStamp === 0xffffffff) { clusterMark.fill(0); clusterStamp = 1; }
+      near.n = 0; near.out = out; near.minX = minX; near.minZ = minZ; near.maxX = maxX; near.maxZ = maxZ;
+      const x0 = Math.floor(minX / CLUSTER_CELL), x1 = Math.floor(maxX / CLUSTER_CELL), z0 = Math.floor(minZ / CLUSTER_CELL), z1 = Math.floor(maxZ / CLUSTER_CELL);
+      if ((x1 - x0 + 1) * (z1 - z0 + 1) > clusterGrid.size) for (let i = 0; i < clusters.length; i++) considerNear(i);
+      else for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) { const b = clusterGrid.get(clusterKey(ix, iz)); if (b) for (let k = 0; k < b.length; k++) considerNear(b[k]!); }
+      near.out = NO_OUT;
+      return near.n;
+    },
+    resident,
+    inside(p) {
+      const e = at(p.x, p.z);
+      return !!e && p.y < e.ceiling && insideKitCave(records.record(e.id), p);
+    },
+    finishNow(i, cause) { const c = clusters[i]!; if (!c.world) finishNow(c, cause); },
+    unsliced,
+    onUnsliced: null,
+    stats,
+  };
   return {
+    kitCaves,
     waterHeight: exterior.waterHeight,
     groundHeight: masked,
-    supportHeight: (x, z, fromY) => inBand(x, z) ? composite.supportHeight(x, z, fromY) : exterior.supportHeight(x, z, fromY),
-    clearance: (origin, shape) => !touches(actorBox(origin, shape)) ? exterior.clearance(origin, shape)
-      : halfExtent(shape) <= maxHalf && composite.clearance(origin, shape),
-    // The composite holds every exterior solid and samples the same exterior
-    // floor outside footprints, so a sight line touching a cave loses nothing.
-    lineOfSight: (a, b, ignore) => touches({ min: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), z: Math.min(a.z, b.z) },
-      max: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y), z: Math.max(a.z, b.z) } })
-      ? composite.lineOfSight(a, b, ignore) : exterior.lineOfSight(a, b, ignore),
+    supportHeight(x, z, fromY) {
+      const e = at(x, z);
+      return e ? ready(clusterOf.get(e)!).supportHeight(x, z, fromY) : exterior.supportHeight(x, z, fromY);
+    },
+    clearance(origin, shape) {
+      const near = touched(actorBox(origin, shape));
+      return !near.length ? exterior.clearance(origin, shape) : halfExtent(shape) <= maxHalf && near.every(c => ready(c).clearance(origin, shape));
+    },
+    lineOfSight(a, b, ignore) {
+      const near = touched({ min: { x: Math.min(a.x, b.x), y: Math.min(a.y, b.y), z: Math.min(a.z, b.z) },
+        max: { x: Math.max(a.x, b.x), y: Math.max(a.y, b.y), z: Math.max(a.z, b.z) } });
+      if (!near.length) return exterior.lineOfSight(a, b, ignore);
+      // Every exterior solid on the line, then each touched cluster's rock,
+      // collar and masked floor (which is the exterior floor off footprints).
+      return solidsOnly.lineOfSight(a, b, ignore) && near.every(c => ready(c).lineOfSight(a, b, ignore));
+    },
     moveCapsule(origin, delta, shape, opts) {
-      if (!finitePoint(origin) || !finitePoint(delta) || !touches(envelope(origin, delta, shape)))
+      if (!finitePoint(origin) || !finitePoint(delta) || !touched(envelope(origin, delta, shape)).length)
         return exterior.moveCapsule(origin, delta, shape, opts);
       if (halfExtent(shape) > maxHalf) return { position: { ...origin }, hitSolid: true, hitBoundary: false };
       const slices = Math.max(1, Math.ceil(Math.hypot(delta.x, delta.y, delta.z) / CAVE_SUB_SWEEP));
       const d = { x: delta.x / slices, y: delta.y / slices, z: delta.z / slices };
       let position = { ...origin }, hitSolid = false, hitBoundary = false;
       for (let i = 0; i < slices; i++) {
-        // Each sub-sweep picks its own owner: the cave composite while its
+        // Each sub-sweep picks its own owner: its cluster's composite while its
         // envelope (slides included) touches a footprint, the original
         // exterior world (legacy guards and all) once it does not.
-        const world = touches(envelope(position, d, shape)) ? composite : exterior;
+        const near = touched(envelope(position, d, shape));
+        const world = near.length ? ready(near[0]!) : exterior;
         const r = world.moveCapsule(position, d, shape, opts);
         position = r.position; hitSolid ||= r.hitSolid; hitBoundary ||= r.hitBoundary;
       }
@@ -819,13 +1123,46 @@ export function createCaveWorldQueries(options: CaveWorldOptions): WorldQueries 
   };
 }
 
-let composedWorld: WorldQueries | null = null;
-/** The game's exterior world: every solid on the shared floor, with the W1
- * caves owning their footprints. Built once, on first use (cave generation
- * takes a fraction of a second). The runtime, recovery, survival, the
+/** Live records for the game's caves: generated from source on first use
+ * (Node, tools, and the browser before or without the bake). */
+const liveRecords: KitCaveRecords = (() => {
+  const done = new Map<string, KitCaveCollision>();
+  return {
+    has: id => done.has(id),
+    record(id) {
+      let r = done.get(id);
+      if (!r) done.set(id, r = liveKitCave(CAVE_SOURCES.find(s => s.id === id)!, worldFloor, surfaceHeight));
+      return r;
+    },
+  };
+})();
+let recordSource: KitCaveRecords = liveRecords;
+/** Use baked records (the browser's decoded `public/caves/collision.bin`):
+ * any cave they lack is still generated live. Set before the world builds a
+ * cluster; records only change how fast a cluster is built, never what. */
+export function setKitCaveRecords(baked: ReadonlyMap<string, KitCaveCollision> | null): void {
+  recordSource = !baked ? liveRecords : {
+    has: id => baked.has(id) || liveRecords.has(id),
+    record: id => baked.get(id) ?? liveRecords.record(id),
+  };
+}
+
+const gameCaves = (): KitCaveEntry[] => CAVE_SOURCES.map(s => ({ id: s.id, footprint: s.footprint, baseY: s.baseY, ceiling: s.topY }));
+const gameRecords: KitCaveRecords = { has: id => recordSource.has(id), record: id => recordSource.record(id) };
+/** The game's cave world over a different exterior roster (tests' extra
+ * solids, as negative controls): the same caves and the same records. */
+export function gameWorldWith(solids: readonly Solid[]): CaveWorld {
+  return kitCaveWorld({ solids, floor: surfaceHeight, caves: gameCaves(), records: gameRecords });
+}
+
+let composedWorld: CaveWorld | null = null;
+/** The game's exterior world: every solid on the shared floor, with the kit
+ * caves owning their footprints. Creating it costs nothing: each cluster's
+ * collision is built on first use, or ahead of time by the streamer
+ * (`world/caves/kitStream.ts`). The runtime, recovery, survival, the
  * validators and the playthrough harness all query this one world. */
-export function gameWorld(): WorldQueries {
-  return composedWorld ??= createCaveWorldQueries({ solids: SOLIDS, floor: surfaceHeight, caves: caves(worldFloor).map(caveOwner) });
+export function gameWorld(): CaveWorld {
+  return composedWorld ??= gameWorldWith(SOLIDS);
 }
 
 /** Hull keel floor sampled across its conservative circular footprint. */

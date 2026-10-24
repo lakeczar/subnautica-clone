@@ -3,9 +3,13 @@ import type { Solid } from "../../sim/world.js";
 import type { Aabb, LodLevel, Rect, Vec3 } from "../../world/types.js";
 import type { CraftProfileId } from "./passages.js";
 import type { FloorFunction } from "./terrain.js";
-import { buildCave, sharesEdge } from "./caveGeometry.js";
+import type { MeshRecipe } from "../../render/kit/types.js";
+import { assertDisjointFootprints, buildCave, caveShell, sharesEdge } from "./caveGeometry.js";
 import { ISLES_CAVES } from "./caves/isles.js";
 import { REEF_CAVES } from "./caves/reef.js";
+import { CANOPY_BASIN_GROUPS, groupDef, type CaveGroup } from "./caves/index.js";
+import { styledShell } from "./caves/style.js";
+import { DEEP_CAVE_SOURCES } from "./caves/deepCaves.js";
 import { HUB_CAVE_SOURCES } from "./hubCaves.js";
 
 /** W1 cave replacement volumes (Babylon-free).
@@ -131,12 +135,15 @@ export interface CaveStaging {
  * W1-pre Fanvault colours. */
 export interface CaveStyle {
   /** Pale banded limestone with warm rims (Reef), or black-green wave-cut
-   * basalt with polished ceilings and pale wet floors (Isles). */
-  readonly rock: "limestone" | "basalt";
+   * basalt with polished ceilings and pale wet floors (Isles). The deep
+   * regions' palettes (CW-1) are their defaults: black lava glass with ember
+   * rims (Rift), lavender brine stone over pale mirror floors (Divide) and
+   * grey cut masonry with lamp-gold rims (Meridian). */
+  readonly rock: "limestone" | "basalt" | "lava_glass" | "brine_stone" | "cut_masonry";
   /** The resident drawn on the shell: unlit glimmer mats on ceilings whose
    * streaks run toward the nearest mouth, or pale clapper shells in bands
-   * along the walls and lips. */
-  readonly resident: "vault_glimmer" | "tide_clapper";
+   * along the walls and lips. None for the deep regions' defaults. */
+  readonly resident?: "vault_glimmer" | "tide_clapper";
 }
 
 export interface CaveSource {
@@ -302,51 +309,76 @@ const FANVAULT_SOURCE: CaveSource = {
     "the north mouth glows amber and the south mouth teal from inside. Optional; no first-access stock.",
 };
 
-/** Owned footprints may share an edge (they are half-open) but must not
- * overlap: there is no union policy for two caves owning one column, so the
- * first-match floor lookup and concatenated rock would silently disagree.
- * Throws until such a policy exists. */
-export function assertDisjointFootprints(sources: readonly CaveSource[]): void {
-  const all = sources.map(s => ({ id: s.id, r: s.footprint }));
-  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
-    const a = all[i]!.r, b = all[j]!.r;
-    if (a.minX < b.maxX && b.minX < a.maxX && a.minZ < b.maxZ && b.minZ < a.maxZ)
-      throw new Error(`caves ${all[i]!.id} and ${all[j]!.id}: overlapping footprints have no union policy`);
-  }
-}
+export { assertDisjointFootprints };
 
-/** The caves in the game: `gameWorld()`, the terrain bake's pits and shells,
- * scatter, chunk bounds and the cave view all follow this list (C4's hook).
- * W2's hub caves are in the world with the hub terrain. */
-export const CAVE_SOURCES: readonly CaveSource[] = [FANVAULT_SOURCE, ...HUB_CAVE_SOURCES];
-/** Every authored kit cave, in the game or not yet: what `caveDef` resolves
- * and what linked caves and the disjointness check see, so a cave builds the
- * same before and after it joins `CAVE_SOURCES`. CA-1's Reef and Isles caves
- * are authored and tested here; adding them to the game is C4's step
- * (docs/build/streams/CA-1.md). Add a linked network whole: a cave's shell
- * stops at a shared seam where its neighbour's begins. */
-export const AUTHORED_CAVE_SOURCES: readonly CaveSource[] = [...CAVE_SOURCES, ...REEF_CAVES, ...ISLES_CAVES];
-assertDisjointFootprints(AUTHORED_CAVE_SOURCES);
+/** CA-2's Canopy and Basin groups by source ID: they build on their
+ * edge-shelf floor (`groupDef`) and draw in their region's style. */
+const GROUPS: ReadonlyMap<string, CaveGroup> = new Map(CANOPY_BASIN_GROUPS.map(g => [g.source.id, g]));
+/** CA-3 caves built with edge rock (`buildCave` `edgeRock`). Two keep their
+ * accepted build: in the kiln tube the ceramic lining's host would sit in the
+ * new edge rock, and in culvert north a lamp-off start would lose its way to
+ * brighter water; both need their author's re-placement first. */
+const EDGE_ROCK: ReadonlySet<string> = new Set(DEEP_CAVE_SOURCES.map(s => s.id)
+  .filter(id => id !== "rift_kiln_tube" && id !== "meridian_culvert_north"));
+
+/** The caves in the game: `gameWorld()`, the terrain and cave bakes, pits,
+ * shells, scatter, chunk bounds and the cave view all follow this list.
+ * - the Fanvault (W1) and W2's hub caves;
+ * - CA-1's Reef and Isles caves (linked networks whole: a cave's shell stops
+ *   at a shared seam where its neighbour's begins);
+ * - CA-2's Canopy and Basin groups;
+ * - CA-3's Rift, Divide and Meridian caves: plain kit sources in their
+ *   region's shell palette (`caveGeometry.ts`), whose hazard fields S4's
+ *   sampler reads (`DEEP_CAVE_HAZARDS`).
+ *
+ * The bake, streaming, admission and current masking follow from this list. */
+export const CAVE_SOURCES: readonly CaveSource[] = [
+  FANVAULT_SOURCE, ...HUB_CAVE_SOURCES, ...REEF_CAVES, ...ISLES_CAVES, ...CANOPY_BASIN_GROUPS.map(g => g.source), ...DEEP_CAVE_SOURCES,
+];
+/** Every authored kit cave. Every one is in the game now; the name stays for
+ * the authoring tests and labs that resolve any authored cave. */
+export const AUTHORED_CAVE_SOURCES: readonly CaveSource[] = CAVE_SOURCES;
+assertDisjointFootprints(CAVE_SOURCES);
 
 const built = new WeakMap<FloorFunction, Map<string, CaveDef>>();
 /** The generated definition, built once per floor function on first use.
  * `floor` is the shared exterior floor (`worldFloor`); taking it as a
  * parameter keeps this module free of a cycle once `sim/world.ts` composes
- * caves, as `composeWorldFloor` does. */
+ * caves, as `composeWorldFloor` does. CA-2's groups are `groupDef`'s own
+ * definitions (one memo), so the tests and the game share one build. */
 export function caveDef(id: string, floor: FloorFunction): CaveDef {
+  const group = GROUPS.get(id);
+  if (group) return groupDef(group, floor);
   let byId = built.get(floor);
   if (!byId) built.set(floor, byId = new Map());
   let def = byId.get(id);
   if (!def) {
-    const source = AUTHORED_CAVE_SOURCES.find(s => s.id === id);
+    const source = CAVE_SOURCES.find(s => s.id === id);
     if (!source) throw new Error(`Unknown cave: ${id}`);
-    def = buildCave(source, floor, AUTHORED_CAVE_SOURCES.filter(s => s !== source && sharesEdge(s.footprint, source.footprint)));
+    // CA-3's caves stand against steep terrace and tube walls, where edge rock
+    // sank up to 17 m under the snapped shell: most lean on the ground outside
+    // (`edgeRock`, `EDGE_ROCK`). CA-2's groups build on their edge-shelf floor instead;
+    // CA-1's and the hub's edges sink at most 1.4 m and keep their accepted build.
+    def = buildCave(source, floor, CAVE_SOURCES.filter(s => s !== source && sharesEdge(s.footprint, source.footprint)),
+      { edgeRock: EDGE_ROCK.has(id) });
     byId.set(id, def);
   }
   return def;
 }
 export function caves(floor: FloorFunction): readonly CaveDef[] {
   return CAVE_SOURCES.map(s => caveDef(s.id, floor));
+}
+/** The caves whose footprint touches a closed rectangle (a chunk). */
+export function cavesTouching(rect: Rect, floor: FloorFunction): readonly CaveDef[] {
+  return CAVE_SOURCES.filter(({ footprint: f }) => f.minX <= rect.maxX && f.maxX >= rect.minX && f.minZ <= rect.maxZ && f.maxZ >= rect.minZ)
+    .map(s => caveDef(s.id, floor));
+}
+/** A cave's shell at one LOD in its region's palette: CA-2's groups through
+ * their own style (`styledShell`), every other cave through the kit's
+ * (`source.style`, else its region's default palette). */
+export function caveShellOf(def: CaveDef, lod: LodLevel): MeshRecipe {
+  const group = GROUPS.get(def.id);
+  return group ? styledShell(def, lod, group.style) : caveShell(def, lod);
 }
 
 /** The cave whose replacement footprint owns (x, z), if any. Footprints are

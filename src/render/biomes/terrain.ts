@@ -1,6 +1,7 @@
 import type { ChunkArtFactory, ChunkBuildContext, ChunkRecipe, MeshRecipe } from "../kit/types.js";
 import type { ChunkDescriptor } from "../../world/types.js";
 import { decodeTerrain } from "./terrainCodec.js";
+import { BAKE_SOURCE } from "../bakeSource.js";
 import { httpTerrainStore, type TerrainStore } from "./terrainAssets.js";
 import type { LodLevel, Rect } from "../../world/types.js";
 import { BORDER_STEP, COARSE, FINE, tessellate, type TessellationOptions } from "./tessellate.js";
@@ -10,7 +11,7 @@ import { BRINE_Y, brineSheetY, emptyMasks, terrainMasks } from "../../content/re
 import { TERRAIN_EXTENT } from "../terrainSurface.js";
 import { geologyColor } from "./geology.js";
 import { hex } from "./recipe.js";
-import { CAVE_SOURCES, caves } from "../../content/regions/caves.js";
+import { CAVE_SOURCES, caveShellOf, cavesTouching } from "../../content/regions/caves.js";
 import { caveShellByColumn } from "../../content/regions/caveGeometry.js";
 
 /** `s2.terrain`: the shared floor as one mesh per chunk, sampled only from
@@ -65,7 +66,7 @@ let store: TerrainStore | null | undefined;
 export function setTerrainStore(next: TerrainStore | null): void { store = next; }
 export function terrainStore(): TerrainStore | null {
   if (store === undefined)
-    store = typeof document !== "undefined" && typeof fetch === "function" ? httpTerrainStore(new URL("terrain/", document.baseURI).href) : null;
+    store = typeof document !== "undefined" && typeof fetch === "function" ? httpTerrainStore(new URL("terrain/", document.baseURI).href, { expectedSource: BAKE_SOURCE }) : null;
   return store;
 }
 
@@ -127,9 +128,9 @@ export function* liveTerrain(ctx: ChunkBuildContext, chunk: ChunkDescriptor, lod
     if (ctx.due()) yield;
     // W1 cave shells for this column, clipped to it (layer-0 recipe parts).
     // Their collar edge lies on the floor, so the seam is the floor itself.
-    if (caveFootprintsTouching(rect).length)
-      for (const def of caves(ctx.floor)) {
-        const part = caveShellByColumn(def, lod, [{ id: chunk.id, rect }]).get(chunk.id);
+    // Only the caves this column touches are generated (CW-1: 35 caves).
+    for (const def of cavesTouching(rect, ctx.floor)) {
+        const part = caveShellByColumn(def, lod, [{ id: chunk.id, rect }], caveShellOf(def, lod)).get(chunk.id);
         // Named so the codec's suffix round-trips: `<chunk>.cave-<id>`.
         if (part) meshes.push({ ...part, name: `${chunk.id}.cave-${def.id}` });
         if (ctx.due()) yield;

@@ -8,6 +8,7 @@ import { S2_FACTORIES, S2_TEMPLATE_LIBRARY } from "../src/render/biomes/index.js
 import { structureMesh } from "../src/render/biomes/structures.js";
 import { TERRAIN_EXTENT } from "../src/render/terrainSurface.js";
 import { COARSE, FINE, planeDistance } from "../src/render/biomes/tessellate.js";
+import { caveFootprintsTouching } from "../src/render/biomes/terrain.js";
 import { ROUTES } from "../src/content/regions/passages.js";
 import { samplePath } from "../src/content/regions/access.js";
 import type { ChunkBuildContext, ChunkRecipe, MeshRecipe } from "../src/render/kit/types.js";
@@ -69,7 +70,9 @@ test("recipes are deterministic, well formed, on the floor and outside today's t
           const cz = (m.positions[m.indices[t]! * 3 + 2]! + m.positions[m.indices[t + 1]! * 3 + 2]! + m.positions[m.indices[t + 2]! * 3 + 2]!) / 3;
           assert.ok(!inLegacy(cx, cz), `${m.name} draws inside the legacy terrain mesh at ${cx}, ${cz}`);
         }
-        assert.ok(verts <= (lod === "fine" ? 30000 : 2000), `${m.name}: ${verts} vertices`);
+        // A cave pit's edges cut the coarse lattice (CW-1: the worst of 55 caves' chunks is 2,529).
+        const pitted = caveFootprintsTouching({ minX: chunk.bounds.min.x, maxX: chunk.bounds.max.x, minZ: chunk.bounds.min.z, maxZ: chunk.bounds.max.z }).length > 0;
+        assert.ok(verts <= (lod === "fine" ? 30000 : pitted ? 3000 : 2000), `${m.name}: ${verts} vertices`);
       }
     });
     for (const inst of a.instances) {

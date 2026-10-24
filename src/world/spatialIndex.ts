@@ -10,16 +10,28 @@ export function createSpatialIndex<T = unknown>(
   cellSize = 32,
   oversizeCells = 256,
 ): SpatialQuery<T> {
+  const build = buildSpatialIndex(entries, cellSize, oversizeCells, Infinity);
+  for (let r = build.next(); ; r = build.next()) if (r.done) return r.value;
+}
+
+/** `createSpatialIndex` in slices: yields after every `slice` entries, so a
+ * large roster (a cave cluster's 10k+ boxes) indexes inside a frame budget.
+ * The finished index is identical. */
+export function* buildSpatialIndex<T = unknown>(
+  entries: readonly SpatialEntry<T>[],
+  cellSize = 32,
+  oversizeCells = 256,
+  slice = 2048,
+): Generator<void, SpatialQuery<T>> {
   const list = [...entries];
   const byId = new Map<string, SpatialEntry<T>>();
-  const order = new Map<SpatialEntry<T>, number>();
   for (const [i, entry] of list.entries()) {
     if (byId.has(entry.id)) throw new Error(`Duplicate spatial entry id: ${entry.id}`);
     const { min, max } = entry.bounds;
     if (![min.x, min.y, min.z, max.x, max.y, max.z].every(Number.isFinite) ||
       min.x > max.x || min.y > max.y || min.z > max.z) throw new Error(`Invalid bounds for spatial entry: ${entry.id}`);
     byId.set(entry.id, entry);
-    order.set(entry, i);
+    if ((i + 1) % slice === 0) yield;
   }
   const cells = new Map<number, number[]>(), oversize: number[] = [];
   // Cell keys pack signed indices; +/-2^15 cells of 32 m covers +/-1000 km.
@@ -33,6 +45,7 @@ export function createSpatialIndex<T = unknown>(
       const k = key(ix, iz), bucket = cells.get(k);
       if (bucket) bucket.push(i); else cells.set(k, [i]);
     }
+    if ((i + 1) % slice === 0) yield;
   }
   const seen = new Uint32Array(list.length);
   let stamp = 0;
@@ -69,7 +82,47 @@ export function createSpatialIndex<T = unknown>(
       e => ok(e) && boxDistance(e.bounds, p) <= radius);
   };
 
+  // dataInBox's query and hit buffer (indices), reused; they never outlive a call.
+  let hits = new Int32Array(64), hitCount = 0;
+  let qKind: SpatialKind = "solid", qMinX = 0, qMaxX = 0, qMinY = 0, qMaxY = 0, qMinZ = 0, qMaxZ = 0;
+  const test = (i: number): void => {
+    if (seen[i] === stamp) return;
+    seen[i] = stamp;
+    const e = list[i]!, b = e.bounds;
+    if (e.kind === qKind && b.min.x <= qMaxX && b.max.x >= qMinX && b.min.y <= qMaxY && b.max.y >= qMinY && b.min.z <= qMaxZ && b.max.z >= qMinZ) {
+      if (hitCount === hits.length) { const grown = new Int32Array(hits.length * 2); grown.set(hits); hits = grown; }
+      hits[hitCount++] = i;
+    }
+  };
   return {
+    dataInBox(box, kind, out) {
+      if (++stamp === 0xffffffff) { seen.fill(0); stamp = 1; }
+      hitCount = 0;
+      qKind = kind; qMinX = box.min.x; qMaxX = box.max.x; qMinY = box.min.y; qMaxY = box.max.y; qMinZ = box.min.z; qMaxZ = box.max.z;
+      const minX = qMinX, maxX = qMaxX, minZ = qMinZ, maxZ = qMaxZ;
+      for (let k = 0; k < oversize.length; k++) test(oversize[k]!);
+      const x0 = cell(minX), x1 = cell(maxX), z0 = cell(minZ), z1 = cell(maxZ);
+      if ((x1 - x0 + 1) * (z1 - z0 + 1) > cells.size) {
+        for (const bucket of cells.values()) for (let k = 0; k < bucket.length; k++) test(bucket[k]!);
+      } else {
+        for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+          const bucket = cells.get(key(ix, iz));
+          if (bucket) for (let k = 0; k < bucket.length; k++) test(bucket[k]!);
+        }
+      }
+      // Ascending index order, as inBox: insertion sort for a few hits (no
+      // allocation), the native numeric sort beyond (hits gathered from many
+      // cells arrive out of order, and insertion sort is quadratic).
+      if (hitCount > 24) hits.subarray(0, hitCount).sort();
+      else for (let k = 1; k < hitCount; k++) {
+        const v = hits[k]!;
+        let j = k - 1;
+        for (; j >= 0 && hits[j]! > v; j--) hits[j + 1] = hits[j]!;
+        hits[j + 1] = v;
+      }
+      for (let k = 0; k < hitCount; k++) out[k] = list[hits[k]!]!.data as T;
+      return hitCount;
+    },
     get size() { return list.length; },
     get(id) { return byId.get(id); },
     inBox(box: Aabb, kinds) {

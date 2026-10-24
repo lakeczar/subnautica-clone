@@ -51,7 +51,7 @@ export function* legacyTerrainRecipe(surface: TerrainSurface, name: string,
     const fracture = unit(fractureDepth(px, pz) / 30);
     const color = lerp(lerp(c, sediment, basin), rgb("#203f52"), fracture * .8);
     colors[v * 4] = color[0]; colors[v * 4 + 1] = color[1]; colors[v * 4 + 2] = color[2]; colors[v * 4 + 3] = 0;
-    if ((v & 255) === 255 && due()) yield;
+    if ((v & 7) === 7 && due()) yield;
   }
   return {
     name, positions: new Float32Array(positions), normals, colors,

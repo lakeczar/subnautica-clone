@@ -1,0 +1,76 @@
+heavy-check: ticket 261024-012950-4b9f; the job keeps running if this call ends: wait with `heavy-check wait 261024-012950-4b9f`, stop with `heavy-check cancel 261024-012950-4b9f`
+heavy-check: 261024-012950-4b9f admitted after 29m58s as gpu: 2 cpu, 3072 MiB, GPU; runs to its end; stops if silent for 15m00s (or touch $SILTWAKE_JOB_HEARTBEAT), at the 4h00m runaway ceiling
+[5.4s] renderer ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)
+[24.7s] cold start {"titleMs":5190,"playableMs":24268,"collisionPackMs":4366.79999999702,"records":true}
+[25.7s] loaded {"cam":[69.273,-9.544,-58.416],"depth":11.4,"vitals":"O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 95% power Hull 100% · 11 / 800 m · hold 0/96 CU"}
+[25.7s] renderer main thread 3668730
+[38.7s] notice "Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). G spends 25 reserve-cell charge on a decoy pulse." at 69,-53,-62
+[136.5s] skip cruise#2 254.4 m short at 419.2,-56.0,-558.6
+[240.2s] notice "Basin plume lane · Scavengers back into their burrows and the lane's floor lifts in a slow grey wall." at 620,-361,-825
+[378.4s] at meridian_footing_void active light meridian_footing_void depth 512.7
+[378.5s] screenshot /work/tmp/cw1/r5-deep/s2-01-meridian_footing_void.jpg
+[413.0s] at meridian_window_gallery active light meridian_window_gallery depth 515.3
+[480.9s] at meridian_spire_footing active light meridian_spire_footing depth 590.2
+[522.4s] recover meridian_terrace_crack 20.7 m short
+[528.6s] recover meridian_terrace_crack 20.7 m short
+[534.8s] recover meridian_terrace_crack 20.7 m short
+[546.0s] skip meridian_terrace_crack 20.7 m short at 1138.6,-637.8,-1486.0
+[546.0s] near meridian_terrace_crack active light meridian_terrace_crack depth 637.8
+[551.8s] recover cruise#29 24.5 m short
+[558.0s] recover cruise#29 24.5 m short
+[564.2s] recover cruise#29 24.5 m short
+[575.4s] skip cruise#29 24.5 m short at 1140.8,-637.8,-1486.3
+[580.5s] recover cruise#30 56.1 m short
+[586.7s] recover cruise#30 56.1 m short
+[592.9s] recover cruise#30 56.1 m short
+[604.1s] skip cruise#30 56.1 m short at 1140.8,-637.8,-1486.3
+[609.2s] recover cruise#31 326.4 m short
+[615.4s] recover cruise#31 326.4 m short
+[621.6s] recover cruise#31 326.4 m short
+[632.8s] skip cruise#31 326.4 m short at 1140.1,-637.8,-1485.8
+[637.8s] recover cruise#32 324.7 m short
+[644.1s] recover cruise#32 324.7 m short
+[650.3s] recover cruise#32 324.7 m short
+[661.5s] skip cruise#32 324.7 m short at 1140.1,-637.8,-1485.8
+[666.5s] recover meridian_culvert_north 339.6 m short
+[672.8s] recover meridian_culvert_north 339.6 m short
+[679.0s] recover meridian_culvert_north 339.6 m short
+[690.2s] skip meridian_culvert_north 339.6 m short at 1140.1,-637.8,-1485.8
+[690.2s] near meridian_culvert_north active light meridian_terrace_crack depth 637.8
+[690.2s] screenshot /work/tmp/cw1/r5-deep/s2-02-meridian_culvert_north.jpg
+[695.3s] recover cruise#34 324.7 m short
+[701.5s] recover cruise#34 324.7 m short
+[707.8s] recover cruise#34 324.7 m short
+[719.0s] skip cruise#34 324.7 m short at 1140.1,-637.8,-1485.8
+[724.0s] recover cruise#35 347.8 m short
+[730.2s] recover cruise#35 347.8 m short
+[736.5s] recover cruise#35 347.8 m short
+[747.7s] skip cruise#35 347.8 m short at 1140.1,-637.8,-1485.8
+[752.8s] recover cruise#36 553.5 m short
+[759.0s] recover cruise#36 553.5 m short
+[765.2s] recover cruise#36 553.5 m short
+[776.4s] skip cruise#36 553.5 m short at 1140.1,-637.8,-1485.8
+[781.4s] recover cruise#37 548.2 m short
+[787.6s] recover cruise#37 548.2 m short
+[793.9s] recover cruise#37 548.2 m short
+[805.1s] skip cruise#37 548.2 m short at 1140.1,-637.8,-1485.8
+[810.1s] recover meridian_escarp_culvert 552.6 m short
+[816.3s] recover meridian_escarp_culvert 552.6 m short
+[822.5s] recover meridian_escarp_culvert 552.6 m short
+[826.6s] notice "Oxygen exhausted. You recovered at Splitspine workshop. Knowledge and essential equipment remain. Ordinary cargo has a visited-site marker; disabled craft retain their hold and modules." at 10,3,-34
+[833.7s] skip meridian_escarp_culvert 1670.4 m short at 33.2,-3.5,-50.8
+[833.7s] near meridian_escarp_culvert active light - depth 1.8
+[840.1s] recover cruise#39 1650.6 m short
+[853.3s] notice "Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). G spends 25 reserve-cell charge on a decoy pulse." at 81,-30,-84
+[933.8s] skip cruise#39 1189.7 m short at 378.5,-201.1,-303.5
+[1018.7s] notice "Oxygen exhausted. You recovered at Splitspine workshop. Knowledge and essential equipment remain. Ordinary cargo has a visited-site marker; disabled craft retain their hold and modules." at 10,3,-34
+[1023.7s] recover cruise#40 1649.9 m short
+[1033.8s] skip cruise#40 1608.2 m short at 59.9,-19.4,-72.2
+[1133.8s] skip cruise#41 1133.2 m short at 450.1,-203.0,-322.7
+[1216.6s] recover cruise#42 1673.5 m short
+[1225.7s] recover cruise#42 1663.1 m short
+[1233.9s] skip cruise#42 1631.3 m short at 62.7,-19.5,-68.8
+[1333.9s] skip meridian_escarp_pocket 1148.5 m short at 452.7,-203.7,-319.2
+[1333.9s] near meridian_escarp_pocket active light - depth 202
+Killed
+heavy-check: processes left behind by the command were stopped

@@ -1,10 +1,15 @@
 import { armTarget, fittedCabin } from "../sim/fleet.js";
 import { craftActions } from "../sim/signatures.js";
 import { SiltwakeAudio } from "../audio/director.js";
+import { relocateForCave } from "../sim/step.js";
+import { gameWorld, setKitCaveRecords } from "../sim/world.js";
+import { actorBox } from "../sim/ribCollision.js";
+import { HULL_COLLIDERS } from "../content/registry.js";
+import { gameCaveStore } from "../render/caves/caveStore.js";
+import { createCaveRuntime, type CaveHold } from "../world/caves/admission.js";
 import { StepFault, StepGuard } from "../sim/stepGuard.js";
 import { PHASE, StepCosts, stepMeter } from "../sim/stepCosts.js";
 import type { StepCostSnapshot } from "../sim/stepCosts.js";
-import { gameWorld } from "../sim/world.js";
 import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
@@ -44,9 +49,15 @@ const DEFAULT_SETTINGS: Settings = {
 };
 const SETTINGS_KEY = "siltwake.settings.v1";
 const BLOCKED_ASCENT_SECONDS = 0.45;
+/** The swimming diver's box (step.ts), for cave admission. */
+const DIVER_SHAPE = { radius: 0.34, height: 0.95 };
 const ASCENT_EPSILON = 1e-5;
 /** Lets a pause or menu draw before idle region preparation may block a frame. */
 const IDLE_PREPARE_MS = 250;
+/** The menu's pause reason while an entered expedition waits for its caves (CW-1 R1). */
+const ENTRY_LOADING = "Loading the caves near your expedition…";
+/** Longest the entry waits for the light of a cave the view stands in, ms. */
+const ENTRY_LIGHT_WAIT_MS = 8000;
 /** Vite's development build (false in production and in Node tests). */
 const DEV = (import.meta as ImportMeta & { env?: { DEV?: boolean } }).env?.DEV === true;
 /** A browser's full-storage error: the standard name and code 22, and Firefox's legacy name and code 1014. */
@@ -104,6 +115,26 @@ export class SiltwakeApp {
    * STRUCTURE_SOLIDS and A1's VISTA_SOLIDS) in the indexed broad phase, and
    * the W1 caves owning their footprints. */
   private readonly world = gameWorld();
+  /** CW-1 cave admission: kit-cave collision built before the actor reaches
+   * it (held only if its records have not arrived), cave biomes through LC's
+   * contract, and the guaranteed refuge. Never expected in ordinary play. */
+  private readonly caveStore = gameCaveStore();
+  private recordsSet = false;
+  private caveHolding = false;
+  /** CW-1 R1: an entered expedition waits here, behind the menu's loading
+   * presentation, until its caves are admitted (or its rescue or refuge is
+   * applied); only then is it shown or resumed. */
+  private entryPending: { readonly generation: number; readonly since: number } | null = null;
+  /** The last frame's timestamp: admission's timers run on the frame clock. */
+  private frameAt = 0;
+  private readonly caves = createCaveRuntime({
+    world: this.world,
+    canGenerate: () => !this.caveStore || (this.caveStore.settled && !this.caveStore.collision),
+    clear: (feet) => {
+      const s = this.state, v = s?.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId);
+      return this.world.clearance(feet, v ? HULL_COLLIDERS[v.hull] : DIVER_SHAPE);
+    },
+  });
   private readonly repository = new SaveRepository(
     storagePort(),
     browserWriterLock(navigator.locks),
@@ -198,6 +229,12 @@ export class SiltwakeApp {
       confirm: () => this.session.confirm(),
       cancelConfirm: () => {
         this.entryCanResume = false;
+        // While the entered expedition waits for its caves there is no I/O to
+        // cancel: cancelling withdraws the automatic resume (it opens paused).
+        if (this.entryPending && !this.session.busy && !this.session.confirmation) {
+          this.view.notify("The expedition will open paused once its caves are ready.", false, { channel: "system" });
+          return;
+        }
         this.session.cancel();
       },
       lockMouse: () => { if (this.resume()) this.requestCapture(); },
@@ -370,21 +407,71 @@ export class SiltwakeApp {
     );
   }
 
+  /** Cave admission for the controlled actor, before anything steps (CW-1). */
+  private caveAdmission(now: number, entry = false): CaveHold | null {
+    const s = this.state;
+    if (!s || s.opening.phase < 4 || s.player.mode === "interior") return null;
+    const v = s.fleet.vehicles.find(x => x.id === s.player.controlledVehicleId);
+    const feet = v ? v.pose.position : s.player.pose.position;
+    const hold = this.caves.update(actorBox(feet, v ? HULL_COLLIDERS[v.hull] : DIVER_SHAPE), feet,
+      { x: feet.x, y: feet.y + 0.8, z: feet.z }, now);
+    if (hold.relocate) {
+      this.session.state = relocateForCave(s, hold.relocate);
+      this.view.notify(hold.message, false, { channel: "system" });
+      this.dirty = true;
+    } else if (hold.holding && !this.caveHolding && !entry) this.view.notify(hold.message, false, { channel: "system" });
+    this.caveHolding = hold.holding && !hold.relocate;
+    this.view.canvas.dataset.caveHold = hold.state;
+    return hold;
+  }
+
   private frame(now: number): void {
     if (this.disposed) return;
-    this.clock.advance(now, this.active, () => {
+    this.frameAt = now;
+    // Frame timing for measurement harnesses only (CW-1 traversal): a page
+    // that defines `__siltwakePerf` gets one entry per frame.
+    const perf = (globalThis as { __siltwakePerf?: unknown[] }).__siltwakePerf;
+    const started = perf ? performance.now() : 0;
+    let simMs = 0, steps = 0, saveMs = 0;
+    this.installCaveRecords();
+    if (this.entryPending) this.admitEntry(now);
+    // While a cave holds, the simulation clock is paused (no oxygen, exposure,
+    // power or AI ticks); rendering carries on.
+    const hold = this.active ? this.caveAdmission(now) : null;
+    // Likewise while the view settles after a jump (respawn, refuge, rescue).
+    this.clock.advance(now, this.active && !hold?.holding && !this.renderer?.settling, () => {
       if (!this.state || !this.active) return;
+      const stepStart = perf ? performance.now() : 0;
       stepMeter.active = this.costs;
       this.costs.open();
-      try { this.step(now); } finally { this.costs.close(this.state?.tick ?? 0); }
+      try { this.step(now); } finally {
+        this.costs.close(this.state?.tick ?? 0);
+        if (perf) { simMs += performance.now() - stepStart; steps++; saveMs += this.lastSaveMs; }
+      }
     });
+    const presentStart = perf ? performance.now() : 0;
+    this.present(now);
+    if (perf) perf.push({ at: now, total: performance.now() - started, sim: simMs, steps, save: saveMs, present: performance.now() - presentStart,
+      hud: this.lastHudMs,
+      parts: (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent ?? null, hold: hold?.state ?? null });
+    this.frameId = requestAnimationFrame((time) => this.frame(time));
+  }
+
+  /** Measurement only: the last step's autosave and the last HUD update, ms. */
+  private lastSaveMs = 0;
+  private lastHudMs = 0;
+
+  /** Everything after the steps: aim, HUD, the renderer, idle preparation, sound. */
+  private present(now: number): void {
     const target = this.active && this.state ? aimedInteraction(this.state, this.world) : null;
     const preview = this.active && this.state && !target ? reachPreview(this.state, this.world) : null;
     const aim = { target, preview };
     if (this.state && now - this.hudTime > 90) {
+      const hudStart = performance.now();
       this.view.update(this.state, this.input?.cruise ?? false, this.forwardThrust, aim);
       this.hudTime = now;
-    }
+      this.lastHudMs = performance.now() - hudStart;
+    } else this.lastHudMs = 0;
     if (this.state) this.view.target(target, preview);
     if (
       this.renderer &&
@@ -417,7 +504,6 @@ export class SiltwakeApp {
       }
     }
     this.sound.update(this.state, this.active);
-    this.frameId = requestAnimationFrame((time) => this.frame(time));
   }
 
   /** One fixed simulation step with this frame's input, marked phase by phase (SIM-PERF-1). */
@@ -456,7 +542,9 @@ export class SiltwakeApp {
         this.lastBoundaryNotice = now;
       }
     costs.mark(PHASE.presentation);
+    const saveStart = performance.now();
     this.session.autosave();
+    this.lastSaveMs = performance.now() - saveStart;
     costs.mark(PHASE.autosave);
   }
 
@@ -470,7 +558,7 @@ export class SiltwakeApp {
       this.session.persistenceMessage,
       this.session.autoSaveAllowed,
       this.state !== null,
-      this.session.busy,
+      this.session.busy || this.entryPending !== null,
     );
     const choice = this.session.confirmation;
     if (choice)
@@ -547,9 +635,19 @@ export class SiltwakeApp {
     this.view.notify("Play timeline exported. It stays on this computer unless you share the file.", false, { channel: "system" });
   }
 
+  /** Baked cave records, once they land (the pack is fetched at start). */
+  private installCaveRecords(): void {
+    if (this.recordsSet || (this.caveStore && !this.caveStore.settled)) return;
+    if (this.caveStore?.collision) setKitCaveRecords(this.caveStore.collision);
+    this.recordsSet = true;
+  }
+
   private entered(): void {
     if (this.disposed) return;
     this.sessionGeneration++;
+    // CW-1 R2: recovery state belongs to the expedition it was learned in.
+    this.caves.reset();
+    this.caveHolding = false;
     this.startTimeline();
     // A loaded save neither replays its history nor inherits old cooldowns.
     this.sound.reset();
@@ -560,12 +658,57 @@ export class SiltwakeApp {
     this.helm.clear();
     forgetCorridorView();
     this.view.resetPresentation();
+    // CW-1 R1: the expedition stays behind the menu's loading presentation
+    // (paused, busy, no HUD) until its caves are admitted: records installed,
+    // admission clear, or a rescue or refuge applied. Usually that is now.
+    this.entryPending = { generation: this.sessionGeneration, since: this.frameAt };
+    this.paused = true;
+    this.clock.reset();
+    this.view.showMenu(true, ENTRY_LOADING);
+    this.syncSessionUi();
+    this.admitEntry(this.frameAt);
+  }
+
+  /** One step of the entry wait: admit the entered expedition's caves, then finish entry. */
+  private admitEntry(now: number): void {
+    const pending = this.entryPending;
+    if (!pending || this.disposed) return;
+    if (pending.generation !== this.sessionGeneration || !this.state) { this.entryPending = null; this.syncSessionUi(); return; }
+    this.installCaveRecords();
+    const hold = this.caveAdmission(now, true);
+    // Held: keep waiting (the refuge timeout bounds it). Relocated: admit again at the new pose next frame.
+    if (hold?.holding) return;
+    // A cave the view stands in is lit before it is shown (never a pop of open
+    // water inside a cave, CW-1 R1); the view keeps presenting meanwhile, and
+    // the wait is bounded (an absent light field draws as before).
+    if (this.renderer?.caveLightPending && now - pending.since < ENTRY_LIGHT_WAIT_MS) { this.dirty = true; return; }
+    this.entryPending = null;
+    this.syncSessionUi();
+    this.finishEntry();
+  }
+
+  private finishEntry(): void {
+    // CW-1: the legacy region owners are monolithic builds (up to half a
+    // second each); make every one now, into retention, behind the load, so
+    // crossing into a region during play only re-attaches it.
+    this.warmRegions();
     if (this.state) this.view.update(this.state, false);
     const automatically = this.entryCanResume;
     this.entryCanResume = false;
     if (!automatically || !this.resume())
       this.pause("Expedition ready. Resume when ready.", false);
     else if (navigator.userActivation?.isActive) this.requestCapture();
+  }
+
+  /** Build every nearby legacy region owner into retention (bounded). */
+  private warmRegions(): void {
+    if (!this.renderer || !this.graphicsAvailable || !this.state) return;
+    try {
+      this.renderer.present(this.state);
+      for (let i = 0; i < 8 && this.renderer.prepare(); i++);
+    } catch (error) {
+      this.view.graphicsError(errorText(error));
+    }
   }
 
   private resume(capture = false): boolean {
@@ -575,6 +718,7 @@ export class SiltwakeApp {
       !this.renderer ||
       this.session.confirmation ||
       this.session.busy ||
+      this.entryPending ||
       !this.graphicsAvailable ||
       document.hidden
     )
@@ -609,7 +753,7 @@ export class SiltwakeApp {
     this.releaseMouse();
     this.view.target(null);
     this.lookAction();
-    this.view.showMenu(this.state !== null, reason);
+    this.view.showMenu(this.state !== null, this.entryPending && !reason ? ENTRY_LOADING : reason);
     this.syncSessionUi();
     this.dirty = true;
   }

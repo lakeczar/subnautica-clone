@@ -1,0 +1,85 @@
+heavy-check: ticket 261023-224100-2ffc; the job keeps running if this call ends: wait with `heavy-check wait 261023-224100-2ffc`, stop with `heavy-check cancel 261023-224100-2ffc`
+heavy-check: 261023-224100-2ffc admitted after 2h03m as exclusive: 6 cpu, 6144 MiB, GPU; runs to its end; stops if silent for 10m00s (or touch $SILTWAKE_JOB_HEARTBEAT), at the 30m00s exclusive cap
+[5.4s] renderer ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)
+[25.0s] cold start {"titleMs":5208,"playableMs":24551,"collisionPackMs":4346,"records":true}
+[26.0s] loaded {"cam":[69.273,-9.544,-58.416],"depth":11.4,"vitals":"O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 95% power Hull 100% · 11 / 800 m · hold 0/96 CU"}
+[26.0s] renderer main thread 3538785
+[136.9s] skip cruise#2 255.6 m short at 409.9,-54.1,-563.7
+[306.6s] at divide_lintel_galleries active light divide_lintel_galleries depth 350.4
+[306.6s] screenshot /work/tmp/cw1/r4-deep/s1-01-divide_lintel_galleries.jpg
+[325.8s] at divide_crest_hollow active light divide_crest_hollow depth 364.8
+[371.8s] at divide_east_pocket active light divide_east_pocket depth 394.4
+[443.3s] at divide_brine_cistern active light divide_brine_cistern depth 441.9
+[490.4s] at meridian_footing_void active light meridian_footing_void depth 517.4
+[490.5s] screenshot /work/tmp/cw1/r4-deep/s1-02-meridian_footing_void.jpg
+[530.2s] recover meridian_window_gallery 12.3 m short
+[536.4s] recover meridian_window_gallery 12.3 m short
+[542.6s] recover meridian_window_gallery 12.3 m short
+[553.9s] skip meridian_window_gallery 12.3 m short at 1002.8,-514.1,-1300.0
+[553.9s] near meridian_window_gallery active light meridian_window_gallery depth 514.1
+[560.2s] recover cruise#41 12.2 m short
+[566.4s] recover cruise#41 12.2 m short
+[572.6s] recover cruise#41 12.2 m short
+[583.8s] skip cruise#41 12.2 m short at 999.7,-514.1,-1300.9
+[590.3s] recover cruise#42 198.7 m short
+[596.5s] recover cruise#42 198.7 m short
+[602.7s] recover cruise#42 198.7 m short
+[614.0s] skip cruise#42 198.7 m short at 1002.6,-514.1,-1300.5
+[619.0s] recover cruise#43 211.9 m short
+[625.2s] recover cruise#43 211.9 m short
+[631.4s] recover cruise#43 211.9 m short
+[642.7s] skip cruise#43 211.9 m short at 1002.6,-514.1,-1300.5
+[647.7s] recover meridian_spire_footing 207.0 m short
+[653.9s] recover meridian_spire_footing 207.0 m short
+[660.1s] recover meridian_spire_footing 207.0 m short
+[671.4s] skip meridian_spire_footing 207.0 m short at 1002.7,-514.1,-1300.3
+[671.4s] near meridian_spire_footing active light meridian_window_gallery depth 514.1
+[676.4s] recover cruise#45 211.9 m short
+[682.6s] recover cruise#45 211.9 m short
+[688.9s] recover cruise#45 211.9 m short
+[700.1s] skip cruise#45 211.9 m short at 1002.6,-514.1,-1300.5
+[705.1s] recover cruise#46 210.9 m short
+[711.3s] recover cruise#46 210.9 m short
+[717.6s] recover cruise#46 210.9 m short
+[728.8s] skip cruise#46 210.9 m short at 1002.6,-514.1,-1300.5
+[733.8s] recover cruise#47 241.2 m short
+[740.0s] recover cruise#47 241.2 m short
+[746.3s] recover cruise#47 241.2 m short
+[757.5s] skip cruise#47 241.2 m short at 1002.1,-514.1,-1301.0
+[762.5s] recover cruise#48 252.0 m short
+[768.7s] recover cruise#48 252.0 m short
+[774.9s] recover cruise#48 252.0 m short
+[786.2s] skip cruise#48 252.0 m short at 1002.1,-514.1,-1301.0
+[791.2s] recover cruise#49 264.3 m short
+[797.4s] recover cruise#49 264.3 m short
+[803.7s] recover cruise#49 264.3 m short
+[814.9s] skip cruise#49 264.3 m short at 1002.0,-514.1,-1301.1
+[819.9s] recover meridian_terrace_crack 244.2 m short
+[826.1s] recover meridian_terrace_crack 244.2 m short
+[832.4s] recover meridian_terrace_crack 1931.9 m short
+[914.9s] skip meridian_terrace_crack 1520.0 m short at 238.0,-180.1,-331.0
+[914.9s] near meridian_terrace_crack active light - depth 178.4
+[1014.9s] skip cruise#51 1033.7 m short at 516.4,-375.7,-697.1
+[1032.1s] recover cruise#52 1906.8 m short
+[1115.0s] skip cruise#52 1494.2 m short at 257.1,-197.8,-343.0
+[1189.1s] recover cruise#53 1016.3 m short
+[1197.5s] recover cruise#53 1012.5 m short
+[1204.4s] recover cruise#53 1011.7 m short
+[1215.0s] skip cruise#53 1004.5 m short at 510.5,-273.2,-551.0
+[1220.0s] recover cruise#54 1007.9 m short
+[1226.8s] recover cruise#54 1753.1 m short
+[1315.0s] skip cruise#54 1316.6 m short at 313.9,-206.5,-316.9
+[1415.1s] skip meridian_culvert_north 850.2 m short at 638.3,-297.2,-632.0
+[1415.1s] near meridian_culvert_north active light - depth 295.5
+[1415.2s] screenshot /work/tmp/cw1/r4-deep/s1-03-meridian_culvert_north.jpg
+[1420.6s] recover cruise#56 1752.7 m short
+[1515.2s] skip cruise#56 1275.7 m short at 336.0,-216.1,-351.7
+[1578.4s] recover cruise#57 975.1 m short
+[1585.4s] recover cruise#57 975.0 m short
+[1592.4s] recover cruise#57 975.0 m short
+[1604.4s] skip cruise#57 974.9 m short at 530.5,-277.4,-540.2
+[1614.5s] recover cruise#58 1654.2 m short
+[1704.4s] skip cruise#58 1208.0 m short at 354.8,-197.0,-294.3
+[1800.1s] error Error: page.waitForTimeout: Target page, context or browser has been closed
+Killed
+heavy-check: the GPU was also used outside the lease by: pid 3574130 (sleep 20)

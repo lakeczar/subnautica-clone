@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AUTHORED_CAVE_SOURCES, CAVE_SOURCES, type CaveSource } from "../src/content/regions/caves.js";
+import { DEEP_CAVE_SOURCES } from "../src/content/regions/caves/deepCaves.js";
 import { assertGroupsDisjoint, caveFloor, EDGE_SHELF, openProfile, BASIN_CAVES, CANOPY_CAVES, CANOPY_BASIN_GROUPS,
   type CaveGroup } from "../src/content/regions/caves/index.js";
 import { layWake, oldestVisible, swimWake, wakeGlow, wakeTrail, WAKE_FADE_SECONDS } from "../src/content/regions/caves/wakeglow.js";
@@ -93,7 +94,7 @@ test("medium caves: a real loop through the bible's closing passage, two or more
 });
 
 test("footprints: disjoint from each other and the kit's, outside the opening's preserve and band, in their region, near the bible's", () => {
-  assert.doesNotThrow(() => assertGroupsDisjoint(CANOPY_BASIN_GROUPS));
+  assert.doesNotThrow(() => assertGroupsDisjoint(CANOPY_BASIN_GROUPS, CAVE_SOURCES));
   const at = (s: CaveSource, minX: number): CaveSource => ({ ...s, footprint: { ...s.footprint, minX, maxX: minX + (s.footprint.maxX - s.footprint.minX) } });
   const first = CANOPY_BASIN_GROUPS[0]!;
   assert.throws(() => assertGroupsDisjoint([first, { ...first, source: { ...at(first.source, first.source.footprint.minX + 1), id: "test.copy" } }]), /no union policy/,
@@ -130,12 +131,14 @@ test("footprints hold no existing datum: sites, structures, registry sources and
 });
 
 test("no footprint or collar-band overlap with any authored cave, CA-1's Reef and Isles caves included", () => {
-  assert.ok(AUTHORED_CAVE_SOURCES.length > CAVE_SOURCES.length, "CA-1's authored caves are present");
+  assert.ok(["reef_archlet", "isles_storm_arch", "hub_crown_shaft"].every(id => CAVE_SOURCES.some(s => s.id === id)), "CA-1's and the hub's caves are present");
   for (const g of CANOPY_BASIN_GROUPS) for (const s of [...AUTHORED_CAVE_SOURCES, ...CANOPY_BASIN_GROUPS.map(x => x.source)]) {
     if (s === g.source) continue;
     const f = g.source.footprint, grown = { minX: f.minX - 2 * BAND, maxX: f.maxX + 2 * BAND, minZ: f.minZ - 2 * BAND, maxZ: f.maxZ + 2 * BAND };
     assert.ok(!overlaps(f, s.footprint), `${g.source.id} overlaps ${s.id}`);
-    if (AUTHORED_CAVE_SOURCES.includes(s)) assert.ok(!overlaps(grown, s.footprint), `${g.source.id}'s collar band meets ${s.id}'s`);
+    // Bands between two CA-2 groups may meet in exterior terrain (Knot and the east crown).
+    // CA-3's kiln tube sits 18 m off the west rim (accepted in CA-3); it is checked there.
+    if (!CANOPY_BASIN_GROUPS.some(x => x.source === s) && !DEEP_CAVE_SOURCES.includes(s)) assert.ok(!overlaps(grown, s.footprint), `${g.source.id}'s collar band meets ${s.id}'s`);
   }
 });
 

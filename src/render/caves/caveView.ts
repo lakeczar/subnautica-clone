@@ -1,57 +1,123 @@
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
 import type { Scene } from "@babylonjs/core/scene.js";
-import { caves, type CaveDef } from "../../content/regions/caves.js";
+import { caveDef, CAVE_SOURCES, type CaveSource } from "../../content/regions/caves.js";
 import { worldFloor } from "../../content/regions/worldFloor.js";
-import { CaveLighting } from "./caveMaterial.js";
+import type { RawTexture3D } from "@babylonjs/core/Materials/Textures/rawTexture3D.js";
+import { CaveLighting, type CaveTexturePort } from "./caveMaterial.js";
 import { caveLightField, type CaveLightField } from "./lightField.js";
 
 /** Within this many metres of a footprint, a cave's light field is active. */
 export const CAVE_ACTIVE_RANGE = 60;
+/** Caves whose textures are made ahead: the cache keeps four, one is active. */
+const UPLOAD_AHEAD = 3;
 
-/** The renderer's cave light (C4): one `CaveLighting` feeding the scene's cel
- * material. The nearest cave within `CAVE_ACTIVE_RANGE` of the camera is the
- * active one; its field is built in idle time (`prepare`) or, failing that,
- * on first approach (about 0.1 s, once). The lamp is the camera's. */
+/** Where light fields come from: the baked store in the browser (null while
+ * a field is fetched), or generation (Node, tools, a dev build without a
+ * bake). `settled` says a null will not change by waiting. */
+export interface CaveFieldSource {
+  field(id: string): CaveLightField | null;
+  settled(id: string): boolean;
+}
+/** Generated fields, built on first ask (about 0.1–1 s each). */
+export const liveCaveFields: CaveFieldSource = {
+  field: id => caveLightField(caveDef(id, worldFloor), worldFloor),
+  settled: () => true,
+};
+
+/** The renderer's cave light (C4, streamed since CW-1): one `CaveLighting`
+ * feeding the scene's cel material. The active cave is the one whose
+ * footprint holds the camera, else the nearest within `CAVE_ACTIVE_RANGE`,
+ * so in a linked network the light switches at the seam. Fields and their
+ * textures arrive ahead of use: the streamer names the caves to fetch and
+ * to upload (`stream`), filled a slab budget per frame. A field still in flight
+ * when its cave becomes active draws as open water until it lands; with
+ * the bake that never happens in ordinary play (fetch from 300 m). Without a
+ * store, `prepare` builds nearby fields in idle time. The lamp is the camera's. */
 export interface CaveView {
-  /** Idle-time construction; true while there was work to do. */
+  /** Idle-time construction (live fields only); true while there was work to do. */
   prepare(): boolean;
+  /** Streamer wishes for this frame: fields to fetch, textures to upload. */
+  stream(light: readonly string[], upload: readonly string[]): void;
   update(camera: Vector3, forward: Vector3, lamp: boolean): void;
   /** The active cave's ID, or null. */
   readonly active: string | null;
+  /** The active cave is drawn as open water because its light field has not
+   * landed yet (CW-1 R1, REC-1: a pop of open water inside a cave). Captures
+   * and the load wait on it. */
+  readonly lightPending: boolean;
+  /** Active frames whose field was not ready yet (drawn as open water). */
+  readonly stats: { readonly missing: number; readonly uploads: number; readonly textureBytes: number;
+    /** Frames an active cave drew as open water (its light not yet bound). */
+    readonly pendingFrames: number;
+    /** Longest empty-texture allocation and slab write, ms; fills restarted by a context restore. */
+    readonly maxAllocMs: number; readonly maxWriteMs: number; readonly restarts: number;
+    /** This frame's upload work (allocation and slab writes, prefetch and activation), ms and bytes. */
+    readonly frameUploadMs: number; readonly frameUploadBytes: number };
   dispose(): void;
 }
 
-export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[]): CaveView {
-  const lighting = new CaveLighting(scene, materials);
-  const fields = new Map<string, CaveLightField>();
-  let defs: readonly CaveDef[] | null = null, active: string | null = null;
-  const all = (): readonly CaveDef[] => defs ??= caves(worldFloor);
-  const field = (def: CaveDef): CaveLightField => {
-    let f = fields.get(def.id);
-    if (!f) fields.set(def.id, f = caveLightField(def, worldFloor));
+export function createCaveView(scene: Scene, materials: readonly ShaderMaterial[], source: CaveFieldSource = liveCaveFields,
+  port?: CaveTexturePort<RawTexture3D>): CaveView {
+  const lighting = new CaveLighting(scene, materials, undefined, undefined, port);
+  // One upload budget per frame for prefetch (`stream`) and activation
+  // (`update`); `update` ends a frame and opens the next one's.
+  lighting.beginFrame();
+  const live = source === liveCaveFields;
+  const built = new Map<string, CaveLightField>();
+  let active: string | null = null, missing = 0, near: readonly string[] = [], lightPending = false, pendingFrames = 0;
+  const field = (id: string): CaveLightField | null => {
+    let f = built.get(id) ?? null;
+    if (!f) { f = source.field(id); if (f && live) built.set(id, f); }
     return f;
   };
-  const reach = (def: CaveDef, p: Vector3): number => {
-    const r = def.replacementFootprints[0]!;
+  const reach = (s: CaveSource, p: Vector3): number => {
+    const r = s.footprint;
     return Math.hypot(Math.max(0, r.minX - p.x, p.x - r.maxX), Math.max(0, r.minZ - p.z, p.z - r.maxZ));
   };
   return {
     get active() { return active; },
+    get lightPending() { return lightPending; },
+    get stats() { const l = lighting.stats; return { missing, uploads: l.uploads, textureBytes: l.bytes, pendingFrames,
+      maxAllocMs: l.maxAllocMs, maxWriteMs: l.maxWriteMs, restarts: l.restarts,
+      frameUploadMs: lighting.lastFrame.ms, frameUploadBytes: lighting.lastFrame.bytes }; },
     prepare() {
-      const next = all().find(d => !fields.has(d.id));
+      // Live fields only: the nearest the streamer named that is not built.
+      if (!live) return false;
+      const next = near.find(id => !built.has(id));
       if (!next) return false;
       field(next);
       return true;
     },
+    stream(light, upload) {
+      near = light;
+      if (live) return;
+      for (let k = 0; k < light.length; k++) source.field(light[k]!);
+      // One texture set filling at a time, nearest first, a slab budget per
+      // frame (CaveLighting.prepare), and never more caves than the texture
+      // cache keeps (more would evict and re-upload forever).
+      for (let k = 0; k < upload.length && k < UPLOAD_AHEAD; k++) {
+        const f = source.field(upload[k]!);
+        if (f && !lighting.has(f)) { lighting.prepare(f); break; }
+      }
+    },
     update(camera, forward, lamp) {
-      let best: CaveDef | null = null, bestReach = CAVE_ACTIVE_RANGE;
-      for (const def of all()) {
-        const r = reach(def, camera);
-        if (r <= bestReach) { best = def; bestReach = r; }
+      let best: CaveSource | null = null, bestReach = CAVE_ACTIVE_RANGE;
+      for (const s of CAVE_SOURCES) {
+        const r = reach(s, camera);
+        if (r <= bestReach) { best = s; bestReach = r; }
+        if (r === 0) break;
       }
       active = best?.id ?? null;
-      lighting.setField(best ? field(best) : null);
+      const f = best ? field(best.id) : null;
+      if (best && !f) missing++;
+      // The active field continues filling within this frame's budget; it is
+      // bound only once complete (never a synchronous upload).
+      if (f && !lighting.has(f)) lighting.prepare(f);
+      lighting.setField(f);
+      lightPending = !!best && (!f || lighting.bound !== f);
+      if (lightPending) pendingFrames++;
+      lighting.beginFrame();
       lighting.apply({ on: lamp, position: camera, direction: forward.lengthSquared() > 0 ? forward.normalizeToNew() : new Vector3(0, 0, -1) });
     },
     dispose() { lighting.dispose(); },

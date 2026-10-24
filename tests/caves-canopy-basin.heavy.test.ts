@@ -8,9 +8,9 @@ import assert from "node:assert/strict";
 import { performance } from "node:perf_hooks";
 import { CANOPY_BASIN_GROUPS } from "../src/content/regions/caves/index.js";
 import { CRAFT_PROFILES, ROUTES } from "../src/content/regions/passages.js";
-import { CAVE_INDEX_CELL, createCaveWorldQueries, createWorldQueries, SOLIDS, surfaceHeight } from "../src/sim/world.js";
+import { CAVE_INDEX_CELL, createCaveWorldQueries, createWorldQueries, gameWorld, SOLIDS, surfaceHeight } from "../src/sim/world.js";
 import type { Vec3 } from "../src/sim/types.js";
-import { allOwners, composedWorld, defOf, dist, DIVER, retreatStarts, sub } from "./caves-canopy-basin-support.js";
+import { composedWorld, defOf, dist, DIVER, retreatStarts, sub } from "./caves-canopy-basin-support.js";
 
 const pad = 2 * 4.5 + 1;
 const touches = (p: Vec3, half: number): boolean => CANOPY_BASIN_GROUPS.some(g => {
@@ -21,8 +21,11 @@ const touches = (p: Vec3, half: number): boolean => CANOPY_BASIN_GROUPS.some(g =
 test("the composed world holds every cave, clear of the legacy guards", t => {
   const started = performance.now(), world = composedWorld();
   assert.ok(world);
-  const owners = allOwners(), rock = owners.reduce((n, o) => n + o.rock.length, 0);
-  t.diagnostic(`${owners.length} caves (${CANOPY_BASIN_GROUPS.length} CA-2 sources + the kit's), ${rock} rock boxes, built in ${(performance.now() - started).toFixed(0)} ms`);
+  // CW-1: the game's world; its construction checks the legacy guards, and
+  // every CA-2 source is one of its caves.
+  const caves = (world as ReturnType<typeof gameWorld>).kitCaves.clusters.flatMap(c => c.caves);
+  for (const g of CANOPY_BASIN_GROUPS) assert.ok(caves.includes(g.source.id), g.source.id);
+  t.diagnostic(`${caves.length} caves (${CANOPY_BASIN_GROUPS.length} CA-2 sources + the rest), composed in ${(performance.now() - started).toFixed(0)} ms`);
 });
 
 test("route corridors near a cave sweep exactly as far in the composed world as over the plain heightfield", () => {

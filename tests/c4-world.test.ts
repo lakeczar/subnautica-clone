@@ -18,7 +18,7 @@ import { protectionFor, sampleHazards } from "../src/sim/ecology/hazards.js";
 import { FIXED_SECONDS as DT } from "../src/sim/clock.js";
 import { completeOpening } from "../src/sim/progression.js";
 import { createGame } from "../src/sim/state.js";
-import { stepGame } from "../src/sim/step.js";
+import { flowHere, stepGame } from "../src/sim/step.js";
 import type { GameCommand, GameEvent, GameState, Vec3 } from "../src/sim/types.js";
 import { CAVE_INDEX_CELL, createCaveWorldQueries, createWorldQueries, gameWorld, hullClearance, hullFloor, SOLIDS, surfaceHeight, caveOwner,
   type Solid } from "../src/sim/world.js";
@@ -355,7 +355,8 @@ test("entering a current shows its cue once", () => {
 
 test("smoke: a powerless diver at two points in the shelf race reaches still water within 25 s, unharmed", () => {
   // Sixteen starts along and across the race: tests/c4-world.heavy.test.ts (TT-1).
-  const still = (p: Vec3, tick: number): boolean => flowAt(p, tick).speed < 0.1;
+  // Cave water is still (CW-1).
+  const still = (p: Vec3, tick: number): boolean => flowHere(world, p, tick).speed < 0.1;
   let checked = 0;
   for (const t of [0.3, 0.8]) {
     const p = along(t, 1.5);

@@ -73,7 +73,9 @@ test("every bible small and medium cave for the Rift, Divide and Meridian is rea
 });
 
 test("caves own disjoint footprints in their region, clear of the preserve, datums, structures, routes and story sites", () => {
-  assert.doesNotThrow(() => assertDisjointFootprints([...AUTHORED_CAVE_SOURCES.filter(s => !DEEP_CAVE_SOURCES.includes(s)), ...CANOPY_BASIN_SOURCES, ...DEEP_CAVE_SOURCES]));
+  // CW-1: the registry lists every cave once (root's, CA-2's and these).
+  assert.ok(DEEP_CAVE_SOURCES.every(s => AUTHORED_CAVE_SOURCES.includes(s)) && CANOPY_BASIN_SOURCES.every(s => AUTHORED_CAVE_SOURCES.includes(s)));
+  assert.doesNotThrow(() => assertDisjointFootprints(AUTHORED_CAVE_SOURCES));
   const storySites = Object.values(STORY_PLACEMENTS).map(p => SITES.find(s => s.id === p.s2)).filter(s => !!s);
   for (const s of DEEP_CAVE_SOURCES) {
     const f = s.footprint;

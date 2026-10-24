@@ -40,12 +40,14 @@ export class GameView {
     GameView.current = this;
   }
   slot(_slot: SaveSlot, _hasSession: boolean): void {}
+  /** The menu's busy presentation (a save operation, or CW-1's entry wait). */
+  busy = false;
   persistence(
     _message: string,
     _automatic: boolean,
     _hasSession: boolean,
-    _busy: boolean,
-  ): void {}
+    busy: boolean,
+  ): void { this.busy = busy; }
   settings(...settings: unknown[]): void { this.lastSettings = settings; }
   lookAction(visible: boolean, fallback = false): void { this.lookVisible = visible; this.fallback = fallback; }
   target(): void {}
@@ -114,6 +116,10 @@ export class TestRenderer {
   static current: TestRenderer;
   presents = 0;
   disposed = false;
+  /** The view settling after a jump (CW-1): the app keeps the clock paused. */
+  settling = false;
+  /** The view's cave drawn as open water until its light lands (CW-1 R1). */
+  caveLightPending = false;
   constructor(
     private readonly canvas: TestCanvas,
     private readonly availability?: (available: boolean) => void,

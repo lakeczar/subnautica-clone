@@ -1,0 +1,88 @@
+{
+ "commit": "7967893",
+ "label": "RTX 4070 Laptop (alickers, shared desktop host; indicative)",
+ "segment": 2,
+ "caves": [
+  "canopy_fin_cleft"
+ ],
+ "reached": [],
+ "skipped": [
+  {
+   "cave": "canopy_fin_cleft",
+   "metres": 17.3
+  }
+ ],
+ "shots": [
+  "s2-01-canopy_fin_cleft.jpg"
+ ],
+ "views": [],
+ "errors": [],
+ "holds": [],
+ "long": [],
+ "unsliced": [],
+ "recoveries": 3,
+ "renderer": "ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL 4.6)",
+ "coldStart": {
+  "titleMs": 7978,
+  "playableMs": 31637,
+  "collisionPackMs": 7239.199999999255,
+  "records": true
+ },
+ "seconds": 34,
+ "frames": {
+  "count": 2042,
+  "p50": 16.7,
+  "p95": 16.8,
+  "p99": 16.8,
+  "max": 16.8,
+  "over33": 0,
+  "over50": 0
+ },
+ "work": {
+  "p50": 2.8,
+  "p95": 3.3,
+  "p99": 3.6,
+  "max": 4.9,
+  "over33": 0
+ },
+ "longByCause": {
+  "over34": 0,
+  "streaming": 0,
+  "streamingOver34": 0,
+  "simulation": 0,
+  "noWork": 0
+ },
+ "streamingMax": {
+  "chunks": 0.3,
+  "caves": 0.5
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 0,
+  "built": 11,
+  "evicted": 2,
+  "boxes": 84661,
+  "stepMs": 2.3,
+  "buildMs": 3.3,
+  "pending": 0,
+  "missing": 4,
+  "uploads": 4,
+  "lightBytes": 5151936,
+  "textureBytes": 4675200,
+  "records": true,
+  "recordsMs": 7239.199999999255
+ },
+ "gate": {
+  "pass": true,
+  "failures": [],
+  "travelSync": 0,
+  "loadSync": 0
+ },
+ "memory": {
+  "residentCpuMiB": 39.4,
+  "residentGpuMiB": 26.9,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 308.6
+ }
+}

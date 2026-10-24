@@ -134,6 +134,8 @@ export interface ResidencyStats {
   /** Longest single build step this frame: a factory that overruns its
    * slice shows up here, not as a mystery hitch. */
   readonly maxStepMs: number;
+  /** The unit (chunk and LOD) whose build step was `maxStepMs`. */
+  readonly maxStepUnit: string | null;
   readonly uploadMs: number;
   readonly uploads: number;
   readonly uploadedBytes: number;
@@ -147,6 +149,8 @@ export interface ResidencyStats {
 /** Metres of rank a priority point is worth: a refuge (priority 1) loads as
  * if it were this much closer, and is evicted as if it were that much nearer. */
 const PRIORITY_METRES = 64;
+/** Hidden units released per frame when only the retained count is over. */
+const MAX_TRIMS_PER_FRAME = 1;
 
 interface Bytes { cpu: number; gpu: number }
 interface Unit {
@@ -413,7 +417,7 @@ export function createResidency(options: {
       // 3. Builds, nearest first, within the time slice. A new build starts
       //    only when its reservation fits; a finished one is re-checked.
       const start = now();
-      let steps = 0, maxStepMs = 0, deferred = 0;
+      let steps = 0, maxStepMs = 0, deferred = 0, maxStepUnit: string | null = null;
       const queue = [...desired.values()].filter(w => {
         const u = units.get(key(w.chunk.id, w.lod));
         return !u || u.state === "building";
@@ -435,7 +439,8 @@ export function createResidency(options: {
         while (u.build) {
           const before = now();
           const r = u.build.next();
-          maxStepMs = Math.max(maxStepMs, now() - before);
+          const stepMs = now() - before;
+          if (stepMs > maxStepMs) { maxStepMs = stepMs; maxStepUnit = u.key; }
           steps++;
           if (r.done) {
             u.build = null; u.prepared = r.value; u.state = "prepared"; totals.built++;
@@ -503,12 +508,17 @@ export function createResidency(options: {
       //    shown or hidden this frame wait one frame unless bytes force it.
       const hidden = [...units.values()].filter(u => u.state === "hidden")
         .sort((a, b) => a.lastUsed - b.lastUsed || b.rank - a.rank);
-      let kept = hidden.length;
+      let kept = hidden.length, trimmed = 0;
       for (const u of hidden) {
         const overBytes = !fits(accounted());
         if (!overBytes && (kept <= budget.retainedUnits || u.lastUsed >= frame)) break;
         if (!overBytes && protectedKeys.has(u.key)) continue;
+        // Trimming retention past the count is spread over frames (CW-1: a
+        // fast traversal dropped several chunks' meshes in one 100 ms frame);
+        // bytes over budget still evict at once.
+        if (!overBytes && trimmed >= MAX_TRIMS_PER_FRAME) break;
         release(u, "evicted"); kept--;
+        if (!overBytes) trimmed++;
       }
       // Last resort (art larger than its recipe said): drop the farthest
       // shown and in-progress units until the budget holds again.
@@ -545,7 +555,7 @@ export function createResidency(options: {
         // completed may still reveal room for chunks cut this frame.
         settled: fits(bytes) && building + prepared + uploading === 0 && pending === 0 && steps === 0 && uploads === 0 &&
           totals.overBudgetDiscards === discardsBefore && evictable <= budget.retainedUnits,
-        buildMs, buildSteps: steps, maxStepMs, uploadMs, uploads, uploadedBytes, uploadOverrunBytes, pending,
+        buildMs, buildSteps: steps, maxStepMs, maxStepUnit, uploadMs, uploads, uploadedBytes, uploadOverrunBytes, pending,
         totals: { ...totals },
       };
       return last;

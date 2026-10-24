@@ -7,6 +7,8 @@ import { BLUEPRINTS, FUTURE_BLUEPRINTS, MATERIALS, PLACES, RECIPES, SOURCES, TEC
 import type { CostKind } from "../src/content/registry.js";
 import { ACCESS_TIERS, CRAFT_PROFILES } from "../src/content/regions/passages.js";
 import { CAVE_SOURCES } from "../src/content/regions/caves.js";
+import { CANOPY_BASIN_GROUPS } from "../src/content/regions/caves/index.js";
+import { DEEP_CAVES } from "../src/content/regions/caves/deepCaves.js";
 import { regionAtPoint } from "../src/content/regions/layout.js";
 import { SITES } from "../src/content/regions/sites.js";
 import { STRUCTURES } from "../src/content/regions/structures.js";
@@ -156,7 +158,10 @@ test("caves: size classes, footprints disjoint, outside the opening's preserve, 
   const P = LEGACY_PRESERVE;
   // A proposal built as a real cave (W2's hub caves) is checked by its own
   // cave tests; the proposal stands in for nothing once the source exists.
-  const built = new Set(CAVE_SOURCES.map(c => c.id)), planned = caves.filter(c => !built.has(c.id));
+  // A kit source realises the proposal of its own ID; CA-2's union groups
+  // realise each bible cave they hold.
+  const built = new Set([...CAVE_SOURCES.map(c => c.id), ...CANOPY_BASIN_GROUPS.flatMap(g => g.caves.map(c => c.id)), ...DEEP_CAVES.flatMap(c => c.bible)]);
+  const planned = caves.filter(c => !built.has(c.id));
   const rects = [...planned.map(c => ({ id: c.id, r: c.footprint })), ...CAVE_SOURCES.map(c => ({ id: c.id, r: c.footprint }))];
   for (let i = 0; i < rects.length; i++) for (let j = i + 1; j < rects.length; j++)
     assert.ok(!overlaps(rects[i]!.r, rects[j]!.r), `${rects[i]!.id} overlaps ${rects[j]!.id}`);
@@ -212,7 +217,9 @@ test("each area meets the bible's density targets", () => {
     const hub = a.area === "hub_spur";
     const anchors = a.landmarks.filter(l => l.role === "anchor").length, all = a.landmarks.length;
     // Built caves the bible already lists (W2's hub caves) count once, as proposals.
-    const existingSmall = a.area === "hub_spur" ? 0 : CAVE_SOURCES.filter(c => c.region === a.area && !caves.some(p => p.id === c.id)).length;
+    // Kit caves that realise no proposal (the Fanvault): a union group realises its own.
+    const realising = new Set([...CANOPY_BASIN_GROUPS.map(g => g.source.id), ...DEEP_CAVES.map(c => c.source.id)]);
+    const existingSmall = a.area === "hub_spur" ? 0 : CAVE_SOURCES.filter(c => c.region === a.area && !caves.some(p => p.id === c.id) && !realising.has(c.id)).length;
     const small = a.caves.filter(c => c.size === "small").length + existingSmall, medium = a.caves.filter(c => c.size === "medium").length;
     const roles = a.creatures.map(c => SPECIES.find(s => s.id === c.species)!.role);
     assert.ok(hub ? anchors >= 1 : anchors >= 2 && anchors <= 3, `${a.area}: ${anchors} anchors`);

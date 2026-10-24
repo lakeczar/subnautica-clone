@@ -1,12 +1,11 @@
-// CA-3 hazards through the real survival path, heavy. The cave fields are
-// registered in the canonical HAZARD_FIELDS before the simulation loads (as
-// composition will), then an unprotected diver held still in a cave pose is
+// CA-3 hazards through the real survival path, heavy. Since CW-1 the game
+// samples the cave fields itself (`DEEP_CAVE_HAZARDS` in `sampleHazards`),
+// so nothing is registered here; an unprotected diver held still in a cave pose is
 // stepped with `stepGame`: the warm end and every pool must raise the real
 // load at their peak, a breath must ease at slack, and the way out must not.
 // Positive controls: with every intensity zeroed these fail.
 import test from "node:test";
 import assert from "node:assert/strict";
-import { HAZARD_FIELDS } from "../src/content/ecology/hazards.js";
 import { RIFT_CAVES } from "../src/content/regions/caves/rift.js";
 import { DIVIDE_CAVES } from "../src/content/regions/caves/divide.js";
 import { MERIDIAN_CAVES } from "../src/content/regions/caves/meridian.js";
@@ -14,8 +13,6 @@ import { KILN_BREATH, type CaveHazard, type DeepCave } from "../src/content/regi
 import type { Vec3 } from "../src/sim/types.js";
 
 const CAVES: readonly DeepCave[] = [...RIFT_CAVES, ...DIVIDE_CAVES, ...MERIDIAN_CAVES];
-for (const h of CAVES.flatMap(c => c.hazards)) (HAZARD_FIELDS as Record<string, unknown>)[h.id] = h;
-// Only now load the simulation, which reads HAZARD_FIELDS once.
 const { createGame } = await import("../src/sim/state.js");
 const { completeOpening } = await import("../src/sim/progression.js");
 const { stepGame } = await import("../src/sim/step.js");

@@ -27,22 +27,52 @@ import { createRegionResidency, REGION_OWNER_BYTES, RESIDENT_REGION_LIMIT, type 
 import { composeWorldArt, type ComposedWorld } from "./worldArt.js";
 import { createKitLoader, TemplateLibrary } from "./kit/loader.js";
 import { defaultContext } from "./kit/factories.js";
-import { createResidency, type Residency, type ResidencyBudget, type ResidencyStats } from "../world/residency.js";
+import { createResidency, DEFAULT_BUDGET, type Residency, type ResidencyBudget, type ResidencyStats } from "../world/residency.js";
+import { CaveArbiter } from "../world/caves/large/streaming.js";
 import type { Vec3 } from "../sim/types.js";
 import type { ShaderMaterial } from "@babylonjs/core/Materials/shaderMaterial.js";
 import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
 import type { Geometry } from "@babylonjs/core/Meshes/geometry.js";
 import { GeometryCache } from "./geometryCache.js";
-import { createCaveView } from "./caves/caveView.js";
+import { createCaveView, liveCaveFields, type CaveFieldSource } from "./caves/caveView.js";
+import { gameCaveStore } from "./caves/caveStore.js";
+import { createKitStreamer, type KitStreamFrame } from "../world/caves/kitStream.js";
+import { terrainStore } from "./biomes/terrain.js";
+import { CAVE_SOURCES } from "../content/regions/caves.js";
 import { createCurrentStreaks } from "./currentStreaks.js";
 import { createHubArt } from "./hub.js";
+import { createFarLayer } from "./farLayer.js";
 
 export type Quality = "rich" | "light";
+/** The renderer's on-demand snapshot (`__siltwake.scene()` once REC-1's hook lands). */
+export interface RendererStats {
+  meshes: number;
+  cave: string | null;
+  /** The active cave's light: "resident", or "pending" while it draws as open water (CW-1 R2); null with no cave. */
+  caveLight: "resident" | "pending" | null;
+  settling: boolean;
+  /** CW-1's cave streaming counters; `sync` counts unsliced builds. */
+  caveStream: { sync: number; built: number; evicted: number; boxes: number; missing: number; uploads: number; pendingFrames: number;
+    maxAllocMs: number; maxWriteMs: number; restarts: number };
+  /** Scene lights: known meshes, lights sent, meshes waiting for a scan; `settled` once every known mesh is scanned and placed. */
+  lights: { known: number; sent: number; pending: number; placed: number; settled: boolean };
+}
 export interface GameRenderer {
   present(state: GameState | null, overlay?: { target: InteractionHost | null; preview?: InteractionHost | null; look?: HeadLook }): void;
   /** Idle-time construction of one nearby region into retention. Callers use
    * it only while play is not advancing; it never draws or changes state. */
   prepare(): boolean;
+  /** The view jumped during play (a respawn, a refuge, a rescue) and the
+   * world near it is still being built across frames: the screen is dark
+   * and the caller keeps the simulation clock paused. Never more than
+   * `SETTLE_MAX_MS`. */
+  readonly settling: boolean;
+  /** The cave the camera is in (or next to) draws as open water: its light
+   * field has not landed (CW-1 R1). The load waits on it, bounded. */
+  readonly caveLightPending: boolean;
+  /** Pulled diagnostics (convention 6: never pushed per frame), in REC-1's
+   * `RendererStats` shape, plus cave light readiness and light settling. */
+  stats(): RendererStats;
   setQuality(quality: Quality): void;
   resize(): void;
   dispose(): void;
@@ -61,6 +91,8 @@ const JUMP = 64;
  * nothing is interactive (title, load, the opening), and in play while the
  * visible range is still incomplete. */
 const CATCH_UP_MS = 2500, MENU_BUILD_MS = 12, PLAY_BUILD_MS = 4;
+/** Longest a jump during play may keep the screen dark while the near world builds. */
+const SETTLE_MAX_MS = 5000;
 /** Underwater fog hides chunks beyond about this distance. */
 const VISIBLE_WORLD = 200;
 
@@ -70,7 +102,15 @@ const VISIBLE_WORLD = 200;
  * terrain, and any composed region pack) follows `stream(viewer)`. */
 export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: ShaderMaterial, options: {
   world?: ComposedWorld; budget?: Partial<ResidencyBudget>; now?: () => number;
+  /** Bytes other owners hold this frame (CW-1: cave collision, light fields
+   * and their textures), reserved before the chunks' share is set. */
+  held?: () => { readonly cpu: number; readonly gpu: number };
 } = {}): RegionArt & {
+  /** One arbiter for the whole world budget (LC-05): the legacy region
+   * owners and cave data hold reservations; the chunk residency is the
+   * opportunistic "world" owner and draws only its exclusive share, so a
+   * cave biome's reservations (placed later) shrink it, never overlap it. */
+  readonly arbiter: CaveArbiter;
   readonly active: readonly RenderRegion[];
   readonly retained: readonly RenderRegion[];
   prepare(): RenderRegion | null;
@@ -93,7 +133,10 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
     scene, material: cel, templates: new TemplateLibrary(world.templates), factories: world.factories,
     context: defaultContext(world.floor, 0.75, now, world.biomeAt),
   });
-  const residency = createResidency({ map: world.map, loader, budget: { ...WORLD_BUDGET, ...options.budget }, now });
+  const budget = { ...DEFAULT_BUDGET, ...WORLD_BUDGET, ...options.budget };
+  const residency = createResidency({ map: world.map, loader, budget, now });
+  const arbiter = new CaveArbiter({ cpu: budget.cpuBytes, gpu: budget.gpuBytes });
+  arbiter.opportunistic("world");
   const navigation = createNavigationSilhouettes(scene, cel);
   const regions = createRegionResidency(region => {
     const before = new Set(scene.meshes);
@@ -145,6 +188,7 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
     get active() { return regions.active; },
     get retained() { return regions.retained; },
     get residency() { return residency; },
+    arbiter,
     get regionBytes() { return regions.bytes; },
     prepare() { return disposed ? null : regions.prepare(); },
     get cacheStats() { return cache.stats; },
@@ -156,8 +200,14 @@ export function createRegionalArt(scene: Scene, cel: ShaderMaterial, glass: Shad
     stream(viewer, streaming = {}) {
       if (disposed) return null;
       const start = now();
-      // Legacy owners and chunks share one budget: chunks get what is left.
-      residency.setExternalBytes({ cpu: regions.bytes, gpu: regions.bytes });
+      // Legacy owners, cave data and chunks share one budget through the
+      // arbiter: owners holding live buffers re-reserve what they hold (with
+      // priority: they already exist), and chunks get the world's share.
+      const held = options.held?.() ?? { cpu: 0, gpu: 0 };
+      for (const [owner, bytes] of [["regions", { cpu: regions.bytes, gpu: regions.bytes }], ["caves", held]] as const) {
+        arbiter.release(owner); arbiter.reserve(owner, bytes, true);
+      }
+      residency.setExternalBytes(arbiter.externalFor("world"));
       let stats = residency.update(viewer);
       const near = streaming.nearRadius;
       while (near !== undefined && !stats.settled && !residency.isReady(near) && now() - start < CATCH_UP_MS)
@@ -230,12 +280,36 @@ export function createRenderer(
     camera.fov = 1.02;
     scene.activeCamera = camera;
     const cel = createCelMaterial(scene);
-    // W1 cave light on the one cel material: the active cave's field and the lamp.
-    const caveView = createCaveView(scene, [cel]);
+    // W1 cave light on the one cel material: the active cave's field and the
+    // lamp. CW-1: fields come baked from the cave store, fetched ahead by the
+    // streamer (generation only without a bake).
+    const caves = gameCaveStore();
+    const fields: CaveFieldSource = caves ? {
+      field: id => caves.light(id) ?? (caves.lightSettled(id) ? liveCaveFields.field(id) : null),
+      settled: id => caves.lightSettled(id),
+    } : liveCaveFields;
+    const caveView = createCaveView(scene, [cel], fields);
+    // CW-1 streaming: cave collision built ahead by proximity and heading,
+    // evicted behind and far first; light fields fetched and uploaded ahead;
+    // terrain files fetched toward where the viewer is heading.
+    const caveWorld = gameWorld();
+    const streamer = createKitStreamer(caveWorld.kitCaves, new Map(CAVE_SOURCES.map(c => [c.id, c.footprint])));
+    // STR-10: every unsliced cluster build is a streaming miss; say where.
+    caveWorld.kitCaves.onUnsliced = (f) => console.warn(`unsliced cave build (${f.cause}): cluster ${f.cluster} [${f.caves.join(", ")}] in ${f.ms} ms ` +
+      `at ${camera.position.x.toFixed(0)},${camera.position.y.toFixed(0)},${camera.position.z.toFixed(0)}`);
+    let lastStream: { at: Vector3; time: number } | null = null, velocity = Vector3.Zero(), streamFrames = 0;
+    let streamFrame: KitStreamFrame | null = null, worstCaveBuildMs = 0;
     // Visible currents: grit streaks carried by the real flow field.
     const streaks = createCurrentStreaks(scene, cel);
     const glass = createGlassMaterial(scene);
-    const art = createRegionalArt(scene, cel, glass);
+    // Cave bytes for the arbiter: collision composites (about 160 B a box),
+    // decoded light fields, and their textures on the GPU.
+    const art = createRegionalArt(scene, cel, glass, { held: () => ({
+      cpu: caveWorld.kitCaves.stats.residentBoxes * 160 + (caves?.stats.lightBytes ?? 0),
+      gpu: caveView.stats.textureBytes,
+    }) });
+    // CW-1's far layer: the tallest landmarks and their lamps, always resident.
+    const far = createFarLayer(scene, cel, art.residency);
     for (const mesh of scene.meshes) mesh.renderingGroupId = 1;
     const { water, sky } = createAtmosphere(scene);
     // ATM-1: emissive art, Rift vents, cockpit instruments and parked-craft
@@ -270,7 +344,7 @@ export function createRenderer(
     let disposed = false,
       available = true,
       generation = 0;
-    let lastViewer: Vector3 | null = null;
+    let lastViewer: Vector3 | null = null, settleSince = -1;
     let whenReady: (() => void) | null = null;
     const cancelReady = (): void => {
       if (whenReady) scene.onReadyObservable.removeCallback(whenReady);
@@ -300,13 +374,38 @@ export function createRenderer(
       };
       scene.executeWhenReady(whenReady);
     });
+    // CW-1's streaming diagnostics for evidence drivers, read on demand
+    // (`#ocean.siltwakeCaveStream()`), never written per frame; REC-1's
+    // `__siltwake` hook can take this over when it lands.
+    Object.defineProperty(canvas, "siltwakeCaveStream", { configurable: true, value: () => {
+      const ks = caveWorld.kitCaves.stats, cv = caveView.stats;
+      return { sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
+        stepMs: +ks.maxStepMs.toFixed(2), buildMs: +worstCaveBuildMs.toFixed(2), pending: streamFrame?.pending ?? -1,
+        missing: cv.missing, uploads: cv.uploads, lightBytes: caves?.stats.lightBytes ?? 0,
+        textureBytes: cv.textureBytes, records: caves ? !!caves.collision : null, recordsMs: caves?.stats.collisionMs ?? 0,
+        lightPendingFrames: cv.pendingFrames, maxAllocMs: +cv.maxAllocMs.toFixed(2), maxWriteMs: +cv.maxWriteMs.toFixed(2), restarts: cv.restarts };
+    } });
     return {
+      get settling() { return settleSince >= 0; },
+      get caveLightPending() { return caveView.lightPending; },
+      stats(): RendererStats {
+        const ks = caveWorld.kitCaves.stats, cv = caveView.stats, ls = lights.stats;
+        return {
+          meshes: scene.meshes.length, cave: caveView.active, caveLight: caveView.active ? (caveView.lightPending ? "pending" : "resident") : null,
+          settling: settleSince >= 0,
+          caveStream: { sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes, missing: cv.missing, uploads: cv.uploads,
+            pendingFrames: cv.pendingFrames, maxAllocMs: cv.maxAllocMs, maxWriteMs: cv.maxWriteMs, restarts: cv.restarts },
+          lights: { known: ls.known, sent: ls.sent, pending: ls.pending, placed: ls.placed, settled: ls.settled },
+        };
+      },
       present(state, overlay) {
         if (disposed || !available) return;
         const time = state ? state.tick / 60 : 0;
         const activationStart = performance.now();
+        const timedParts = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
         const priorRegions = art.active.join(",");
         art.update(state);
+        const regionsMs = performance.now() - activationStart;
         canvas.dataset.regions = art.active.join(",");
         if (priorRegions !== canvas.dataset.regions) {
           canvas.dataset.activationMs = (performance.now() - activationStart).toFixed(3);
@@ -347,14 +446,25 @@ export function createRenderer(
           camera.position.set(25, 13, 44);
           camera.setTarget(new Vector3(-1, -0.8, -20));
         }
-        // Chunks stream around the camera. After a load or a jump the nearby
-        // ground is built before this frame draws; with no expedition running
-        // (title, loading) construction gets more of each frame.
+        // Chunks stream around the camera. On the first frame the nearby
+        // ground is built before it draws (behind the load screen); a jump
+        // during play instead settles: dark frames, the clock paused by the
+        // caller, the near world built in bounded slices across frames. With
+        // no expedition running (title, loading) or while settling,
+        // construction gets more of each frame.
+        const timed = !!(globalThis as { __siltwakePerf?: unknown }).__siltwakePerf;
         const jumped = !lastViewer || Vector3.Distance(lastViewer, camera.position) > JUMP;
-        lastViewer = camera.position.clone();
         const cinematic = !state || state.opening.phase < 4;
-        const extraMs = cinematic ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
-        const world = art.stream(camera.position, { ...(jumped ? { nearRadius: NEAR_WORLD } : {}), extraMs });
+        if (jumped && lastViewer && !cinematic) settleSince = performance.now();
+        // A jump during play builds the near world before the frame draws: say from where to where.
+        const jump = jumped && lastViewer && timed ? [...lastViewer.asArray(), ...camera.position.asArray()].map(n => Math.round(n)) : null;
+        lastViewer = camera.position.clone();
+        const extraMs = cinematic || settleSince >= 0 ? MENU_BUILD_MS : art.residency.isReady(VISIBLE_WORLD) ? 0 : PLAY_BUILD_MS;
+        const tStream = timed ? performance.now() : 0;
+        const world = art.stream(camera.position, { ...(jumped && settleSince < 0 ? { nearRadius: NEAR_WORLD } : {}), extraMs });
+        // Settled once the near world is drawn and the cave there (if any) is lit (CW-1 R1); bounded.
+        if (settleSince >= 0 && ((art.residency.isReady(NEAR_WORLD) && !caveView.lightPending) || performance.now() - settleSince > SETTLE_MAX_MS)) settleSince = -1;
+        const chunkMs = timed ? performance.now() - tStream : 0;
         cue.update(state ? overlay?.target ?? overlay?.preview ?? null : null, camera.position, !!overlay?.target);
         corridor.update(state, gameWorld());
         canvas.dataset.corridor = corridor.visible ? "shown" : "";
@@ -362,21 +472,57 @@ export function createRenderer(
         const underwater = camera.position.y < -0.08 && !interior ? 1 : 0;
         const fog = Color3.FromHexString(interior ? "#486e76" : underwater ? "#226e7e" : "#96c5b9");
         scene.clearColor = new Color4(fog.r, fog.g, fog.b, 1);
+        const tLights = timedParts ? performance.now() : 0;
         const optics = updateOpticalUniforms([cel, glass, water, sky, cue.material], camera.position, state);
+        const opticsMs = timedParts ? performance.now() - tLights : 0;
         lights.update(state, camera.position, optics.ambient, time);
+        const lightsMs = timedParts ? performance.now() - tLights : 0;
         canvas.dataset.localLights = `${lights.stats.sent}/${lights.stats.known}`;
         cel.setFloat("underwater", underwater);
         cel.setFloat("lampOn", state && state.opening.phase >= 4 && lampOn(state) ? 1 : 0);
+        // Viewer velocity (smoothed) for heading-aware prefetch; a jump resets it.
+        const nowMs = performance.now();
+        if (lastStream && !jumped && nowMs > lastStream.time) {
+          const v = camera.position.subtract(lastStream.at).scale(1000 / (nowMs - lastStream.time));
+          velocity = Vector3.Lerp(velocity, v, 0.1);
+        } else velocity = Vector3.Zero();
+        lastStream = { at: camera.position.clone(), time: nowMs };
+        // Records must have landed before the streamer builds from them;
+        // without a store (or a bake) clusters generate live.
+        const tCaves = timed ? performance.now() : 0;
+        // Sub-parts of the cave work, for measurement: the streamer's step, the
+        // light texture upload, field retention, and the view's activation.
+        let caveStepMs = 0, caveStreamMs = 0, caveRetainMs = 0;
+        if (!caves || caves.settled) {
+          const t0 = timed ? performance.now() : 0;
+          streamFrame = streamer.update(camera.position, velocity);
+          worstCaveBuildMs = Math.max(worstCaveBuildMs, streamFrame.buildMs);
+          const t1 = timed ? performance.now() : 0;
+          caveView.stream(streamFrame.light, streamFrame.upload);
+          const t2 = timed ? performance.now() : 0;
+          caves?.retainLight(streamFrame.light);
+          if (timed) { caveStepMs = t1 - t0; caveStreamMs = t2 - t1; caveRetainMs = performance.now() - t2; }
+        }
+        if (++streamFrames % 30 === 0) terrainStore()?.prefetch(camera.position.add(velocity.scale(streamer.options.lookAhead)), 520);
+        const tView = timed ? performance.now() : 0;
         caveView.update(lamp ?? camera.position, camera.getTarget().subtract(camera.position),
           !!state && state.opening.phase >= 4 && lampOn(state) && underwater === 1);
+        const caveViewMs = timed ? performance.now() - tView : 0;
+        const caveMs = timed ? performance.now() - tCaves : 0;
+        // This frame's texture upload work, wherever it ran (prefetch or activation).
+        const caveUpload = caveView.stats.frameUploadBytes > 0 ? { ms: +caveView.stats.frameUploadMs.toFixed(2), bytes: caveView.stats.frameUploadBytes } : null;
         canvas.dataset.cave = caveView.active ?? "";
         streaks.update(camera.position, state?.tick ?? 0, !!state && state.opening.phase >= 4 && underwater === 1);
         canvas.dataset.currentStreaks = String(streaks.shown);
+        const tActors = timedParts ? performance.now() : 0;
         placed.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         fieldKit.update(state, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
         hub.update(time, { x: camera.position.x, y: camera.position.y, z: camera.position.z });
+        far.update();
+        canvas.dataset.farLandmarks = String(far.shown);
         if (state) creatures.update(ecologyView(state.world.ecology, state.tick, presentationStimulus(state)), time,
           { x: camera.position.x, y: camera.position.y, z: camera.position.z }, state);
+        const actorsMs = timedParts ? performance.now() - tActors : 0;
         cel.setFloat("time", time);
         water.setFloat("time", time);
         sky.setFloat("time", time);
@@ -384,7 +530,21 @@ export function createRenderer(
         canvas.dataset.cameraPosition = camera.position.asArray().map(n => n.toFixed(3)).join(",");
         // CR-1: the sim tick, for evidence drivers timing creature rhythms (as cameraPosition is for steering).
         canvas.dataset.tick = String(state?.tick ?? 0);
-        scene.render();
+        const tRender = timed ? performance.now() : 0;
+        if (settleSince >= 0) { engine.clear(new Color4(0, 0, 0, 1), true, true); canvas.dataset.settling = "true"; }
+        else { scene.render(); canvas.dataset.settling = "false"; }
+        if (timed) (globalThis as { __siltwakePresent?: unknown }).__siltwakePresent = {
+          regions: +regionsMs.toFixed(2), lights: +lightsMs.toFixed(2), optics: +opticsMs.toFixed(2), actors: +actorsMs.toFixed(2),
+          lightScan: +lights.stats.scanMs.toFixed(2), lightPlace: +lights.stats.placeMs.toFixed(2), lightSelect: +lights.stats.selectMs.toFixed(2),
+          lightCount: lights.stats.placed, evicted: world?.totals.evicted ?? 0,
+          chunks: +chunkMs.toFixed(2), caves: +caveMs.toFixed(2), render: +(performance.now() - tRender).toFixed(2),
+          buildMs: +(world?.buildMs ?? 0).toFixed(2), maxStepMs: +(world?.maxStepMs ?? 0).toFixed(2), uploadMs: +(world?.uploadMs ?? 0).toFixed(2),
+          uploads: world?.uploads ?? 0, caveBuildMs: +(streamFrame?.buildMs ?? 0).toFixed(2),
+          jump, stepUnit: world?.maxStepUnit ?? null,
+          caveStep: +caveStepMs.toFixed(2), // The streamer reuses its pass timings: a copy per frame (wanted list, eviction, light lists).
+          cavePasses: streamFrame ? { score: +streamFrame.passMs.score.toFixed(2), evict: +streamFrame.passMs.evict.toFixed(2), light: +streamFrame.passMs.light.toFixed(2) } : null, caveStream: +caveStreamMs.toFixed(2), caveRetain: +caveRetainMs.toFixed(2), caveView: +caveViewMs.toFixed(2), caveUpload, lightsIn: lights.stats.considered, lightsWalked: lights.stats.walked,
+          lightSlow: lights.stats.slowest && lights.stats.slowest.ms > 2 ? { ...lights.stats.slowest, ms: +lights.stats.slowest.ms.toFixed(1) } : null,
+        };
         canvas.dataset.meshes = String(scene.meshes.length);
         canvas.dataset.vertices = String(scene.meshes.reduce((n, m) => n + m.getTotalVertices(), 0));
         canvas.dataset.triangles = String(scene.meshes.reduce((n, m) => n + m.getTotalIndices() / 3, 0));
@@ -438,6 +598,7 @@ export function createRenderer(
         placed.dispose();
         fieldKit.dispose();
         hub.dispose();
+        far.dispose();
         caveView.dispose();
         streaks.dispose();
         lights.dispose();

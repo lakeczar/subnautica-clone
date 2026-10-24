@@ -171,7 +171,7 @@ test("POIs keep clear of carrier lanes (25 m past the hull), routes, W2's lanes 
 test("ADVERSE controls: a float on a carrier lane, art in a sibling cave and a lamp off the spire are all caught", () => {
   const path = ROUTES.find(r => r.id === "route.divide.meridian_broad")!.path, lane = path[Math.floor(path.length / 2)]!;
   assert.match(crowds({ x: lane.x, y: lane.y - 20, z: lane.z + 20 }) ?? "", /meridian_broad/, "28 m from a carrier lane's keel line is too close");
-  assert.match(crowds({ x: 800, y: worldFloor(800, -1235), z: -1235 }) ?? "", /ca3\.divide_east_pocket/, "CA-3's east pocket is a keep-out");
+  assert.match(crowds({ x: 800, y: worldFloor(800, -1235), z: -1235 }) ?? "", /divide_east_pocket/, "CA-3's east pocket is a keep-out");
   assert.match(crowds({ x: 330, y: -100, z: -600 }) ?? "", /pinnacle|w2|hub/, "W2's crown is a keep-out");
   const spire = STRUCTURE_SOLIDS.find(s => s.id === "meridian.spire.shaft")!.bounds;
   assert.ok(!inBox({ x: spire.max.x + 1, y: spire.min.y + 20, z: (spire.min.z + spire.max.z) / 2 }, spire, 0.1), "a lamp 1 m off the spire is not on it");

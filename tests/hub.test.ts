@@ -2,7 +2,8 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { HULL_COLLIDERS, PLACES, RECIPES, type MaterialId, type RecipeId } from "../src/content/registry.js";
 import { sweepHull } from "../src/content/regions/access.js";
-import { caves, CAVE_SOURCES } from "../src/content/regions/caves.js";
+import { caveDef, CAVE_SOURCES } from "../src/content/regions/caves.js";
+import { HUB_CAVE_SOURCES } from "../src/content/regions/hubCaves.js";
 import { drape } from "../src/content/regions/drape.js";
 import { CRAFT_PROFILES, RAW_ROUTES, ROUTES } from "../src/content/regions/passages.js";
 import { RESCUE_PLANS } from "../src/content/regions/rescue.js";
@@ -96,7 +97,8 @@ test("carrier lanes pass between the pinnacles at depth: no route or tether is l
 const RAW_PATHS = new Map(RAW_ROUTES.map(r => [r.id, r.path] as const));
 
 test("nothing passes through the pinnacles' cave rock: every route, tether and parked hull is clear of it", () => {
-  const rock = caves(worldFloor).filter(d => d.id !== "fanvault").flatMap(d => d.rock.map(s => ({ id: s.id, bounds: { min: s.min, max: s.max } })));
+  // The hub's own caves; every cave against every lane is cw1-caves.heavy (CW-1).
+  const rock = HUB_CAVE_SOURCES.map(s => caveDef(s.id, worldFloor)).flatMap(d => d.rock.map(s => ({ id: s.id, bounds: { min: s.min, max: s.max } })));
   const lines: [string, readonly Vec3[], keyof typeof CRAFT_PROFILES][] = [
     ...ROUTES.filter(r => r.role !== "walk").map(r => [r.id, r.path, r.profile] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES]),
     ...RESCUE_PLANS.flatMap(p => p.tethers.map((t, i) => [`${p.id}#${i}`, t, "medium"] as [string, readonly Vec3[], keyof typeof CRAFT_PROFILES])),

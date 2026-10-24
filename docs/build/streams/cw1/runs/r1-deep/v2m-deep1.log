@@ -1,0 +1,80 @@
+heavy-check: ticket 261024-012949-00e9; the job keeps running if this call ends: wait with `heavy-check wait 261024-012949-00e9`, stop with `heavy-check cancel 261024-012949-00e9`
+heavy-check: 261024-012949-00e9 admitted after 4m59s as gpu: 2 cpu, 3072 MiB, GPU; runs to its end; stops if silent for 15m00s (or touch $SILTWAKE_JOB_HEARTBEAT), at the 4h00m runaway ceiling
+[5.4s] renderer ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)
+[25.2s] cold start {"titleMs":5184,"playableMs":24766,"collisionPackMs":4305.5,"records":true}
+[26.2s] loaded {"cam":[69.273,-9.544,-58.416],"depth":11.4,"vitals":"O₂ 100% Creel air HEALTH 100 FOOD 67 F · eat meal CREEL 95% power Hull 100% · 11 / 800 m · hold 0/96 CU"}
+[26.2s] renderer main thread 3644233
+[39.2s] notice "Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). G spends 25 reserve-cell charge on a decoy pulse." at 69,-53,-62
+[137.1s] skip cruise#2 254.2 m short at 410.9,-56.0,-564.6
+[288.2s] at divide_lee_burrow active light divide_lee_burrow depth 383.9
+[288.3s] screenshot /work/tmp/cw1/r5-deep/s1-01-divide_lee_burrow.jpg
+[332.7s] notice "Saddle downwelling · Filter ribbons on the crest all lean south and down toward the mirror layer; suspended grains streak past. In slack water they stand upright." at 401,-344,-1211
+[335.6s] at divide_mirror_pocket active light divide_mirror_pocket depth 350.7
+[403.4s] at divide_fissure_window active light divide_fissure_window depth 424.9
+[473.8s] at divide_lintel_galleries active light divide_lintel_galleries depth 353.8
+[492.3s] at divide_crest_hollow active light divide_crest_hollow depth 364.9
+[492.3s] screenshot /work/tmp/cw1/r5-deep/s1-02-divide_crest_hollow.jpg
+[528.5s] recover cruise#31 40.3 m short
+[534.8s] recover cruise#31 40.3 m short
+[541.0s] recover cruise#31 40.2 m short
+[552.2s] skip cruise#31 40.1 m short at 788.0,-356.9,-1226.3
+[557.3s] recover cruise#32 53.5 m short
+[591.0s] recover cruise#32 48.1 m short
+[597.2s] recover cruise#32 48.1 m short
+[608.5s] skip cruise#32 48.2 m short at 788.0,-365.6,-1243.2
+[613.5s] recover divide_east_pocket 39.0 m short
+[619.7s] recover divide_east_pocket 39.0 m short
+[625.9s] recover divide_east_pocket 39.0 m short
+[637.2s] skip divide_east_pocket 39.0 m short at 787.9,-365.6,-1244.0
+[637.2s] near divide_east_pocket active light divide_east_pocket depth 365.6
+[642.2s] recover cruise#34 48.4 m short
+[648.4s] recover cruise#34 48.4 m short
+[654.7s] recover cruise#34 48.4 m short
+[665.9s] skip cruise#34 48.4 m short at 788.0,-365.6,-1244.1
+[670.9s] recover cruise#35 48.5 m short
+[677.1s] recover cruise#35 48.5 m short
+[683.4s] recover cruise#35 48.5 m short
+[694.6s] skip cruise#35 48.5 m short at 788.0,-365.6,-1244.1
+[699.6s] recover cruise#36 162.1 m short
+[705.8s] recover cruise#36 162.1 m short
+[712.1s] recover cruise#36 162.1 m short
+[723.3s] skip cruise#36 162.1 m short at 788.0,-365.6,-1244.1
+[728.3s] recover cruise#37 176.3 m short
+[734.5s] recover cruise#37 176.3 m short
+[740.8s] recover cruise#37 176.3 m short
+[752.0s] skip cruise#37 176.3 m short at 788.0,-365.6,-1244.1
+[757.0s] recover divide_brine_cistern 163.9 m short
+[763.3s] recover divide_brine_cistern 163.9 m short
+[769.5s] recover divide_brine_cistern 163.9 m short
+[780.7s] skip divide_brine_cistern 163.9 m short at 788.0,-365.6,-1244.1
+[780.7s] near divide_brine_cistern active light divide_east_pocket depth 365.6
+[785.8s] recover cruise#39 176.3 m short
+[792.0s] recover cruise#39 176.3 m short
+[798.2s] recover cruise#39 176.3 m short
+[809.4s] skip cruise#39 176.3 m short at 788.0,-365.6,-1244.1
+[814.4s] recover cruise#40 205.3 m short
+[820.6s] recover cruise#40 205.3 m short
+[825.1s] notice "Oxygen exhausted. You recovered at Splitspine workshop. Knowledge and essential equipment remain. Ordinary cargo has a visited-site marker; disabled craft retain their hold and modules." at 10,3,-34
+[826.9s] recover cruise#40 1570.0 m short
+[848.5s] notice "Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). G spends 25 reserve-cell charge on a decoy pulse." at 72,-32,-111
+[909.4s] skip cruise#40 1155.7 m short at 248.3,-176.9,-331.5
+[1009.5s] skip cruise#41 713.9 m short at 538.0,-368.1,-693.5
+[1021.1s] notice "Oxygen exhausted. You recovered at Splitspine workshop. Knowledge and essential equipment remain. Ordinary cargo has a visited-site marker; disabled craft retain their hold and modules." at 10,3,-34
+[1026.0s] recover cruise#42 1607.7 m short
+[1043.5s] notice "Upper Canopy crowns: a sound hunter keeps this water. Near it, hold Z to run quiet and switch the lamp off (L). G spends 25 reserve-cell charge on a decoy pulse." at 71,-32,-111
+[1109.5s] skip cruise#42 1189.2 m short at 261.0,-194.2,-347.8
+[1209.5s] skip cruise#43 700.3 m short at 548.3,-377.9,-706.8
+[1215.8s] notice "Oxygen exhausted. You recovered at Splitspine workshop. Knowledge and essential equipment remain. Ordinary cargo has a visited-site marker; disabled craft retain their hold and modules." at 10,3,-34
+[1220.8s] recover cruise#44 1619.2 m short
+[1309.5s] skip cruise#44 1172.7 m short at 286.4,-201.8,-362.7
+[1364.5s] recover cruise#45 955.2 m short
+[1371.4s] recover cruise#45 955.2 m short
+[1378.4s] recover cruise#45 955.2 m short
+[1390.4s] skip cruise#45 955.2 m short at 434.7,-267.7,-529.2
+[1395.4s] recover meridian_footing_void 952.5 m short
+[1402.4s] recover meridian_footing_void 952.5 m short
+[1409.4s] recover meridian_footing_void 952.5 m short
+[1490.4s] skip meridian_footing_void 1248.7 m short at 249.3,-178.5,-315.9
+[1490.4s] near meridian_footing_void active light - depth 176.9
+Killed
+heavy-check: processes left behind by the command were stopped

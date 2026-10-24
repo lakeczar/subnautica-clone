@@ -16,7 +16,8 @@ import type { DockKind, UpgradeId } from "../content/upgrades/catalogue.js";
 import { LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import { isSeed, SEEDS } from "../content/systems/cultivation.js";
 import { SYS2_SOURCES } from "../content/systems/items.js";
-import { fieldLevel, protectionFor, sampleHazards, shapeWeight } from "./ecology/hazards.js";
+import { caveFieldLevel, cycleLevel, fieldLevel, protectionFor, sampleHazards, shapeWeight } from "./ecology/hazards.js";
+import { DEEP_CAVE_HAZARDS } from "../content/regions/caves/deepCaves.js";
 import type { Protection } from "./ecology/types.js";
 import { launchPoint } from "./carrier.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
@@ -63,6 +64,14 @@ export function hazardsAt(p: Vec3, tick: number): Hazards {
     if (level <= 1e-9) continue;
     const cycled = "cycle" in f;
     heat.push({ level, kind: !cycled ? "ambient" : fieldLevel(id, tick) > ((f as { baseline?: number }).baseline ?? 0) + 1e-9 ? "burst" : "core" });
+  }
+  // CA-3's cave heat (CW-1): a breath is a burst above its baseline, else a core.
+  for (const f of DEEP_CAVE_HAZARDS) {
+    if (f.kind !== "heat") continue;
+    const level = caveFieldLevel(f, p, tick);
+    if (level <= 1e-9) continue;
+    const cycled = f.cycle ? cycleLevel(f.cycle, tick) > 1e-9 : false;
+    heat.push({ level, kind: !f.cycle ? "ambient" : cycled ? "burst" : "core" });
   }
   return { heat, brine: sampleHazards(p, tick).brine };
 }

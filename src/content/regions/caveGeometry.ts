@@ -1,7 +1,7 @@
 import type { Solid } from "../../sim/world.js";
 import type { MeshRecipe } from "../../render/kit/types.js";
 import type { Aabb, LodLevel, Rect, Vec3 } from "../../world/types.js";
-import type { CaveDef, CaveRoom, CaveSource, CaveSurface, CarveSource, TerraceSource } from "./caves.js";
+import type { CaveDef, CaveRoom, CaveSource, CaveStyle, CaveSurface, CarveSource, TerraceSource } from "./caves.js";
 import { cachedBuild, type CacheKey, floorKey } from "../buildCache.js";
 import { fbm, smooth } from "./noise.js";
 import type { FloorFunction } from "./terrain.js";
@@ -181,6 +181,20 @@ export interface CaveSampler {
 }
 
 const ownsPoint = (r: Rect, x: number, z: number): boolean => x >= r.minX && x < r.maxX && z >= r.minZ && z < r.maxZ;
+
+/** Owned footprints may share an edge (they are half-open) but must not
+ * overlap: there is no union policy for two caves owning one column, so the
+ * first-match floor lookup and concatenated rock would silently disagree.
+ * Throws until such a policy exists. (Here, not in `caves.ts`, so content
+ * modules can check without a value import from the registry.) */
+export function assertDisjointFootprints(sources: readonly CaveSource[]): void {
+  const all = sources.map(s => ({ id: s.id, r: s.footprint }));
+  for (let i = 0; i < all.length; i++) for (let j = i + 1; j < all.length; j++) {
+    const a = all[i]!.r, b = all[j]!.r;
+    if (a.minX < b.maxX && b.minX < a.maxX && a.minZ < b.maxZ && b.minZ < a.maxZ)
+      throw new Error(`caves ${all[i]!.id} and ${all[j]!.id}: overlapping footprints have no union policy`);
+  }
+}
 /** Two footprints touch along a side for a positive length: a crawl may
  * cross there, and each samples the other's source in its pad. */
 export function sharesEdge(a: Rect, b: Rect): boolean {
@@ -268,14 +282,16 @@ export function caveVolume(def: CaveDef): CaveVolume {
   return v;
 }
 
-function sampleVolume(source: CaveSource, floor: FloorFunction, voxel: number, neighbours: readonly CaveSource[] = []): {
+/** Pad, in voxels, when edge rock may lean on the ground outside (`edgeRock`): 2 m, so a cube can stand three voxels out. */
+const EDGE_PAD = 4;
+function sampleVolume(source: CaveSource, floor: FloorFunction, voxel: number, neighbours: readonly CaveSource[] = [], edgeRock = false): {
   grid: CaveGrid; raw: Uint8Array; field: Float32Array; near: Uint8Array; under: Uint8Array; owned: Uint8Array; linked: Uint8Array;
   group: Uint8Array;
 } {
   const f = source.footprint;
   for (const v of [f.minX, f.maxX, f.minZ, f.maxZ, source.baseY, source.topY])
     if (!lattice(v, voxel)) throw new Error(`cave ${source.id}: ${v} is off the ${voxel} m lattice`);
-  const pad = neighbours.length ? LINKED_PAD : PAD;
+  const pad = neighbours.length ? LINKED_PAD : edgeRock ? EDGE_PAD : PAD;
   const origin = { x: f.minX - pad * voxel, y: source.baseY, z: f.minZ - pad * voxel };
   const nx = Math.round((f.maxX - f.minX) / voxel) + 2 * pad, nz = Math.round((f.maxZ - f.minZ) / voxel) + 2 * pad;
   const ny = Math.round((source.topY - source.baseY) / voxel);
@@ -371,10 +387,24 @@ function openRock(raw: Uint8Array, mask: Uint8Array, grid: CaveGrid): { rock: Ui
   return { rock, S, fits, opened, dropped };
 }
 
-/** Open owned rock by a 2 m cube, then cover the result with maximal boxes. */
-function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid): { opened: Uint8Array; boxes: VoxelBox[]; dropped: number } {
+/** Open owned rock by a 2 m cube, then cover the result with maximal boxes.
+ * With `ground` (edge rock, CW-1), a cube may lean on the exterior ground in
+ * the pad: owned rock at an uphill footprint edge, too thin to hold a cube
+ * on its own, stays rock where the ground outside continues it; only owned
+ * voxels are kept, and boxes are clipped back to the footprint. */
+function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid, ground?: Uint8Array): { opened: Uint8Array; boxes: VoxelBox[]; dropped: number } {
   const { nx, ny, nz } = grid, n = nx * ny * nz;
-  const { S, fits, opened, dropped } = openRock(raw, owned, grid);
+  let mask = owned;
+  if (ground) { mask = new Uint8Array(n); for (let at = 0; at < n; at++) mask[at] = owned[at]! | ground[at]!; }
+  const { S, fits, opened, dropped: all } = openRock(raw, mask, grid);
+  let dropped = all;
+  if (ground) {
+    dropped = 0;
+    for (let at = 0; at < n; at++) {
+      if (!owned[at]) { opened[at] = 0; continue; }
+      if (raw[at] && !opened[at]) dropped++;
+    }
+  }
   const inRock = (b: VoxelBox): boolean => b.i0 >= 0 && b.j0 >= 0 && b.k0 >= 0 && b.i1 <= nx && b.j1 <= ny && b.k1 <= nz &&
     boxSum(S, nx, ny, b.i0, b.i1, b.j0, b.j1, b.k0, b.k1) === (b.i1 - b.i0) * (b.j1 - b.j0) * (b.k1 - b.k0);
   const grow = (b: VoxelBox, faces: readonly (keyof VoxelBox)[]): void => {
@@ -424,18 +454,35 @@ function thickRock(raw: Uint8Array, owned: Uint8Array, grid: CaveGrid): { opened
       covered[bi + nx * (bj + ny * bk)] = covered[bi + nx * (bj + ny * bk)]! - 1;
   }
   kept.reverse();
-  return { opened, boxes: kept, dropped };
+  if (!ground) return { opened, boxes: kept, dropped };
+  // Clip to the owned columns (the footprint): leaning boxes end at its edge.
+  let i0 = nx, i1 = 0, k0 = nz, k1 = 0;
+  for (let k = 0; k < nz; k++) for (let i = 0; i < nx; i++) if (owned[i + nx * ny * k]) {
+    i0 = Math.min(i0, i); i1 = Math.max(i1, i + 1); k0 = Math.min(k0, k); k1 = Math.max(k1, k + 1);
+  }
+  const clipped = kept.map(b => ({ ...b, i0: Math.max(b.i0, i0), i1: Math.min(b.i1, i1), k0: Math.max(b.k0, k0), k1: Math.min(b.k1, k1) }))
+    .filter(b => b.i0 < b.i1 && b.k0 < b.k1);
+  return { opened, boxes: clipped, dropped };
 }
 
 // --- Definition ---------------------------------------------------------------
 
 /** Generate a cave definition from its source. Pure and deterministic, so on
  * a named floor the generated data may come from the build cache
- * (`content/buildCache.ts`); the definition still refers to `source` itself. */
-export function buildCave(source: CaveSource, floor: FloorFunction, neighbours: readonly CaveSource[] = []): CaveDef {
-  const key = floorKey("cave", floor, [source, neighbours], import.meta.url);
+ * (`content/buildCache.ts`); the definition still refers to `source` itself.
+ *
+ * `edgeRock` (CW-1): rock at uphill footprint edges leans on the exterior
+ * ground outside (see `thickRock`), so it no longer sinks under the shell's
+ * edge, which is snapped to the floor. Boxes stay inside the footprint; one
+ * clipped at an edge may be thinner than `MIN_ROCK` across it, with the
+ * exterior ground (the world's collar columns) continuing it. Not with
+ * edge neighbours (their seam is exact already). */
+export function buildCave(source: CaveSource, floor: FloorFunction, neighbours: readonly CaveSource[] = [],
+  options: { readonly edgeRock?: boolean } = {}): CaveDef {
+  const edgeRock = !!options.edgeRock && !neighbours.length;
+  const key = floorKey("cave", floor, [source, neighbours, edgeRock], import.meta.url);
   const built = cachedBuild(key, () => {
-    const def = generateCave(source, floor, neighbours);
+    const def = generateCave(source, floor, neighbours, edgeRock);
     return { def: { ...def, source: null }, volume: caveVolume(def) };
   });
   const def: CaveDef = {
@@ -457,12 +504,14 @@ export function derivedCacheKey(def: CaveDef, kind: string, module: string, extr
   return base && { key: `${kind}:${base.key}`, modules: [module, ...base.modules, ...extra] };
 }
 
-function generateCave(source: CaveSource, floor: FloorFunction, neighbours: readonly CaveSource[]): CaveDef {
+function generateCave(source: CaveSource, floor: FloorFunction, neighbours: readonly CaveSource[], edgeRock: boolean): CaveDef {
   const started = Date.now();
   checkNeighbours(source, neighbours);
-  const s = sampleVolume(source, floor, 0.5, neighbours);
+  const s = sampleVolume(source, floor, 0.5, neighbours, edgeRock);
   const { grid } = s, { nx, ny, nz, origin, voxel } = grid;
-  const { opened, boxes, dropped } = thickRock(s.raw, s.owned, grid);
+  let ground: Uint8Array | undefined;
+  if (edgeRock) { ground = new Uint8Array(s.raw.length); for (let at = 0; at < ground.length; at++) ground[at] = s.owned[at] || s.group[at] ? 0 : 1; }
+  const { opened, boxes, dropped } = thickRock(s.raw, s.owned, grid, ground);
   const solid = new Uint8Array(s.raw.length);
   for (let at = 0; at < solid.length; at++) solid[at] = s.owned[at] ? opened[at]! : s.raw[at]!;
   // In a neighbour's pad, its rock as its own build keeps it: opened by
@@ -719,7 +768,32 @@ const STYLE_PALETTES = {
     wall: hex("#3c4b4b"), wall2: hex("#34423f"), ceiling: hex("#566c6b"), floor: hex("#a7b3a2"), floor2: hex("#96a593"),
     mouths: [hex("#8ff0c4"), hex("#ffcf7a"), hex("#a8d8ff")],
   },
+  lava_glass: {
+    top: hex("#3a3537"), top2: hex("#433c3e"), rim: hex("#b8673c"), strata: [hex("#2c2729"), hex("#342e30"), hex("#3e3638")] as const,
+    sand: hex("#73685e"), sand2: hex("#665c53"),
+    wall: hex("#2f2c30"), wall2: hex("#38323a"), ceiling: hex("#242126"), floor: hex("#51443d"), floor2: hex("#463b35"),
+    mouths: [hex("#ff8a3d"), hex("#ffc070"), hex("#ff6a4a")],
+  },
+  brine_stone: {
+    top: hex("#a9a5ba"), top2: hex("#9f9bb0"), rim: hex("#d6cee8"), strata: [hex("#918da5"), hex("#87839c"), hex("#9c98b0")] as const,
+    sand: hex("#bab6c8"), sand2: hex("#aca8bc"),
+    wall: hex("#615d75"), wall2: hex("#59556b"), ceiling: hex("#49465d"), floor: hex("#bcc6de"), floor2: hex("#acb7d1"),
+    mouths: [hex("#c2abff"), hex("#92dbff"), hex("#e6caff")],
+  },
+  cut_masonry: {
+    top: hex("#8e9188"), top2: hex("#84877e"), rim: hex("#cbbb90"), strata: [hex("#787a71"), hex("#6e7068"), hex("#82847b")] as const,
+    sand: hex("#9c9c8e"), sand2: hex("#909082"),
+    wall: hex("#5c5f5a"), wall2: hex("#545751"), ceiling: hex("#454841"), floor: hex("#7f8176"), floor2: hex("#75776d"),
+    mouths: [hex("#ffd47c"), hex("#a1e2d2"), hex("#f4ba82")],
+  },
 } as const;
+/** Default palettes of the regions whose caves set no style (CW-1): the deep
+ * regions. Reef, Isles, Canopy, Basin and the hub keep their own looks. */
+const REGION_STYLES: Partial<Record<CaveSource["region"], CaveStyle>> = {
+  thermal_rift: { rock: "lava_glass" },
+  brine_divide: { rock: "brine_stone" },
+  deep_district: { rock: "cut_masonry" },
+};
 const GLIMMER_HEAD = hex("#d8ffe9"), GLIMMER_TAIL = hex("#5fc9b4"), CLAPPER = hex("#e6dcc2"), CLAPPER2 = hex("#c9bfa6");
 
 /** The styled cave shell: regional stone, mouth colonies and the resident.
@@ -788,7 +862,8 @@ function styledColors(source: CaveSource, style: NonNullable<CaveSource["style"]
 
 function shellColors(source: CaveSource, floor: FloorFunction, positions: Float32Array, normals: Float32Array,
   rooms: Uint8Array, out: Float32Array): void {
-  if (source.style) return styledColors(source, source.style, floor, positions, normals, rooms, out);
+  const style = source.style ?? REGION_STYLES[source.region];
+  if (style) return styledColors(source, style, floor, positions, normals, rooms, out);
   const glows: Glow[] = [];
   for (const p of source.portals) if (p.kind === "mouth") {
     const inward = { x: -p.normal.x * 3, z: -p.normal.z * 3 };
@@ -949,8 +1024,9 @@ function generateShell(def: CaveDef, lod: LodLevel): MeshRecipe {
 }
 
 /** Bake form: the shell split per 128 m column (layer-0 recipe parts). */
-export function caveShellByColumn(def: CaveDef, lod: LodLevel, columns: readonly { readonly id: string; readonly rect: Rect }[]): Map<string, MeshRecipe> {
-  const out = new Map<string, MeshRecipe>(), shell = caveShell(def, lod), f = def.replacementFootprints[0]!;
+export function caveShellByColumn(def: CaveDef, lod: LodLevel, columns: readonly { readonly id: string; readonly rect: Rect }[],
+  shell: MeshRecipe = caveShell(def, lod)): Map<string, MeshRecipe> {
+  const out = new Map<string, MeshRecipe>(), f = def.replacementFootprints[0]!;
   for (const c of columns) {
     if (c.rect.maxX <= f.minX || c.rect.minX >= f.maxX || c.rect.maxZ <= f.minZ || c.rect.minZ >= f.maxZ) continue;
     const part = clipMeshToRect(shell, c.rect, `${c.id}.cave.${def.id}`);

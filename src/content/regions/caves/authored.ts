@@ -1,8 +1,7 @@
 import type { MaterialId, RegionId } from "../../registry.js";
-import { assertDisjointFootprints, AUTHORED_CAVE_SOURCES, EXTERIOR, type CarveSource, type CaveDef, type CavePortal, type CaveRoomSource,
-  type CaveRoute, type CaveSource, type TerraceSource } from "../caves.js";
+import type { CarveSource, CaveDef, CavePortal, CaveRoomSource, CaveRoute, CaveSource, TerraceSource } from "../caves.js";
 import { floorIdentity, nameFloor } from "../../buildCache.js";
-import { buildCave } from "../caveGeometry.js";
+import { assertDisjointFootprints, buildCave } from "../caveGeometry.js";
 import type { CraftProfileId } from "../passages.js";
 import type { FloorFunction } from "../terrain.js";
 import type { Vec3 } from "../../../world/types.js";
@@ -135,6 +134,10 @@ export interface CaveGroup {
 }
 
 // --- Authoring shorthands -------------------------------------------------------
+
+/** The open-water side of a portal (`caves.ts` `EXTERIOR`). Spelled out: the
+ * registry lists these groups, so nothing here imports a value from it. */
+const EXTERIOR = "exterior";
 
 export const v3 = (x: number, y: number, z: number): Vec3 => ({ x, y, z });
 type Axis = "+x" | "-x" | "+z" | "-z" | "+y" | "-y";
@@ -306,9 +309,11 @@ export function groupDef(group: CaveGroup, floor: FloorFunction): CaveDef {
   return def;
 }
 
-/** Throws if any footprint overlaps another, every authored kit cave (CA-1's included) too. */
-export function assertGroupsDisjoint(groups: readonly CaveGroup[]): void {
-  assertDisjointFootprints([...AUTHORED_CAVE_SOURCES, ...groups.map(g => g.source)]);
+/** Throws if any footprint overlaps another or one of `others` (pass the
+ * registry's other caves; groups already among them are not counted twice). */
+export function assertGroupsDisjoint(groups: readonly CaveGroup[], others: readonly CaveSource[] = []): void {
+  const own = new Set(groups.map(g => g.source.id));
+  assertDisjointFootprints([...others.filter(s => !own.has(s.id)), ...groups.map(g => g.source)]);
 }
 
 /** A group moved rigidly by `by` (whole metres, so every lattice edge and

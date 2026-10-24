@@ -1,6 +1,6 @@
 import { EVIDENCE, HULLS, HULL_COLLIDERS, ITEMS, OPTIONAL_RECORD, renewable, SOURCES, techRecord } from "../content/registry.js";
 import type { EvidenceId, SourceId } from "../content/registry.js";
-import { createWorldQueries, hullFloor, moveHull, withinWorldBounds } from "./world.js";
+import { createWorldQueries, hullFloor, moveHull, withinWorldBounds, type CaveWorld } from "./world.js";
 import { FIXED_SECONDS as DT } from "./clock.js";
 import type {
   GameCommand,
@@ -22,6 +22,7 @@ import {
   storeMaterials,
   transfer,
   usedCapacity,
+  facility as facilityRestored,
 } from "./inventory.js";
 import {
   collectWithOutcome,
@@ -99,6 +100,7 @@ import { protectionFor } from "./ecology/hazards.js";
 import { MOTION, respondToFlow } from "./currents/motion.js";
 import { dampIntoFace, impactLoss, supportedDrift } from "./currents/move.js";
 import { flowAt, worldCurrents } from "./currents/world.js";
+import type { FlowSample } from "./currents/flow.js";
 import { stepUpgrades, upgradeAction } from "./fittings.js";
 import { stepSystems, systemsCommand } from "./systemsLink.js";
 import { hostUpgradeCommand } from "./hostUpgrades.js";
@@ -601,6 +603,18 @@ export function executeCommand(
     );
   return { state: draft, events };
 }
+/** Still water: carved cave water shelters from every current (CW-1). */
+const STILL_WATER: FlowSample = { flow: { x: 0, y: 0, z: 0 }, speed: 0, volumes: [] };
+/** The current that moves an actor at `p`: the world's flow field, except in
+ * a kit cave's carved water (its inside), where it is still. Authored flow
+ * volumes know nothing of rock, so without this a crest downwelling blew
+ * through CA-3's "sheltered" crest hollow and lintel galleries and drifted a
+ * resting diver into the brine (Sol, CA-3 R1). Exterior flow, and the
+ * caves' own heat and brine, are untouched. */
+export function flowHere(world: WorldQueries, p: Vec3, tick: number): FlowSample {
+  return "kitCaves" in world && (world as CaveWorld).kitCaves.inside(p) ? STILL_WATER : flowAt(p, tick);
+}
+
 /** A detached fixed step: `state` is left untouched and a new state returned.
  * For forks and comparisons (tests, previews); play uses `stepGameInPlace`. */
 export function stepGame(
@@ -754,7 +768,7 @@ export function stepGameInPlace(
     const powered = !v.disabled && v.charge > 0, drive = { ...v.velocity };
     const cruiseDrain = profile.drain / profile.capacity;
     const stopped = Math.hypot(target.x, target.y, target.z) < MOTION.stopped;
-    const current = v.berth ? null : respondToFlow(flowAt(v.pose.position, s.tick).flow, {
+    const current = v.berth ? null : respondToFlow(flowHere(world, v.pose.position, s.tick).flow, {
       id: v.hull, authority: profile.current, cruise: profile.speed.cruise, drain: cruiseDrain,
     }, drive, (v.upgrades.anchored || lineHolds(v)) && stopped ? "anchor" : powered && stopped ? "station" : "none", powered);
     const driftDelta = current ? { x: current.drift.x * DT, y: current.drift.y * DT, z: current.drift.z * DT } : ZERO;
@@ -939,7 +953,7 @@ export function stepGameInPlace(
     // CY currents, swimming only: the drift joins the swim inside each slice,
     // so support, the cliff guard and the surface cap still apply to it. The
     // diver holds nothing and pays only time and position, never health.
-    const swimCurrent = mode === "swimming" ? respondToFlow(flowAt(old, s.tick).flow,
+    const swimCurrent = mode === "swimming" ? respondToFlow(flowHere(world, old, s.tick).flow,
       { id: "diver", authority: protectionFor(null, fittedProtections(s)).current, cruise: speed, drain: 0 },
       { x: vx, y: vy, z: vz }, "none") : null;
     const drift = swimCurrent?.drift ?? ZERO;
@@ -1065,8 +1079,8 @@ export function stepGameInPlace(
   // A current's readable cue, once, as the swimmer or craft enters its flow.
   if (s.player.mode === "swimming" || s.player.mode === "piloting") {
     const felt = (c: { weight: number; level: number }): boolean => c.weight * c.level > 0.05;
-    const was = new Set(flowAt(old, pre.tick).volumes.filter(felt).map(c => c.id));
-    for (const c of flowAt(s.player.pose.position, s.tick).volumes)
+    const was = new Set(flowHere(world, old, pre.tick).volumes.filter(felt).map(c => c.id));
+    for (const c of flowHere(world, s.player.pose.position, s.tick).volumes)
       if (!was.has(c.id) && felt(c)) {
         const def = worldCurrents().volumes.find(volume => volume.id === c.id);
         if (def) events.push({ type: "notice", channel: "hazard", context: "ecology", message: `${def.label} · ${def.cue}` });
@@ -1135,4 +1149,34 @@ export function stepGameInPlace(
       v && !v.disabled && v.charge > 0)
     events.push(thrust);
   return events;
+}
+
+/** Cave admission's relocation (CW-1; LC's rescue and LC-07's refuge),
+ * applied before anything steps. A deterministic teleport, never travel:
+ * - **point:** the controlled craft (or the diver) is moved to the verified
+ *   exterior point, at rest;
+ * - **refuge:** the diver leaves any craft (it stays where it is, hold and
+ *   modules intact) and wakes at their refuge base: the last restored base
+ *   rested at while it still works, else the pod.
+ * Inventory, knowledge, vitals and vessel state are untouched. */
+export function relocateForCave(state: GameState, to: { kind: "point"; position: Vec3 } | { kind: "refuge" }): GameState {
+  const s = structuredClone(state), p = s.player;
+  if (to.kind === "point") {
+    const v = s.fleet.vehicles.find(x => x.id === p.controlledVehicleId);
+    if (v) { v.pose.position = { ...to.position }; v.velocity = { x: 0, y: 0, z: 0 }; }
+    p.pose = { ...p.pose, position: { ...to.position } };
+    p.velocity = { x: 0, y: 0, z: 0 };
+    if (!v && p.mode !== "interior") p.mode = to.position.y < -0.5 ? "swimming" : p.mode;
+    return s;
+  }
+  const rested = REST_BASES[p.refugeId], base = rested.facility === null || facilityRestored(s, rested.facility) ? p.refugeId : "home_pod";
+  const wake = REST_BASES[base].wake;
+  p.controlledVehicleId = null; p.interiorId = null; p.interiorPose = null;
+  p.pose = { frame: "world", position: { ...wake }, yaw: 0, pitch: -0.05 };
+  p.velocity = { x: 0, y: 0, z: 0 };
+  p.mode = wake.y >= 0 ? "walking" : "swimming";
+  p.refugeId = base;
+  s.world.action = null;
+  s.feedback = `This cave could not load. You were returned to ${base === "home_pod" ? "the home pod" : REST_BASES[base].label}; your craft waits where you left it.`;
+  return s;
 }

@@ -27,10 +27,27 @@ export interface LightCluster {
 /** Group a mesh's emissive vertices into lights, in its local space.
  * `positions` xyz and `colors` rgba per vertex, as the cel meshes carry them. */
 export function clusterEmissive(positions: ArrayLike<number>, colors: ArrayLike<number>, cell = CLUSTER_CELL): LightCluster[] {
+  const job = emissiveScan(positions, colors, cell);
+  while (!job.step(Infinity)) { /* whole mesh at once */ }
+  return job.clusters();
+}
+
+/** `clusterEmissive` resumable (CW-1): a streamed chunk can carry hundreds of
+ * thousands of vertices, so the scene lights scan it a slice at a time;
+ * `step(vertices)` reads at most that many and reports whether it is done.
+ * The clusters are the same as in one pass. */
+export function emissiveScan(positions: ArrayLike<number>, colors: ArrayLike<number>, cell = CLUSTER_CELL) {
   const cells = new Map<string, { n: number; x: number; y: number; z: number; r: number; g: number; b: number;
     lo: [number, number, number]; hi: [number, number, number]; faint: boolean }>();
   const count = Math.min(positions.length / 3, colors.length / 4);
-  for (let i = 0; i < count; i++) {
+  let next = 0;
+  const clusters = (): LightCluster[] => [...cells.values()].map(c => ({
+    x: c.x / c.n, y: c.y / c.n, z: c.z / c.n, r: c.r / c.n, g: c.g / c.n, b: c.b / c.n,
+    extent: Math.max(c.hi[0] - c.lo[0], c.hi[1] - c.lo[1], c.hi[2] - c.lo[2]), faint: c.faint,
+  }));
+  const step = (vertices: number): boolean => {
+  const end = Math.min(count, next + vertices);
+  for (let i = next; i < end; i++) {
     const a = colors[i * 4 + 3]!;
     if (!(a <= FAINT_ALPHA)) continue;
     const faint = a > UNLIT_ALPHA;
@@ -43,10 +60,10 @@ export function clusterEmissive(positions: ArrayLike<number>, colors: ArrayLike<
     c.lo = [Math.min(c.lo[0], x), Math.min(c.lo[1], y), Math.min(c.lo[2], z)];
     c.hi = [Math.max(c.hi[0], x), Math.max(c.hi[1], y), Math.max(c.hi[2], z)];
   }
-  return [...cells.values()].map(c => ({
-    x: c.x / c.n, y: c.y / c.n, z: c.z / c.n, r: c.r / c.n, g: c.g / c.n, b: c.b / c.n,
-    extent: Math.max(c.hi[0] - c.lo[0], c.hi[1] - c.lo[1], c.hi[2] - c.lo[2]), faint: c.faint,
-  }));
+  next = end;
+  return next >= count;
+  };
+  return { step, clusters };
 }
 
 /** A light in world space as the shader takes it. */
@@ -63,10 +80,12 @@ export interface PointLight {
   readonly noHalo?: boolean;
 }
 
+/** The furthest any scene light reaches, metres. */
+export const MAX_LIGHT_RADIUS = 18;
 /** Reach and strength from a cluster's size: a creature's eye is a faint
  * spark, a lantern lights a few metres, a lit window wall lights a street. */
 export function lightFromCluster(c: LightCluster, attached = false): Omit<PointLight, "x" | "y" | "z"> {
-  const radius = Math.min(18, Math.max(2, 2 + c.extent * 7)) * (c.faint ? 0.45 : 1);
+  const radius = Math.min(MAX_LIGHT_RADIUS, Math.max(2, 2 + c.extent * 7)) * (c.faint ? 0.45 : 1);
   const strength = Math.min(1, 0.22 + c.extent * 0.7) * (c.faint ? 0.35 : 1) * (attached ? 0.45 : 1);
   // Glow colours are pale; lights carry their hue a little more strongly.
   const peak = Math.max(c.r, c.g, c.b, 1e-3), k = 0.35;
@@ -76,9 +95,10 @@ export function lightFromCluster(c: LightCluster, attached = false): Omit<PointL
 
 /** How much a light can matter to the view from `eye`: big and close first. */
 export function lightScore(l: PointLight, eye: Vec3Like): number {
-  const d = Math.hypot(l.x - eye.x, l.y - eye.y, l.z - eye.z);
-  return (l.strength * l.radius) / Math.max(1, d - l.radius * 0.5);
+  const dx = l.x - eye.x, dy = l.y - eye.y, dz = l.z - eye.z;
+  return scoreAt(l, Math.sqrt(dx * dx + dy * dy + dz * dz));
 }
+const scoreAt = (l: PointLight, d: number): number => (l.strength * l.radius) / Math.max(1, d - l.radius * 0.5);
 
 /** Lights further than this from the eye are never sent. */
 export const LIGHT_RANGE = 200;
@@ -88,24 +108,50 @@ export const MAX_LIGHTS = 12;
 /** The lights to send this frame: every reserved light (up to the slot
  * count), then the best-scoring others within `LIGHT_RANGE`. Lights near the
  * range edge fade out, so leaving range never pops. */
-export function selectLights(lights: Iterable<PointLight>, eye: Vec3Like, slots = MAX_LIGHTS): PointLight[] {
-  const reserved: PointLight[] = [], scored: { l: PointLight; s: number }[] = [];
-  for (const l of lights) {
-    if (l.reserved) { if (reserved.length < slots) reserved.push(l); continue; }
-    const d = Math.hypot(l.x - eye.x, l.y - eye.y, l.z - eye.z);
+export function selectLights(lights: readonly PointLight[], eye: Vec3Like, slots = MAX_LIGHTS): PointLight[] {
+  // Allocation-free over the candidates (CW-1: thousands of lights a frame
+  // made a megabyte of score objects per frame): the best `slots` are kept in
+  // place, best first. A pure function of the eye and the set of candidates:
+  // equal scores are ordered by the lights themselves (`lightOrder`), never by
+  // the order meshes happened to arrive in, so the same pose over the same
+  // resident lights always chooses, and orders, the same lights (CW-1 R1,
+  // REC-1's view repeatability).
+  if (bestScore.length < slots) { bestScore = new Float64Array(slots); bestLight = new Array<PointLight | null>(slots).fill(null); }
+  const reserved: PointLight[] = [];
+  let kept = 0;
+  for (let n = 0; n < lights.length; n++) {
+    const l = lights[n]!;
+    if (l.reserved) { reserved.push(l); continue; }
+    const dx = l.x - eye.x, dy = l.y - eye.y, dz = l.z - eye.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     if (d - l.radius > LIGHT_RANGE) continue;
-    scored.push({ l, s: lightScore(l, eye) });
+    const s = scoreAt(l, d);
+    if (kept === slots && !ranksBefore(s, l, bestScore[slots - 1]!, bestLight[slots - 1]!)) continue;
+    let i = kept < slots ? kept++ : slots - 1;
+    for (; i > 0 && ranksBefore(s, l, bestScore[i - 1]!, bestLight[i - 1]!); i--) { bestScore[i] = bestScore[i - 1]!; bestLight[i] = bestLight[i - 1]!; }
+    bestScore[i] = s; bestLight[i] = l;
   }
-  scored.sort((a, b) => b.s - a.s);
-  const out = [...reserved];
-  for (const { l } of scored) {
-    if (out.length >= slots) break;
-    const d = Math.hypot(l.x - eye.x, l.y - eye.y, l.z - eye.z);
+  // Reserved lights (instrument and markers: a handful) in the same total order.
+  if (reserved.length > 1) reserved.sort(lightOrder);
+  const out = reserved.length > slots ? reserved.slice(0, slots) : reserved;
+  for (let k = 0; k < kept; k++) {
+    const l = bestLight[k]!;
+    bestLight[k] = null;
+    if (out.length >= slots) continue;
+    const dx = l.x - eye.x, dy = l.y - eye.y, dz = l.z - eye.z, d = Math.sqrt(dx * dx + dy * dy + dz * dz);
     const fade = 1 - Math.max(0, Math.min(1, (d - l.radius - LIGHT_RANGE * 0.75) / (LIGHT_RANGE * 0.25)));
     out.push(fade < 1 ? { ...l, strength: l.strength * fade } : l);
   }
   return out;
 }
+/** A total order on lights by what they are (position, reach, strength,
+ * colour), for ties in score: negative when `a` goes first. */
+export function lightOrder(a: PointLight, b: PointLight): number {
+  return a.x - b.x || a.y - b.y || a.z - b.z || a.radius - b.radius || a.strength - b.strength ||
+    a.r - b.r || a.g - b.g || a.b - b.b || Number(!!a.noHalo) - Number(!!b.noHalo);
+}
+const ranksBefore = (s: number, l: PointLight, bs: number, bl: PointLight): boolean => s > bs || (s === bs && lightOrder(l, bl) < 0);
+/** Selection's reusable best-so-far buffers (never retained past a call). */
+let bestScore = new Float64Array(MAX_LIGHTS), bestLight = new Array<PointLight | null>(MAX_LIGHTS).fill(null);
 
 /** Shader uniform data for `selectLights`' result: pos+radius and
  * colour+strength, `MAX_LIGHTS` vec4 each. */
@@ -113,10 +159,10 @@ export function lightUniforms(lights: readonly PointLight[]): { position: number
   const position = new Array<number>(MAX_LIGHTS * 4).fill(0), color = new Array<number>(MAX_LIGHTS * 4).fill(0);
   const n = Math.min(MAX_LIGHTS, lights.length);
   for (let i = 0; i < n; i++) {
-    const l = lights[i]!;
-    position.splice(i * 4, 4, l.x, l.y, l.z, l.radius);
+    const l = lights[i]!, k = i * 4;
+    position[k] = l.x; position[k + 1] = l.y; position[k + 2] = l.z; position[k + 3] = l.radius;
     // A negative strength marks a light without a halo.
-    color.splice(i * 4, 4, l.r, l.g, l.b, l.noHalo ? -l.strength : l.strength);
+    color[k] = l.r; color[k + 1] = l.g; color[k + 2] = l.b; color[k + 3] = l.noHalo ? -l.strength : l.strength;
   }
   return { position, color, count: n };
 }

@@ -1,0 +1,90 @@
+{
+ "commit": "7967893",
+ "label": "RTX 4070 Laptop (alickers, shared desktop host; indicative)",
+ "segment": 7,
+ "caves": [
+  "isles_storm_arch"
+ ],
+ "reached": [
+  "isles_storm_arch"
+ ],
+ "skipped": [],
+ "shots": [
+  "s7-01-isles_storm_arch.jpg"
+ ],
+ "views": [],
+ "errors": [],
+ "holds": [],
+ "long": [],
+ "unsliced": [
+  {
+   "traveling": false,
+   "text": "unsliced cave build (admission): cluster 12 [isles_east_ledge_cave, isles_storm_arch] in 7 ms at 25,13,44"
+  }
+ ],
+ "recoveries": 0,
+ "renderer": "ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL 4.6)",
+ "coldStart": {
+  "titleMs": 8080,
+  "playableMs": 22704,
+  "collisionPackMs": 7320.4000000003725,
+  "records": true
+ },
+ "seconds": 5.9,
+ "frames": {
+  "count": 357,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 16.8,
+  "over33": 0,
+  "over50": 0
+ },
+ "work": {
+  "p50": 2.1,
+  "p95": 2.7,
+  "p99": 3.1,
+  "max": 3.9,
+  "over33": 0
+ },
+ "longByCause": {
+  "over34": 0,
+  "streaming": 0,
+  "streamingOver34": 0,
+  "simulation": 0,
+  "noWork": 0
+ },
+ "streamingMax": {
+  "chunks": 0.2,
+  "caves": 0.2
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 1,
+  "built": 8,
+  "evicted": 3,
+  "boxes": 65003,
+  "stepMs": 2,
+  "buildMs": 3.3,
+  "pending": 0,
+  "missing": 4,
+  "uploads": 3,
+  "lightBytes": 5517108,
+  "textureBytes": 2846016,
+  "records": true,
+  "recordsMs": 7320.4000000003725
+ },
+ "gate": {
+  "pass": true,
+  "failures": [],
+  "travelSync": 0,
+  "loadSync": 1
+ },
+ "memory": {
+  "residentCpuMiB": 35.3,
+  "residentGpuMiB": 23.4,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 218.7
+ }
+}

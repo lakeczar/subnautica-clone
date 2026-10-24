@@ -7,7 +7,7 @@ import { caveFloor, EDGE_LIP, EDGE_SHELF, groupDef, type CaveGroup } from "../sr
 import { CANOPY_BASIN_GROUPS } from "../src/content/regions/caves/index.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { CRAFT_PROFILES, type CraftProfileId } from "../src/content/regions/passages.js";
-import { caveOwner, createCaveWorldQueries, SOLIDS, surfaceHeight, type CaveOwner, type Solid } from "../src/sim/world.js";
+import { caveOwner, gameWorld, gameWorldWith, SOLIDS, type CaveOwner, type Solid } from "../src/sim/world.js";
 import type { Capsule, Vec3, WorldQueries } from "../src/sim/types.js";
 import { boxDistance } from "../src/world/frame.js";
 import type { MeshRecipe } from "../src/render/kit/types.js";
@@ -43,15 +43,13 @@ export interface Frame {
   to(p: Readonly<Vec3>): Vec3;
   from(p: Readonly<Vec3>): Vec3;
 }
-/** Every cave owner the composed world holds: the kit's and ours. */
-export const allOwners = (): CaveOwner[] => [...caves(worldFloor), ...groups.map(defOf)].map(caveOwner);
-let shared: WorldQueries | null = null;
-/** The composed world with every cave, built once. */
+/** Every cave owner the composed world holds (CW-1: the registry lists ours too). */
+export const allOwners = (): CaveOwner[] => caves(worldFloor).map(caveOwner);
+/** The composed world with every cave: the game's own (CW-1 registered
+ * these sources), its clusters built as queries reach them; with `extra`
+ * exterior solids, the same caves over that roster. */
 export function composedWorld(extra: readonly Solid[] = []): WorldQueries {
-  if (!extra.length && shared) return shared;
-  const world = createCaveWorldQueries({ solids: [...SOLIDS, ...extra], floor: surfaceHeight, caves: allOwners() });
-  if (!extra.length) shared = world;
-  return world;
+  return extra.length ? gameWorldWith([...SOLIDS, ...extra]) : gameWorld();
 }
 const copy = (p: Readonly<Vec3>): Vec3 => ({ x: p.x, y: p.y, z: p.z });
 /** The composed world seen from one cave, plus `extra` exterior solids. */

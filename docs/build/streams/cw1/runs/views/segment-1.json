@@ -1,0 +1,171 @@
+{
+ "commit": "7967893",
+ "label": "RTX 3090 (factory-worker)",
+ "segment": 1,
+ "caves": [],
+ "reached": [],
+ "skipped": [],
+ "shots": [
+  "s1-01-seam-bellhole-side.jpg",
+  "s1-02-seam-at-edge.jpg",
+  "s1-03-seam-archlet-side.jpg"
+ ],
+ "views": [
+  {
+   "aboveWater": false,
+   "view": "seam-bellhole-side",
+   "shot": "s1-01-seam-bellhole-side.jpg",
+   "reached": true,
+   "faced": true,
+   "camera": [
+    -446.5,
+    -23.9,
+    76
+   ],
+   "bearing": 183,
+   "pitch": -10,
+   "metresToTarget": 13,
+   "activeCaveLight": "reef_bellhole",
+   "farLandmarksShown": 11
+  },
+  {
+   "aboveWater": false,
+   "view": "seam-at-edge",
+   "shot": "s1-02-seam-at-edge.jpg",
+   "reached": true,
+   "faced": true,
+   "camera": [
+    -446.5,
+    -25.3,
+    82.9
+   ],
+   "bearing": 183,
+   "pitch": -3,
+   "metresToTarget": 11,
+   "activeCaveLight": "reef_bellhole",
+   "farLandmarksShown": 11
+  },
+  {
+   "aboveWater": false,
+   "view": "seam-archlet-side",
+   "shot": "s1-03-seam-archlet-side.jpg",
+   "reached": true,
+   "faced": true,
+   "camera": [
+    -447.3,
+    -25.3,
+    87.8
+   ],
+   "bearing": 169,
+   "pitch": 9,
+   "metresToTarget": 9,
+   "activeCaveLight": "reef_archlet",
+   "farLandmarksShown": 11
+  }
+ ],
+ "errors": [],
+ "holds": [],
+ "long": [
+  {
+   "at": 13125,
+   "gap": 50,
+   "frame": {
+    "total": 4,
+    "sim": 0.7,
+    "steps": 1,
+    "present": 3.3,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.5,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 1961,
+     "evicted": 0,
+     "chunks": 0.1,
+     "caves": 0,
+     "render": 1.3,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  }
+ ],
+ "unsliced": [
+  {
+   "traveling": false,
+   "text": "unsliced cave build (admission): cluster 5 [reef_archlet, reef_bellhole, reef_wrackhollow] in 10.9 ms at 25,13,44"
+  }
+ ],
+ "recoveries": 0,
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 5606,
+  "playableMs": 11222,
+  "collisionPackMs": 4534.39999999851,
+  "records": true
+ },
+ "seconds": 31.6,
+ "frames": {
+  "count": 1892,
+  "p50": 16.7,
+  "p95": 16.8,
+  "p99": 16.8,
+  "max": 50,
+  "over33": 1,
+  "over50": 0
+ },
+ "work": {
+  "p50": 3.9,
+  "p95": 8.4,
+  "p99": 11.6,
+  "max": 25.3,
+  "over33": 0
+ },
+ "longByCause": {
+  "over34": 1,
+  "streaming": 0,
+  "streamingOver34": 0,
+  "simulation": 0,
+  "noWork": 1
+ },
+ "streamingMax": {
+  "chunks": 4.4,
+  "caves": 4.4
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 1,
+  "built": 6,
+  "evicted": 1,
+  "boxes": 88188,
+  "stepMs": 2.6,
+  "buildMs": 3.3,
+  "pending": 0,
+  "missing": 7,
+  "uploads": 3,
+  "lightBytes": 8245728,
+  "textureBytes": 2024640,
+  "records": true,
+  "recordsMs": 4534.39999999851
+ },
+ "gate": {
+  "pass": true,
+  "failures": [],
+  "travelSync": 0,
+  "loadSync": 1
+ },
+ "memory": {
+  "residentCpuMiB": 44.2,
+  "residentGpuMiB": 25.2,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 305
+ }
+}

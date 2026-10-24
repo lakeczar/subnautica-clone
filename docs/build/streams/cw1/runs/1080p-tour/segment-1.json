@@ -1,0 +1,461 @@
+{
+ "commit": "cb8ae86",
+ "label": "RTX 3090 (factory-worker)",
+ "segment": 1,
+ "caves": [
+  "reef_wrackhollow",
+  "reef_lantern_grotto",
+  "hub_apron_hollow",
+  "hub_step_arch",
+  "hub_glimmer_crack",
+  "basin_fracture_pocket",
+  "basin_culvert_north",
+  "hub_crown_shaft",
+  "basin_dish_lee_vault",
+  "basin_buried_hut"
+ ],
+ "reached": [
+  "reef_lantern_grotto",
+  "hub_apron_hollow",
+  "hub_step_arch",
+  "hub_glimmer_crack",
+  "basin_fracture_pocket",
+  "basin_culvert_north",
+  "hub_crown_shaft",
+  "basin_dish_lee_vault",
+  "basin_buried_hut"
+ ],
+ "skipped": [],
+ "shots": [
+  "s1-01-reef_lantern_grotto.jpg",
+  "s1-02-basin_fracture_pocket.jpg",
+  "s1-03-basin_buried_hut.jpg"
+ ],
+ "views": [],
+ "errors": [],
+ "holds": [],
+ "long": [
+  {
+   "at": 111189,
+   "gap": 33.4,
+   "camera": "31.149,-5.620,-406.650",
+   "thread": {
+    "spanMs": 42.7,
+    "onCpuMs": 31.6,
+    "waitingMs": 6.8,
+    "minorFaults": 315,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 4.9,
+    "gpuWaitingMs": 0.5
+   },
+   "hot": null,
+   "gcPauseMs": 46.2,
+   "gcs": [
+    "MajorGC 46.17 ms"
+   ],
+   "heapFreedMiB": -0.4,
+   "gc": false,
+   "frame": {
+    "total": 6.2,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 5.4,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.7,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 2370,
+     "evicted": 0,
+     "chunks": 0.3,
+     "caves": 0,
+     "render": 2.5,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 145105,
+   "gap": 100,
+   "camera": "87.949,-63.564,-367.232",
+   "thread": {
+    "spanMs": 114.4,
+    "onCpuMs": 13.3,
+    "waitingMs": 0.5,
+    "minorFaults": 5,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 9.1,
+    "gpuWaitingMs": 0
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -1.3,
+   "gc": false,
+   "frame": {
+    "total": 17.3,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 16.4,
+    "parts": {
+     "regions": 0,
+     "lights": 12,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 11.8,
+     "lightSelect": 0.2,
+     "lightCount": 2749,
+     "evicted": 0,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 1.8,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null
+    },
+    "hold": "clear"
+   },
+   "streaming": true
+  },
+  {
+   "at": 148054,
+   "gap": 83.3,
+   "camera": "87.949,-81.364,-367.232",
+   "thread": {
+    "spanMs": 86.9,
+    "onCpuMs": 5.7,
+    "waitingMs": 0.3,
+    "minorFaults": 6,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 0.6,
+    "gpuWaitingMs": 0.1
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -1.3,
+   "gc": false,
+   "frame": {
+    "total": 4.8,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 4,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.6,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.4,
+     "lightSelect": 0.2,
+     "lightCount": 2773,
+     "evicted": 0,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 1.5,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 149204,
+   "gap": 66.7,
+   "camera": "87.949,-88.364,-367.232",
+   "thread": {
+    "spanMs": 89.4,
+    "onCpuMs": 11,
+    "waitingMs": 0,
+    "minorFaults": 10,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 11.1,
+    "gpuWaitingMs": 0.6
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -1.3,
+   "gc": false,
+   "frame": {
+    "total": 4.7,
+    "sim": 0.7,
+    "steps": 1,
+    "present": 4,
+    "parts": {
+     "regions": 0.3,
+     "lights": 0.6,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 2773,
+     "evicted": 0,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 1.5,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 152704,
+   "gap": 100.1,
+   "camera": "87.949,-109.164,-367.232",
+   "thread": {
+    "spanMs": 115,
+    "onCpuMs": 8,
+    "waitingMs": 0,
+    "minorFaults": 9,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 10.1,
+    "gpuWaitingMs": 2.5
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -1.4,
+   "gc": false,
+   "frame": {
+    "total": 53.9,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 53,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.4,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0.2,
+     "lightCount": 2908,
+     "evicted": 0,
+     "chunks": 49.7,
+     "caves": 0,
+     "render": 1.2,
+     "buildMs": 49.3,
+     "maxStepMs": 49.3,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null
+    },
+    "hold": "clear"
+   },
+   "streaming": true
+  },
+  {
+   "at": 161771,
+   "gap": 83.3,
+   "camera": "111.864,-139.995,-374.940",
+   "thread": {
+    "spanMs": 94,
+    "onCpuMs": 79.2,
+    "waitingMs": 0.7,
+    "minorFaults": 4,
+    "majorFaults": 0,
+    "gpuOnCpuMs": 3.9,
+    "gpuWaitingMs": 1.9
+   },
+   "hot": null,
+   "gcPauseMs": 0,
+   "gcs": [],
+   "heapFreedMiB": -1.4,
+   "gc": false,
+   "frame": {
+    "total": 82.8,
+    "sim": 0.9,
+    "steps": 1,
+    "present": 81.9,
+    "parts": {
+     "regions": 0.2,
+     "lights": 0.3,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.2,
+     "lightSelect": 0.1,
+     "lightCount": 3015,
+     "evicted": 0,
+     "chunks": 78.8,
+     "caves": 0,
+     "render": 1.3,
+     "buildMs": 0.1,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0,
+     "jump": null
+    },
+    "hold": "clear"
+   },
+   "streaming": true
+  }
+ ],
+ "unsliced": [
+  {
+   "traveling": false,
+   "text": "unsliced cave build (admission): cluster 5 [reef_archlet, reef_bellhole, reef_wrackhollow] in 9.1 ms at 25,13,44"
+  }
+ ],
+ "recoveries": 0,
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 4949,
+  "playableMs": 8350,
+  "collisionPackMs": 4111.10000000149,
+  "records": true
+ },
+ "seconds": 409.3,
+ "gcTraceAligned": true,
+ "gcTraceNames": [
+  "V8.GC_HEAP_EXTERNAL_PROLOGUE",
+  "MinorGC",
+  "V8.GC_HEAP_PROLOGUE",
+  "V8.GCScavenger",
+  "V8.GC_TIME_TO_SAFEPOINT",
+  "V8.GC_SCAVENGER",
+  "V8.GC_HEAP_PROLOGUE_SAFEPOINT",
+  "V8.GC_SCAVENGER_SCAVENGE",
+  "V8.GC_SCAVENGER_SCAVENGE_WEAK_GLOBAL_HANDLES_IDENTIFY",
+  "V8.GC_SCAVENGER_TRACED_HANDLES_COMPUTE_WEAKNESS_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_COLLECT_OLD_TO_NEW_PAGES",
+  "V8.GC_SCAVENGER_SCAVENGE_PARALLEL_PHASE",
+  "V8.GC_SCAVENGER_SCAVENGE_ROOTS",
+  "V8.GC_SCAVENGER_SCAVENGE_PARALLEL",
+  "V8.GC_SCAVENGER_BACKGROUND_SCAVENGE_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_WEAK_GLOBAL_HANDLES_PROCESS",
+  "V8.GC_SCAVENGER_TRACED_HANDLES_RESET_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_FINALIZE",
+  "V8.GC_SCAVENGER_SCAVENGE_RESTORE_AND_QUARANTINE_PINNED",
+  "V8.GC_SCAVENGER_FREE_REMEMBERED_SET",
+  "V8.GC_SCAVENGER_SWEEP_ARRAY_BUFFERS",
+  "V8.GC_SCAVENGER_RESIZE_NEW_SPACE",
+  "V8.GCPretenuringFeedback",
+  "V8.GC_MINOR_MS_BACKGROUND_SWEEPING",
+  "V8.GCPretenuringSummary",
+  "V8.GC_BACKGROUND_YOUNG_ARRAY_BUFFER_SWEEP",
+  "V8.GC_HEAP_EPILOGUE_SAFEPOINT",
+  "V8.GC_HEAP_EPILOGUE",
+  "V8.GCTraceGCNVP",
+  "V8.GC_HEAP_DUMP_STATISTICS",
+  "V8.GC_Heap_Stats",
+  "V8.GC_HEAP_EXTERNAL_EPILOGUE",
+  "V8.GC_SCAVENGER_COMPLETE_SWEEP_ARRAY_BUFFERS",
+  "V8.GC_BACKGROUND_SAFEPOINT",
+  "V8.GC_BACKGROUND_UNPARK",
+  "V8.GCDeoptMarkedAllocationSites",
+  "V8.GCIncrementalMarkingStart",
+  "V8.GC_HEAP_ENSURE_SWEEPING_COMPLETED",
+  "V8.GC_MC_INCREMENTAL_START",
+  "V8.GC_MC_INCREMENTAL_EXTERNAL_PROLOGUE"
+ ],
+ "frames": {
+  "count": 24633,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 100.1,
+  "over33": 6,
+  "over50": 5
+ },
+ "work": {
+  "p50": 3.6,
+  "p95": 7.6,
+  "p99": 9.7,
+  "max": 82.8,
+  "over33": 3
+ },
+ "longByCause": {
+  "over34": 5,
+  "streaming": 3,
+  "streamingOver34": 3,
+  "simulation": 0,
+  "noWork": 3,
+  "gcShaped": 1,
+  "streamingGcShaped": 0
+ },
+ "streamingMax": {
+  "chunks": 78.8,
+  "caves": 6.1
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 1,
+  "built": 25,
+  "evicted": 13,
+  "boxes": 148906,
+  "stepMs": 6,
+  "buildMs": 6,
+  "pending": 0,
+  "missing": 7,
+  "uploads": 25,
+  "lightBytes": 5121024,
+  "textureBytes": 7883328,
+  "records": true,
+  "recordsMs": 4111.10000000149
+ },
+ "pageOrigin": 1792745411985.5,
+ "thread": {
+  "pid": "982095",
+  "samples": 79620
+ },
+ "gc": {
+  "collections": 3231,
+  "byKind": {
+   "MinorGC": 1601,
+   "V8.GCScavenger": 1601,
+   "MajorGC": 15,
+   "V8.GCFinalizeMC": 14
+  },
+  "maxPauseMs": 46.17,
+  "over16": [
+   "MajorGC 46.17 ms at 111150",
+   "MajorGC 16.46 ms at 226247",
+   "V8.GCFinalizeMC 16.3 ms at 226247",
+   "MajorGC 18.63 ms at 240783",
+   "V8.GCFinalizeMC 18.47 ms at 240783",
+   "MajorGC 20.32 ms at 262965",
+   "V8.GCFinalizeMC 20.15 ms at 262965",
+   "MajorGC 16.63 ms at 295160",
+   "V8.GCFinalizeMC 16.46 ms at 295160"
+  ]
+ },
+ "gate": {
+  "pass": false,
+  "failures": [
+   "3 streaming frame(s) over 34 ms"
+  ],
+  "travelSync": 0,
+  "loadSync": 1
+ },
+ "memory": {
+  "residentCpuMiB": 75.3,
+  "residentGpuMiB": 57.7,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 283.1
+ }
+}

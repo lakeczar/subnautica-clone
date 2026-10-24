@@ -1,0 +1,121 @@
+{
+ "commit": "7967893",
+ "label": "RTX 4070 Laptop (alickers, shared desktop host; indicative)",
+ "segment": 13,
+ "caves": [
+  "meridian_window_gallery"
+ ],
+ "reached": [
+  "meridian_window_gallery"
+ ],
+ "skipped": [],
+ "shots": [
+  "s13-01-meridian_window_gallery.jpg"
+ ],
+ "views": [],
+ "errors": [],
+ "holds": [],
+ "long": [
+  {
+   "at": 18511,
+   "gap": 1766.7,
+   "frame": {
+    "total": 7,
+    "sim": 3.5,
+    "steps": 8,
+    "present": 3.5,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.6,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 0.2,
+     "lightCount": 4522,
+     "evicted": 0,
+     "chunks": 0.1,
+     "caves": 0,
+     "render": 0.9,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  }
+ ],
+ "unsliced": [
+  {
+   "traveling": false,
+   "text": "unsliced cave build (admission): cluster 42 [meridian_window_gallery] in 3.6 ms at 25,13,44"
+  }
+ ],
+ "recoveries": 0,
+ "renderer": "ANGLE (Microsoft Corporation, D3D12 (NVIDIA GeForce RTX 4070 Laptop GPU), OpenGL 4.6)",
+ "coldStart": {
+  "titleMs": 11478,
+  "playableMs": 15783,
+  "collisionPackMs": 10755.10000000149,
+  "records": true
+ },
+ "seconds": 7.3,
+ "frames": {
+  "count": 336,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 1766.7,
+  "over33": 1,
+  "over50": 1
+ },
+ "work": {
+  "p50": 2.4,
+  "p95": 3.1,
+  "p99": 4.8,
+  "max": 7.2,
+  "over33": 0
+ },
+ "longByCause": {
+  "over34": 1,
+  "streaming": 0,
+  "streamingOver34": 0,
+  "simulation": 0,
+  "noWork": 1
+ },
+ "streamingMax": {
+  "chunks": 4.3,
+  "caves": 2.3
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 1,
+  "built": 11,
+  "evicted": 2,
+  "boxes": 75723,
+  "stepMs": 2.3,
+  "buildMs": 3,
+  "pending": 0,
+  "missing": 3,
+  "uploads": 4,
+  "lightBytes": 9508680,
+  "textureBytes": 5110392,
+  "records": true,
+  "recordsMs": 10755.10000000149
+ },
+ "gate": {
+  "pass": true,
+  "failures": [],
+  "travelSync": 0,
+  "loadSync": 1
+ },
+ "memory": {
+  "residentCpuMiB": 41.4,
+  "residentGpuMiB": 26.1,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 249.2
+ }
+}

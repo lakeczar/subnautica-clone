@@ -1143,3 +1143,19 @@ for (const pauseBy of ["notebook", "menu"] as const)
     f.view.actions.resume(); f.frames(30);
     assert.equal(music(), 0, "resume does not replay the missed phrase");
   });
+
+test("app: while the view settles after a jump the simulation clock is paused, then it runs on", async (t) => {
+  const f = await fixture(t);
+  f.activation.isActive = true;
+  f.view.actions.resume(); f.locked(true);
+  f.view.actions.command({ type: "skip-opening" });
+  f.frames(30);
+  TestRenderer.current.settling = true;
+  f.frames();
+  const held = f.view.state!.tick;
+  f.frames(60);
+  assert.equal(f.view.state!.tick, held, "no ticks while the near world builds behind a dark screen");
+  TestRenderer.current.settling = false;
+  f.frames(60);
+  assert.ok(f.view.state!.tick > held);
+});

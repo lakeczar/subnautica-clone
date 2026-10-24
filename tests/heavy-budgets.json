@@ -7,7 +7,9 @@
     "regions-bake.heavy.test.ts": 1920,
     "render-cache.heavy.test.ts": 1536,
     "renewal-render.heavy.test.ts": 1280,
-    "world-stream.heavy.test.ts": 1536
+    "world-stream.heavy.test.ts": 1536,
+    "cw1-caves.heavy.test.ts": 1536,
+    "cw1-bake.heavy.test.ts": 1536
   },
   "exclusive": [
     "caves-canopy-basin.heavy.test.ts",

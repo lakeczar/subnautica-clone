@@ -4,7 +4,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { AUTHORED_CAVE_SOURCES, caveDef } from "../src/content/regions/caves.js";
-import { CANOPY_BASIN_GROUPS, groupDef } from "../src/content/regions/caves/index.js";
 import { buildCave } from "../src/content/regions/caveGeometry.js";
 import { withoutBuildCache } from "../src/content/buildCache.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
@@ -48,8 +47,10 @@ test("cost: build, rock boxes, collar columns and per-step diver queries with ro
     rows.push(`${c.source.id}: ${def.rock.length} rock boxes, ${(def.stats.voxels / 1e6).toFixed(2)} M voxels, ${took.toFixed(0)} ms`);
     assert.ok(def.rock.length < 5000, `${c.source.id}: ${def.rock.length} boxes`);
   }
-  const root = [...AUTHORED_CAVE_SOURCES.map(s => caveDef(s.id, worldFloor)), ...CANOPY_BASIN_GROUPS.map(g => groupDef(g, worldFloor))];
-  const rootRock = root.reduce((n, d) => n + d.rock.length, 0), rootCollar = [...AUTHORED_CAVE_SOURCES, ...CANOPY_BASIN_GROUPS.map(g => g.source)].reduce((n, s) => n + collarColumns(s.footprint), 0);
+  // CW-1: the registry lists every cave once (CA-2's groups and these too).
+  const rootSources = AUTHORED_CAVE_SOURCES.filter(s => !DEEP_CAVES.some(c => c.source.id === s.id));
+  const root = rootSources.map(s => caveDef(s.id, worldFloor));
+  const rootRock = root.reduce((n, d) => n + d.rock.length, 0), rootCollar = rootSources.reduce((n, s) => n + collarColumns(s.footprint), 0);
   for (const r of rows) t.diagnostic(r);
   t.diagnostic(`deep caves: ${DEEP_CAVES.length}, ${rock} rock boxes + ~${Math.round(collar)} collar columns, ${(voxels / 1e6).toFixed(1)} M voxels, build ${(ms / 1000).toFixed(1)} s`);
   t.diagnostic(`root caves: ${root.length}, ${rootRock} rock boxes + ~${Math.round(rootCollar)} collar columns`);

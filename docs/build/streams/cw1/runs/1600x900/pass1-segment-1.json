@@ -1,0 +1,227 @@
+{
+ "commit": "f55254f",
+ "segment": 1,
+ "caves": [
+  "reef_lantern_grotto",
+  "hub_apron_hollow",
+  "hub_step_arch",
+  "hub_glimmer_crack",
+  "basin_fracture_pocket",
+  "basin_culvert_north",
+  "hub_crown_shaft",
+  "basin_dish_lee_vault",
+  "basin_buried_hut",
+  "basin_burrow_warren",
+  "canopy_lee_hollow"
+ ],
+ "reached": [
+  "hub_apron_hollow",
+  "hub_step_arch",
+  "hub_glimmer_crack",
+  "basin_fracture_pocket",
+  "basin_culvert_north",
+  "hub_crown_shaft",
+  "basin_dish_lee_vault",
+  "basin_buried_hut",
+  "basin_burrow_warren",
+  "canopy_lee_hollow"
+ ],
+ "skipped": [],
+ "shots": [
+  "s1-01-hub_apron_hollow.jpg",
+  "s1-02-basin_culvert_north.jpg",
+  "s1-03-basin_burrow_warren.jpg"
+ ],
+ "errors": [
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_4_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_5_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_4_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:5531/terrain/t_5_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)"
+ ],
+ "holds": [],
+ "long": [
+  {
+   "at": 260683,
+   "gap": 50,
+   "frame": {
+    "total": 5.2,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 4.4,
+    "parts": {
+     "regions": 0.1,
+     "lights": 0.9,
+     "actors": 0,
+     "lightScan": 0,
+     "lightPlace": 0.4,
+     "lightSelect": 0.5,
+     "lightCount": 4197,
+     "evicted": 11,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 1.7,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 265816,
+   "gap": 66.8,
+   "frame": {
+    "total": 44.8,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 44,
+    "parts": {
+     "regions": 0.1,
+     "lights": 40.4,
+     "actors": 0.2,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 40.1,
+     "lightCount": 3977,
+     "evicted": 12,
+     "chunks": 0.3,
+     "caves": 0,
+     "render": 1.6,
+     "buildMs": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": true
+  },
+  {
+   "at": 276033,
+   "gap": 49.9,
+   "frame": {
+    "total": 15.3,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 14.5,
+    "parts": {
+     "regions": 0.1,
+     "lights": 10.8,
+     "actors": 0.1,
+     "lightScan": 0,
+     "lightPlace": 0.3,
+     "lightSelect": 10.4,
+     "lightCount": 3218,
+     "evicted": 13,
+     "chunks": 0.2,
+     "caves": 0,
+     "render": 1.7,
+     "buildMs": 0.1,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  },
+  {
+   "at": 532039,
+   "gap": 49.9,
+   "frame": {
+    "total": 9.8,
+    "sim": 0.8,
+    "steps": 1,
+    "present": 8.9,
+    "parts": {
+     "regions": 0.2,
+     "lights": 1.7,
+     "actors": 0,
+     "lightScan": 0.1,
+     "lightPlace": 0.2,
+     "lightSelect": 1.4,
+     "lightCount": 6821,
+     "evicted": 90,
+     "chunks": 4.5,
+     "caves": 0.1,
+     "render": 1.1,
+     "buildMs": 4.3,
+     "maxStepMs": 0.9,
+     "uploadMs": 0,
+     "uploads": 0,
+     "caveBuildMs": 0
+    },
+    "hold": "clear"
+   },
+   "streaming": false
+  }
+ ],
+ "recoveries": 6,
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 4687,
+  "playableMs": 8634,
+  "collisionPackMs": 3958.20000000007,
+  "records": true
+ },
+ "seconds": 524.3,
+ "frames": {
+  "count": 31446,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 66.8,
+  "over33": 4,
+  "over50": 1
+ },
+ "work": {
+  "p50": 3.6,
+  "p95": 7.2,
+  "p99": 8.4,
+  "max": 44.8,
+  "over33": 3
+ },
+ "longByCause": {
+  "over34": 4,
+  "streaming": 1,
+  "streamingOver34": 1,
+  "simulation": 0,
+  "noWork": 3
+ },
+ "streamingMax": {
+  "chunks": 33.2,
+  "caves": 9.6
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 0,
+  "built": 32,
+  "evicted": 18,
+  "boxes": 140883,
+  "stepMs": 3.8,
+  "buildMs": 4.8,
+  "pending": 0,
+  "missing": 6,
+  "uploads": 32,
+  "lightBytes": 4902336,
+  "textureBytes": 3133536,
+  "records": true,
+  "recordsMs": 3958.20000000007
+ },
+ "memory": {
+  "residentCpuMiB": 62.6,
+  "residentGpuMiB": 41.7,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 281.5
+ }
+}

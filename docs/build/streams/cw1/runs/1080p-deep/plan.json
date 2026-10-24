@@ -1,0 +1,517 @@
+{
+ "totalMetres": 3669,
+ "stops": [
+  {
+   "cave": "basin_buried_hut",
+   "region": "silt_basin",
+   "via": "basin_buried_hut.mouth.slot",
+   "at": {
+    "x": 561.5,
+    "z": -769.5,
+    "y": -372
+   },
+   "outer": {
+    "x": 561.5,
+    "z": -769.5,
+    "y": -372
+   },
+   "mouthY": -372
+  },
+  {
+   "cave": "divide_lee_burrow",
+   "region": "brine_divide",
+   "via": "divide_burrow.mouth.shelf",
+   "at": {
+    "x": 482.5,
+    "z": -1085,
+    "y": -388.04826644221765
+   },
+   "outer": {
+    "x": 498.5,
+    "z": -1085,
+    "y": -385.04826644221765
+   },
+   "mouthY": -390.1
+  },
+  {
+   "cave": "divide_mirror_pocket",
+   "region": "brine_divide",
+   "via": "divide_mirror.mouth.ledge",
+   "at": {
+    "x": 400,
+    "z": -1226,
+    "y": -352.08600199141364
+   },
+   "outer": {
+    "x": 400,
+    "z": -1210,
+    "y": -349.08600199141364
+   },
+   "mouthY": -355.4
+  },
+  {
+   "cave": "divide_fissure_window",
+   "region": "brine_divide",
+   "via": "divide_window.mouth.fissure",
+   "at": {
+    "x": 545,
+    "z": -1334.5,
+    "y": -426.3
+   },
+   "outer": {
+    "x": 545,
+    "z": -1350.5,
+    "y": -423.3
+   },
+   "mouthY": -426.3
+  },
+  {
+   "cave": "divide_lintel_galleries",
+   "region": "brine_divide",
+   "via": "divide_lintel.mouth.crest",
+   "at": {
+    "x": 705,
+    "z": -1228,
+    "y": -354.4
+   },
+   "outer": {
+    "x": 705,
+    "z": -1212,
+    "y": -351.4
+   },
+   "mouthY": -354.4
+  },
+  {
+   "cave": "divide_crest_hollow",
+   "region": "brine_divide",
+   "via": "divide_hollow.mouth.lee",
+   "at": {
+    "x": 690,
+    "z": -1197.5,
+    "y": -366
+   },
+   "outer": {
+    "x": 690,
+    "z": -1181.5,
+    "y": -363
+   },
+   "mouthY": -366
+  },
+  {
+   "cave": "divide_east_pocket",
+   "region": "brine_divide",
+   "via": "divide_east.mouth.flank",
+   "at": {
+    "x": 811,
+    "z": -1235,
+    "y": -395.7692859061989
+   },
+   "outer": {
+    "x": 827,
+    "z": -1235,
+    "y": -392.70912598526706
+   },
+   "mouthY": -398
+  },
+  {
+   "cave": "divide_brine_cistern",
+   "region": "brine_divide",
+   "via": "divide_cistern.mouth.crest",
+   "at": {
+    "x": 925.5,
+    "z": -1200,
+    "y": -443.2
+   },
+   "outer": {
+    "x": 941.5,
+    "z": -1200,
+    "y": -440.2
+   },
+   "mouthY": -443.2
+  },
+  {
+   "cave": "meridian_footing_void",
+   "region": "deep_district",
+   "via": "meridian_footing.mouth.shelf",
+   "at": {
+    "x": 1035.5,
+    "z": -1225,
+    "y": -516.972377332145
+   },
+   "outer": {
+    "x": 997.5,
+    "z": -1225,
+    "y": -513.972377332145
+   },
+   "mouthY": -519.2
+  },
+  {
+   "cave": "meridian_window_gallery",
+   "region": "deep_district",
+   "via": "meridian_window.mouth.window",
+   "at": {
+    "x": 1014.5,
+    "z": -1302,
+    "y": -517.0400780174643
+   },
+   "outer": {
+    "x": 998.5,
+    "z": -1302,
+    "y": -514.0400780174643
+   },
+   "mouthY": -518.2
+  },
+  {
+   "cave": "meridian_spire_footing",
+   "region": "deep_district",
+   "via": "meridian_spire.mouth.footing",
+   "at": {
+    "x": 1181,
+    "z": -1371,
+    "y": -591.9
+   },
+   "outer": {
+    "x": 1181,
+    "z": -1387,
+    "y": -588.9
+   },
+   "mouthY": -598.9
+  },
+  {
+   "cave": "meridian_terrace_crack",
+   "region": "deep_district",
+   "via": "meridian_crack.mouth.slot",
+   "at": {
+    "x": 1133.4,
+    "z": -1478,
+    "y": -619.5
+   },
+   "outer": {
+    "x": 1149.4,
+    "z": -1478,
+    "y": -616.5
+   },
+   "mouthY": -621.5
+  },
+  {
+   "cave": "meridian_culvert_north",
+   "region": "deep_district",
+   "via": "meridian_culvert.mouth.terrace",
+   "at": {
+    "x": 1232,
+    "z": -1161.5,
+    "y": -596.8847425093809
+   },
+   "outer": {
+    "x": 1232,
+    "z": -1177.5,
+    "y": -593.8847425093809
+   },
+   "mouthY": -598.4
+  },
+  {
+   "cave": "meridian_escarp_culvert",
+   "region": "deep_district",
+   "via": "meridian_escarp.mouth.foot",
+   "at": {
+    "x": 1320.5,
+    "z": -974,
+    "y": -533.4
+   },
+   "outer": {
+    "x": 1304.5,
+    "z": -974,
+    "y": -530.4
+   },
+   "mouthY": -533.4
+  },
+  {
+   "cave": "meridian_escarp_pocket",
+   "region": "deep_district",
+   "via": "meridian_pocket.mouth.ledge",
+   "at": {
+    "x": 1376.6,
+    "z": -932,
+    "y": -503.6
+   },
+   "outer": {
+    "x": 1360.6,
+    "z": -932,
+    "y": -500.6
+   },
+   "mouthY": -503.6
+  }
+ ],
+ "segments": [
+  [
+   {
+    "x": 561.5,
+    "z": -769.5,
+    "y": -372
+   },
+   {
+    "x": 561.5,
+    "z": -769.5,
+    "y": -372,
+    "cave": "basin_buried_hut"
+   },
+   {
+    "x": 561.5,
+    "z": -769.5,
+    "y": -372
+   }
+  ],
+  [
+   {
+    "x": 498.5,
+    "z": -1085,
+    "y": -385.04826644221765
+   },
+   {
+    "x": 482.5,
+    "z": -1085,
+    "y": -388.04826644221765,
+    "cave": "divide_lee_burrow"
+   },
+   {
+    "x": 498.5,
+    "z": -1085,
+    "y": -385.04826644221765
+   }
+  ],
+  [
+   {
+    "x": 400,
+    "z": -1210,
+    "y": -349.08600199141364
+   },
+   {
+    "x": 400,
+    "z": -1226,
+    "y": -352.08600199141364,
+    "cave": "divide_mirror_pocket"
+   },
+   {
+    "x": 400,
+    "z": -1210,
+    "y": -349.08600199141364
+   }
+  ],
+  [
+   {
+    "x": 545,
+    "z": -1350.5,
+    "y": -423.3
+   },
+   {
+    "x": 545,
+    "z": -1334.5,
+    "y": -426.3,
+    "cave": "divide_fissure_window"
+   },
+   {
+    "x": 545,
+    "z": -1350.5,
+    "y": -423.3
+   }
+  ],
+  [
+   {
+    "x": 705,
+    "z": -1212,
+    "y": -351.4
+   },
+   {
+    "x": 705,
+    "z": -1228,
+    "y": -354.4,
+    "cave": "divide_lintel_galleries"
+   },
+   {
+    "x": 705,
+    "z": -1212,
+    "y": -351.4
+   }
+  ],
+  [
+   {
+    "x": 690,
+    "z": -1181.5,
+    "y": -363
+   },
+   {
+    "x": 690,
+    "z": -1197.5,
+    "y": -366,
+    "cave": "divide_crest_hollow"
+   },
+   {
+    "x": 690,
+    "z": -1181.5,
+    "y": -363
+   }
+  ],
+  [
+   {
+    "x": 827,
+    "z": -1235,
+    "y": -392.70912598526706
+   },
+   {
+    "x": 811,
+    "z": -1235,
+    "y": -395.7692859061989,
+    "cave": "divide_east_pocket"
+   },
+   {
+    "x": 827,
+    "z": -1235,
+    "y": -392.70912598526706
+   }
+  ],
+  [
+   {
+    "x": 941.5,
+    "z": -1200,
+    "y": -440.2
+   },
+   {
+    "x": 925.5,
+    "z": -1200,
+    "y": -443.2,
+    "cave": "divide_brine_cistern"
+   },
+   {
+    "x": 941.5,
+    "z": -1200,
+    "y": -440.2
+   }
+  ],
+  [
+   {
+    "x": 997.5,
+    "z": -1225,
+    "y": -513.972377332145
+   },
+   {
+    "x": 1035.5,
+    "z": -1225,
+    "y": -516.972377332145,
+    "cave": "meridian_footing_void"
+   },
+   {
+    "x": 997.5,
+    "z": -1225,
+    "y": -513.972377332145
+   }
+  ],
+  [
+   {
+    "x": 998.5,
+    "z": -1302,
+    "y": -514.0400780174643
+   },
+   {
+    "x": 1014.5,
+    "z": -1302,
+    "y": -517.0400780174643,
+    "cave": "meridian_window_gallery"
+   },
+   {
+    "x": 998.5,
+    "z": -1302,
+    "y": -514.0400780174643
+   }
+  ],
+  [
+   {
+    "x": 1181,
+    "z": -1387,
+    "y": -588.9
+   },
+   {
+    "x": 1181,
+    "z": -1371,
+    "y": -591.9,
+    "cave": "meridian_spire_footing"
+   },
+   {
+    "x": 1181,
+    "z": -1387,
+    "y": -588.9
+   }
+  ],
+  [
+   {
+    "x": 1149.4,
+    "z": -1478,
+    "y": -616.5
+   },
+   {
+    "x": 1133.4,
+    "z": -1478,
+    "y": -619.5,
+    "cave": "meridian_terrace_crack"
+   },
+   {
+    "x": 1149.4,
+    "z": -1478,
+    "y": -616.5
+   }
+  ],
+  [
+   {
+    "x": 1232,
+    "z": -1177.5,
+    "y": -593.8847425093809
+   },
+   {
+    "x": 1232,
+    "z": -1161.5,
+    "y": -596.8847425093809,
+    "cave": "meridian_culvert_north"
+   },
+   {
+    "x": 1232,
+    "z": -1177.5,
+    "y": -593.8847425093809
+   }
+  ],
+  [
+   {
+    "x": 1304.5,
+    "z": -974,
+    "y": -530.4
+   },
+   {
+    "x": 1320.5,
+    "z": -974,
+    "y": -533.4,
+    "cave": "meridian_escarp_culvert"
+   },
+   {
+    "x": 1304.5,
+    "z": -974,
+    "y": -530.4
+   }
+  ],
+  [
+   {
+    "x": 1360.6,
+    "z": -932,
+    "y": -500.6
+   },
+   {
+    "x": 1376.6,
+    "z": -932,
+    "y": -503.6,
+    "cave": "meridian_escarp_pocket"
+   },
+   {
+    "x": 1360.6,
+    "z": -932,
+    "y": -500.6
+   }
+  ]
+ ]
+}
