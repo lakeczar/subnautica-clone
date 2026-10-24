@@ -16,7 +16,7 @@ test("field kit: outposts and their modules build near the camera, rebuild on ch
     const scene = new Scene(engine);
     scene.useRightHandedSystem = true;
     const cel = createCelMaterial(scene);
-    const before = [scene.meshes.length, scene.geometries.length, scene.materials.length];
+    const before = [scene.meshes.length, scene.geometries.length, scene.materials.length], materials = scene.materials.length;
     const kit = createFieldKit(scene, cel);
     const { s, outpost } = busyOutpost();
     const o = s.systems.outposts.find((x) => x.id === outpost)!, near = { x: o.position.x + 5, y: o.position.y + 2, z: o.position.z };
@@ -42,7 +42,7 @@ test("field kit: outposts and their modules build near the camera, rebuild on ch
     kit.update(s, near);
     assert.equal(scene.getMeshByName("fieldkit.drone")!.isEnabled(), false);
     assert.equal(scene.getMeshByName(`fieldkit.line.tether.${m.id}`)!.isEnabled(), false);
-    assert.equal(scene.materials.length, before[2] + 1 + 8, "the cel material, the pulse's and eight flares' (no per-frame materials)");
+    assert.equal(scene.materials.length, materials + 1 + 8, "the cel material, the pulse's and eight flares' (no per-frame materials)");
     kit.dispose();
     assert.deepEqual([scene.meshes.length, scene.geometries.length, scene.materials.length], before, "disposed clean");
   } finally { engine.dispose(); }
