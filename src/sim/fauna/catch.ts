@@ -10,7 +10,7 @@ import { SOURCES } from "../../content/registry.js";
 import type { SourceId } from "../../content/registry.js";
 import { placeDeterrent } from "../ecologyLink.js";
 import { cabinHull, cabinPowered, fittedCabin, nearFixture } from "../fleet.js";
-import { addItem, applySpend, cabinLockerId, containerAccepts, containerLabel, distance, facility, freeCapacity, nearPod, nearWorkshop, planSpend, removeQuantity } from "../inventory.js";
+import { addItem, applySpend, cabinLockerId, containerAccepts, containerLabel, cuOf, distance, facility, hasRoomAfter, nearPod, nearWorkshop, planSpend, removeQuantity } from "../inventory.js";
 import type { GameState, Vec3 } from "../types.js";
 import { WORLD_BOUNDS } from "../world.js";
 import { cropReady } from "../systems/cultivation.js";
@@ -88,10 +88,11 @@ export function cookPlan(s: GameState, portions: number): CookPlan {
   // Raw from the destination frees its space first.
   const order = [where.to, ...where.raw.filter((c) => c !== where.to)];
   const pay = planSpend(s, use, order.filter((c) => s.inventory.containers.some((k) => k.id === c)));
-  const freed = pay.lines.filter((l) => l.from === where.to).reduce((k, l) => k + l.quantity, 0);
+  // Room is read from the spend plan: the raw it pays frees its own space (the authority's rule).
+  const mealCu = cuOf("meal") * meals;
   const to = [where.to, "diver"].find((c) => s.inventory.containers.some((k) => k.id === c) && containerAccepts(s, c, "meal") &&
-    freeCapacity(s, c) + (c === where.to ? freed : pay.lines.filter((l) => l.from === c).reduce((k, l) => k + l.quantity, 0)) >= meals) ?? null;
-  if (!to) return { ...base, refusal: `${meals} meals need ${meals} CU free in ${containerLabel(s, where.to)} or your hold. Nothing cooked.`, use, meals, to: null };
+    hasRoomAfter(s, pay, c, mealCu)) ?? null;
+  if (!to) return { ...base, refusal: `${meals} meals need ${mealCu} CU free in ${containerLabel(s, where.to)} or your hold. Nothing cooked.`, use, meals, to: null };
   return { ...base, refusal: null, use, meals, to };
 }
 export function cookCatch(s: GameState, portions: number): string | null {
