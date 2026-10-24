@@ -22,9 +22,17 @@ Opus 5.5 high, design authority for the stream. Branch `t3/ls-1-lost-sites` from
 
    There is no at-door unlock (R1 F5). Order and spacing are checked from route events, never from timers (§5).
 
-   **Coded doors use a keypad** (owner, 2026-10-24). You click the keypad and type the code on the keyboard. A decoded code is kept in the journal, so nothing has to be memorised. The same rule applies to every coded door. There is no lockout and no penalty for a wrong code, and a guessed code works: the gate is legibility, not a puzzle. Typing the code is the "aha".
+   **Coded doors use a keypad** (owner, 2026-10-24). You click the keypad and type the code on the keyboard. A decoded code is kept in the journal, so nothing has to be memorised. The same rule applies to every coded door. There is no lockout and no penalty for a wrong code, and a guessed code works. Typing the code is the "aha".
 
-   Both are seen before they can be opened and are legible in hindsight. An owner answer on adding a light puzzle to some doors is pending; this plan doesn't change until it arrives.
+   **Most coded doors ask for a little deduction** (owner, 2026-10-24). Either part of the code is in the environment at the door, or a log points at something you've seen.
+   - **The first door teaches the mechanic with a straight code** (coordinator): the cold-store hatch's code is given whole by the gauge logger.
+   - **The ridge vault door is a deduction door.** Its first two digits are stencilled on the door itself (`atDoor: "20··"`). The mixing-line return slip gives the rest ("…9-3, the rest's on the door").
+   - **The journal keeps the record's part,** and says the rest is at the door. It never writes out a deduction door's full code.
+   - **Nothing is memorised:** the door's part is in front of you at the keypad, and the record's part stays in the journal.
+   - **The main path never needs a door,** so the main path stays solvable from logs alone.
+   - **Every deduction door passes the keypad contract unchanged.**
+
+   Both doors are seen before they can be opened and are legible in hindsight.
 6. **The owner's mid-game overgrown plot becomes a main-path site:** the keeper's racks on the hub spur. Its planting card (the planter plan) is readable without decoding, which keeps the main-path rule. The first planter arrives about 2.5–4 h in (owner-confirmed, 2026-10-24).
 7. **A notably better cultivation upgrade past 4 h** (owner, 2026-10-24): the **heated grow bed**, from the Rift borehole hut (see §2 and *Cultivation progression*).
 8. **Seeing is not capturing.** The Dart's range tagger and the Hush's listening array mark a site on the chart and in the journal. Capturing its data still means reaching the logger. Otherwise approach design is moot.
@@ -358,8 +366,9 @@ From the access research (`research/access-onboarding` `45811fa5`, `ACCESS-ONBOA
 **Pacing acceptance (R1 F4, R2 N4 and N5).** This is a named check, not a report to read. There is **one analyzer**, `analyseTimeline` (`src/sim/timeline/report.ts`); the acceptance is a thin rule set over its output, and REC-2 later reuses or absorbs both.
 - **Rules,** from `DEFAULT_THRESHOLDS`:
   - the longest gap between counted new-content beats is 20 min of play or less;
-  - every empty-travel stretch is 90 s or less at that leg's craft;
   - **no idle span has a decode as its recorded cause.**
+  - **Empty travel over 90 s is reported for judgement, never failed** (owner, 2026-10-24). The 90 s rule is a spacing guide whose limit grows with progression and journey length. Long legs are listed in the output and in the debt record for PACE-1 and the playtests to judge.
+  - **An audible predator counts as something happening** only while its warning cue plays (owner, 2026-10-24). The recorder doesn't tag threat cues yet, so this is noted for REC-2.
 
   Idle never counts as play time and never fills a gap.
 - **Analyzer extensions** (no second model):
@@ -476,7 +485,8 @@ The lore owner's rulings, dates, canon ties and the player-text lint list are in
 
 ## 7. Owner decisions (answered 2026-10-24) and open questions
 
-1. **Coded doors use a keypad:** click it and type the code; the journal keeps every decoded code. This applies to the cold-store hatch and the ridge vault (§2, design call 5, stage 1b).
+1. **Coded doors use a keypad:** click it and type the code; the journal keeps what each decoded record gives. **More puzzles** (later answer): most doors take a little deduction, the main path stays solvable from logs, and the first door (the hatch) is a straight code (design call 5, stage 1b).
+3. **Pacing:** the 90 s empty-travel rule is a spacing guide, so long legs are reported for judgement. The 15–20 min new-content gap and zero decode-only waiting stay hard rules (§3).
 2. **The first planter at 2.5–4 h is right,** plus a notably better cultivation upgrade past 4 h: the heated grow bed (§2, *Cultivation progression*).
 
 No owner questions are open. The Sol review's findings will be settled with the coordinator before stage 1a.
@@ -605,3 +615,54 @@ Code at **`4b89164b`** (branch `t3/ls-1-lost-sites`, from root `a38b951e` plus t
 - The racks' planting card (`bp_cultivation`) and every new reward are stage 1b.
 - The reef slates and the listening array's sound-tell filter are stage 2.
 - The Creel route now spends 1 alloy, 1 crust and 1 resin on the relay; the economy scripts don't simulate the bot, and all six pass.
+
+### Stage 1a R1 fixes (Sol, `review/ls-1-1a-r1` `9de5917e`)
+
+Code at **`4593705d`**. Every finding is fixed as written, together with the two owner decisions that came during the fixes (deduction doors; empty travel as a spacing guide).
+
+| Finding | Fix | Proof |
+| --- | --- | --- |
+| **F1 [P1]**: the records didn't reach the real journal | `journalPanel` now renders the shared model. The story notebook stays as it is, followed by the model's *Found notes* and *Door codes* sections. Decoded log prose is part of the model (`JournalEntry.logs`), so the panel no longer looks it up by the wrong entry identity (`decode:` against `decoded:`). | `tests/lost-sites-panel.test.ts`, on the real `PanelView` output: a board note appears once its place is visited; a decode note once decoded; a completed log's prose; a placed door's code. |
+| **F4 [P2]**: unplaced-door codes showed in the readable-record path | **One authority, `readableLog`** (`sim/systems/decoder.ts`): nothing before the decode, and a code-bearing line (it names its door in `lostSites.ts`) only once `doorPlaced`. Site inspection, notices, the journal and `doorCodes` all read it. `DECODE_LOGS` is gone; `decodeLog` is raw data for the decoder and tests. | The same panel test, through the rendered journal and site inspection: before decoding, decoded but unplaced, then placed. Also `tests/lost-sites.test.ts`. |
+| **F3 [P2]**: most waits had no cause | `Driver.waitFor(label, seconds, done, cause)` **requires** a cause (empty is refused), and `idle()` goes through it. All 15 call sites declare theirs: `action:sort` and `action:lift`, `action:tool-arms`, `vitals:air` and `vitals:low-air`, `docking:settle`, `docking:capture` and `docking:launch`, `works:equalize`, `recovery:bobbin` and `recovery:tow`, `craft:coast`, `growth:seed_staple_cup`, `decode:reef_pumphouse_log`. Every declared wait is idle from its first tick. The pump-house cause and the decode-free guard are unchanged. | `tests/playthrough-pacing.test.ts`, through the real driver and observer: short (1 s) and long (30 s) non-decode waits, a cause change, a timed-out wait clearing its cause, an undeclared cause refused, and causes surviving `summarizeChunk`. |
+| **F2 [P2]**: the aggregate debt could hide regressions | **An identified ratchet** (`scripts/playthrough/pacing-debt.ts`, `judgePacing`). One row per identified figure, each holding its measured bounds (largest first) and an owner. Each identity's values are compared largest to largest, so nothing new hides under an old maximum. A decode-caused idle span fails **first**, counted by spans, so a one-tick wait counts.<br>**Gaps** (keyed by the beats either side, play minutes; owner PACE-1): new, more or larger fails, and fewer, smaller or gone **also fails**, printing the exact rows to write.<br>**Legs** (keyed by hull and region, seconds; owner REC-2 with PACE-1): **reported for judgement, never failed**, per the owner's ruling that 90 s is a spacing guide. Any difference from the record is listed with the figures now. | Fixtures through the real analyzer: a new gap shorter than the old maximum; a gap improvement, then a regression after lowering; a worsened secondary leg (reported, not failed); a one-tick and a zero-length decode wait; and an unrecorded route judged strictly. Also `timeline-acceptance`: a 120 s leg is reported, not failed. |
+
+**Recomputed baseline, after every wait was declared** (playthrough ticket `261024-193214-8831`; the final run below reproduces it exactly). Minutes are active play. The gaps are hard and ratcheted; the legs are reported for judgement.
+
+| Route | Longest gap | Empty legs over 90 s (reported) | Longest leg | Decode waits |
+| --- | --- | --- | --- | --- |
+| Creel | 50.6 min (works: service air assembly → pod buffer) | 31 | 849.9 s, Creel in the district | 0 |
+| Carrier | 94.2 min (works), plus 50.8 (Hearthline → Divide), 29.8 (C12 → service air plans), 26.5 (controller → service power assembly) | 55 | 753.4 s, Hearthline | 0 |
+| No-optional | 50.9 min (works) | 31 | 849.8 s | 0 |
+| No-optional carrier | 87.1 min (works), plus 50.8, 29.8 and 24.1 | 55 | 753.4 s | 0 |
+
+These rows are PACE-1's input. The per-leg bounds are in `pacing-debt.ts`, and the timelines are the playthrough artifacts.
+
+**Checks at `4593705d`** (all `--machine any`):
+
+| Check | Ticket | Machine | Result |
+| --- | --- | --- | --- |
+| Fast tier | `261024-195227-f530` | factory-worker | 168 files pass |
+| Heavy tier | `261024-195618-824b` | 4070 | all files pass, 0 failures |
+| Six economy steps and the production build | `261024-202436-d92c` | factory-worker | all pass |
+| Playthrough | `261024-195617-cdf9` | factory-worker | **9/9 complete, no blockers, every milestone reload matches** |
+
+Playthrough detail:
+- **Decode-free runs:** both end with nothing decoding or decoded.
+- **Four judged routes:** gaps exactly the recorded debt, 0 decode waits, and legs equal to their record.
+- **Route lengths:** Creel 203.7 min, carrier 372.5 min of simulated play.
+
+Shared-host runs are functional evidence only. The timelines are copied to `/work/tmp/ls1-1a-r1-evidence/`.
+
+**Owner decisions folded in (2026-10-24):**
+- **More puzzles:** most coded doors ask for a little deduction, and the hatch stays straight to teach the keypad.
+  - The ridge vault is now a deduction door: `atDoor: "20··"` on the door, and the return slip gives "…9-3".
+  - The journal keeps the record's part and says the rest is at the door. It never writes out the full code.
+  - Tests check that the parts combine into the code and that the full code never appears in logs, the clue, the journal or site inspection.
+  - Design call 5 and §7 are updated.
+- **The 90 s rule is a spacing guide:**
+  - empty travel is reported for judgement, both in `pacingAcceptance` (a new `reported` list) and in the debt record;
+  - the new-content gap and zero decode waits stay hard.
+  - **Tension** (an audible predator counts while its warning cue plays): the recorder doesn't tag threat cues, so this is noted for REC-2.
+
+**For PACE-1:** the per-route gap and leg rows in `scripts/playthrough/pacing-debt.ts`, and the timelines in `/work/tmp/ls1-1a-r1-evidence/timelines/` (playthrough ticket `261024-195617-cdf9`).
