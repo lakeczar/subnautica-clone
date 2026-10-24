@@ -1,97 +1,104 @@
 # STEW-2: local work can't disturb a 3090 exclusive run (handoff)
 
-Opus 5.5 high. Branch `t3/stew-2-exclusive-guard`, on root `6ee488a`. Head: see the report. Story-neutral; no spoilers read. `scripts/heavy/*` is untouched. The queue change this needs is a proposed patch for SCHED-3 (below).
+Opus 5.5 high. Branch `t3/stew-2-exclusive-guard`, on root `6ee488a`. Head: see the report. Story-neutral; no spoilers read. `scripts/heavy/*` and game code are untouched. R1 (Sol, `e8764aa`): request changes, five findings. R2 follows the coordinator's decision: **no leases; on factory-worker, guarded commands don't run locally at all, they go through the queue.**
 
 ## Outcome
-- **The guard.** Ordinary local commands on factory-worker refuse to run beside a 3090 `exclusive` ticket, running or queued, because a queued one can start at any moment. Nobody has to remember to check first: `scripts/local-guard.mjs` is asked by every CPU-heavy entry point.
-  - **The npm scripts:** `npm test`/`test:fast`, `build`, `typecheck`, `playthrough`, and `check`'s local tail.
-  - **The node entry points:** `scripts/test-build.mjs`, `test-tier.mjs`, `guard-architecture.mjs`, `bake-terrain.mjs`, the six economy scripts, `sim-bench.mjs` and `timeline-save-bench.mjs`.
-  - **The shell scripts:** `saves-build-at.sh` and `sim-differential.sh`.
+- **On factory-worker, the repo's CPU work runs only through the queue.** Each CPU-heavy entry point asks `scripts/local-guard.mjs` first. Unless it is admitted, it runs **the same command again** through `heavy-check run --class <its class> --machine <any|3090> -- …`, in the foreground, and exits with its code, so it reads like a local run. The queue then knows every sanctioned CPU job, and an exclusive run drains them like any other job: no race, no lifetimes, no SCHED patch.
+  - **Admitted (runs directly):**
+    - inside a real heavy-check job (`SILTWAKE_JOB_TICKET`, and this process in that ticket's recorded cgroup, by whole path components);
+    - on the alickers sandbox, positively identified: hostname `siltwake-alickers`, its `/usr/local/bin/siltwake-job`, and no queue state there;
+    - with `SILTWAKE_LOCAL_OVERRIDE="<why>"`, logged to `/work/tmp/siltwake-sched/local-overrides.jsonl` once per command tree. If the log can't be written, it refuses.
+  - **If the queue client can't be run** (missing, not executable, killed), the command refuses with exit 75 and the reason. It never falls back to running locally. The guard reads no queue state; the queue decides.
+  - **Guarded:**
+    - the npm scripts: `npm test`/`test:fast`, `build`, `typecheck`, `playthrough`, `check`, `test:build`, `bake:terrain`;
+    - the node entry points: `scripts/test-tier.mjs`, `test-build.mjs`, `guard-architecture.mjs`, `bake-terrain.mjs`, the six economy scripts, `sim-bench.mjs`, `timeline-save-bench.mjs`;
+    - the shell scripts: `saves-build-at.sh`, `sim-differential.sh`.
 
-  A refusal is one line naming the ticket and the queued form of the same command (exit 75). Inside a heavy-check job it runs, and so it does on alickers, which has no queue. An override (`SILTWAKE_LOCAL_OVERRIDE="<why>"`) runs it anyway and is logged.
-- **`npm run gate` routes itself.** Before each local step (fast, build, economy) the gate asks the guard. When local work would be refused, every remaining local step goes to the queue as **one** `--class standard --machine any --review` job, `node scripts/gate.mjs --batch <ids>`, so the economy scripts read that job's own `.test-build`. Queued steps a batched step follows (the bake before the build) run first. The gate reports each step from the job's per-step `gate-batch:` line, judged on the job's receipt like any queued step (exit, stop reason, DISTURBED, bound to the pinned commit). `--queued` forces the routing. `--machine` moves the batch too. This is what the coordinator did by hand.
-- **`scripts/saves-export.sh` compiles nothing outside the queue.**
-  - **The export** is one `--machine any --class playthrough --snapshot --artifact <root>/<sha>` job. It runs on alickers when its slot is free, else here between exclusive runs. Inside, it builds the SHA (`saves-build-at.sh`), exports, and verifies where it ran.
-  - **The import:** only when the export ran on alickers, a second small `--machine 3090` job imports (decodes) the fetched copy.
-  - **A commit already in the library** is verified in a job.
+    Each package script is a wrapper (`local-guard.mjs --class C -- npm run X:direct --`). `X:direct` refuses outside a job, so it isn't a way round.
+  - **Where a routed command runs:**
+    - **`any`** (alickers when free, else here): tests and checks;
+    - **`3090`:**
+      - whatever leaves its product in your worktree (`test:build`, `build`, the bake);
+      - commands naming local paths;
+      - any command when your environment carries a setting (`SILTWAKE_*`, `NODE_OPTIONS`), since alickers receives only the command line.
 
-  The outer script only submits and waits, so it may be started at any time. It now uses the remote lane (`--artifact`) instead of calling `alickers-job.sh` directly and copying over ssh, as its own old comment planned.
-- **Heavy-tier timing bounds.** Files that assert elapsed time (`exclusive` in `tests/heavy-budgets.json`) now run in an explicit **timing phase**: last, one at a time, with nothing else of the tier beside them. Each such file's summary row reports the CPU wait (PSI "some") of this job and of the host while it ran, and a timing file that fails under ≥5% job CPU wait says so. No bound changed.
-  - **Classification is enforced:** a heavy file that reads a clock must be listed under `exclusive` or under the new `clockWithoutBound`, or the tier refuses to run (exit 2). `ecology-render` and `ux1-carrier-corridor` only report a time and are listed so.
-- **A local-run lease and a proposed queue rule close the remaining gap.** A check made once at start can't see an exclusive submitted a minute later, and an idle lane admits that exclusive at once. So each run the guard lets through leaves a lease (`/work/tmp/siltwake-sched/local-runs/<pid>.json`) while it runs. [`stew2/stew2-sched-local-runs.patch`](stew2/stew2-sched-local-runs.patch), for SCHED-3, makes a draining exclusive wait for live leases (blocked reason `local`; leases over 20 min stop counting) and lists them in `status`. The guard refuses new local work while the exclusive waits, so the wait ends with the longest local run already in progress (a fast tier, about 2 min). Until it lands, leases are attribution only.
+    The tiers and the economy scripts compile inside their job, because on alickers there is no `.test-build` until they do.
+- **Nothing expensive loads before admission (F3).** The economy scripts import their compiled `.test-build` modules dynamically after the guard. `guard-architecture.mjs` loads TypeScript, and `bake-terrain.mjs` loads esbuild, only after it. A routed or refused script loads none of them, even with no build output.
+- **Scope membership is one shared predicate (F4):** `scripts/cgroup-scope.mjs` compares whole cgroup path components, against the job's recorded scope path (`jobs/<ticket>/cgroup`) or else its unit. A process is inside only if it is in the scope or below it, so `<unit>.scope-escaped.scope` isn't. SCHED's nested and GPU checks share the weaker `includes` rule; the coordinator has SCHED-3 adopt this helper in its follow-up.
+- **`npm run gate`:** where local steps aren't admitted (factory-worker), fast, build and economy go to the queue as **one** `--class standard --machine any --review` job (`gate.mjs --batch <ids>`). The bake runs first; each step is reported from the job's `gate-batch:` line and judged on its receipt (exit, stop reason, DISTURBED, bound to the pinned commit). Admitted (in a job, on alickers, or overridden), they run directly. `--machine` moves the batch too. The R1 behaviour of choosing per step is gone, along with `--queued`, since on factory-worker there's no other choice.
+- **`scripts/saves-export.sh` compiles nothing outside the queue** (unchanged in R2; Sol passed it).
+  - **The export:** one `--machine any --class playthrough --snapshot --artifact <root>/<sha>` job builds the SHA, exports and verifies where it ran.
+  - **The import:** only when the export ran on alickers, a small `--machine 3090` job imports (decodes) the copy.
+  - **An existing commit** is verified in a job.
+- **Heavy-tier timing bounds.** Files that assert elapsed time (`exclusive` in `tests/heavy-budgets.json`) run in a **timing phase**: last, one at a time. Each row reports the CPU wait (PSI "some") of the job and the host. No bound changed.
+  - **Classification (F5):** a heavy file that reads a clock, itself or through a test helper beside it (transitively), must be listed under `exclusive` or `clockWithoutBound`, or the tier refuses (exit 2). The scan covers:
+    - `Date.now`, `Date()`, `new Date` with no argument, `Date` aliased or destructured;
+    - `performance` (and `perf_hooks` imports);
+    - `hrtime`;
+    - the CPU-usage clocks;
+    - `console.time`.
+  - **Newly classified:** `heavy-tier.heavy.test.ts` asserts its runner ends promptly, so it is a timing file. `terrain-borders`, `world-kit-render` and `regions-bake-decode` poll through `shared-support`'s `waitUntil` timeout, so they are clock-without-bound.
 
-## The finding behind "timing bounds flake"
-TT-1 already ran the four `exclusive` files alone within the tier, and CW-1's failing run did too: they ran last, serially. The log (`261024-155654-6ff6`) shows `caves-deep-perf` at 437.6 µs as the 64th of 66 files, among the four timing files that ran last, after the pool had drained. What ran beside it was **another queue job on the 3090**, a `npm run playthrough -- --jobs 3` (`261024-160618-7506`, 16:08:36–16:17:07Z), so the "three-way concurrency" was three games in another job. Serialising within the tier can't prevent that. The timing phase makes the ordering explicit and the contention visible, and the root fix is listed under compromises, item 4.
+## R1 findings and what changed
+- **F1 (P1), leases aren't mutual exclusion:** dropped entirely, with the SCHED patch and its check script. On factory-worker the guarded commands are queue jobs, so the queue's own admission is the exclusion: an exclusive drains them like any job, and nothing is registered, aged or expired.
+- **F2 (P1), fail-open and unknown state:** the guard reads no queue state at all. Alickers is admitted only by positive identity (hostname, its `siltwake-job` tool, no queue directory), never because something is missing. Everything else routes, and a queue client that can't run means refusal (75).
+- **F3 (P2), static imports before the guard:** dynamic imports after admission in all six economy scripts; TypeScript and esbuild likewise. A test runs each routed script with a module-resolution hook, in the repo and in a bare copy without `.test-build` or `node_modules`. No compiled module, TypeScript or esbuild loads, and there's no `ERR_MODULE_NOT_FOUND`.
+- **F4 (P2), scope-name prefix:** `cgroup-scope.mjs`, with tests for the scope, descendants, `/sys/fs/cgroup` prefixes, trailing slashes, and prefix-collision siblings (by path and by unit). End to end inside a real job: the job's real path admits, and a prefix-named path routes.
+- **F5 (P2), `Date.now` bypass:** the wider scan above, with regressions for `Date.now`, a destructured `Date`, `new Date().getTime()` and `+new Date`, an aliased `perf_hooks` import, `hrtime`, and a clock read through a helper. A fixed `new Date(0)` isn't refused.
+- **Docs:** this handoff and `WORKER_RESOURCE_LIMITS.md` say plainly what remains a convention (below).
 
 ## How agents run things now (paste into briefs)
-- **Run locally as before.** When the guard refuses, run the command it prints: `scripts/heavy-check.sh --machine any -- npm test`. Commit first (a WIP commit is fine) and it runs on alickers at once if free; otherwise it runs here between exclusive runs.
-- **`node scripts/local-guard.mjs --status`** shows what the guard sees and the local runs in progress (`--json` for scripts).
-- **The override** is for a few seconds of work you can't queue: `SILTWAKE_LOCAL_OVERRIDE="why" npm run typecheck`. It is logged to `/work/tmp/siltwake-sched/local-runs.jsonl`. If an exclusive was *running*, tell the coordinator with the ticket id and time.
-- **Unguarded:** bare `npx tsc`, `npx vite build`, `node --test <file>` and `node .test-build/…` directly. Use the npm scripts, or the queue.
-- **The coordinator:** `npm run gate` and `scripts/saves-export.sh` need no status check before them any more.
+- **Run the npm scripts as before.** On factory-worker they queue themselves, in the foreground, and print the queued command first.
+- **Commit first** (a WIP commit is fine) so a `--machine any` command can go to alickers. With uncommitted changes it runs here. If the tree changes while it waits, the queue rejects it (exit 3).
+- **One job per worktree runs at a time:** a guarded command waits behind your own running job in the same worktree.
+- **`node scripts/local-guard.mjs --status`** says what happens here.
+- **The override** is for seconds of work you can't queue: `SILTWAKE_LOCAL_OVERRIDE="why" npm run typecheck`. It's logged. If `heavy-check status` shows an exclusive ticket, tell the coordinator its id and the time.
+- **Not prevented, a convention only:**
+  - bare `npx tsc` and `npx vite build`;
+  - `vite dev`;
+  - `node --test <file>`;
+  - compiled runners started directly (`node .test-build/…`);
+  - the `:direct` scripts' commands typed by hand;
+  - SCHED's acceptance suites run directly.
 
-## Design notes
-- **What counts:** tickets of class `exclusive` in `state.json`.
-  - **Running:** they count regardless of their holder (the job can outlive it).
-  - **Queued:** they count while their supervisor lives. A queued ticket whose supervisor died is never admitted, and the queue drops it at its next reconcile.
-  - **The read:** `state.json` plus `/proc/<pid>/stat` for liveness, about 1 ms. No `heavy-check status` call (its `recover()` can call systemd), and no process-tree walk.
-- **Inside a job:** `SILTWAKE_JOB_TICKET` *and* this process inside that ticket's scope (its `grant.json` unit in `/proc/self/cgroup`), the rule heavy-check's own nested calls use. The variable alone is refused. v1's `SILTWAKE_HEAVY_LOCK_HELD` counts inside a `siltwake-heavy-*` scope.
-- **Fail open, and why that's right here.** State that can't be read or parsed means the queue itself is broken. It then admits nothing, so no exclusive measurement is running to protect, and failing closed would stop every agent's tests machine-wide over a queue fault. The guard warns on every call, so the condition isn't silent.
-  - **The case where failing open would be wrong:** a newer queue protocol renaming the fields. Tickets of an unknown shape are counted and warned about on every call ("update scripts/local-guard.mjs"), never silently ignored.
-  - **No queue:** a missing state directory (alickers) is no queue: it runs, and writes nothing.
-- **A later step of the same run continues.** `npm test`'s guard leases the npm shell; its later steps (guard, compile, tier) find that lease on an ancestor and go on when an exclusive is merely *queued*, since the lease holds it back, but refuse once one is *running*. A half-done `npm test` isn't aborted for an exclusive that will wait for it. Without the queue patch, an idle lane admits that exclusive at once, and the next step then refuses.
-- **No lease during a queue wait.** `check` leases only its local tail, after `test:heavy`. A lease held while waiting on the queue would deadlock with a draining exclusive.
-- **The gate asks before each local step**, not once, so an exclusive submitted mid-gate moves the remaining local steps to the queue rather than failing them on the guard.
-- **Rejected alternative: CPU isolation of the exclusive** (cpuset `AllowedCPUs` on everything else). It would cover even bare `npx tsc`, but agents' work runs in T3's slices, and the owner's rule is never to clamp T3 slices.
-- **Rejected alternative: running all local work at idle CPU weight in a `siltwake-*` scope.** It would make agents' `npm test` crawl whenever queue jobs run, and it still shares caches and memory bandwidth.
+  Use the npm scripts, or `heavy-check` yourself.
+- **The coordinator:** `npm run gate` and `scripts/saves-export.sh` need no status check before them.
+
+## The finding behind "timing bounds flake" (R1, unchanged)
+TT-1 already ran the four timing files alone within the tier, and CW-1's failing run did too. The log (`261024-155654-6ff6`) shows `caves-deep-perf` at 437.6 µs as the 64th of 66 files, after the pool had drained. What ran beside it was another queue job on the 3090: `npm run playthrough -- --jobs 3` (`261024-160618-7506`, 16:08:36–16:17:07Z). The timing phase makes the ordering explicit and the contention visible; the root fix is compromise 3.
 
 ## Compromises, each with its root fix and cost
-1. **The guard can't see bare compiler calls.** These are unguarded:
-   - `npx tsc`;
-   - `npx vite build`;
-   - `node --test <file>`;
-   - running compiled output directly (`node .test-build/scripts/playthrough/run.js`);
-   - `vite dev`.
-
-   *Root fix:* none in the repo short of wrapping `node_modules/.bin`. The structural fix is CPU isolation of the exclusive slice, ruled out by the T3-slice rule. *Cost:* these few still rely on habit, so briefs say to use the npm scripts.
-2. **Until SCHED-3 takes the patch, a local run started before an exclusive was submitted can still overlap it**, if the lane was idle. *Root fix:* the patch. It's tested: SCHED's policy tests pass with it, 34/34 including the new case, on alickers (`261024-173003-3fad`), via `stew2/check-sched-patch.sh`. *Cost:* a SCHED-3 review and an install while the queue is idle.
-3. **The guard reads SCHED's internal state shape** (`tickets[*].state`, `req.class`, `supervisor`). *Root fix:* SCHED documents those fields as a read contract, or ships the reader. *Cost:* a line in SCHED's design doc. Until then, unknown shapes warn.
-4. **Timing bounds are still judged on a shared machine.** The tier can't stop other queue jobs; the phase only makes the contention visible. *Root fix, for the files' owners (CW-1, the CA streams, LC):* assert per-step bounds on the thread's CPU time (`process.threadCpuUsage()`, Node ≥ 23.9; we run 24), which doesn't count time spent waiting for a CPU. The bound's number would then need re-establishing on a quiet machine, which is the owners' call, not mine. *Alternative:* a SCHED class that reserves the whole CPU pool without the GPU and exclusive drain. *Cost:* a change in each of four tests, or a queue class.
-5. **The clock classification scans the test file's own text**, not its helpers, so a timing bound inside a shared helper isn't caught.
-6. **`SILTWAKE_SCHED_DIR` redirects the guard** (tests need private roots), so a deliberate bypass is possible and unlogged. It is an explicit act, like the override.
-7. **A batched gate prints the job's last 40 lines** (`wait`'s tail), not the whole fast tier. The gate names `heavy-check log <ticket>` for the rest.
-8. **An alickers export builds the SHA twice:** once in the export job there, once in the import job here (a compile of about 30 s). That second build is the import's own trust boundary, as before.
+1. **Bare compiler calls and direct runners aren't prevented** (the convention list above). *Root fix:* none in the repo short of wrapping `node_modules/.bin`. The structural fix, CPU isolation of the exclusive slice, is ruled out by the never-touch-T3-slices rule. *Cost:* these rely on habit.
+2. **Every guarded command is now a queue job, even when nothing is measuring.** That adds about a second of queue overhead. On a quiet machine a dirty-tree command is admitted at once; with an exclusive series running, it waits for its turn (≤ 30 min), or runs on alickers if committed. *Root fix:* none needed; it is the design. *Cost:* latency for agents during exclusive windows, so commit to use alickers.
+3. **Timing bounds are still judged on a shared machine.** *Root fix, for the files' owners (CW-1, the CA streams, LC):* bounds on thread CPU time (`process.threadCpuUsage()`), or a queue class reserving the whole CPU pool. *Cost:* four tests, or a SCHED class.
+4. **`SILTWAKE_HEAVY_CHECK` names another queue client** (tests use stand-ins), so pointing it at `/bin/true` would skip the work. The guard prints the client it used whenever it isn't the production one. *Root fix:* none short of removing the test seam; it's an explicit act, like the override.
+5. **The clock scan is textual,** over the test file and the helpers beside it, not code reached through `src/`.
+6. **A routed command doesn't update your worktree when it runs on alickers.** That's why commands whose product is in the worktree route to `3090`, and guarded consumers compile inside their job. A bare `node .test-build/…` after a routed `npm test` can read a stale build, so run `npm run test:build` first.
+7. **A batched gate prints the job's last 40 lines;** the gate names `heavy-check log <ticket>` for the rest.
+8. **An alickers export builds the SHA twice:** the export there, the import here. That's the import's trust boundary.
 
 ## Evidence
-All checks ran through the queue, nothing locally beside the exclusive series that was running throughout (CW-1 r13 and REC-1).
-- **Fast tier, `--machine any`:** 1,646/1,646 on alickers at `c3f2aef` (`261024-175250-fa00`), the last code change; the later commits are docs only. Earlier passes: `73bb321` (`261024-173532-7ac2`) and `f292345` (`261024-173249-80a7`). It includes the new `tests/local-guard.test.ts` (decisions; refusals of the real entry points before they compile; override and log; inside-job by scope; no-queue and unreadable state; leases), `tests/gate-routing.test.ts` (routing order, per-step verdicts, the real gate against a stand-in queue) and `tests/saves-export.test.ts` (the real script in a throwaway repo against a stand-in queue, with a `saves-build-at.sh` that records any call: none outside a job).
-- **Heavy tier, `--machine any`:** all 67 files pass on alickers at `122c768` (`261024-182115-3db0`, 578 s, exit 0, bound). That includes `heavy-tier.heavy.test.ts`, 8/8: containment as before, plus the new timing-phase order and CPU-wait report and the unclassified-clock refusal, under both cgroup and process-group containment. The four timing files ran last, one at a time, all ok:
-
-  | File | CPU wait: job | CPU wait: host |
-  | --- | --- | --- |
-  | `caves-canopy-basin` | 0% | 0.2% |
-  | `caves-deep-perf` | 0% | 0.1% |
-  | `caves-reef-isles-game` | 0% | 0.1% |
-  | `large-cave-canopy` | 0.1% | 0.2% |
-
-  These are on a quiet sandbox. An earlier run at `73bb321` (`261024-173654-f12a`) showed the same, except for two new refusal tests whose test helper wrongly required a summary line; that was fixed at `c3f2aef`.
-- **Inside a real 3090 job** (`261024-175236-cee0`, `--snapshot`, at `c3f2aef`, admitted between CW-1's exclusive segments with the rest of the series still queued): `local-guard --status` printed `local work here: run (inside heavy-check job 261024-175236-cee0)`, and a guarded call ran. The production queue's own job scope is what the guard recognised.
-- **saves-export's in-job path for real:** `saves-export.sh --job-verify ac734b0` (the newest library) as a queued 3090 job (`261024-173723-788a`, at `73bb321`, 6.9 s). `saves-build-at.sh` built `ac734b0` from an archive (its guard let it run inside the job; that commit's lockfile differs, so it ran `npm ci`), and every file matched its manifest and decoded unchanged.
-- **End-to-end dry run against a private copy of the live queue state** (CW-1's and REC-1's real exclusive tickets; nothing written to the production state directory): [`stew2/dry-run.txt`](stew2/dry-run.txt).
-  - `npm run build`, `npm test`, `npm run typecheck`, `npm run playthrough`, `node scripts/test-build.mjs --typecheck`, `node scripts/test-tier.mjs fast` and `saves-build-at.sh` each refused in 27–182 ms, exit 75.
-  - The override ran and was logged.
-  - `--status` reported REFUSED.
-  - `gate --only bake,build,economy:m1`, against a stand-in queue, submitted the bake, then one `--batch build,economy:m1` job with `--machine any`.
-  - The dry run also caught the economy scripts loading their compiled modules before asking the guard; they now import `local-guard-now.mjs` first.
-- **Not obtained:** a real end-to-end `saves-export.sh` through the new path. It would publish a library for a branch commit into the shared store. The first real run is the coordinator's next post-merge export after this lands; its output names each ticket.
+All checks ran through the queue; nothing CPU-heavy ran locally (exclusive series from REC-1 were queued throughout).
+- **Fast tier, `--machine any`:** FAST_ANY
+- **Fast tier, `--machine 3090`** (admission inside a real factory-worker job scope): FAST_3090
+- **Heavy tier:** HEAVY
+- **Dry run, as a queued 3090 job:** DRY
+- **A real routed command:** REAL
+- **R1 evidence still standing:**
+  - **Gate batching:** Sol's 6/6 real `--batch` economy steps.
+  - **saves-export:** Sol's private-library checks; my `--job-verify ac734b0` (`261024-173723-788a`).
+- **Not obtained:** a real end-to-end `saves-export.sh` (it would publish a branch commit's library). The first real run is the next post-merge export.
 
 ## Files
-- **New:** `scripts/local-guard.mjs` and `local-guard-now.mjs`; `tests/local-guard.test.ts`, `gate-routing.test.ts` and `saves-export.test.ts`; `docs/build/streams/stew2/` (the patch, its check script, the dry run).
+- **New:**
+  - `scripts/local-guard.mjs` and `scripts/cgroup-scope.mjs`;
+  - `tests/local-guard.test.ts`, `gate-routing.test.ts` and `saves-export.test.ts`;
+  - `docs/build/streams/stew2/` (the dry-run script and its output).
 - **Changed:**
-  - `package.json` scripts;
-  - `scripts/gate.mjs` and `saves-export.sh`;
-  - `scripts/saves-build-at.sh`, `sim-differential.sh`, `test-build.mjs`, `test-tier.mjs`, `guard-architecture.mjs`, `bake-terrain.mjs`, the economy scripts and the two benches (one guard line each);
-  - `tests/heavy-budgets.json`;
-  - `tests/heavy-tier.heavy.test.ts`, `gate.test.ts` and `bake-terrain-store.test.ts` (fixtures copy the guard);
-  - `docs/build/WORKER_RESOURCE_LIMITS.md`;
-  - `scripts/playthrough/README.md`.
+  - `package.json` scripts (wrappers plus `:direct` bodies);
+  - `scripts/gate.mjs`, `saves-export.sh`, `saves-build-at.sh` and `sim-differential.sh`;
+  - `scripts/test-build.mjs`, `test-tier.mjs`, `guard-architecture.mjs` and `bake-terrain.mjs`;
+  - the six economy scripts and the two benches;
+  - `tests/heavy-budgets.json`, `heavy-tier.heavy.test.ts`, `gate.test.ts` and `bake-terrain-store.test.ts`;
+  - `docs/build/WORKER_RESOURCE_LIMITS.md` and `scripts/playthrough/README.md`.
+- **Removed:** the lease code, `scripts/local-guard-now.mjs`, and the proposed SCHED patch and its check script.
