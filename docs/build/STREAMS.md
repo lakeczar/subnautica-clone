@@ -1017,3 +1017,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - (5) no "reduce camera motion" for the opening's roll and drift (plus an FOV control before sustained play).
   - **Owners:** (2) and the sound-tell equivalence go to LS-1 (sent). (1), (3), (4) and the settings plumbing for (5) form **UI-2**, queued after CW-1 (bindings live in CW-1-owned `app.ts`), before the first playtest. Opus call: keyboard rebinding is included. OP-1 consumes reduce-motion.
 - **LS-1 plan ACCEPTED** (R3, Sol `3666eda4` on `review/ls-1-r3`; the coordinator inspected the `12d83e94` keypad and sound-tell delta). **Stage 1a started:** the records framework, decodes-off playthrough refactor, `storyCampaign` audit, `pacingAcceptance` with `idle.byCause` and validated `yields` (no format bump; SIM-1b owns the format). 1b waits for the owner's door-puzzle answer only where coded doors are concerned.
+- **Research #7 storage envelope** (Sol `06008be3` on `research/storage-envelope`): saves project to 79 KiB at 10 h and 139 KiB at 20 h, comfortably within limits. Combined storage needs retention work before PT-0.
+  - **Routing:**
+    - **SAVE-2,** queued after LS-1 stage 1a merges (both touch the timeline): (1) a timeline aggregate budget reserving the next save and chunk, plus reclaim-and-retry on a save quota refusal; (5) a `persist()` request with refusal handling; (6) a worst-case write-latency matrix inside PT-0's gates; (9) aggregate-size reporting with one populated adverse save.
+    - **REC-1b:** (3) the OPFS readiness probe, then the memory-export fallback.
+    - **REC-2:** (2) note payloads pinned and exported with their timeline; (4) free-space-aware export admission; (7) telemetry rotation; (8) one recorder writer per origin.
+  - **Owner-facing note:** browser-only saves are lost if site data is cleared or in private windows, so use Export save for anything precious until SAVE-2's `persist()` lands.
