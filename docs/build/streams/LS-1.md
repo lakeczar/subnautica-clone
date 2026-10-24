@@ -674,6 +674,10 @@ Shared-host runs are functional evidence only. The timelines are copied to `/wor
 
 ## Stage 1b handoff (rewards, caches, keypad model, schema 8)
 
+> **Resume note (paused for the host reboot, 2026-10-24):** 1b code at `24eddb36`. Fast tier (5fad8a39), heavy tier, the six economy checks and the build (9629fdbc, same source) pass. Full playthrough `261024-235145-1fa4` completes 9/9 routes; it fails only the pacing ratchet, by design, now that the racks run changed the timelines.
+> **Next:** write the printed rows from `/work/tmp/siltwake-sched/jobs/261024-235145-1fa4/output.log` into `scripts/playthrough/pacing-debt.ts`, giving the new `dart in refuge_reef` leg an owner; rerun the fast tier and the full playthrough at that SHA (`--snapshot`, artifacts in `/work/tmp/ls1-1b-evidence`); fill `CODE_SHA` and the checks table here; report "LS-1 stage 1b done at <sha>".
+> **Tickets to resubmit:** none queued or cancelled. Only those two reruns.
+
 Code at **`CODE_SHA`** (branch `t3/ls-1-lost-sites`, on the accepted 1a). Everything here is outside CW-1's files. The keypad panel's registration in `App.openPanel` and the pause path, and its real-browser acceptance, wait for CW-1 to land, as the coordinator sequenced. Spoiler-safe; canon notes stay in `docs/spoilers/LS-1-LORE.md`.
 
 **What a player gets now:**
