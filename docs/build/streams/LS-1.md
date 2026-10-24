@@ -671,3 +671,36 @@ Shared-host runs are functional evidence only. The timelines are copied to `/wor
   - **Tension** (an audible predator counts while its warning cue plays): the recorder doesn't tag threat cues, so this is noted for REC-2.
 
 **For PACE-1:** the per-route gap and leg rows in `scripts/playthrough/pacing-debt.ts`, and the timelines in `/work/tmp/ls1-1a-r1-evidence/timelines/` (playthrough ticket `261024-195617-cdf9`).
+
+## Stage 1b handoff (rewards, caches, keypad model, schema 8)
+
+Code at **`CODE_SHA`** (branch `t3/ls-1-lost-sites`, on the accepted 1a). Everything here is outside CW-1's files. The keypad panel's registration in `App.openPanel` and the pause path, and its real-browser acceptance, wait for CW-1 to land, as the coordinator sequenced. Spoiler-safe; canon notes stay in `docs/spoilers/LS-1-LORE.md`.
+
+**What a player gets now:**
+- **The keeper's racks** (the spur's second step) are the planter plan's home. The *planting card* on the racks grants `bp_cultivation`, and the racks carry three seed patches: staple cups on the summit lip, ribbon fans at the riser's foot, salve fronds in its shade. The workshop's outpost sheet now grants only the outpost kit.
+- **Three reward upgrades,** each through the existing host-upgrade offer and SYS-1's spending authority:
+  - **Locker extension** (`locker_extension_1`, tier 1): one locker module's own locker goes from 32 to 48 CU, through packing and reload.
+  - **Heated grow bed** (`grow_bed_1`, tier 2): on a powered host, food, medicine and material crops grow twice as fast and yield one more; power crops are unchanged; the heater bills the host's drain.
+  - **Ping lens** (`ping_lens_1`, tier 1, knowledge): the handheld ping reaches 60 m instead of 35 m.
+- **Kiln tubers** at the borehole hut: a warmth crop that a planter takes only with a grow bed or on a thermal outpost.
+- **Lost-site caches** at the basket, the pump heads and the allotments. Each is found when the diver first comes within reach (a notice says so), holds its authored contents, is take-only, and never refills.
+- **Coded doors** have their command (`enter-code`): a wrong code costs nothing, the right one opens the door for good, and dashes are accepted. The keypad's model, markup and key handling are built (`src/ui/keypad.ts`) behind a seam; the app wiring lands after CW-1. Neither door is placed yet (OP-1's hatch, the Basin vault biome).
+
+**Changed contracts:**
+- **Save schema 8** (content version unchanged), with the 7 → 8 bridge in `src/save/bridge7.ts` (`bridge6.ts` is deleted; schemas 1–6 are refused as older builds):
+  - `systems.opened`: opened coded doors, known door IDs, each once. It starts empty, because no schema 7 build had a coded door.
+  - `knowledge.legacyGrants`: one table and one validator (`src/save/legacyGrants.ts`), rows `{ blueprint, source: { kind: "scan" | "discovery", id } }`. The bridge writes a row only when the save holds both the plan and the old source. The one row today is the planter plan from the workshop's outpost sheet. PACE-1's pod-buffer row joins this table when the coordinator says so.
+  - Named fixtures are converted once (`docs/build/streams/ls1/convert-fixtures-schema8.mjs`); the schema 7 originals are in `tests/fixtures/archive/*.schema7.json`.
+- **Host upgrades:** `moduleIn` takes locker and planter modules as well as decoder and survey. One capacity authority (`lockerModuleCapacity`) is used by install, upgrade and validation. One effect authority for the bed (`growthRate`, `harvestQuantity`, `growBedFitted`); `poweredModules` counts a bed-fitted planter.
+- **Site caches** (`src/sim/systems/siteCaches.ts`): found on first reach, from the systems step (`cache-found` event, notice and a `new` timeline event); validation lists each found cache at its authored capacity and bounds its contents; `containerAccepts` refuses deposits. This deviates from the plan's "fixed container from New Game" (reasoning below).
+- **Seed patches' bed** is the support surface: `tests/c4-systems.test.ts` now measures against `supportHeight`, because the racks sit inside the glimmer crack's cave footprint, where the kit is the rock and `groundHeight` is the floor under the cave.
+- **Proposals:** `bp_locker_extension` and `bp_ping_lens` move from the new-plan proposals to the built list.
+
+**Design call during the build (Opus, from the evidence):** caches are **found on first reach**, not stocked in New Game. Stocking them broke an invariant much of the code relies on: every item in the inventory is the player's. The fast tier showed it in the opening rule, "elsewhere" counts, per-kind totals and dozens of tests reading the first item. Finding on reach keeps that invariant with no exception, needs no "opened" flag (the container's presence is the record) and no new-content rule for later caches. A found cache then behaves like a visited cargo cache.
+
+**Compromises, with their root fixes:**
+- **Keypad wiring:** the panel is built and tested against its seam; registration in `App.openPanel`, pause and the real-browser acceptance wait for CW-1 (`src/runtime/app.ts`). `enter-code` returns a typed outcome through the systems command; door events and sounds land with the app wiring.
+- **The locker extension's plan has no source in the world yet** (the tide store is BIO's). The upgrade works and is tested with a stand-in source; players can't reach it until the store is placed.
+- **The air-line reel** stays in stage 2, as sequenced.
+- **A staged interact before any tick** at an unfound cache opens Cargo without the cache, because the find happens in the fixed step and `src/sim/step.ts` is CW-1's. In play the diver swims there, so the step always finds it first.
+- **Grow-bed speed needs power; its extra yield doesn't.** The extra produce is per harvest, so an unpowered bed still yields one more once its crop ripens at the base rate. This is deliberate and tested.

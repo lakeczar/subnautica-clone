@@ -91,6 +91,7 @@ test("heated grow bed: twice as fast and one more produce for food on a powered 
   assert.equal(plant(s, s.systems, id, "s0", "seed_staple_cup"), null);
   const crop = s.systems.planters[0]!;
   assert.equal(growthRate(s, s.systems, crop), 1, "a cell outpost without a charged cell: no acceleration");
+  assert.equal(harvestQuantity(s.systems, planter, "seed_staple_cup"), 3, "the extra produce is per harvest, powered or not");
   const cell = give(s, "reserve_cell", 1, `${id}_locker`);
   assert.equal(growthRate(s, s.systems, crop), 2, "powered: twice as fast");
   assert.equal(harvestQuantity(s.systems, planter, "seed_staple_cup"), 3, "staple cups 2 → 3");
