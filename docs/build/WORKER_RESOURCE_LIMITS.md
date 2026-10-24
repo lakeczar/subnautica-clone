@@ -184,6 +184,15 @@ State lives in `/work/tmp/siltwake-sched/` (the queue, `ledger.jsonl` and per-jo
 
 Light checks of the scheduler itself (no systemd) are in `tests/heavy-sched-policy.test.ts`. Its acceptance tests use private state only: `node --test --test-concurrency=1 scripts/heavy/acceptance.test.mjs` (SCHED-1) and `scripts/heavy/acceptance-sched2.test.mjs` (SCHED-2).
 
+## Measurement hygiene (coordinator, 2026-10-24, from the test-efficiency study)
+
+- **Never measure with the heavy budget override.** Runs with `SILTWAKE_HEAVY_BUDGET_MIB` set are not budget evidence, because the override inflates peaks and makes every file run alone.
+- **Check existing logs before running anything new.** Many questions (a root baseline, a file's usual peak) are already answered in the queue's job logs under `/work/tmp/siltwake-sched/jobs/`.
+- **Size jobs to what they use.** Request the seats and memory the job needs, and send non-GPU work with `--machine any`.
+- **Run both sides of a comparison together.** An A/B runs both arms in one job, interleaved, with a fixed run count, a margin declared in advance and an "inconclusive" outcome. Don't run two separate whole-tier jobs.
+- **Keep exit codes honest.** Use `set -o pipefail`, and never pipe into `grep` or `tail` in a way that hides a failure.
+- **Record the context with every number:** the memory limit, the cache state, the machine and the commit.
+
 ## Second worker: siltwake-alickers (best-effort, added 2026-10-23)
 
 A WSL2 Ubuntu sandbox on the owner's PC (`alickers`): **8 CPUs, 16 GB, no swap, an RTX 4070 Laptop GPU** (Chrome → ANGLE/OpenGL → Mesa D3D12). Fleet provisioned it (handoff: `/work/tmp/siltwake-alickers-handoff/SANDBOX-HANDOFF.md` on factory-worker). It runs **one job at a time**, in its own capped scope (6-CPU quota, 8 GiB by default, 1–12 GiB allowed).
