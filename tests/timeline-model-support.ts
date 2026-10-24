@@ -614,7 +614,7 @@ export async function runScript(script: Script): Promise<ModelResult> {
           if (typeof read === "string") return fail(read);
           const exported = read.value;
           if (typeof exported !== "string") {
-            if (op.stale) storage.force(chunkKey("Z", 0), "garbage left by another tab");
+            if (op.stale) storage.force(chunkKey("Z", counter++), "garbage left by another tab");
             if (op.crash) storage.images = [];
             const m0 = storage.mutations;
             const r = await tab.journal.repair(tab.rec, tab.s, new AbortController().signal, exported);

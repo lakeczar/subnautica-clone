@@ -119,6 +119,56 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
   Not run: the gate's bake step. The terrain bake's sources are unchanged.
 - **Cancelled:** the 4070 gate tickets submitted at `5314f3ef` were still queued when R1 landed, and were cancelled so a changed tree couldn't run them locally. The gate is rerun at the R1 head.
 
+### SIM-1b R2 (Sol 6.1 xhigh, on `b2aebd6d`)
+
+- **F1 (P2), the shared validator accepted malformed payloads.** `validTimeline` stays the one validator. When present, it now checks every known optional event field:
+  - strings: `what`, `id`, `label`, `hull`, `text`, `wall`;
+  - numbers: `quantity`, `seconds`, `stationary`, `metres`, `of`;
+  - `region` as a string or null; `waiting` and `keys` as string lists; `at` as three numbers; `saveRef` within its bound.
+
+  It also checks every member of a summary's `travel.long` and `idle.long`. Repeated note text stays legitimate.
+  - Regressions (`timeline-store.test.ts`): complete, otherwise-valid records with one wrong field, covering sixteen fields in an ordinary event and in a kept event, plus four bad stretch members. A fresh reader protects with zero mutations. The open writer's fold of a damaged event chunk refuses with zero mutations, and a commit that doesn't touch a damaged summary leaves it byte for byte.
+  - Control: a timeline with every optional field well formed and a repeated note reloads whole.
+- **F2 (P2), the harness wasn't independent and missed boundaries.** `tests/timeline-model-support.ts` is rewritten.
+  - **An independent oracle:** the harness keeps its own model of what is committed: which expedition each head holds, a pending v1 record, each expedition's notes (save references included), and its analysis totals and pending recoveries. It checks storage against its own lenient decoding of the raw JSON, never the production parsers. A commit's expected next state, drops and reports come from the model alone. The removal guard reads the stored journal leniently, so a head whose session and chunk numbers still read keeps its keys even when it is malformed.
+  - **Targeted damage:** corruption records its key, its damaged bytes and the original. While damage is live:
+    - every fresh reader must protect;
+    - the damaged bytes may change, or leave the journal, only through a committed repair;
+    - a commit over a damaged journal, a missing chunk or v1 must refuse, as must a commit folding a damaged chunk;
+    - nothing may write a damaged key before a journal write.
+
+    The raw journal, with damage undone, must still hold exactly the model's heads and notes, so "saved implies durable" holds whether or not something was damaged. Corruptions now include the meaningful controls: one wrong field in an event, a kept event or a stretch; a valid summary with only a bad kept `saveRef`; and a valid summary with a deeply nested extra field.
+  - **Reads write nothing:** every load, `records()` and fresh reader is bracketed by a storage snapshot and a mutation-call counter, so even a refused write inside a read fails the run. Refused commits (conflict, cancelled, invalid, no lock, failed lock) must make no mutating call at all, the other tab's included.
+  - **Fault and lock families:**
+    - any of `getItem`, `setItem`, `removeItem`, `length` and `key` can fail, once or from a position on, in commits, loads, `records()` and repairs;
+    - crash images (the storage after every mutation) must hold each expedition's notes as before or as after, and load unless damaged;
+    - gated commits with notes queued behind them, another tab's commit interleaved, an abort while waiting, and a note added right after the lock action, before the commit settles;
+    - a refused lock, no lock, an aborted signal and a recorder of another expedition;
+    - a live timeline (`LiveTimeline`) closed at page hide, disposed or replaced mid-commit. A disposed generation never writes, and every "Note saved" it says is committed.
+  - **Events:** every kind, with its optional fields; open travel and idle spans closed by the commit; pending recoveries; repeated notes; save references. A reload's analysis totals and pending recoveries must equal the commit's.
+  - **Replay:** seeds run `MODEL_STEPS` (40) steps in both tiers, so `SILTWAKE_TIMELINE_SEED=<seed>` replays the full original sequence.
+  - **Regression scripts (fast tier):** fixed scripts in the same operation language, one or more per known defect:
+    - a protected read; hostile and deep v1 records; five head counters;
+    - one wrong field in events and summaries; a shallow summary about to fold;
+    - both R1-F4 quota cases; a failed repair at each of four writes;
+    - the missing-named-number repair (Sol's smaller replacement); a repair that claims success;
+    - every storage call failing once or for good at three positions;
+    - the lock and live boundaries.
+
+    The targeted store tests are kept. The seed-66769815 store test now uses Sol's smaller replacement, which fails the number-reuse mutant.
+  - **Self-check (heavy tier):** `timeline-model.heavy.test.ts` patches the real sources with the review's mutants (by text anchor), transpiles them into a private copy of the compiled tree, and requires the fast tier's scripts and seeds to catch each one. The unchanged copy must pass. Detection per mutant is below.
+- **F3 (P2), a timeline warning suppressed urgent hazards.** A timeline storage warning keeps its own identity (`persistence` channel, `timeline` context), but now ranks 2.5: below hazard captions (3) and game-save warnings (4). When something more urgent takes the central caption, the warning moves to the status line, which already exists, for the rest of its 12-second lifetime, styled as a warning. One that arrives while a higher caption shows goes straight there. A routine confirmation doesn't push it off; it expires or is resolved.
+  - Regressions (`timeline-app.test.ts`), using the real `EncounterPresentation`:
+    - the chimney-lip ecology caption, before and after a timeline warning;
+    - a game-save failure, before and after one;
+    - in the app, the live cue: the game stepped at the chimney lip until the ecology module delivers it, in both orders, with a refused timeline commit.
+
+    In every case the hazard or game-save warning is the central caption and the timeline warning is readable on the status line.
+- **F4 (P3), a successful repair left its failure visible.** `LiveTimeline` now speaks in structured tones (`error`, `info`, `resolved`). The app maps `resolved` to a timeline-context persistence success, which resolves timeline warnings, central or on the status line, and nothing else.
+  - **What resolves:** a repair that commits, a "Note saved", and a new "The play timeline is saved again." after a retryable failure.
+  - **What doesn't:** a game save's success still never resolves a timeline warning, and a timeline success never resolves a game-save warning.
+  - Regressions: both directions in the presentation, the success after a refused commit with the live cue showing, and a repair in the app that clears its protection warning.
+
 ## What changed
 
 **`stepGameInPlace(s, commands, world): GameEvent[]`** (`src/sim/step.ts`) is the step, and it mutates `s`.
