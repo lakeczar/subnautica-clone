@@ -904,3 +904,31 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P2:** production falls back to the synchronous live builder on a missing or refused bake. Decision: keep the fallback but count and report it, test that normal builds never hit it, and record it as a production compromise with WK-1 owning the root fix.
   - **P3:** a snap-guard collapse control.
 - **SIM-1b R3 fix at `06094260`** (fix `c690de5e`): the timeline warning is at rank 1.5, below general errors, with the status-line fallback; real failed-import tests in both orders; an exact `seq` reload check added to the model; regression scripts split out for the fast-tier budget. Short Sol R4 running (`siltwake-sim1b-review-r4-sol-0609426`).
+- **CW-1 targeted remeasure, 5/8:** tours 0, 3, 4 and 5 pass (placement 31→4.8 ms, selection 73→1.0 ms, no light lag, evict ≤0.9 ms). Tour 7 reached all 4 caves (surf included) but failed on one mixed frame: 83 ms, the renderer 0.1 ms on CPU, VM-wide steal 450 ms.
+  - **Decision:** no pure CPU-time cap (it would excuse GPU-bound frames). A narrower "host-stopped" class requires most of the VM stolen, thread CPU within budget, and no GPU-busy evidence (otherwise reported as "GPU unknown").
+  - **Chunk plan:** single frames up to 6.9 ms (over the 2 ms slice), recorded as a compromise; WK-1 owns wanted-set caching.
+- **COL-1 A R8 fixes done at `7be9c0c9`:**
+  - **Fixes:** the validator proves the directed boundary (notch and tiny strip refused, construction enforces it); a counted, pulled production fallback (`terrainFallbackStats`), recorded as a compromise with WK-1 owning the root fix; a snap-guard collapse test; all 4 mutants killed.
+  - **Checks:** gate parts on the 4070 at 0d8f033c (fast 1,555, bake, build, 6 economy, heavy, playthrough).
+  - **Review:** 3090 counter runs pending; short Sol R9 running (`siltwake-col1a-review-r9-sol-7be9c0c`).
+- **CW-1 done at `c0b7d92e`** (game code unchanged since 5d9425f4):
+  - **Fixes and results:** R2-1–5 fixed; the stolen-time frame gate plus host-stopped (GPU unknown); r12 targeted remeasure passes all 8 previously failing segments (41/41 stops, 0 dark cave frames, placement 31→4.8 ms, selection 73→≤0.4 ms p99); Meridian east and surf caves reached by ordinary input.
+  - **Checks:** fast 1,488, heavy 478, 6 economy, playthrough 8/8, bake 276/276.
+  - **Review:** Sol R3 running (`siltwake-cw1-review-r3-sol-c0b7d92`).
+- **COL-1 stage A ACCEPTED** (R9, Sol `f4219ee5` on `review/col-1a-r9`): focused 16/16, independent 110/110 shell audit, boundary attacks refused, fallback accounting correct; a 1 nm precision limit is documented. The 3090 zero-fallback runs are pending evidence. It merges after the SIM-1b push. The second of CW-1/COL-1 to merge rebakes `collision.bin`. Stage B planning starts; code waits for CW-1.
+- **SIM-PERF-1 done at `9b668708`** (game `36dabcf3`):
+  - **Attribution:** 30–136 ms sim steps were VM pauses (steal plus canary stalls); the sim takes ≤0.4 ms in every long frame; no shader compiles in long frames; one render-side GPU-process 53 ms frame (`ExecuteDeferredRequest`).
+  - **Fixes:** 7 root fixes plus warm-at-entry. 3090 headless p99 0.29→0.197 ms, p99.9 1.4→0.66 ms, max 14→6–9 ms; allocation 118→76 KiB per step; determinism identical.
+  - **Merge note:** `hazardsAt` semantic conflict with CW-1, resolved in `probe/sim-perf-1-cw1`.
+  - **Review:** Sol R1 running (`siltwake-simperf1-review-r1-sol-9b66870`).
+- **SCHED-3 done at `86744a72`** (code `79d6bc13`): `any` by default for standard, gpu, playthrough and heavy-suite; fallback to the 3090 with a visible reason (reusing the remote lane's predicate); a `buildOnly` rule; admission-time placement unchanged. Suites pass 23/23, 27/27 and 29/29; fast tier on the 4070. Sol R1 running (`siltwake-sched3-review-r1-sol-86744a7`).
+- **SIM-PERF-1 R1** (Sol on `9b668708`, report on `review/sim-perf-1-r1` `41a58c94`): REQUEST CHANGES. The game fixes are verified (10,800 differential steps, hashes equal; hazard resolution at `74f51bc6`).
+  - **P2:** step attribution over-excuses (max of renderer/GPU steal, boundary intervals, no canary requirement).
+  - **Decisions:** correct the handoff (two steps' attribution unproven); a stricter renderer-only, interior, canary-required classifier as a patch for CW-1 to fold with its R3 fixes; a clean attribution rerun after fleet's host change.
+  - **P3:** memo byte budgets and registration.
+- **CW-1 self-qualification:** `frame-class.mjs` over-counts boundary steal, so tours 3 and 7 are **unresolved**; the proven r12 result is 6/8 segments passing. The R3 prep is approved now: fold SIM-PERF-1's step classifier, a provable lower-bound frame gate, an always-on canary that must agree, and raw sampler rows saved. The one rerun of the unresolved segments waits for R3's findings.
+- **CW-1 R3** (Sol on `c0b7d92e`, report on `review/cw-1-r3` `ed4963a8`): REQUEST CHANGES, 3 P2s.
+  - **Findings:** attribution not confined to the runnable thread (same root as the self-qualification); prefetch and activation cancel each other's uploads; entry and settle can reveal a cave before its light is ready.
+  - **What passed:** composition clean, 43 tests. Fixes plus one exclusive rerun next.
+- **SIM-PERF-1 R1 fixes at `2bcc25fe`:** honest attribution in the handoff (two steps unproven); a stricter `classifyStep` patch for CW-1 (renderer-only, interior, canary-capped, raw rows saved); `src/sim/caches.ts` cache ledger plus `BoundedMemo`; a fixed hazard-centre table. Fast tier 149 files. Short Sol R2 running (`siltwake-simperf1-review-r2-sol-2bcc25f`).
+- **SIM-1b merged to root at `e86e89a2`** (R4 ACCEPT, Sol `df9e4b03`): playthrough 8/8 (`261024-141553-1487`); fast, build and 6 economy pass (`261024-154946-b6ae`, moved off a 4070 pin to `any` and run on the 3090 in 1 m 43 s). Saves exported at `e86e89a2`. COL-1 stage A merges next.
