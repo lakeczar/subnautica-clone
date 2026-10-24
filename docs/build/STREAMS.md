@@ -958,3 +958,62 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **COL-1 stage A merged to root at `ac734b0d`:** full `npm run gate` passes (fast, bake, build, 6 economy, playthrough). Saves exported at `ac734b0d`. Stage B code waits for CW-1 on root; CW-1 (second to merge) rebakes `collision.bin`.
 - **Disturbance, REC-1 exclusive `4a2b`** (admitted 16:17:07Z): overlapped by SCHED-3's local acceptance suites (16:17–16:23) and the coordinator's `saves-export.sh` local archive build (about 16:22–16:25). Cause: the window was announced from CW-1's estimate while REC-1's exclusives were already queued. 4a2b is to be rerun.
   - **Follow-ups:** warnings now come from the first queued exclusive; `saves-export.sh` should submit its local archive build through the queue (SCHED/STEW).
+- **SIM-PERF-1 ACCEPTED** (R3, Sol `dc251401` on `review/sim-perf-1-r3`); merged locally at `a38b951e`. Gate parts on the 4070 (`00c8`, playthrough `1f2e`); the bake after CW-1's window (`noise.ts` changes the bake key, same output expected); push after both. CW-1, merging second, takes the `hazardsAt` resolution (`74f51bc6`) plus its deep-cave centre-table fields.
+- **LS-1 lost sites started** in the freed slot (5 of 5: CW-1, COL-1 (waiting), REC-1, SCHED-3, LS-1). Plan-first: inventory, site list per region, pacing, a staged plan disjoint from CW-1, spoiler appendix separate. No code until approved.
+- **SCHED-3 R1 fixes done at `fa2078a2`** (scheduler code `df808cfb`):
+  - **Fixes:** a registry of portable commands (fast, heavy inner, playthrough) else the 3090 with "portability not declared"; explicit `--machine any` plus `--artifact` is the declaration; `buildOnly` respects artifacts (no regex); a shared `terminalRecord` (planned vs ran); tool headers pinned to the 3090.
+  - **Tests:** B30–B33 fail on base; suites 23/23, 27/27, 33/33 (2b via the queue); fast on the 4070.
+  - **Review:** Sol R2 running (`siltwake-sched3-review-r2-sol-fa2078a`).
+- **SIM-PERF-1 merged to root at `a38b951e`:** fast, build and 6 economy pass (`00c8`); playthrough 8/8 (`1f2e`, 4070); the bake rebaked 220 chunks with a clean tree (`31e5`, 3090). Saves export deferred until the 3090 exclusive queue drains (its local build would disturb).
+- **Claude rate limit (about 16:45Z):** LS-1's first run failed and is resumed on its thread. Every other task was checked: CW-1, REC-1, SCHED-3, COL-1 and SIM-PERF-1 had finished their turns; the Sol SCHED-3 R2 review is running. The exclusive "lane" block is the queue's normal turn interleaving with the R2 reviewer's queued suites.
+- **LS-1 plan done at `30ed003b`** (plan `docs/build/streams/LS-1.md`; spoiler appendix separate):
+  - **Today:** 7 exterior sites exist only as invisible triggers; 2 grant anything; cave finds, caches, notes and reveals are unwired and unowned.
+  - **Plan:** presence first (silhouette, tell, approach, readable plate); 4 redundant plans dropped and their rewards reassigned; decodes feel 3–10 min all game; decoded maps chain to more sites; two backtracking gates about 3 h apart; the garden plot on the hub spur; 16 sites, 17 decodables, 10 caches.
+  - **Stages:** 1a framework and 1b rewards (disjoint from CW-1); 2 after CW-1; 3 after COL-1 B; 4 with the BIO streams. It flags OP-1 coordination (the bot's pump-house leg, the pump-house floor, the decoder rack within 250 m).
+  - **Review:** Sol plan review R1 running (`siltwake-ls1-review-r1-sol-30ed003`).
+  - **Owner answers (2026-10-24, in OPENING-DESIGN):** coded doors open by clicking a keypad and typing the code; the first planter at 2.5–4 h is right, with a notably better cultivation upgrade past 4 h.
+- **Owner (2026-10-24): more agents allowed if helpful.** The cap of 5 is lifted for unblocked, non-overlapping work. The real limit is the critical path: the 3090 exclusive queue and CW-1's merge (OP-1, WK-1, BIO-1, COL-1 B, NAV-1 and LS-1 stage 2 wait on it). NAV-1 stays queued (it depends on COL-1 B).
+- **STEW-2 started** (`siltwake-stew2-exclusive-guard-opus-6ee488a`, branch `t3/stew-2-exclusive-guard`): a structural guard so local CPU commands can't disturb a running or queued exclusive. Also the gate's local steps into one queued job during exclusives, saves-export's local build through the queue, and per-step perf-bound heavy files run serially. Hands off `scripts/heavy` (SCHED-3).
+- **Builders:** CW-1, REC-1, SCHED-3 (in review), COL-1 (waiting), LS-1 (plan in review), STEW-2.
+- **SCHED-3 R2** (Sol on `fa2078a2`, report on `review/sched-3-r2` `0f6b3b2a`): REQUEST CHANGES, not installed. R1 repros 9/9; suites 23/23, 33/33; SCHED-2 27 across a full run and a focused recheck; migration faithful.
+  - **P1:** registered commands inherit invocation-changing local env (`npm_config_script_shell`), dropped remotely.
+  - **P2:** a build with `--outDir` plus a matching `--artifact` is refused (base allowed it).
+  - **P3:** holder and remote-recovery terminal writers bypass `terminalRecord`.
+  - **Decisions:** a clean env for the default `any`, else local with a reason; trailing build options make any declared artifact the contract; one terminal builder with `ran` true, false or unknown from the payload launch.
+  - **New F4:** SCHED suites independent of an enclosing queue job (S11, S17, S20 and S22 harness assumptions). The last edge-closing round before install.
+- **LS-1 plan R1** (Sol on `30ed003b`, report on `review/ls-1-r1` `4a9a56a6`): REQUEST CHANGES. Direction, reuse, inventory and stage-1a disjointness confirmed.
+  - **P1:** moving `bp_cultivation` breaks existing saves.
+  - **P2:** reward contracts (per-locker identity, air-line seam via CW-1's `airLineFor`, 27 m baseline); the decode-free route proof needs the playthrough phase refactor in 1a; pacing evidence via an `analyseTimeline` gap check with failing injected cases; the vault's at-door unlock isn't a real backtrack.
+  - **Decisions:** a narrow converted-save provenance in `bridge7`; contracts specified, with the reel deferred or seamed; LS-1 owns the `live.ts`/`scenarios.ts` refactor now (OP-1 inherits it); a reusable pacing check for REC-2; the vault as a true backtrack. R2 covers R1 plus the owner-answer deltas.
+- **LS-1 R1 fixes at `ffaa24e5`:**
+  - **Saves:** a narrow `knowledge.legacyGrants` (one row, validated against the sheet-read record).
+  - **Rewards:** per-reward contracts (locker extension per module; reel 27→40 m moved to stage 2 via `airLineFor`; caches as one fixed-container mechanism).
+  - **Route proof:** decodes-off scenarios for both strategies with a guard.
+  - **Pacing:** a `pacingAcceptance` check beside `analyseTimeline` (≤20 min gap, ≤90 s empty travel, no decode-only idle; injected failures).
+  - **Vault:** a true backtrack (code from the Divide decode two tiers later).
+  - **Review:** Sol R2 running (`siltwake-ls1-review-r2-sol-ffaa24e`).
+- **Session candidates research** (Sol `ebed4b78` on `research/session-candidates`): 9 candidates (laptop floor, presets and performance, accessibility and onboarding, swim and craft comfort, sound listening, fear and failure, storage envelope, mid/late payoffs, first external build). The engine is Babylon.js 9.31 with WebGL2.
+  - **Owner (2026-10-24):** graphics first; integrated-GPU laptops later via a settings preset (30 fps at a reduced resolution); device chosen later; keep quality scalable (DIRECTION rule added).
+  - **Started (Sol desk passes):** #3 access and onboarding (`siltwake-research-access-onboarding-sol-ebed4b7`), #7 storage envelope (`siltwake-research-storage-envelope-sol-ebed4b7`). #4–6 fold into one optional sitting after the first playtest; #8 into the mid-game debrief; #2 and #9 later.
+- **LS-1 plan R2** (Sol on `ffaa24e5`, report on `review/ls-1-r2` `0a7b0bf5`): REQUEST CHANGES, 5 P2s. R1 F3/F5 resolved; keypad, grow-bed reuse and cost, `systems.opened` and thresholds sound.
+  - **Decisions:** `legacyGrants` permanent; caches hold no reserve cells (keep the crafted-pair rule simple); the grow bed gives power crops nothing and its heater draws through the shared power authority; one analyzer with the recorder attached to the normal gate and actual wait causes; dedupe the same accomplishment but keep new payoff times.
+  - **Balance follow-up (SYS/economy):** plain lumen bulbs already supply about 300 units/h against the carrier's about 150/h cruise draw, so self-supply is possible today; check whether that's intended.
+- **LS-1 R2 fixes at `e752c15b`:**
+  - **N1–N3:** permanent `legacyGrants`; caches without reserve cells (a content test; uncapped replacements); grow bed gives power crops nothing, per-item `poweredModules` billing.
+  - **N4–N5:** the recorder attached in `run.ts`, `idle.byCause`, declared `waitFor` causes; first-occurrence plus `yields` payoff counting.
+  - **Review:** short Sol R3 running (`siltwake-ls1-review-r3-sol-e752c15`).
+- **Owner (2026-10-24): no battery mode, no frame-cap setting; smooth motion on 120 Hz+ displays wanted.** Found: a fixed 60 Hz sim with no render interpolation, so motion caps at 60 visually and judders at 144 Hz. **FRAME-1** (render interpolation) is queued for after CW-1 merges (it touches `renderer.ts`/`app.ts`). DIRECTION updated.
+- **SCHED-3 R2 fixes done at `3850c9bd`** (code `a01066f2`):
+  - **F1–F4:** an `invocationEnv` clean-environment rule (13 npm self-exports allowed; `NODE_OPTIONS` and the test/playthrough selectors block the default `any`); trailing build options make the declared artifact the contract; `terminalRecord` across all 7 writers with `ran` true/false/unknown from the launch; suites work inside a queue job.
+  - **Checks:** B34–B37 fail on R1 code; queue runs 48/48, 23/23, 27/27, 37/37; fast on the 4070.
+  - **Compromise:** a user `~/.npmrc` is not inspected.
+  - **Review:** short Sol R3 running (`siltwake-sched3-review-r3-sol-3850c9b`).
+- **Research #3 access and onboarding** (Sol `45811fa5` on `research/access-onboarding`): 5 barriers plus shared acceptance cases.
+  - **The barriers:**
+    - (1) fixed physical bindings and hand-written prompts (no remapping; AZERTY labels wrong; Settings omits P/O/U);
+    - (2) the keypad's input lifecycle;
+    - (3) fixed 11–14 px text with no text-size setting;
+    - (4) "Opening captions" really controls all captions, and essential captions can be replaced by routine ones;
+    - (5) no "reduce camera motion" for the opening's roll and drift (plus an FOV control before sustained play).
+  - **Owners:** (2) and the sound-tell equivalence go to LS-1 (sent). (1), (3), (4) and the settings plumbing for (5) form **UI-2**, queued after CW-1 (bindings live in CW-1-owned `app.ts`), before the first playtest. Opus call: keyboard rebinding is included. OP-1 consumes reduce-motion.
+- **LS-1 plan ACCEPTED** (R3, Sol `3666eda4` on `review/ls-1-r3`; the coordinator inspected the `12d83e94` keypad and sound-tell delta). **Stage 1a started:** the records framework, decodes-off playthrough refactor, `storyCampaign` audit, `pacingAcceptance` with `idle.byCause` and validated `yields` (no format bump; SIM-1b owns the format). 1b waits for the owner's door-puzzle answer only where coded doors are concerned.
