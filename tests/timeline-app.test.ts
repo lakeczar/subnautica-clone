@@ -375,3 +375,39 @@ test("SIM-1b R1-F5: the protection warning survives expedition entry: New, Conti
     } finally { hud.restore(); app?.dispose(); f.restore(); }
   }
 });
+
+test("SIM-1b R1-F2: Continue onto a hostile version 1 record offers the repair rather than throwing", async () => {
+  const f = browserFixture();
+  let app = await newGame(f);
+  try {
+    assert.equal(app.live.note(app.state, "base"), null); await settled();
+    app.dispose();
+    f.storage.setItem(TIMELINE_JOURNAL_KEY, "{bad");
+    f.storage.setItem("siltwake.timeline.v1", '{"format":"siltwake.timeline","version":{"toString":null}}');
+    app = seams(new SiltwakeApp({} as HTMLElement)); f.frames();
+    assert.doesNotThrow(() => { GameView.current.actions.continueGame(); f.frames(); });
+    assert.equal(app.live.protected, true);
+    assert.equal(GameView.current.repairVisible, true);
+  } finally { app.dispose(); f.restore(); }
+});
+
+test("SIM-1b R1-F1: a refused repair keeps the version 1 record and says nothing was changed, truthfully", async () => {
+  const f = browserFixture();
+  withDownloads(f);
+  f.storage.setItem(TIMELINE_JOURNAL_KEY, "{bad");
+  const v1 = JSON.stringify({ format: "siltwake.timeline", version: 1, dropped: 0, session: { id: "legacy", started: "2026-10-01T00:00:00.000Z", end: { tick: 10, play: 1, idle: 0 } },
+    events: [{ kind: "note", tick: 1, play: 0, text: "legacy note" }] });
+  f.storage.setItem("siltwake.timeline.v1", v1);
+  const app = await newGame(f);
+  try {
+    GameView.current.actions.repairTimeline();
+    const write = f.storage.setItem.bind(f.storage);
+    f.storage.setItem = (k: string, v: string) => { if (k === TIMELINE_JOURNAL_KEY) throw new Error("denied"); write(k, v); };
+    GameView.current.actions.confirm(); await settled();
+    f.storage.setItem = write;
+    assert.equal(f.storage.getItem("siltwake.timeline.v1"), v1, "the version 1 record is kept");
+    assert.equal(f.storage.getItem(TIMELINE_JOURNAL_KEY), "{bad");
+    assert.ok(GameView.current.notices.some((n) => /Nothing was changed/.test(n)));
+    assert.equal(GameView.current.repairVisible, true);
+  } finally { app.dispose(); f.restore(); }
+});

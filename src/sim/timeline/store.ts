@@ -380,8 +380,9 @@ function head(h: unknown): TimelineHead | null | string {
   const bad = "a stored timeline head is malformed";
   if (!obj(h) || !obj(h.session) || typeof h.session.id !== "string" || typeof h.commit !== "string" || !safe(h.notes)) return bad;
   const ints = (a: unknown): a is number[] => Array.isArray(a) && a.every(safe) && new Set(a).size === a.length;
-  if (!ints(h.chunks) || !ints(h.folded) || !h.folded.every((n, i) => h.chunks[i] === n)) return bad;
-  if (!safe(h.nextChunk) || !h.chunks.every((n) => n < (h.nextChunk as number)) || !safe(h.seq)) return bad;
+  const chunks = h.chunks, folded = h.folded, next = h.nextChunk;
+  if (!ints(chunks) || !ints(folded) || !folded.every((n, i) => chunks[i] === n)) return bad;
+  if (!safe(next) || !chunks.every((n) => n < next) || !safe(h.seq)) return bad;
   if (!Array.isArray(h.events) || h.events.length > TIMELINE_CHUNK_EVENTS + 1) return bad;
   // The head's own events and session through the one validator (the chunks are checked when read).
   const parsed = validTimeline({ ...h, rotated: [] });
