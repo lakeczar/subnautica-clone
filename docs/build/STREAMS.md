@@ -899,3 +899,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **Owner approves GPU self-balancing (2026-10-24):** a DIRECTION rule is added (only acceptance numbers are 3090 exclusive; everything else `--machine any`).
   - **Next: SCHED-3**, a small queue change for the SCHED-2 builder: default `any` for non-exclusive test, gpu, playthrough and heavy classes when the command needs no factory-worker-only paths (falling back to `3090` automatically, with the reason printed, when it does). It keeps `bake` and express `quick` jobs local (shipping a commit costs more than they do), and runs the full SCHED suites.
   - **Timing:** it starts when a builder slot frees (cap 5), likely when SIM-1b finishes.
+- **COL-1 A R8** (Sol on `79dff359`, report on `review/col-1a-r8` `32b9ac4a`): REQUEST CHANGES. The independent 110-shell audit is clean and 87/87 tests pass.
+  - **P2:** the tiling validator accepts an equal-area wrong cap, so it must verify the directed boundary.
+  - **P2:** production falls back to the synchronous live builder on a missing or refused bake. Decision: keep the fallback but count and report it, test that normal builds never hit it, and record it as a production compromise with WK-1 owning the root fix.
+  - **P3:** a snap-guard collapse control.
