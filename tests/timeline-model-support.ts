@@ -334,9 +334,14 @@ const copyModel = (m: Model): Model => ({ ...m, durable: new Map(m.durable), tot
 const held = (m: Model): Set<string> => new Set([m.current, m.previous, m.v1].filter((x): x is string => x !== null));
 const keyOf = (n: Note): string => `${n.text}${n.ref !== undefined ? ` @${n.ref}` : ""}`;
 const game = (): GameState => { const s = createGame(); completeOpening(s); return s; };
+/** Analysis totals and pending recoveries, canonical: a chunk folded into its summary is the same
+ * history, though its per-hull minutes sum in another order and its listed stretches come apart. */
 function totalsOf(rec: TimelineRecorder, s: GameState): string {
   const a = analyseTimeline(exportTimeline(rec, s));
-  return JSON.stringify([a.newCount, a.gathering, a.deaths, a.travel, a.idle, rec.pending]);
+  const round = (_k: string, v: unknown): unknown => typeof v === "number" ? Math.round(v * 1e6) / 1e6 : v;
+  const set = (xs: readonly object[]): string[] => xs.map((x) => JSON.stringify(x, round)).sort();
+  const { emptyStretches, ...travel } = a.travel, { listed, longest, ...idle } = a.idle;
+  return JSON.stringify([a.newCount, a.gathering, a.deaths, travel, set(emptyStretches), idle, set(listed), longest?.seconds ?? null, rec.pending], round);
 }
 const recorderNotes = (rec: TimelineRecorder, s: GameState): string[] => {
   const x = exportTimeline(rec, s);
@@ -834,6 +839,10 @@ export const REGRESSIONS: Script[] = [
     { op: "repair", crash: true, faults: [{ call: "set", at, persistent: false, name: "SecurityError" }] }, { op: "repair" }] })),
   { name: "repair staging avoids a missing named number (seed 66769815)", v1: "none", start: "A", ops: [{ op: "note", count: 2, kind: "plain" }, C(2000), COMMIT,
     { op: "corrupt", target: "chunk-delete", pick: 0, value: 0, chunk: { session: "A", n: 1 } }, { op: "enter", session: "A" }, C(1000), { op: "repair", crash: true }] },
+  // SIM-1b R2 (found by heavy seed 29276833): a reload whose open chunk ends in the commit's
+  // closing spans (999 events plus two) keeps sealing 1,000-event chunks.
+  { name: "reload of a full open chunk", v1: "none", start: "A", ops: [{ op: "note", count: 1, kind: "plain" }, C(1998),
+    { op: "spans", travel: true, idle: true, pending: true }, COMMIT, { op: "enter", session: "A" }, C(1), { op: "note", count: 1, kind: "plain" }, COMMIT] },
   // A repair that claims success has written its journal.
   { name: "a successful repair is durable", v1: "none", start: "A", ops: [{ op: "note", count: 2, kind: "plain" }, COMMIT,
     { op: "corrupt", target: "journal-raw", pick: 0, value: 0 }, { op: "enter", session: "A" }, { op: "note", count: 1, kind: "plain" }, { op: "repair" }] },

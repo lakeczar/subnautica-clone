@@ -103,8 +103,16 @@ export function resumeRecorder(t: TimelineExport, options: RecorderOptions = {},
   const summaries = (t.rotated ?? []).map((r) => structuredClone(r));
   if (stored) {
     rec.sealed = stored.sealed.map((c) => ({ n: c.n, events: [...c.events] }));
-    rec.events = [...t.events];
     rec.nextChunk = Math.max(stored.nextChunk, ...summaries.map((r) => (r.n ?? -1) + 1), ...stored.sealed.map((c) => c.n + 1));
+    // The stored open chunk ends with the commit's closing spans, so it can hold a full chunk
+    // (999 events and two closings): seal it as recording would, never a longer one (SIM-1b R2).
+    for (const e of t.events) {
+      rec.events.push(e);
+      if (rec.events.length < TIMELINE_CHUNK_EVENTS) continue;
+      rec.sealed.push({ n: rec.nextChunk++, events: rec.events });
+      rec.events = [];
+    }
+    while (rec.sealed.length > TIMELINE_RETAINED_CHUNKS) rotateOldest(rec);
   } else {
     // One numbering (SIM-1 R2): the summaries first, in order, then the chunks re-chunked from the events.
     summaries.forEach((r, i) => { r.n = i; });

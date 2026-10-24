@@ -28,14 +28,14 @@ test(`the timeline journal keeps its invariants over ${COUNT} seeded fault seque
 });
 
 // ---- Mutants: each patches the real sources by text anchor (a missing anchor fails loudly).
-type Sources = { store: string; report: string };
+type Sources = { store: string; report: string; recorder: string };
 const replace = (s: string, a: string, b: string): string => { if (!s.includes(a)) throw new Error(`missing mutation anchor: ${a}`); return s.replace(a, b); };
 const removeBetween = (s: string, a: string, b: string): string => {
   const i = s.indexOf(a), j = s.indexOf(b, i);
   if (i < 0 || j < 0) throw new Error(`missing mutation block: ${a}`);
   return s.slice(0, i) + s.slice(j);
 };
-const MUTANTS: Record<string, (x: Sources) => Sources> = {
+const MUTANTS: Record<string, (x: Sources) => Partial<Sources>> = {
   // A protected read writes (and catches a refusal).
   load_mutates: ({ store, report }) => ({ report, store: replace(store, "private protect(reason: string): TimelineLoad {",
     'private protect(reason: string): TimelineLoad { try { this.storage?.setItem("review.unrelated.setting", "overwritten during a protected read"); } catch {}') }),
@@ -62,7 +62,7 @@ const MUTANTS: Record<string, (x: Sources) => Sources> = {
     return { report, store: s };
   },
   // R1-F3: a shallow `kept` discriminator bypasses the fold validator, treating the chunk as folded, or overwriting it.
-  ...Object.fromEntries((["summary", "events"] as const).map((kind) => [`F3_${kind}`, ({ store, report }: Sources): Sources => ({ report, store: replace(store,
+  ...Object.fromEntries((["summary", "events"] as const).map((kind) => [`F3_${kind}`, ({ store }: Sources): Partial<Sources> => ({ store: replace(store,
     "      const c = this.chunk(this.session, r.n!);", `      const rawFold = this.read(chunkKey(this.session, r.n!));
       let c: Chunk | string;
       try {
@@ -85,6 +85,10 @@ const MUTANTS: Record<string, (x: Sources) => Sources> = {
   // A repair claims success without writing anything.
   oracle_saved_protected: ({ store, report }) => ({ report, store: replace(store, "    const storage = this.storage!;",
     "    const storage = this.storage!;\n    if (replacing) return { ok: true, seq: rec.seq, rotated: false, dropped: [] };") }),
+  // SIM-1b R2: a reload keeps the stored open chunk whole, closing spans and all, so it can seal 1,001 events.
+  R2_resume_long_chunk: (x) => ({ ...x, recorder: removeBetween(replace(x.recorder,
+    "    // The stored open chunk ends with the commit's closing spans", "    rec.events = [...t.events];\n    // The stored open chunk ends with the commit's closing spans"),
+    "    // The stored open chunk ends with the commit's closing spans", "  } else {") }),
   // R2-F1: known optional event fields and stretch members unchecked again.
   R2_F1_fields: ({ store, report }) => {
     let r = replace(report, "&& r.travel.long.every(travelStretch)", "");
@@ -96,17 +100,18 @@ const MUTANTS: Record<string, (x: Sources) => Sources> = {
 
 test("the fast tier's regression scripts and seeds catch every known defect, and pass the unchanged sources", async (t) => {
   const root = fileURLToPath(new URL("../../", import.meta.url)), build = fileURLToPath(new URL("../", import.meta.url));
-  const sources: Sources = { store: readFileSync(join(root, "src/sim/timeline/store.ts"), "utf8"), report: readFileSync(join(root, "src/sim/timeline/report.ts"), "utf8") };
+  const read = (file: string): string => readFileSync(join(root, `src/sim/timeline/${file}.ts`), "utf8");
+  const sources: Sources = { store: read("store"), report: read("report"), recorder: read("recorder") };
   const work = mkdtempSync(join(tmpdir(), "siltwake-timeline-mutants-"));
   t.after(() => rmSync(work, { recursive: true, force: true }));
   const rows: string[] = [], caughtBy = new Map<string, boolean>();
   for (const [name, mutate] of [["unchanged", (x: Sources) => x] as const, ...Object.entries(MUTANTS)]) {
-    const dir = join(work, name), patched = mutate(sources);
+    const dir = join(work, name), patched: Sources = { ...sources, ...mutate(sources) };
     cpSync(join(build, "src"), join(dir, "src"), { recursive: true });
     mkdirSync(join(dir, "tests"), { recursive: true });
     cpSync(join(build, "tests/timeline-model-support.js"), join(dir, "tests/timeline-model-support.js"));
     writeFileSync(join(dir, "package.json"), '{"type":"module"}');
-    for (const [file, text] of [["store", patched.store], ["report", patched.report]] as const)
+    for (const [file, text] of [["store", patched.store], ["report", patched.report], ["recorder", patched.recorder]] as const)
       writeFileSync(join(dir, `src/sim/timeline/${file}.js`), ts.transpileModule(text, { compilerOptions: { target: ts.ScriptTarget.ES2022, module: ts.ModuleKind.ES2022 } }).outputText);
     const support = await import(pathToFileURL(join(dir, "tests/timeline-model-support.js")).href) as typeof Support;
     const run = async (r: () => Promise<Support.ModelResult>): Promise<Support.ModelResult> => {

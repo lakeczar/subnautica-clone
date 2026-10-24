@@ -890,6 +890,27 @@ test("R1-F3: a malformed summary in a chunk about to fold is caught by the one c
   }
 });
 
+test("SIM-1b R2: a reload whose open chunk ends in the commit's closing spans keeps recording in 1,000-event chunks", async () => {
+  for (const spans of [["idle"], ["travel", "idle"]]) {
+    const label = `999 open, closing ${spans.join("+")}`;
+    const s = createGame(); completeOpening(s);
+    const rec = createRecorder({ id: "A", started: STARTED }), storage = new Storage();
+    addNote(rec, s, "old note");
+    for (let i = 1; i < TIMELINE_CHUNK_EVENTS * 2 + 999 - 1; i++) { s.tick += 3; rec.playTicks += 3; recordEvent(rec, s, { kind: "gather", what: "silica_glass", id: "src", quantity: 1 }); }
+    addNote(rec, s, "recent note");
+    if (spans.includes("travel")) rec.travel = { hull: "dart", vehicleId: "dart_1", last: { x: 0, y: 0, z: 0 }, piece: { tick: s.tick - 600, play: 1, movingTicks: 600, stationaryTicks: 30, metres: 120 } };
+    rec.idle = { tick: s.tick - 900, play: 2, waiting: new Set(["decode"]) };
+    assert.ok((await commit(tab(storage), rec, s)).ok, label);
+    // Another session continues the reloaded timeline: one more event, a note, a commit.
+    const back = loaded(storage, "A", label), j = tab(storage);
+    assert.ok(back.events.length < TIMELINE_CHUNK_EVENTS && back.sealed.every((c) => c.events.length === TIMELINE_CHUNK_EVENTS), `${label}: chunks of 1,000`);
+    recordEvent(back, s, { kind: "gather", what: "silica_glass", id: "src", quantity: 1 });
+    addNote(back, s, "after reload");
+    assert.ok((await commit(j, back, s)).ok, label);
+    assert.deepEqual(allNotes(reloadsWhole(storage, back, s, label), s), ["after reload", "old note", "recent note"], label);
+  }
+});
+
 test("R1-F4: under quota, every chunk the plan may fold and the previous head are read before the first committed-chunk change", async () => {
   // (1) A full-window B whose ordinary rotation is planned on entry, with a damaged previous A.
   {
