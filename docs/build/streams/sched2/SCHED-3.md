@@ -58,6 +58,18 @@ Review `36018341` on `review/sched-3-r5`, by Sol on `7aa88a3d`: REQUEST CHANGES.
     - the v1 shim inline with `--machine any --artifact out`.
   - **B43 (Sol's symlink probe):** the npm link runs here as submitted with the boundary reason. A committed link into a linked `node_modules` stays portable.
 
+- **Checks**, all through the queue:
+  - **One `--class standard --machine 3090 --review` job** (ticket `261024-202820-69bf`, at `f361238e`):
+    - units **55/55**, the new runner tests included (run directly, no compile);
+    - B28 and B34–B43 **11/11**;
+    - SCHED-1 **23/23**;
+    - SCHED-2 **27/27**;
+    - SCHED-2b **43/43**.
+  - **Fast tier** on the 4070 (ticket `261024-212629-d57e`, at `999a530c`): exit 0, 150 files.
+  - **Run history, test-file only** (the two later commits change only `tests/heavy-portable-run.test.ts`): the fast tier first failed twice on that file.
+    - **Strict typecheck:** `SIG.SIGUSR2` could be undefined (`1aa2c548`).
+    - **The tier's child-process guard:** the file needs an `allow-escape` line saying it loads no Babylon (`999a530c`).
+
 ## R4 review responses
 
 Review `f8378439` on `review/sched-3-r4`, by Sol on `194dcdc8`: REQUEST CHANGES. The R3 probes and the focused checks pass. The findings:
