@@ -51,6 +51,8 @@ STEW-2 is on root at `e136beb6` (R3 accepted, `899db9a1` on `review/stew-2-r3`),
   - `gpu-lease.mjs`'s ticket, sandbox and v1 checks.
 
   STEW-2's accepted module exports `cgroupPathOf`, `ownCgroupPath`, `withinCgroup` and `hasScopeComponent`. For patterns there is a one-line `state.mjs` `componentMatches`, so STEW-2's file stays untouched.
+  - **The v1-scope test, in one place:** `state.mjs` `v1Scope(path, prefix)` accepts a component shaped `siltwake-heavy-<dir>-<pid>.scope` (v1's own) and never a v2 job scope, which ends in a ticket id. It serves the legacy nested call, the v1 GPU lease and the GPU-user scan.
+    - **Why:** a whole-component match on `siltwake-heavy-*.scope` let a forged `SILTWAKE_HEAVY_LOCK_HELD` pass from inside another queue's v2 job (SCHED-1 test 13, run inside a queue job). The old regex refused it only because it was anchored to the end of the path.
   - **In the repository,** `scripts/heavy/cgroup-scope.mjs` re-exports `scripts/cgroup-scope.mjs`.
   - **When installed,** `install.sh` copies the real file into each version and into the GPU guard's own install, and hashes it into both version ids.
 - **Tests:**

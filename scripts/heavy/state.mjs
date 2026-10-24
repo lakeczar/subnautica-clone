@@ -482,6 +482,17 @@ export function readStats(dir) {
 export const componentMatches = (path, re) => String(path ?? "").split("/").some((c) => re.test(c));
 
 /**
+ * Whether a component of the cgroup path `path` is a v1 scope: scripts/heavy-check.sh v1's
+ * siltwake-heavy-<dir>-<pid>.scope (or `prefix`-<dir>-<pid>, a private state's), and not a
+ * v2 job's scope, which ends in a ticket id (any queue's: e.g. the job running these suites).
+ */
+export function v1Scope(path, prefix = "siltwake-heavy") {
+  const p = String(prefix).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const v1 = new RegExp(`^(siltwake-heavy|${p})-.+-\\d+\\.scope$`);
+  return componentMatches(path, { test: (c) => v1.test(c) && !/-\d{6}-\d{6}-[0-9a-f]{4}\.scope$/.test(c) });
+}
+
+/**
  * Processes with an NVIDIA device open (/dev/nvidia0 …), which is what a GPU
  * Chrome (ANGLE GL-EGL) or any other GPU client does; SwiftShader does not.
  * Each is matched to the running ticket whose job scope contains it: `leased`
@@ -502,7 +513,7 @@ export function gpuUsers(cfg, state) {
     const owner = scopes.find(([unit]) => hasScopeComponent(cgroup, unit))?.[1];
     // A v1 scope is siltwake-heavy-<dir>-<pid>; a v2 job scope of any queue
     // (another state's, e.g. the queue job running these suites) ends in a ticket id, and isn't one (R2-F4).
-    const v1 = !owner && componentMatches(cgroup, /^siltwake-heavy-.+\.scope$/) && !componentMatches(cgroup, /-\d{6}-\d{6}-[0-9a-f]{4}\.scope$/);
+    const v1 = !owner && v1Scope(cgroup);
     users.push({ pid: Number(pid), cmd: (readFileSafe(`/proc/${pid}/cmdline`) ?? "").replace(/\0/g, " ").trim().slice(0, 160),
       ticket: owner?.id ?? null, leased: Boolean(owner?.req.gpu) || v1 });
   }

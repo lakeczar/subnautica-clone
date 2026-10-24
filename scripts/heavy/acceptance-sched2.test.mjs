@@ -828,7 +828,7 @@ test("S27 (TST-16b): one installer lock covers the whole install, publication in
     assert.equal(await A.done, 0, A.out);
     assert.equal(await B.done, 0, B.out);
     assert.ok(existsSync(join(home, "current", "heavy-check.mjs")));
-    assert.equal(spawnSync("bash", ["-c", `cd '${join(home, "current")}' && for f in *; do cmp -s "$f" '${here}/'"$f" || [[ $f == alickers-job.sh ]] || echo "$f"; done`], { encoding: "utf8" }).stdout, "", "a complete version");
+    assert.equal(spawnSync("bash", ["-c", `cd '${join(home, "current")}' && for f in *; do cmp -s "$f" '${here}/'"$f" || [[ $f == alickers-job.sh ]] || { [[ $f == cgroup-scope.mjs ]] && cmp -s "$f" '${here}/../cgroup-scope.mjs'; } || echo "$f"; done`], { encoding: "utf8" }).stdout, "", "a complete version (the real cgroup-scope.mjs, where the repository re-exports it)");
   } finally { writeFileSync(go, ""); await A.done; }
   // The unit helper outside install.sh (no lock fd, or a fd that isn't the lock): refused, nothing paused.
   const slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE, unitDir = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user");

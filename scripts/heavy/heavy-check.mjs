@@ -33,7 +33,7 @@ import { hasScopeComponent, ownCgroupPath } from "./cgroup-scope.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
 import { buildOnly, builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
-  alive, componentMatches, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState, terminalRecord,
+  alive, ensureDirs, flockFd, gitTree, v1Scope, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState, terminalRecord,
   reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
 } from "./state.mjs";
 
@@ -95,7 +95,7 @@ async function nested(opts, command) {
       fail(`SILTWAKE_JOB_TICKET=${ticket}, but this process is not inside that ticket's scope; refusing. Unset it, or run inside the job.`);
     if (cls.gpu && !grant.gpu) fail(`nested ${opts.class ?? "exclusive"} call inside ${grant.class} ticket ${ticket}, which has no GPU lease; submit the GPU work as its own --class gpu job`);
     if (cls.exclusive && !grant.exclusive) fail(`nested exclusive call inside ${grant.class} ticket ${ticket}; submit it as its own --class exclusive job`);
-  } else if (!componentMatches(cgroup, /^siltwake-heavy-.+\.scope$/) && !componentMatches(cgroup, new RegExp(`^${cfg.unitPrefix.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}-.+\\.scope$`))) {
+  } else if (!v1Scope(cgroup, cfg.unitPrefix)) {
     fail("SILTWAKE_HEAVY_LOCK_HELD is set, but this process is not inside a heavy-check scope; refusing");
   }
   // The outer job's own stall window and limit govern; this only bounds a runaway.

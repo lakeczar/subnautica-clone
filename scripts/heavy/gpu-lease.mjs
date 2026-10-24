@@ -17,7 +17,7 @@ import { readFileSync, realpathSync } from "node:fs";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { cgroupPathOf, hasScopeComponent } from "./cgroup-scope.mjs";
-import { componentMatches, jobDir, loadConfig, readJson } from "./state.mjs";
+import { componentMatches, jobDir, loadConfig, readJson, v1Scope } from "./state.mjs";
 
 const HOW = "Run it through scripts/heavy-check.sh --class gpu -- … (functional evidence), or --class exclusive for frame-time or performance numbers.";
 
@@ -29,7 +29,7 @@ export function leaseProblem(env = process.env, cgroup = ownCgroup()) {
   if (componentMatches(path, /^siltwake-job-.+\.scope$/)) return null;
   const lease = env.SILTWAKE_GPU_LEASE;
   if (!lease) return "no GPU lease (SILTWAKE_GPU_LEASE is not set)";
-  if (lease.startsWith("v1-")) return componentMatches(path, /^siltwake-heavy-.+\.scope$/) ? null : `SILTWAKE_GPU_LEASE=${lease}, but this process is not inside a heavy-check scope`;
+  if (lease.startsWith("v1-")) return v1Scope(path) ? null : `SILTWAKE_GPU_LEASE=${lease}, but this process is not inside a heavy-check scope`;
   const grant = readJson(join(jobDir(loadConfig(env), lease), "grant.json"));
   if (!grant) return `SILTWAKE_GPU_LEASE=${lease} names no admitted ticket`;
   if (!grant.gpu) return `ticket ${lease} (${grant.class}) was not granted the GPU`;
