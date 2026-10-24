@@ -159,10 +159,10 @@ export function lightUniforms(lights: readonly PointLight[]): { position: number
   const position = new Array<number>(MAX_LIGHTS * 4).fill(0), color = new Array<number>(MAX_LIGHTS * 4).fill(0);
   const n = Math.min(MAX_LIGHTS, lights.length);
   for (let i = 0; i < n; i++) {
-    const l = lights[i]!;
-    position.splice(i * 4, 4, l.x, l.y, l.z, l.radius);
+    const l = lights[i]!, k = i * 4;
+    position[k] = l.x; position[k + 1] = l.y; position[k + 2] = l.z; position[k + 3] = l.radius;
     // A negative strength marks a light without a halo.
-    color.splice(i * 4, 4, l.r, l.g, l.b, l.noHalo ? -l.strength : l.strength);
+    color[k] = l.r; color[k + 1] = l.g; color[k + 2] = l.b; color[k + 3] = l.noHalo ? -l.strength : l.strength;
   }
   return { position, color, count: n };
 }

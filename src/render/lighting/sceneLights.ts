@@ -97,10 +97,21 @@ interface Entry {
    * round-robin refresh of a large one resumes. */
   moving: { lights: { x: number; y: number; z: number }[]; next: number } | null;
   active: boolean;
+  /** Where the entry sits in the dense per-frame list. */
+  index: number;
 }
 
 export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: readonly ShaderMaterial[]): SceneLights {
-  const entries = new Map<number, Entry>();
+  // By mesh, for lookup; and the same entries in a dense list the frame walks
+  // by index (no iterator objects per frame: the walk is per entry). Removal
+  // swaps the last entry in; order is irrelevant to selection (R2-3).
+  const entries = new Map<number, Entry>(), list: Entry[] = [];
+  const drop = (e: Entry): void => {
+    if (entries.get(e.mesh.uniqueId) !== e) return;
+    entries.delete(e.mesh.uniqueId);
+    const last = list.pop()!;
+    if (last !== e) { list[e.index] = last; last.index = e.index; }
+  };
   // Scanned clusters by geometry, owned by the live meshes using them (CW-1
   // R2-5): each mesh that consulted a geometry holds a reference until it is
   // disposed, and the last release frees the entry, so streamed chunks that
@@ -164,8 +175,9 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     }
     if (!clusters.length) return true;
     const instances = m.thinInstanceCount > 0 ? m.thinInstanceGetWorldMatrices() : null;
-    entries.set(mesh.uniqueId, { mesh, clusters, instances, world: null, placing: null, params: null, moving: null, active: true });
-    mesh.onDisposeObservable.addOnce(() => entries.delete(mesh.uniqueId));
+    const e: Entry = { mesh, clusters, instances, world: null, placing: null, params: null, moving: null, active: true, index: list.length };
+    entries.set(mesh.uniqueId, e); list.push(e);
+    mesh.onDisposeObservable.addOnce(() => drop(e));
     return true;
   };
   const scratch = new Matrix(), p = new Vector3();
@@ -204,26 +216,33 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
    * hold thousands of thin instances, each with many clusters); null while
    * still being placed. The budget is checked by lights placed, not by
    * instances, and each cluster's parameters are derived once per entry. */
+  /** Each cluster's parameters, for a moving (attached) or frozen mesh (no closure: called per entry). */
+  const paramsOf = (clusters: readonly LightCluster[], attached: boolean): Omit<PointLight, "x" | "y" | "z">[] => {
+    const out: Omit<PointLight, "x" | "y" | "z">[] = new Array(clusters.length);
+    for (let i = 0; i < clusters.length; i++) out[i] = lightFromCluster(clusters[i]!, attached);
+    return out;
+  };
+  const SINGLE: readonly (Matrix | null)[] = [null];
   const toWorld = (e: Entry, until = Infinity): PointLight[] | null => {
     const frozen = e.mesh.isWorldMatrixFrozen && !e.mesh.parent;
     if (frozen && e.world) return e.world;
-    if (!e.params || e.params.attached === frozen) e.params = { attached: !frozen, list: e.clusters.map(c => lightFromCluster(c, !frozen)) };
+    if (!e.params || e.params.attached === frozen) e.params = { attached: !frozen, list: paramsOf(e.clusters, !frozen) };
     const params = e.params.list, clusters = e.clusters;
-    const world = e.mesh.computeWorldMatrix(!frozen), instances = e.instances ?? [null];
+    const world = e.mesh.computeWorldMatrix(!frozen), instances = e.instances ?? SINGLE;
     if (!frozen) return moveLights(e, world, instances, params);
-    const job = frozen ? (e.placing ??= { out: [], next: 0, cluster: 0 }) : { out: [] as PointLight[], next: 0, cluster: 0 };
+    const job = (e.placing ??= { out: [], next: 0, cluster: 0 });
     let sinceCheck = 0;
     for (; job.next < instances.length; job.next++, job.cluster = 0) {
       const matrix = instances[job.next];
       const m = matrix ? matrix.multiplyToRef(world, scratch) : world;
       for (; job.cluster < clusters.length; job.cluster++) {
-        if (frozen && ++sinceCheck >= PLACE_CHECK) { sinceCheck = 0; if (performance.now() > until) return null; }
+        if (++sinceCheck >= PLACE_CHECK) { sinceCheck = 0; if (performance.now() > until) return null; }
         const c = clusters[job.cluster]!;
         Vector3.TransformCoordinatesFromFloatsToRef(c.x, c.y, c.z, m, p);
         job.out.push({ x: p.x, y: p.y, z: p.z, ...params[job.cluster]! });
       }
     }
-    if (frozen) { e.world = job.out; e.placing = null; }
+    e.world = job.out; e.placing = null;
     return job.out;
   };
   const hulls = new Map<string, Mesh>();
@@ -269,33 +288,40 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       const hull = seated ? hullOf(seated.id) : null;
       scanMs = performance.now() - (until - 1.5);
       const placeStart = performance.now();
-      // The frame's candidates, in one array reused frame to frame (never retained by selection).
+      // The frame's candidates, in one array reused frame to frame (never
+      // retained by selection), written by index and cut to length once at the
+      // end: emptying it each frame would drop its storage and regrow it.
       const lights = frameLights;
-      lights.length = 0;
+      let n = 0;
       // A newly streamed frozen mesh's lights (thousands of thin instances
       // for some scatter) are placed once and cached; place a bounded number
       // per frame (CW-1), so a new chunk's lights join over a few frames.
       const placeUntil = performance.now() + 2;
       slowest = null; unplaced = 0;
-      for (const e of entries.values())
+      for (let k = 0; k < list.length; k++) {
+        const e = list[k]!;
         if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
-          if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) { unplaced++; continue; }
+          const frozen = e.mesh.isWorldMatrixFrozen && !e.mesh.parent;
+          if (!e.world && frozen && performance.now() > placeUntil) { unplaced++; continue; }
           // A non-instanced mesh's lights all lie in its world bounds, each
           // reaching at most MAX_LIGHT_RADIUS: a mesh whose bounds are beyond
           // LIGHT_RANGE of that can give selection nothing, so its lights are
           // not placed this frame (CW-1: a far creature field re-placed 1,201
           // moving lights a frame for nothing).
           if (!e.instances && outOfRange(e.mesh, eye)) continue;
+          // Placed and cached: copied in, untimed (most entries, most frames).
+          const cached = frozen ? e.world : null;
+          if (cached) { for (let i = 0; i < cached.length; i++) lights[n++] = cached[i]!; continue; }
           const t0 = performance.now();
           const placedLights = toWorld(e, placeUntil);
           if (!placedLights) unplaced++;
-          if (placedLights) for (const l of placedLights) lights.push(l);
+          if (placedLights) for (let i = 0; i < placedLights.length; i++) lights[n++] = placedLights[i]!;
           const ms = performance.now() - t0;
-          if (ms > (slowest?.ms ?? 0)) slowest = { name: e.mesh.name, ms, instances: e.instances?.length ?? 1, clusters: e.clusters.length,
-            frozen: e.mesh.isWorldMatrixFrozen && !e.mesh.parent };
+          if (ms > (slowest?.ms ?? 0)) slowest = { name: e.mesh.name, ms, instances: e.instances?.length ?? 1, clusters: e.clusters.length, frozen };
         }
-      placeMs = performance.now() - placeStart; placed = lights.length;
-      for (const v of vents) lights.push(v);
+      }
+      placeMs = performance.now() - placeStart; placed = n;
+      for (let i = 0; i < vents.length; i++) lights[n++] = vents[i]!;
       // Parked craft: a blinking marker light, always sent, nearest two.
       const blinkOn = (time % BLINK) < BLINK * BLINK_ON;
       const parked: { mesh: Mesh; d: number }[] = [];
@@ -311,16 +337,17 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       parked.sort((a, b) => a.d - b.d);
       for (const p of parked.slice(0, 2)) {
         const at = p.mesh.getAbsolutePosition();
-        lights.push({ x: at.x, y: at.y, z: at.z, radius: 8, strength: blinkOn ? 1.4 : 0.3, reserved: true, ...MARKER_COLOR });
+        lights[n++] = { x: at.x, y: at.y, z: at.z, radius: 8, strength: blinkOn ? 1.4 : 0.3, reserved: true, ...MARKER_COLOR };
       }
       // The piloted cockpit's own soft instrument light.
       const inst = seated ? INSTRUMENT[seated.hull] : undefined;
       if (inst && hull) {
         const at = Vector3.TransformCoordinates(new Vector3(inst.at.x, inst.at.y, inst.at.z), hull.computeWorldMatrix(true));
-        lights.push({ x: at.x, y: at.y, z: at.z, radius: inst.radius, strength: 0.2, reserved: true, noHalo: true, r: 0.78, g: 0.92, b: 1 });
+        lights[n++] = { x: at.x, y: at.y, z: at.z, radius: inst.radius, strength: 0.2, reserved: true, noHalo: true, r: 0.78, g: 0.92, b: 1 };
       }
       const selectStart = performance.now();
-      considered = lights.length;
+      lights.length = n;
+      considered = n;
       const chosen = selectLights(lights, eye);
       selectMs = performance.now() - selectStart;
       sent = chosen.length;
@@ -331,7 +358,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       scene.onMeshRemovedObservable.remove(removed);
       for (const m of markers.values()) if (!m.isDisposed()) m.dispose();
       if (!ventArt.isDisposed()) ventArt.dispose();
-      entries.clear(); pending.clear(); byGeometry.clear(); cacheBytes = 0;
+      entries.clear(); list.length = 0; pending.clear(); byGeometry.clear(); cacheBytes = 0;
     },
   };
 }
