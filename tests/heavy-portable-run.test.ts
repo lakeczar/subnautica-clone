@@ -1,3 +1,4 @@
+// test-tier: allow-escape spawns the portable runner in tiny temp repositories (node scripts that print or signal) and the v1 shim inline with `sh -c echo`; none loads Babylon.
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
