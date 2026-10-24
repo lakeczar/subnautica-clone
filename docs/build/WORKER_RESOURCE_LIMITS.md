@@ -37,20 +37,18 @@ Heavy jobs are **admitted through the queue**, not run one at a time. `scripts/h
 H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 ```
 
-**Heavy** means render/NullEngine tests, `npm run test:heavy`, playthroughs, terrain bake or `--verify`, GPU browser sessions, and anything that needs more than about 1 GiB or 2 cores. **Light** work runs directly, outside the queue: `npm test`, typecheck, compiles (`npm run test:build`, `npx tsc -p scripts/playthrough/tsconfig.json`), a warm `npm run build` and focused non-render tests. Never wrap `npm run test:heavy` in `$H`: it already queues itself.
+**Heavy** means render/NullEngine tests, `npm run test:heavy`, playthroughs, terrain bake or `--verify`, GPU browser sessions, and anything that needs more than about 1 GiB or 2 cores. Never wrap `npm run test:heavy` in `$H`: it queues itself.
 
-**Except beside a 3090 exclusive run (STEW-2).** While an `exclusive` ticket is running *or queued* (a queued one can start at any moment), the repo's CPU-heavy entry points refuse to run outside the queue, in one line, exit 75: `npm test`/`test:fast`, `test:build`, `build`, `typecheck`, `playthrough`, `check`'s local tail, `scripts/test-tier.mjs`, `test-build.mjs`, `guard-architecture.mjs`, `bake-terrain.mjs`, the economy scripts, the benches, `saves-build-at.sh` and `sim-differential.sh`. Send the same command through the queue instead, as the message says:
-
-```sh
-$H --machine any -- npm test        # commit first (a WIP commit is fine): alickers runs it at once if free, else it runs here between exclusive runs
-```
-
-- **Inside a queued job** (and on alickers, which has no queue) they run normally. The guard checks the job's scope, not just its variables.
-- **Override:** `SILTWAKE_LOCAL_OVERRIDE="<why>" npm test` runs it anyway and logs who, what, why and the exclusive tickets it may disturb to `/work/tmp/siltwake-sched/local-runs.jsonl`. If an exclusive was *running*, tell the coordinator with the ticket id and time.
-- **`node scripts/local-guard.mjs --status`** shows what the guard sees and the local runs in progress.
-- **Not guarded** (call the npm scripts instead): bare `npx tsc`, `npx vite build` and `node --test <file>`.
-- **Local runs leave a lease** (`/work/tmp/siltwake-sched/local-runs/<pid>.json`) while they run. With SCHED's `local` admission rule (proposed in [STEW-2](streams/STEW-2.md)), an exclusive about to start waits for them, which closes the gap of an exclusive submitted after a local run began.
-- **`npm run gate`** routes its local steps the same way on its own (one `--machine any` job), and **`scripts/saves-export.sh`** compiles nothing outside the queue.
+**On factory-worker, the repo's CPU work runs only through the queue (STEW-2).** The CPU-heavy entry points never run here outside a heavy-check job: started from an agent's shell, each runs the same command again through `heavy-check run`, in the foreground, and exits with its code, so it reads like a local run. The queue then knows every sanctioned CPU job, and an exclusive run drains them like any other job. Nothing to check first.
+- **Guarded:** `npm test`/`test:fast`, `build`, `typecheck`, `playthrough`, `check`, `test:build`, `bake:terrain`, and `scripts/test-tier.mjs`, `test-build.mjs`, `guard-architecture.mjs`, `bake-terrain.mjs`, the six economy scripts, `sim-bench.mjs`, `timeline-save-bench.mjs`, `saves-build-at.sh` and `sim-differential.sh`. Each has its class (`quick` for a typecheck or a single compile, `standard` for the fast tier or the build, `bake`, `playthrough`, `heavy-suite`).
+- **Where it runs:** `--machine any` (alickers when its slot is free, else here) for tests and checks. Here (`3090`) for what leaves its product in your worktree (`.test-build`, `dist`, baked terrain), for commands naming local paths, and whenever your environment carries a setting such as `SILTWAKE_TEST_BUILD` or `NODE_OPTIONS`, since alickers receives only the command line. A guarded consumer of compiled output (the economy scripts, the tiers) compiles inside its job.
+- **Commit first** (a WIP commit is fine) so a `--machine any` command can go to alickers; with uncommitted changes it runs here, and if the tree changes while it waits, the queue rejects it (exit 3). One job per worktree runs at a time, so a guarded command waits behind your own running job in the same worktree.
+- **Runs directly** inside a heavy-check job (the job's own cgroup, not just its variables), on the alickers sandbox (identified by its hostname and its `siltwake-job` tool), or with the override.
+- **Override:** `SILTWAKE_LOCAL_OVERRIDE="<why>" npm test` runs it here and logs who, what and why to `/work/tmp/siltwake-sched/local-overrides.jsonl`; if the log can't be written it refuses. If `heavy-check status` shows an exclusive ticket, tell the coordinator its id and the time.
+- **If heavy-check can't be run,** a guarded command refuses (exit 75) with the reason; it never falls back to running locally.
+- **`node scripts/local-guard.mjs --status`** says what happens here.
+- **Not prevented, a convention only:** bare `npx tsc`, `npx vite build`, `vite dev`, `node --test <file>`, compiled runners started directly (`node .test-build/…`), the `:direct` package scripts' commands typed by hand, and SCHED's acceptance suites run directly. Use the npm scripts, or `$H` yourself.
+- **`npm run gate`** sends its local steps (fast, build, economy) as one `--machine any` job, and **`scripts/saves-export.sh`** compiles nothing outside the queue.
 
 **A job has a goal, not a time limit** (owner, 2026-10-23; SCHED-2). It runs until its command ends. The queue stops it only when:
 - it **stalls**: nothing written to its output, and no touch of `$SILTWAKE_JOB_HEARTBEAT`, for the stall window (exit **123**, `stalled: no output for N min`, with what its processes were doing). A job that is legitimately quiet for long stretches touches the heartbeat file or passes `--stall S`;
@@ -160,12 +158,7 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
   - submit jobs that never read `.test-build`, such as GPU play from `dist`, with `--no-test-build`, or use `--snapshot`: neither takes the worktree's `.test-build`.
 
   The job itself may rebuild.
-- **Playthroughs:** compile first, then queue only the run:
-
-  ```sh
-  npx tsc -p scripts/playthrough/tsconfig.json
-  $H --class playthrough -- node .test-build/scripts/playthrough/run.js --scenario …
-  ```
+- **Playthroughs:** `npm run playthrough -- --scenario …` queues itself (class `playthrough`, `--machine any`) and compiles inside its job. A compiled runner started directly (`node .test-build/scripts/playthrough/run.js`) isn't guarded: queue it yourself, `$H --class playthrough -- node .test-build/scripts/playthrough/run.js --scenario …`, after a compile that ran in a job (`npm run test:build`, here).
 
   While iterating, run only the affected scenarios (a branch alone with `--from-library`); run them all at handoff.
 - **The GPU guard is installed** (2026-10-23 10:12Z, guard `073e8b0da3da`). Rerun `scripts/heavy/install.sh --gpu-guard` after any `npx playwright install`.
@@ -232,11 +225,11 @@ scripts/alickers-job.sh --deadline 1800 -- npm run test:heavy
 Don't derive late saves in your own job. After each root merge the coordinator runs `scripts/saves-export.sh` on root: the whole playthrough runs on siltwake-alickers (factory-worker's queue if it is paused), and every bot-earned save lands, read-only, in **`/work/tmp/siltwake-saves/<sha>/`** on factory-worker, shared by every worktree. Kinds include pod start, the Dart, the Creel at 350 m, the Rift at 450 m, the 800 m Creel, the carrier fit-out, the pre-ending of both routes, low air, a damaged hull, a lost craft, a depleted battery, minimum gear and over-geared in the Canopy, and the tour-ready Dart. The details are in [the playthrough README](../../scripts/playthrough/README.md#save-library-save-1).
 
 ```sh
-npx tsc -p scripts/playthrough/tsconfig.json                 # light; from your checkout
+npm run test:build                                            # through the queue, here (its .test-build is the product)
 node .test-build/scripts/playthrough/saves.js pick creel-350  # prints the save's path
 npm run playthrough -- --scenario carrier --from-library      # a branch without its parent's replay
 ```
 
-- **Light:** `pick`, `list` and `verify` are light work; run them directly. `verify` and `import` compile a build of the commit when needed, which takes about 5 s. Exporting is a playthrough: only through `scripts/saves-export.sh`, which runs it from an archive build of the pinned SHA, on the second worker or through the queue.
+- **Light:** `pick` and `list` are light work; run them directly. `verify` and `import` compile a build of the commit when needed (about 5 s), so on factory-worker run those in a job (`$H --class quick -- node .test-build/scripts/playthrough/saves.js verify …`). Exporting is a playthrough: only through `scripts/saves-export.sh`, which runs it from an archive build of the pinned SHA, on the second worker or through the queue.
 - **Compatibility:** the newest export at your commit or one of its ancestors, with this build's schema and content versions (or the schema 5 bridge), that this build decodes. Anything else is refused with the reason (exit 3), never swapped for another save. Record the save's commit (stderr, or `--json`) with your evidence.
 - **On the second worker:** exports run there keep their copy in the same place, `/work/tmp/siltwake-saves`, so a job there finds every commit exported there. A commit exported on factory-worker isn't there; `pick` then refuses, and you copy the save you need in with the job.
