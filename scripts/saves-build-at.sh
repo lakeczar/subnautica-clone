@@ -10,6 +10,10 @@
 # same as this checkout's; otherwise `npm ci` installs SHA's own.
 set -euo pipefail
 [[ $# == 2 ]] || { echo "usage: $0 SHA DIR" >&2; exit 2; }
+# A compile: on factory-worker only inside a heavy-check job (STEW-2); otherwise this
+# same command runs through the queue, here (DIR is on this machine).
+guard="$(dirname "$0")/local-guard.mjs"
+node "$guard" --require --quiet "bash $0" || exec node "$guard" --class standard --machine 3090 -- bash "$0" "$@"
 repo="$(git rev-parse --show-toplevel)"
 sha="$(git -C "$repo" rev-parse --verify "$1^{commit}")"
 dir="$2"
