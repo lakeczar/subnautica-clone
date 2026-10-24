@@ -511,3 +511,97 @@ No owner questions are open. The Sol review's findings will be settled with the 
 | **N3** power crops and the grow bed | **Fixed.** No benefit to power crops. The heater is billed through a per-item `poweredModules`, so there's no acceleration without power. Plain lumen-bulb supply against carrier drain is noted as pre-existing and out of scope. | §2 *Cultivation progression*; *Reward contracts* |
 | **N4** pacing data | **Fixed.** `run.ts` attaches and exports the recorder by default, resumes branch history from the parent milestone, and exits non-zero on failure. One analyzer, extended with `idle.byCause`. Wait causes are declared by `waitFor`, not inferred from presence. Three fixtures cover the wait cases. | §3 *Pacing acceptance* |
 | **N5** grouping | **Fixed.** Dedupe by `(what, id)` first occurrence; a decode counts at its own time when its `yields` holds something new. A positive (delayed real payoff) and a negative (duplicate notice) fixture. | §3 *Pacing acceptance* |
+
+## Stage 1a handoff (records and decode-free routes)
+
+Code at **`4b89164b`** (branch `t3/ls-1-lost-sites`, from root `a38b951e` plus the docs-only root merge `c98517ae`); this section is the docs-only commit after it. No file CW-1 changed was touched. Spoiler-safe; canon notes stay in `docs/spoilers/LS-1-LORE.md`.
+
+**What a player gets now:**
+- The pump house, gauge line, basket, pump heads, borehole rig, mixing line and allotments, plus the **keeper's racks** on the spur's second step and the **beacon house** door on the crown (W2's lit lamp), are findable lost sites, each with a **plate** readable before any decode.
+- Decoded maps now **lead to further lost sites**: the beacon house's archive reveals the borehole rig and the mixing line. A reveal whose target is not in the world yet (a cave before CW-1 lands) is withheld, and appears by itself in a later build.
+- CB-2's **found notes** read in the journal (notebook → *Found notes*): the five board notes once you've been at their place, the ten site notes once decoded.
+- **Seeing is not capturing:** the Dart's range tagger now marks a site on the chart (`tag:<site>`), and the journal lists it under *Marked, not captured* until you reach its logger.
+- Coded doors carry their codes in decoded logs, and the journal's *Door codes* section shows a code once its door exists (neither door is placed yet: OP-1 and the Basin vault biome).
+
+**Changed contracts:**
+- `content/systems/lostSites.ts` is the one lost-site table:
+  - plates, paths and tells (sound tells carry their caption text);
+  - typed `RevealTarget`;
+  - `CODED_DOORS`;
+  - `DEFERRED_LOST_SITES`, never findable.
+- `content/systems/decodes.ts`:
+  - the `demo_*` rows, `DEMO_MAIN_PATH`, `decoderPlanProblems` and `mainPathPlanProblems(path)` are deleted;
+  - `revealPlaced` and `placedReveals` are added;
+  - `MAIN_PATH_PLANS` now also lists `bp_cultivation`.
+- `sim/storyCampaign.ts`: `mainPathPlanRoute` / `mainPathPlanProblems(strategy)` generalise the kit audit over `REAL_GRANTS`; `kitPlanRoute` is now a view of it.
+- **Decoder and chart:**
+  - `knownSites` returns site IDs;
+  - `DecodeCompletion` gains `fresh`, the plans not held before;
+  - `markedSites`, `doorCodes` and `decodedReveals` are new;
+  - beacons derive late-placed reveals.
+- **Notes:** found-note text moved to `content/systems/notes.ts`. `proposals/fieldNotes.ts` keeps only hosts and hints by ID, so there's one copy of the text.
+- **Timeline:**
+  - `TimelineEvent` gains `cause` (idle) and `yields` (decode), validated in the existing validator;
+  - `ChunkSummary.idle.byCause` survives rotation;
+  - `analyseTimeline` gains `idle.byCause` and first-occurrence counting (`newContent`);
+  - `ObserveContext.cause` opens a declared wait from its first tick;
+  - `sim/timeline/acceptance.ts` holds `pacingAcceptance`.
+- **Playthrough:**
+  - `PlayOptions.decodes`;
+  - `Driver.waitFor(…, cause)`, `decodesAllowed` (refuses `start-decode`) and `milestones`;
+  - `scripts/playthrough/pacing.ts`: one recorder per driver through `driverHooks`, branches resumed from the parent's milestone export, `judgePacing`;
+  - `run.ts` attaches it by default and takes `--timeline-dir`;
+  - `no-optional` is decode-free and `no-optional-carrier` is new;
+  - the Creel route sockets a signal relay beside the workshop decoder;
+  - `pacing-debt.ts` (below).
+- **Save:** no change. New decodable IDs are additive, and read notes and codes are derived from saved state.
+
+**Checks** (all on the 4070 sandbox, `--machine any`):
+
+| Check | Ticket and commit | Result |
+| --- | --- | --- |
+| Fast tier | `261024-184819-f703` at `4b89164b` | 167 files pass |
+| Heavy tier | `261024-183857-f6db` at `3d09cdb9` (the later commits touch only playthrough scripts and one fast test) | All files pass, 0 failures |
+| Six economy steps | `261024-183857-1533` at `3d09cdb9` | All pass |
+| Playthrough | `261024-184819-d93f` at `4b89164b` | **9/9 complete, no blockers, every milestone reload matches.** Creel 203.7 min, carrier 372.5, no-optional 200.2, no-optional-carrier 362.3. |
+| Production build | `261024-190232-5649` at `4b89164b` | Passes |
+
+**Questions:**
+1. *Does every reveal, door and gated note resolve to something real, or stay withheld?* Yes (`tests/lost-sites.test.ts`):
+   - cave targets are authored caves, with their point at the footprint, and show exactly when the cave is in `CAVE_SOURCES`;
+   - site, source and lost-site targets resolve;
+   - deferred rows are never findable;
+   - every note is dated before the disaster and gated by its own decode;
+   - each door's code is in exactly one decoded log and shows only once the door is placed;
+   - player text passes the lore owner's lint list, read from the appendix.
+2. *Do both strategies finish decode-free, with the plan guarantee proved on real content, while the normal routes still decode?* Yes:
+   - `no-optional` and `no-optional-carrier` end with nothing decoding or decoded, and the driver would block any `start-decode`;
+   - `mainPathPlanProblems` is empty for both strategies, and every plan comes from a real record no decode gates;
+   - Creel and carrier still decode the pump house, now in the background through the relay.
+3. *Does the pacing acceptance pass on all four runs and fail its injected cases?*
+   - **Decode waits:** 0 s on all four.
+   - **Injected cases:** the six fixtures behave as specified (`tests/timeline-acceptance.test.ts`, `tests/playthrough-pacing.test.ts`).
+   - **Gap and empty travel: all four runs fail them on root's existing late game.** They pass only against the recorded debt (compromise 1). **This is the finding to decide on.**
+
+**Adverse case:** a decode at a host that loses power, then range. It pauses with the reason shown, resumes, and loses nothing through pack, redeploy and reload (`systems-decoder`, `systems-outposts`, `systems-recovery` tests, now on real sites). The decode-free guard throws on a `start-decode`.
+
+**Compromises (each with its root fix):**
+1. **Recorded pacing debt** (`scripts/playthrough/pacing-debt.ts`).
+   - **What the first acceptance run found** on every judged route:
+     - a 51 min gap (Creel) or 87–95 min gap (carrier) in the works phase, between the service air assembly and the pod buffer;
+     - on the carrier, also a 51 min stretch from the Hearthline to the Divide;
+     - 31 (Creel) or 55 (carrier) empty-travel stretches over 90 s, the longest a 3.5 km, 850 s Creel haul between the district and the island workshop.
+   - **Why it's debt:** it's existing campaign structure that LS-1 did not cause, and a red gate on root would block every stream. The entry holds today's figures, so anything new or worse fails. Decode waits get no allowance, and an improvement prints "tighten the entry".
+   - **Root fixes:**
+     - late-game works logistics: a forward fabrication point or a shorter material path;
+     - the measure: the recorder doesn't yet break travel at lit landmarks passed, so long deep legs read as empty where POI-1's measure finds them under 60 s.
+   - **Cost:** the gate tolerates today's late-game slog until those land.
+   - **Owner:** yours to assign (late-game content; REC-2 for the measure).
+2. **The door-order check isn't live yet:** neither door is placed. It activates with OP-1's hatch and the vault biome. Until then, a test holds that an unplaced door shows no code.
+3. **The scout drone still captures site data** at its 12 m scan range: the drone physically reaches the logger, which counts as reaching it. Only the range tagger changed.
+4. **Sites are still invisible find points**, as before, until stage 3 on COL-1 B. No new compromise.
+
+**Known limits:**
+- The racks' planting card (`bp_cultivation`) and every new reward are stage 1b.
+- The reef slates and the listening array's sound-tell filter are stage 2.
+- The Creel route now spends 1 alloy, 1 crust and 1 resin on the relay; the economy scripts don't simulate the bot, and all six pass.
