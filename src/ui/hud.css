@@ -178,6 +178,7 @@
 .session-warning button { border: 1px solid #e5bd8180; padding: 6px 10px; font-size: 12px; }
 [data-opening="true"] .hud-top { justify-content: flex-end; }
 #system-status { max-width: 290px; padding: 7px 10px; border: 1px solid #a3c7bd70; border-radius: 4px; background: #102d36fa; color: #d6e5d9; font-size: 12px; line-height: 1.5; }
+#system-status.error { border-color: #e5bd81; background: #38372ffa; color: #ffe1b2; }
 .experience-layout:has(> #menu:not([hidden])), [data-screen="panel"] .experience-layout { padding: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); gap: 0; overflow: hidden; }
 [data-screen="panel"] .experience-layout { background: #102d3ef5; }
 .experience-layout > .menu-screen, .experience-layout > .game-panel { position: relative; inset: auto; grid-column: 1; grid-row: 1; min-width: 0; min-height: 0; pointer-events: auto; }
