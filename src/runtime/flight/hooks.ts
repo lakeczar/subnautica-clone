@@ -60,6 +60,8 @@ export interface HookSource {
   capture(): FlightCapture | null;
   /** Driver mode only; false when refused. */
   stage(view: StagedView): boolean;
+  /** Measurement only (`?recmeasure=1`): the recorder skips all its work while paused; false when refused. */
+  pauseRecorder(on: boolean): boolean;
 }
 
 export interface SiltwakeTestHook {
@@ -69,6 +71,8 @@ export interface SiltwakeTestHook {
   freeze(on: boolean): boolean;
   stage(view: StagedView): boolean;
   capture(): Promise<string | null>;
+  /** Measurement only (`?recmeasure=1`, R3b): pause the recorder in place, so one page measures with and without it. */
+  readonly measure: { pauseRecorder(on: boolean): boolean };
   readonly recorder: ReturnType<typeof recorderHook> | null;
 }
 
@@ -102,6 +106,7 @@ export function installTestHook(src: HookSource): () => void {
       if (!c || c.mode !== "driver") return null;
       return c.frameData();
     },
+    measure: { pauseRecorder: (on) => src.pauseRecorder(Boolean(on)) },
     get recorder() { const c = src.capture(); return c ? recorderHook(c) : null; },
   };
   (globalThis as { __siltwake?: SiltwakeTestHook }).__siltwake = hook;

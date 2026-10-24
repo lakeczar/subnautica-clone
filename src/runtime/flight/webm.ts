@@ -8,7 +8,7 @@
  * (it is appended to as it goes), every Cluster is written whole with its
  * size, and there are no Cues (a pack's remux adds them). DOM-free. */
 
-export type WebmCodec = "V_VP9" | "V_VP8";
+export type WebmCodec = "V_VP9" | "V_VP8" | "V_AV1";
 
 const CLUSTER_MAX_MS = 30_000;
 
@@ -44,13 +44,15 @@ function el(id: readonly number[], ...body: Uint8Array[]): Uint8Array {
 }
 const UNKNOWN_SIZE = Uint8Array.from([0x01, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff]);
 
-/** The file's start: the EBML header, an unknown-size Segment, Info (1 ms ticks) and the one video track. */
-export function webmHead(codec: WebmCodec, width: number, height: number): Uint8Array {
+/** The file's start: the EBML header, an unknown-size Segment, Info (1 ms ticks) and the one video track
+ * (with the encoder's decoder configuration as CodecPrivate when it gives one: AV1's av1C). */
+export function webmHead(codec: WebmCodec, width: number, height: number, codecPrivate?: Uint8Array): Uint8Array {
   const ebml = el([0x1a, 0x45, 0xdf, 0xa3],
     el([0x42, 0x86], uint(1)), el([0x42, 0xf7], uint(1)), el([0x42, 0xf2], uint(4)), el([0x42, 0xf3], uint(8)),
     el([0x42, 0x82], ascii("webm")), el([0x42, 0x87], uint(4)), el([0x42, 0x85], uint(2)));
   const info = el([0x15, 0x49, 0xa9, 0x66], el([0x2a, 0xd7, 0xb1], uint(1_000_000)), el([0x4d, 0x80], ascii("siltwake")), el([0x57, 0x41], ascii("siltwake")));
   const track = el([0xae], el([0xd7], uint(1)), el([0x73, 0xc5], uint(1)), el([0x83], uint(1)), el([0x86], ascii(codec)),
+    ...(codecPrivate?.length ? [el([0x63, 0xa2], codecPrivate)] : []),
     el([0xe0], el([0xb0], uint(width)), el([0xba], uint(height))));
   return concat([ebml, Uint8Array.from([0x18, 0x53, 0x80, 0x67]), UNKNOWN_SIZE, info, el([0x16, 0x54, 0xae, 0x6b], track)]);
 }

@@ -312,6 +312,13 @@ export class SiltwakeApp {
       // Fixed-view captures only (driver mode): a player's build cannot be frozen through the hook.
       freeze: (on) => { if (this.flight?.mode !== "driver") return; this.frozen = on; this.clock.reset(); this.dirty = true; },
       capture: () => this.flight,
+      // R3b's within-run A/B: paused, the recorder costs what off does (no rows, samples, events, video or renderer timing).
+      pauseRecorder: (on) => {
+        if (!this.flight || new URLSearchParams(globalThis.location?.search ?? "").get("recmeasure") !== "1") return false;
+        this.flightPaused = on;
+        if (this.renderer) this.renderer.timing = !on;
+        return true;
+      },
       stage: (v) => {
         if (this.flight?.mode !== "driver" || !this.state) return false;
         this.session.state = stageView(this.state, v);
@@ -467,7 +474,7 @@ export class SiltwakeApp {
     // Frame timing for measurement harnesses only (CW-1 traversal): a page
     // that defines `__siltwakePerf` gets one entry per frame.
     const perf = (globalThis as { __siltwakePerf?: unknown[] }).__siltwakePerf;
-    const timed = !!perf || !!this.flight;
+    const timed = !!perf || !!this.recording;
     const started = timed ? performance.now() : 0;
     let simMs = 0, steps = 0, saveMs = 0;
     this.installCaveRecords();
@@ -484,7 +491,7 @@ export class SiltwakeApp {
     const presentStart = timed ? performance.now() : 0;
     this.present(now);
     const presentEnd = timed ? performance.now() : 0;
-    if (this.flight) this.recordFrame(now, presentEnd - started, simMs, steps, saveMs, hold?.state ?? this.holdNotEvaluated());
+    if (this.recording) this.recordFrame(now, presentEnd - started, simMs, steps, saveMs, hold?.state ?? this.holdNotEvaluated());
     if (perf) perf.push({ at: now, total: presentEnd - started, sim: simMs, steps, save: saveMs, present: presentEnd - presentStart,
       hud: this.lastHudMs, parts: this.renderer?.parts ?? null, hold: hold?.state ?? null });
     this.frameId = requestAnimationFrame((time) => this.frame(time));
@@ -622,6 +629,9 @@ export class SiltwakeApp {
   }
   /** The last recording turned off, kept for export. */
   private flightDone: FlightCapture | null = null;
+  /** Measurement only (R3b): the running recorder paused in place. */
+  private flightPaused = false;
+  private get recording(): FlightCapture | null { return this.flightPaused ? null : this.flight; }
 
   private async exportFlight(): Promise<void> {
     const capture = this.flight ?? this.flightDone;
@@ -653,13 +663,13 @@ export class SiltwakeApp {
     this.session.state = result.state;
     this.events(result.events);
     this.observeTimeline(result.state, [...controls, ...gesture], result.events);
-    if (this.flight) {
+    if (this.recording) {
       const t0 = performance.now();
-      recordGameEvents(this.flight.recorder, result.state, result.events);
-      for (const c of gesture) recordCommand(this.flight.recorder, result.state, c);
-      if (this.timeline) this.flightTimeline.read(this.flight.recorder, this.timeline);
-      this.flightSurvival.observe(this.flight.recorder, before, result.state, result.events, now);
-      this.flight.recorder.charge(performance.now() - t0, "events");
+      recordGameEvents(this.flight!.recorder, result.state, result.events);
+      for (const c of gesture) recordCommand(this.flight!.recorder, result.state, c);
+      if (this.timeline) this.flightTimeline.read(this.flight!.recorder, this.timeline);
+      this.flightSurvival.observe(this.flight!.recorder, before, result.state, result.events, now);
+      this.flight!.recorder.charge(performance.now() - t0, "events");
     }
     this.observeAscent(result.events);
     this.observeThrust(result.events);

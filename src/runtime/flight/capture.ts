@@ -92,7 +92,7 @@ interface Ledger {
 type WorkerReply = {
   ack?: number; file?: string; failed?: string; bytes?: number; quota?: boolean; error?: string; video?: boolean;
   removed?: number; exported?: number; barrier?: number; videoFlushed?: number; videoClosed?: number;
-  videoFrame?: number; kept?: boolean; videoOpened?: string; codec?: string; videoError?: string; wrote?: string; videoOrigin?: string; t?: number;
+  videoFrame?: number; kept?: boolean; videoOpened?: string; codec?: string; hardware?: boolean; videoError?: string; wrote?: string; videoOrigin?: string; t?: number;
   frames?: number; firstMs?: number; lastMs?: number; why?: string; absent?: boolean; refused?: string; opFailed?: string; released?: number;
 };
 
@@ -426,12 +426,13 @@ export class FlightCapture {
   }
   private videoHeader(): void {
     const v = this.video;
-    this.header.video = { source: "game", encoder: "webcodecs", codec: this.codec, fps: VIDEO_FPS, size: v ? { width: v.segment.width, height: v.segment.height } : VIDEO_SIZE,
+    this.header.video = { source: "game", encoder: "webcodecs", codec: this.codec, hardware: this.hardware, fps: VIDEO_FPS, size: v ? { width: v.segment.width, height: v.segment.height } : VIDEO_SIZE,
       bitsPerSecond: VIDEO_BITS, segments: this.segments.filter((x) => x.start !== null),
       ...(this.segments[0]?.start != null ? { file: this.segments[0].file, start: this.segments[0].start } : {}) };
     this.putHeader();
   }
   private codec: string | null = null;
+  private hardware = false;
   /** Ends a segment: the encoder drains into its file (tracked), its end time recorded. */
   private finishSegment(v: Video, why: string, final: boolean): void {
     const seg = this.segments.find((x) => x.file === v.segment.file);
@@ -490,7 +491,7 @@ export class FlightCapture {
       const seg = this.segments.find((x) => x.file === m.videoOrigin);
       if (seg && seg.start === null) { seg.start = Math.round((m.t ?? 0) * 1000) / 1000; if (this.video?.segment.file === seg.file) this.video.segment.start = seg.start; this.videoHeader(); }
     }
-    if (m.videoOpened !== undefined && m.codec && this.codec !== m.codec) { this.codec = m.codec; this.videoHeader(); }
+    if (m.videoOpened !== undefined && m.codec && (this.codec !== m.codec || this.hardware !== (m.hardware === true))) { this.codec = m.codec; this.hardware = m.hardware === true; this.videoHeader(); }
     if (m.videoError !== undefined && this.video) {
       // The video ends here; what came after is lost, and the ledger says so (R3-1).
       const v = this.video;

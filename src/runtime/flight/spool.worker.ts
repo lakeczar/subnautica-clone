@@ -115,7 +115,7 @@ async function exportZip(dir: string, out: string): Promise<number> {
 const ENCODE_QUEUE_MAX = 2;
 /** A key frame this often (frames), and at every segment's start: seeking stays cheap. */
 const KEY_EVERY = 24;
-type Segment = { dir: string; file: string; h: SyncHandle; clusters: WebmClusters; origin: number | null; frames: number; broken: boolean };
+type Segment = { dir: string; file: string; h: SyncHandle; clusters: WebmClusters; origin: number | null; frames: number; broken: boolean; headWritten: boolean };
 let encoder: VideoEncoder | null = null, encoderSize = "", codec: WebmCodec = "V_VP9", lastPicture: ImageBitmap | null = null, lastT = -Infinity;
 /** The one segment being written. A close drains the encoder first, so every chunk belongs to it. */
 let segment: Segment | null = null;
@@ -133,23 +133,37 @@ function writeVideo(seg: Segment, bytes: Uint8Array): void {
     scope.postMessage({ failed: seg.file, bytes: bytes.length, quota: name === "QuotaExceededError", error: error instanceof Error ? error.message : String(error), video: true });
   }
 }
-/** The codecs tried, in order, by WebM codec ID. */
+/** Software codecs by name, as the main thread orders them. */
 const CODECS: Record<string, [string, WebmCodec]> = { vp9: ["vp09.00.10.08", "V_VP9"], vp8: ["vp8", "V_VP8"] };
+/** Tried first: a hardware encoder takes the GPU's picture without a CPU readback and costs the page almost nothing (R3b). */
+const HARDWARE: [string, WebmCodec][] = [["av01.0.04M.08", "V_AV1"], ["vp09.00.10.08", "V_VP9"]];
+let hardware = false, head: { width: number; height: number } | null = null;
 async function openEncoder(width: number, height: number, fps: number, bitrate: number, order: readonly string[] = ["vp9", "vp8"]): Promise<void> {
   const size = `${width}x${height}:${order.join(",")}`;
   if (encoder && encoder.state === "configured" && encoderSize === size) return;
   try { encoder?.close(); } catch { /* closed */ }
   encoder = null;
   if (typeof VideoEncoder === "undefined") throw new Error("this browser has no WebCodecs video encoder");
-  for (const [c, id] of order.map((k) => CODECS[k]).filter((x): x is [string, WebmCodec] => !!x)) {
-    const config: VideoEncoderConfig = { codec: c, width, height, bitrate, framerate: fps, latencyMode: "realtime" };
-    if (!(await VideoEncoder.isConfigSupported(config)).supported) continue;
-    codec = id;
+  const tries: [string, WebmCodec, boolean][] = [...HARDWARE.map(([c, id]) => [c, id, true] as [string, WebmCodec, boolean]),
+    ...order.map((k) => CODECS[k]).filter((x): x is [string, WebmCodec] => !!x).map(([c, id]) => [c, id, false] as [string, WebmCodec, boolean])];
+  for (const [c, id, hw] of tries) {
+    const config: VideoEncoderConfig = { codec: c, width, height, bitrate, framerate: fps, latencyMode: "realtime", hardwareAcceleration: hw ? "prefer-hardware" : "prefer-software" };
+    let ok = false;
+    try { ok = (await VideoEncoder.isConfigSupported(config)).supported === true; } catch { ok = false; }
+    if (!ok) continue;
+    codec = id; hardware = hw; head = { width, height };
     encoderSize = size;
     encoder = new VideoEncoder({
-      output: (chunk) => {
+      output: (chunk, meta) => {
         const seg = segment;
         if (!seg || seg.origin === null) return;
+        // The file's head waits for the first chunk: AV1 in WebM carries the encoder's configuration.
+        if (!seg.headWritten && head) {
+          const description = meta?.decoderConfig?.description;
+          const priv = description ? new Uint8Array(description instanceof ArrayBuffer ? description : (description as ArrayBufferView).buffer.slice(0)) : undefined;
+          writeVideo(seg, webmHead(codec, head.width, head.height, priv));
+          seg.headWritten = true;
+        }
         const bytes = new Uint8Array(chunk.byteLength);
         chunk.copyTo(bytes);
         seg.clusters.add(bytes, chunk.timestamp / 1000 - seg.origin, chunk.type === "key");
@@ -159,18 +173,17 @@ async function openEncoder(width: number, height: number, fps: number, bitrate: 
     encoder.configure(config);
     return;
   }
-  throw new Error(`no VP9 or VP8 encoder for ${size}`);
+  throw new Error(`no hardware or software (${order.join(", ")}) encoder for ${width}x${height}`);
 }
 async function videoOpen(m: Extract<Message, { op: "video-open" }>): Promise<void> {
   try {
     await openEncoder(m.width, m.height, m.fps, m.bitrate, m.codecs);
     const h = await handle(m.dir, m.file);
     h.truncate(0);
-    const seg: Segment = { dir: m.dir, file: m.file, h, clusters: null as unknown as WebmClusters, origin: null, frames: 0, broken: false };
+    const seg: Segment = { dir: m.dir, file: m.file, h, clusters: null as unknown as WebmClusters, origin: null, frames: 0, broken: false, headWritten: false };
     seg.clusters = new WebmClusters((b) => writeVideo(seg, b));
-    writeVideo(seg, webmHead(codec, m.width, m.height));
     segment = seg;
-    scope.postMessage({ videoOpened: m.file, codec });
+    scope.postMessage({ videoOpened: m.file, codec, hardware });
   } catch (error) { scope.postMessage({ videoError: error instanceof Error ? error.message : String(error) }); }
 }
 function videoFrame(m: Extract<Message, { op: "video-frame" }>): void {

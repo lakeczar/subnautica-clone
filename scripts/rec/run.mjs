@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp8|vp9,…] [--video-width W]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp8|vp9,…] [--video-width W] [--alternate W]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -76,7 +76,7 @@ function probeScript() {
 }
 
 const gpu0 = gpuInfo();
-const query = (mode === "off" ? "?rec=off" : mode === "playtest" ? `?rec=playtest${arg("video") === "off" ? "&recvideo=0" : ""}` : "?rec=driver") + (flag("no-timing") ? "&rectiming=0" : "") + (arg("codec") ? `&reccodec=${arg("codec")}` : "") + (arg("video-width") ? `&recvideowidth=${arg("video-width")}` : "");
+const query = (mode === "off" ? "?rec=off" : mode === "playtest" ? `?rec=playtest${arg("video") === "off" ? "&recvideo=0" : ""}` : "?rec=driver") + (flag("no-timing") ? "&rectiming=0" : "") + (arg("alternate") ? "&recmeasure=1" : "") + (arg("codec") ? `&reccodec=${arg("codec")}` : "") + (arg("video-width") ? `&recvideowidth=${arg("video-width")}` : "");
 const result = { mode, video: videoOn, machine, commit, segment, errors: [], reached: [], skipped: [] };
 let exit = 0, g = null;
 try {
@@ -122,7 +122,24 @@ try {
   // window (12 fps video, 4 Hz samples, a 5 s flush), the game's occasional bursts do not, so the
   // median window is a robust per-run figure beside the whole window's (R3-4).
   const windows = [];
-  if (holdS > 0) {
+  // --alternate W (with --rec playtest and --hold): the recorder paused and resumed in place every W s,
+  // in on/off/off/on order, and each window's main-thread time per frame kept: the within-run A/B (R3b).
+  const alternateS = Number(arg("alternate", 0)), alternation = [];
+  if (holdS > 0 && alternateS > 0) {
+    const ok = await g.page.evaluate(() => window.__siltwake.measure.pauseRecorder(false));
+    if (!ok) throw new Error("--alternate: the page refused to pause its recorder (playtest mode and ?recmeasure=1 needed)");
+    let at = await metrics(), n = await g.page.evaluate(() => window.__recProbe.work.length);
+    for (let i = 0; i * alternateS < holdS; i++) {
+      const on = [true, false, false, true][i % 4];
+      await g.page.evaluate((p) => window.__siltwake.measure.pauseRecorder(p), !on);
+      await g.page.waitForTimeout(alternateS * 1000);
+      const now = await metrics(), m = await g.page.evaluate(() => window.__recProbe.work.length);
+      if (m > n) alternation.push({ on, frames: m - n, msPerFrame: +(((now.TaskDuration - at.TaskDuration) * 1000) / (m - n)).toFixed(4) });
+      at = now; n = m;
+    }
+    await g.page.evaluate(() => window.__siltwake.measure.pauseRecorder(false));
+    await stopProfile();
+  } else if (holdS > 0) {
     let at = await metrics(), n = await g.page.evaluate(() => window.__recProbe.work.length);
     for (let left = holdS; left > 0; left -= HOLD_WINDOW_S) {
       await g.page.waitForTimeout(Math.min(left, HOLD_WINDOW_S) * 1000);
@@ -169,6 +186,7 @@ try {
     mainThread: { taskMsPerFrame: per("TaskDuration"), scriptMsPerFrame: per("ScriptDuration"), taskMsPerSecond: perSecond("TaskDuration"),
       heapMiBEnd: m1.JSHeapUsedSize ? +(m1.JSHeapUsedSize / 1048576).toFixed(1) : null },
     // ms of CPU per measured second, all threads: renderer process (page, workers, media), GPU process, the browser's whole tree.
+    ...(alternation.length ? { alternation: alternationStats(alternation, alternateS) } : {}),
     ...(windows.length ? { windows: { seconds: HOLD_WINDOW_S, taskMsPerFrame: windows, median: +[...windows].sort((x, y) => x - y)[Math.floor(windows.length / 2)].toFixed(3) } } : {}),
     processCpu: probe.seconds > 0 ? Object.fromEntries(Object.keys(cpu1).map((k) => [`${k}MsPerS`, +(((cpu1[k] - cpu0[k]) * 1000) / probe.seconds).toFixed(1)])) : null };
   writeFileSync(path.join(out, "probe.json"), JSON.stringify({ gaps: probe.gaps.map((x) => +x.toFixed(2)), work: probe.work.map((w) => +w.toFixed(3)), metrics: { start: m0, end: m1 } }));
@@ -209,4 +227,17 @@ function profileSummary(profile, seconds) {
   const byFile = new Map();
   for (const r of rows) { const f = r.fn.split(" ")[0]; byFile.set(f, +((byFile.get(f) ?? 0) + r.msPerS).toFixed(3)); }
   return { seconds: +wall.toFixed(1), byFile: [...byFile.entries()].sort((a, b) => b[1] - a[1]).slice(0, 25), top: rows.slice(0, 60) };
+}
+
+/** The within-run A/B: adjacent on/off windows paired (on minus off), with a paired t 95% interval (n pairs; independent pairs, roughly normal differences). */
+function alternationStats(w, seconds) {
+  const T95 = [NaN, 12.706, 4.303, 3.182, 2.776, 2.571, 2.447, 2.365, 2.306, 2.262, 2.228, 2.201, 2.179, 2.160, 2.145, 2.131, 2.120, 2.110, 2.101, 2.093, 2.086];
+  const d = [];
+  for (let i = 0; i + 1 < w.length; i += 2) { const a = w[i], b = w[i + 1]; if (a.on !== b.on) d.push((a.on ? a.msPerFrame : b.msPerFrame) - (a.on ? b.msPerFrame : a.msPerFrame)); }
+  const n = d.length, mean = n ? d.reduce((x, y) => x + y, 0) / n : null;
+  const sd = n > 1 ? Math.sqrt(d.reduce((x, v) => x + (v - mean) ** 2, 0) / (n - 1)) : null;
+  const half = n > 1 ? (T95[n - 1] ?? (n > 60 ? 2.0 : 2.05)) * sd / Math.sqrt(n) : null;
+  const r = (v) => (v == null ? null : +v.toFixed(4));
+  return { windowS: seconds, windows: w, pairs: n, diffs: d.map(r), mean: r(mean), sd: r(sd), lo: r(half == null ? null : mean - half), hi: r(half == null ? null : mean + half),
+    budget: half == null ? "not established" : mean + half < 16.667 / 100 ? "met" : "not shown" };
 }
