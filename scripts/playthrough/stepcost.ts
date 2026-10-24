@@ -59,7 +59,13 @@ stepMeter.active = costs;
 
 /** V8 collections over 1 ms, on the step clock (matched to slow steps afterwards). */
 const gcs: { at: number; ms: number; kind: number }[] = [];
+/** Every collection by kind (1 minor, 4 major, 8 incremental, 16 weak callbacks): count and total ms. */
+const gcAll = new Map<number, { count: number; ms: number }>();
 const gcObserver = new PerformanceObserver((list) => {
+  for (const e of list.getEntries()) {
+    const kind = ((e as { detail?: { kind?: number } }).detail)?.kind ?? 0, k = gcAll.get(kind) ?? gcAll.set(kind, { count: 0, ms: 0 }).get(kind)!;
+    k.count++; k.ms += e.duration;
+  }
   for (const e of list.getEntries()) if (e.duration > 1)
     gcs.push({ at: e.startTime, ms: e.duration, kind: ((e as { detail?: { kind?: number } }).detail)?.kind ?? 0 });
 });
@@ -308,6 +314,8 @@ const seconds = (performance.now() - t0) / 1000;
 const r2 = (x: number): number => +x.toFixed(3);
 console.log(`${runs.map((r) => `${r.run} ${r.outcome} ${r.ticks}`).join("; ")} in ${seconds.toFixed(0)} s`);
 console.log(`largest play timeline: ${timelineSize.events} events, ${timelineSize.chars} chars exported, ${timelineSize.playHours.toFixed(2)} h of play`);
+console.log(`collections: ${[...gcAll].sort((a, b) => a[0] - b[0]).map(([k, v]) => `kind ${k} ${v.count} (${v.ms.toFixed(0)} ms)`).join(", ")}; ` +
+  `heap at the end ${(v8.getHeapStatistics().used_heap_size / 1048576).toFixed(0)} MiB`);
 console.log(`steps ${snapshot.steps}; mean ${r2(snapshot.step.mean)} ms, p50 ${r2(snapshot.step.p50)}, p99 ${r2(snapshot.step.p99)}, ` +
   `p99.9 ${r2(snapshot.step.p999)}, max ${r2(snapshot.step.max)}; over ${SLOW_STEP_MS} ms: ${snapshot.slow}; GC over 1 ms: ${gcs.length} (max ${r2(Math.max(0, ...gcs.map((g) => g.ms)))} ms)`);
 for (const [name, p] of Object.entries(snapshot.phases).sort((a, b) => b[1].max - a[1].max))
@@ -346,5 +354,5 @@ if (alloc) {
   }
 }
 const json = value("--json");
-if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, timelineSize, snapshot, slow, gcs }, null, 1) + "\n");
+if (json) fs.writeFileSync(json, JSON.stringify({ generated: new Date().toISOString(), heap, seconds, runs, timelineSize, gcAll: Object.fromEntries(gcAll), snapshot, slow, gcs }, null, 1) + "\n");
 process.exit(runs.some((r) => r.outcome === "blocked") ? 1 : 0);
