@@ -1109,3 +1109,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Findings:** P1 committed symlinks to external npm escape the grammar; P2 signal exits are unfaithful (TERM during the final step yields 0); P2 `test:heavy --machine any` breaks the v1 fallback. Also, STEW-2's guard wrappers would bring npm back inside the runner.
   - **Decisions:** a `realpath` boundary (repo sources and its own `node_modules`); faithful signal handling; the v1 parser accepts `--machine`; adopt `cgroup-scope.mjs`; quiet the queued-progress output.
   - **Merge order:** STEW-2 first, then SCHED-3 rebases and adds a guard-wrapper alias that expands `X:direct` under the grammar. R6 on the composed candidate is the install decision.
+- **LS-1 stage 1a R1 fixes done at `dd02c0e7`** (code `4593705d`):
+  - **Fixes:** the real Journal renders the shared model; one placement-aware `readableLog`; `waitFor` causes required at all 15 sites; per-gap debt rows with measured bounds, owners and a two-way ratchet; empty legs reported, not failed.
+  - **Vault:** the ridge vault is now a deduction door ("20··" stencilled plus "…9-3" on the slip; the full code is written nowhere).
+  - **New baseline:** Creel 50.6 min; carrier 94.2 min plus 50.8, 29.8 and 26.5 min gaps; 31 and 55 empty legs reported.
+  - **Checks:** fast 168, heavy, economy, build, playthrough 9/9.
+  - **Review:** short Sol R2 running (`siltwake-ls1-1a-review-r2-sol-dd02c0e`).
