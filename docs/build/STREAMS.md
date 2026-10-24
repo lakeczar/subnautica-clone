@@ -1043,3 +1043,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **PACE-1 started** (`siltwake-pace1-lategame-opus-8fe591f`, plan-first): bot artefacts versus structure, then logistics and content fixes with no padding.
 - **SCHED-3 R3 fixes done at `194dcdc8`** (code `0c684b50`): the portable runner (`portable-run.mjs`, `resolveScript`, `portableEnv`), `intentEnv`, and recovery `ran` from the start marker. B38–B40; all suites through the queue (49, 8, 27, 40, 23); fast on the 4070. Sol R4 running (`siltwake-sched3-review-r4-sol-194dcdc`).
 - **Builders:** CW-1, REC-1, SCHED-3, COL-1 (waiting), LS-1, STEW-2 (in review), PACE-1.
+- **Landmark passes go to REC-2** (LS-1's assessment):
+  - **Why not LS-1:** POI-1's noticeable-mark list lives in `tests/poi.test.ts`, and the landmark lights derive from render geometry the sim can't import. A proper reuse means lifting the list into one Babylon-free content module (light points precomputed from content or the bake), then adding a recorder "point of interest passed" event with a spatial index and throttled line of sight.
+  - **REC-2 brief:** lift, event, then re-measure, so the ratchet lowers.
+  - **LS-1's R1 fixes:** the debt ratchet fails when a route is better than recorded, and each row names its owner (PACE-1 logistics, REC-2 landmarks).
