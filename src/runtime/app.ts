@@ -30,6 +30,7 @@ import { regionAtPoint } from "../content/regions/layout.js";
 import { CONTENT_VERSION } from "../content/registry.js";
 import { DEFAULT_FLIGHT_SETTINGS, FlightCapture, flightMode, type FlightSettings } from "./flight/capture.js";
 import { gameSample, recordCommand, recordGameEvents, stageView, SurvivalWatch, TimelineReader } from "./flight/game.js";
+import { OwnerCheck } from "./flight/ownercheck.js";
 import { installTestHook, type HookRead } from "./flight/hooks.js";
 import { exposure } from "../sim/survival.js";
 import { BAKE_SOURCE } from "../render/bakeSource.js";
@@ -313,13 +314,7 @@ export class SiltwakeApp {
       freeze: (on) => { if (this.flight?.mode !== "driver") return; this.frozen = on; this.clock.reset(); this.dirty = true; },
       capture: () => this.flight,
       // R3b's within-run A/B: paused, the recorder costs what off does (no rows, samples, events, video or renderer timing).
-      pauseRecorder: (on) => {
-        if (!this.flight || new URLSearchParams(globalThis.location?.search ?? "").get("recmeasure") !== "1") return false;
-        this.flightPaused = on;
-        this.flight.pauseForMeasurement(on);
-        if (this.renderer) this.renderer.timing = !on;
-        return true;
-      },
+      pauseRecorder: (on) => this.pauseRecorder(on),
       stage: (v) => {
         if (this.flight?.mode !== "driver" || !this.state) return false;
         this.session.state = stageView(this.state, v);
@@ -472,6 +467,7 @@ export class SiltwakeApp {
   private frame(now: number): void {
     if (this.disposed) return;
     this.frameAt = now;
+    const frameStart = this.ownerCheck ? performance.now() : 0;
     // Frame timing for measurement harnesses only (CW-1 traversal): a page
     // that defines `__siltwakePerf` gets one entry per frame.
     const perf = (globalThis as { __siltwakePerf?: unknown[] }).__siltwakePerf;
@@ -495,6 +491,9 @@ export class SiltwakeApp {
     if (this.recording) this.recordFrame(now, presentEnd - started, simMs, steps, saveMs, hold?.state ?? this.holdNotEvaluated());
     if (perf) perf.push({ at: now, total: presentEnd - started, sim: simMs, steps, save: saveMs, present: presentEnd - presentStart,
       hud: this.lastHudMs, parts: this.renderer?.parts ?? null, hold: hold?.state ?? null });
+    this.ownerCheck?.frame(now, performance.now() - frameStart);
+    // The owner check starts once the player is in the world and the scene has had 20 s to settle.
+    if (!this.ownerCheckTried && this.active && this.flight && now - this.flightStartedAt > 20_000) { this.ownerCheckTried = true; this.startOwnerCheck(); }
     this.frameId = requestAnimationFrame((time) => this.frame(time));
   }
 
@@ -599,6 +598,7 @@ export class SiltwakeApp {
       this.flightTimeline.start(this.timeline);
       // The renderer's per-part timing and GPU timer queries feed the frame rows; `?rectiming=0` (measurement only) leaves them off.
       this.renderer.timing = new URLSearchParams(globalThis.location?.search ?? "").get("rectiming") !== "0";
+      this.flightStartedAt = performance.now();
     } catch (error) {
       console.warn(`flight recorder unavailable: ${errorText(error)}`);
       this.flight = null;
@@ -633,6 +633,34 @@ export class SiltwakeApp {
   /** Measurement only (R3b): the running recorder paused in place. */
   private flightPaused = false;
   private get recording(): FlightCapture | null { return this.flightPaused ? null : this.flight; }
+  /** Measurement only (`?recmeasure=1`): the recorder paused in place, so one page measures with and without it. */
+  private pauseRecorder(on: boolean): boolean {
+    if (!this.flight || new URLSearchParams(globalThis.location?.search ?? "").get("recmeasure") !== "1") return false;
+    this.flightPaused = on;
+    this.flight.pauseForMeasurement(on);
+    if (this.renderer) this.renderer.timing = !on;
+    return true;
+  }
+  /** The owner-PC check (`?rec=playtest&recmeasure=1&reccheck=SECONDS`, R3b): see flight/ownercheck.ts. */
+  private ownerCheck: OwnerCheck | null = null;
+  private ownerCheckTried = false;
+  private flightStartedAt = 0;
+  private startOwnerCheck(): void {
+    const q = new URLSearchParams(globalThis.location?.search ?? ""), seconds = Number(q.get("reccheck"));
+    if (!(seconds > 0) || q.get("recmeasure") !== "1" || this.flight?.mode !== "playtest") return;
+    const check = new OwnerCheck(seconds, (on) => { this.pauseRecorder(on); }, (report) => {
+      const blob = new Blob([JSON.stringify({ check: report, grid: check.grid, encoder: this.flight?.header.video ?? null,
+        browser: navigator.userAgent, platform: (navigator as { userAgentData?: { platform?: string } }).userAgentData?.platform ?? navigator.platform, at: new Date().toISOString() }, null, 1)], { type: "application/json" });
+      const url = URL.createObjectURL(blob), a = document.createElement("a");
+      a.href = url; a.download = "siltwake-recorder-check.json"; document.body.append(a); a.click(); a.remove();
+      window.setTimeout(() => URL.revokeObjectURL(url), 60_000);
+      this.view.notify("Recorder check finished: siltwake-recorder-check.json was downloaded.", false, { channel: "system" });
+      this.ownerCheck = null;
+    });
+    this.ownerCheck = check;
+    void check.askGrid();
+    this.view.notify(`Recorder check running for ${Math.round(seconds / 60)} min: please hold still and do not touch the controls.`, false, { channel: "system" });
+  }
 
   private async exportFlight(): Promise<void> {
     const capture = this.flight ?? this.flightDone;

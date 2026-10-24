@@ -427,3 +427,18 @@ test("R3b (owner policy): off Linux, no hardware encoder means no video, recorde
     assert.deepEqual(opens(worker).map((m) => [m.file, m.rungs[0]]), [["video/000.mkv", "h264-hw"]], "Windows with a hardware H.264 encoder records it");
   } finally { fakePlatform = "Linux x86_64"; hardwareEncoders = new Set(); }
 });
+
+test("R3b owner-PC check: the recorder paused on/off/off/on every 10 s, paired windows, one report at the end", async () => {
+  const { OwnerCheck } = await import("../src/runtime/flight/ownercheck.js");
+  const paused: boolean[] = [];
+  let report: { pairs: number; meanMs: number; ci95: [number, number]; windows: { on: boolean }[] } | null = null;
+  const check = new OwnerCheck(80, (on) => paused.push(on), (r) => { report = r as typeof report; });
+  // 80 s at 60 fps: frames cost 2.0 ms with the recorder on, 1.8 ms paused.
+  let t = 0;
+  for (let i = 0; i < 80 * 60 + 120 && !report; i++, t += 1000 / 60) check.frame(t, paused.at(-1) ? 1.8 : 2.0);
+  assert.ok(report, "the report came at the end");
+  assert.deepEqual(report!.windows.map((w) => w.on), [true, false, false, true, true, false, false, true]);
+  assert.equal(report!.pairs, 4);
+  assert.ok(Math.abs(report!.meanMs - 0.2) < 1e-6, String(report!.meanMs));
+  assert.equal(paused.at(-1), false, "the recorder is left running");
+});
