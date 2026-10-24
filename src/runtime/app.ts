@@ -493,10 +493,22 @@ export class SiltwakeApp {
     if (!meta || !this.state) { this.view.timelineRepair(false); return; }
     let storage: Storage | null = null;
     try { storage = window.localStorage; } catch { /* memory only */ }
+    // What opening says is delivered once entry is complete (after the session's own entry notices),
+    // so a protection or memory-only warning is the one left showing (SIM-1b R1 F5).
+    const opening: [string, boolean][] = [];
+    let opened = false;
+    const say = (message: string, error: boolean): void => {
+      if (!opened) opening.push([message, error]);
+      else if (!this.disposed) this.view.notify(message, error, { channel: "system" });
+    };
     this.live = LiveTimeline.open(storage, this.writerLock, { id: meta.sessionId, started: meta.createdAt, build: CONTENT_VERSION },
-      { regionAt: (x: number, z: number) => regionAtPoint(x, z) },
-      (message, error) => { if (!this.disposed) this.view.notify(message, error, { channel: "system" }); },
+      { regionAt: (x: number, z: number) => regionAtPoint(x, z) }, say,
       () => { if (!this.disposed) this.view.timelineRepair(this.live?.protected ?? false); });
+    const live = this.live;
+    queueMicrotask(() => {
+      opened = true;
+      if (this.live === live) for (const [message, error] of opening) say(message, error);
+    });
     this.view.timelineRepair(this.live.protected);
     this.timelineSaved = this.state.tick;
   }

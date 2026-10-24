@@ -367,7 +367,7 @@ test("SIM-1b R1-F5: the protection warning survives expedition entry: New, Conti
         view.actions.confirm(); await settled();
         if (entry === "session-only") { assert.match(app.session.confirmation?.title ?? "", /without local saving/); view.actions.confirm(); f.storage.failWrite = false; }
       }
-      f.frames();
+      await settled(); f.frames();
       assert.equal(app.live.protected, true, entry);
       const shown = [hud.presentation.central?.message, hud.presentation.status?.message].filter(Boolean).join(" | ");
       assert.match(shown, /play-timeline store can't be read.*memory only/, `${entry}: the warning is still shown (${shown})`);
