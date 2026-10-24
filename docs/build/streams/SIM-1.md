@@ -130,7 +130,12 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
   - Regressions (`timeline-store.test.ts`): complete, otherwise-valid records with one wrong field, covering sixteen fields in an ordinary event and in a kept event, plus four bad stretch members. A fresh reader protects with zero mutations. The open writer's fold of a damaged event chunk refuses with zero mutations, and a commit that doesn't touch a damaged summary leaves it byte for byte.
   - Control: a timeline with every optional field well formed and a repeated note reloads whole.
 - **F2 (P2), the harness wasn't independent and missed boundaries.** `tests/timeline-model-support.ts` is rewritten.
-  - **An independent oracle:** the harness keeps its own model of what is committed: which expedition each head holds, a pending v1 record, each expedition's notes (save references included), and its analysis totals and pending recoveries. It checks storage against its own lenient decoding of the raw JSON, never the production parsers. A commit's expected next state, drops and reports come from the model alone. The removal guard reads the stored journal leniently, so a head whose session and chunk numbers still read keeps its keys even when it is malformed.
+  - **An independent oracle, with two exceptions:** the harness keeps its own model of what is committed: which expedition each head holds, a pending v1 record, each expedition's notes (save references included), and its analysis totals and pending recoveries. It checks storage against its own lenient decoding of the raw JSON, never the production parsers. A commit's expected next state, drops and reports come from the model alone. The removal guard reads the stored journal leniently, so a head whose session and chunk numbers still read keeps its keys even when it is malformed.
+    - **Exceptions:**
+      - the analysis totals compared across a reload come from production `analyseTimeline` on both sides, so they check that a reload matches its commit, not that the analysis is right;
+      - a reload's `seq` is checked only against the commit's result, as that `seq` plus zero to two closing spans (R3), not re-derived independently.
+
+      The targeted store tests check `seq` exactly.
   - **Targeted damage:** corruption records its key, its damaged bytes and the original. While damage is live:
     - every fresh reader must protect;
     - the damaged bytes may change, or leave the journal, only through a committed repair;
@@ -164,7 +169,7 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
     - a failed quota commit legitimately folds stored chunks (the same history), which sums per-hull minutes in another order and lists tied stretches apart.
 
     Totals are now compared canonically.
-- **F3 (P2), a timeline warning suppressed urgent hazards.** A timeline storage warning keeps its own identity (`persistence` channel, `timeline` context), but now ranks 2.5: below hazard captions (3) and game-save warnings (4). When something more urgent takes the central caption, the warning moves to the status line, which already exists, for the rest of its 12-second lifetime, styled as a warning. One that arrives while a higher caption shows goes straight there. A routine confirmation doesn't push it off; it expires or is resolved.
+- **F3 (P2), a timeline warning suppressed urgent hazards.** A timeline storage warning keeps its own identity (`persistence` channel, `timeline` context), but now ranks 2.5 (1.5 since R3): below hazard captions (3) and game-save warnings (4). When something more urgent takes the central caption, the warning moves to the status line, which already exists, for the rest of its 12-second lifetime, styled as a warning. One that arrives while a higher caption shows goes straight there. A routine confirmation doesn't push it off; it expires or is resolved.
   - Regressions (`timeline-app.test.ts`), using the real `EncounterPresentation`:
     - the chimney-lip ecology caption, before and after a timeline warning;
     - a game-save failure, before and after one;
@@ -175,6 +180,9 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
   - **What resolves:** a repair that commits, a "Note saved", and a new "The play timeline is saved again." after a retryable failure.
   - **What doesn't:** a game save's success still never resolves a timeline warning, and a timeline success never resolves a game-save warning.
   - Regressions: both directions in the presentation, the success after a refused commit with the live cue showing, and a repair in the app that clears its protection warning.
+
+- **R3 (Sol 6.1 xhigh, on `16961a67`), F1 (P2): a timeline warning (2.5) still hid general system errors.** A failed import ("This file is not valid JSON…", "could not be read…", "exceeds the 1 MiB save limit…") was dropped in both arrival orders. The warning now ranks 1.5, below general errors (2), hazards (3) and game-save warnings (4), and "Calls fading" replaces it too. Its own resolution identity is unchanged; when outranked, it waits on the status line.
+  - Regressions (`timeline-app.test.ts`): all three real failed-import paths, in both arrival orders. A protected store's warning comes first, or a refused timeline commit comes after the import. The import error is the central caption and the timeline warning is on the status line. A presentation test covers each outranking kind in both orders.
 
 **Mutant detection, at `80b11146`:** the self-check, via the queue on `--machine 4070`. The review's mutants are Sol's `mutations.mjs` patches, unchanged, on the same anchors. Three are new: a read that rewrites identical bytes, R2-F1's validator reverted, and the old resume.
 

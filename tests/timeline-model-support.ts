@@ -329,8 +329,10 @@ interface Model {
   durable: Map<string, string[]>;
   /** Analysis totals and pending recoveries at the last commit, as JSON. */
   totals: Map<string, string>;
+  /** The recorder sequence each commit made durable; a reload's is that plus the commit's closing spans (0–2). */
+  seqs: Map<string, number>;
 }
-const copyModel = (m: Model): Model => ({ ...m, durable: new Map(m.durable), totals: new Map(m.totals) });
+const copyModel = (m: Model): Model => ({ ...m, durable: new Map(m.durable), totals: new Map(m.totals), seqs: new Map(m.seqs) });
 const held = (m: Model): Set<string> => new Set([m.current, m.previous, m.v1].filter((x): x is string => x !== null));
 const keyOf = (n: Note): string => `${n.text}${n.ref !== undefined ? ` @${n.ref}` : ""}`;
 const game = (): GameState => { const s = createGame(); completeOpening(s); return s; };
@@ -352,7 +354,7 @@ const eq = (a: readonly string[], b: readonly string[]): boolean => a.length ===
 /** Plays one script; returns the first broken invariant, if any. */
 export async function runScript(script: Script): Promise<ModelResult> {
   const storage = new FuzzStorage(), queue = new LockQueue(storage), log: string[] = [`${script.name}: v1 ${script.v1}, start ${script.start}`];
-  let model: Model = { current: null, previous: null, v1: null, superseded: false, durable: new Map(), totals: new Map() };
+  let model: Model = { current: null, previous: null, v1: null, superseded: false, durable: new Map(), totals: new Map(), seqs: new Map() };
   let damage: Damage[] = [];
   let counter = 0, step = -1;
   const fail = (failure: string): ModelResult => ({ ok: false, name: script.name, steps: script.ops.length, failure: `step ${step}: ${failure}`, log });
@@ -373,7 +375,7 @@ export async function runScript(script: Script): Promise<ModelResult> {
     for (let i = 0; i < 1 + (counter % 30); i++) { addNote(rec, s, `v1 ${id} ${i}`); notes.push(`v1 ${id} ${i}`); }
     for (let i = 0; i < 1200; i++) { s.tick += 5; rec.playTicks += 5; recordEvent(rec, s, richEvent(i, s.tick)); }
     storage.force(V1, serializeTimeline({ ...exportTimeline(rec, s), version: 1 }));
-    model.v1 = id; model.durable.set(id, notes.sort()); model.totals.set(id, totalsOf(rec, s));
+    model.v1 = id; model.durable.set(id, notes.sort()); model.totals.set(id, totalsOf(rec, s)); model.seqs.set(id, rec.seq);
   } else if (script.v1 === "broken" || script.v1 === "hostile") {
     const value = script.v1 === "broken" ? "{broken v1" : BAD_V1[0]!;
     storage.force(V1, value);
@@ -427,7 +429,7 @@ export async function runScript(script: Script): Promise<ModelResult> {
       const bad = reports(r.dropped, others[0] ?? null, others[1] ?? null);
       if (bad) return bad;
       model = copyModel(M);
-      for (const id of others) { model.durable.delete(id); model.totals.delete(id); }
+      for (const id of others) { model.durable.delete(id); model.totals.delete(id); model.seqs.delete(id); }
       model.current = want[0]; model.previous = want[1];
       return null;
     }
@@ -453,13 +455,14 @@ export async function runScript(script: Script): Promise<ModelResult> {
     const bad = reports(r.dropped, room.length ? expected : null, displaced);
     if (bad) return bad;
     model = copyModel(M);
-    if (displaced) { model.durable.delete(displaced); model.totals.delete(displaced); }
-    if (P === null && expected !== null && !migrating) { model.durable.delete(expected); model.totals.delete(expected); }
+    if (displaced) { model.durable.delete(displaced); model.totals.delete(displaced); model.seqs.delete(displaced); }
+    if (P === null && expected !== null && !migrating) { model.durable.delete(expected); model.totals.delete(expected); model.seqs.delete(expected); }
     if (M.v1 !== null && (M.v1 === S || P === M.v1)) model.v1 = null;
     model.superseded = M.superseded || (M.v1 !== null && (M.v1 === S || P === M.v1));
     model.current = S; model.previous = P;
     model.durable.set(S, tab.notes.filter((n) => n.seq <= r.seq).map(keyOf).sort());
     model.totals.set(S, totalsOf(tab.rec, tab.s));
+    model.seqs.set(S, r.seq);
     return null;
   };
   /** The drop reports match the expeditions that went: `room` dropped for space, `displaced` replaced. */
@@ -629,7 +632,7 @@ export async function runScript(script: Script): Promise<ModelResult> {
             let bad = traceProblem(preDamage);
             if (r.ok) {
               model = { current: tab.session, previous: null, v1: null, superseded: true,
-                durable: new Map([[tab.session, tab.notes.filter((n) => n.seq <= r.seq).map(keyOf).sort()]]), totals: new Map([[tab.session, totalsOf(tab.rec, tab.s)]]) };
+                durable: new Map([[tab.session, tab.notes.filter((n) => n.seq <= r.seq).map(keyOf).sort()]]), totals: new Map([[tab.session, totalsOf(tab.rec, tab.s)]]), seqs: new Map([[tab.session, r.seq]]) };
               damage = [];
               active = tab;
             } else {
@@ -798,6 +801,8 @@ export async function runScript(script: Script): Promise<ModelResult> {
       if (!eq(got, want)) return `${id} reloads ${got.length} notes, ${want.length} committed`;
       const totals = model.totals.get(id);
       if (totals !== undefined && totalsOf(l.recorder, s) !== totals) return `${id} reloads other totals or pending recoveries than it committed`;
+      const seq = model.seqs.get(id);
+      if (seq !== undefined && !(l.recorder.seq >= seq && l.recorder.seq <= seq + 2)) return `${id} reloads seq ${l.recorder.seq}, committed ${seq} (plus up to two closing spans)`;
     }
     return null;
   }

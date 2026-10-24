@@ -18,7 +18,7 @@ import type { WriterLockPort } from "../src/save/writer-lock.js";
 
 // The real HUD, loaded before the loader redirects app.ts's view imports to the test double.
 import { HudView } from "../src/ui/hud.js";
-import { EncounterPresentation, NOTICE_SECONDS } from "../src/ui/notices.js";
+import { EncounterPresentation, NOTICE_SECONDS, TIMELINE_PRIORITY } from "../src/ui/notices.js";
 import { cueHome, miteScatter } from "../src/sim/ecology/cues.js";
 import { completeOpening } from "../src/sim/progression.js";
 register("./app-loader.js", import.meta.url);
@@ -520,4 +520,47 @@ test("SIM-1b R2-F4: a successful repair resolves the protection warning in the a
     assert.equal(hud.presentation.central, null, "the obsolete warning is resolved");
     assert.equal(hud.presentation.status?.message, "The local play-timeline store was replaced. This expedition's timeline is saved again.");
   } finally { hud.restore(); app.dispose(); f.restore(); }
+});
+
+const FAILED_IMPORTS = [
+  { label: "invalid JSON", file: { size: 4, text: async () => "{bad" }, message: /not valid JSON/ },
+  { label: "an unreadable file", file: { size: 10, text: async (): Promise<string> => { throw new Error("read failed"); } }, message: /could not be read/ },
+  { label: "an oversize file", file: { size: 2 * 1024 * 1024, text: async () => "" }, message: /exceeds the 1 MiB save limit/ },
+];
+for (const order of ["timeline warning first", "failed import first"] as const)
+  test(`SIM-1b R3-F1: a failed import's error stays readable beside a timeline warning (${order})`, async () => {
+    for (const { label, file, message } of FAILED_IMPORTS) {
+      const f = browserFixture();
+      if (order === "timeline warning first") f.storage.setItem(TIMELINE_JOURNAL_KEY, "{bad");
+      const hud = realHud();
+      const app = await newGame(f);
+      try {
+        if (order === "timeline warning first") {
+          assert.equal(hud.presentation.central?.context, "timeline", `${label}: the protection warning shows`);
+          await app.session.importFile(file); await settled(); f.frames();
+        } else {
+          await app.session.importFile(file); await settled(); f.frames();
+          const write = f.storage.setItem.bind(f.storage);
+          f.storage.setItem = (k: string, v: string) => { if (k === TIMELINE_JOURNAL_KEY) throw new DOMException("full", "QuotaExceededError"); write(k, v); };
+          await saveTimeline(app);
+          f.storage.setItem = write;
+        }
+        assert.match(hud.presentation.central?.message ?? "", message, `${label}: the import error is the central caption`);
+        assert.equal(hud.presentation.status?.context, "timeline", `${label}: the timeline warning is on the status line`);
+        assert.match(hud.presentation.status?.message ?? "", /play-timeline store can't be read|play timeline couldn't be saved/, label);
+      } finally { hud.restore(); app.dispose(); f.restore(); }
+    }
+  });
+
+test("SIM-1b R3-F1: the timeline warning ranks below general errors, hazards and game-save warnings, in both arrival orders", () => {
+  for (const [name, error, options] of [["general error", true, { channel: "system" }], ["hazard", false, { channel: "hazard", context: "ecology" }],
+    ["game-save warning", true, { channel: "persistence" }]] as const)
+    for (const timelineFirst of [true, false]) {
+      const p = new EncounterPresentation();
+      const timeline = () => p.notify("The play timeline is in memory only for now.", true, TIMELINE_WARNING, 0);
+      if (timelineFirst) { timeline(); p.notify(name, error, options, 1); } else { p.notify(name, error, options, 0); timeline(); }
+      assert.equal(p.central?.message, name, `${name}, ${timelineFirst ? "timeline first" : "timeline second"}`);
+      assert.equal(p.status?.context, "timeline", name);
+    }
+  assert.ok(TIMELINE_PRIORITY < 2, "below a general error's priority");
 });

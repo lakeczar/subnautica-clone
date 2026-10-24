@@ -7,8 +7,9 @@ import type { GameEvent, GameState, NoticeContext, NoticeOptions, Vec3 } from ".
 // saved state is involved. Ongoing danger remains in the separate hazard area.
 export const NOTICE_SECONDS = { action: 2.5, refusal: 4, hazard: 6, error: 12, system: 3, release: 2.5, call: 3 } as const;
 export const DAMAGE_SECONDS = { aftermath: 3, pulse: 1 } as const;
-/** Central priority of a play-timeline storage warning: below hazards (3) and game-save warnings (4). */
-export const TIMELINE_PRIORITY = 2.5;
+/** Central priority of a play-timeline storage warning: below hazards (3), game-save warnings (4)
+ * and general errors (2), such as a failed import (SIM-1b R3); one outranked waits on the status line. */
+export const TIMELINE_PRIORITY = 1.5;
 export type ThreatDamage = Extract<GameEvent, { type: "threat-damage" }>;
 export type DamageTarget = ThreatDamage["target"];
 export interface DamageFeedback {
@@ -86,7 +87,7 @@ export class EncounterPresentation {
       return;
     }
     const timeline = channel === "persistence" && options.context === "timeline";
-    // The play timeline's storage warning yields to urgent hazards and to game-save warnings.
+    // The play timeline's storage warning yields to hazards, game-save warnings and general errors.
     const priority = timeline ? TIMELINE_PRIORITY : channel === "persistence" ? 4 : channel === "hazard" ? 3 : error ? 2 : 1;
     const wall = channel === "persistence" || error && channel !== "hazard";
     const expiresAt = wall ? now + NOTICE_SECONDS.error * 1000 : null;
