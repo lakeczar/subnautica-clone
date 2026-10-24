@@ -7,12 +7,13 @@ const runs = process.argv.slice(2).flatMap(dir => readdirSync(dir).filter(f => /
   .map(f => ({ dir, ...JSON.parse(readFileSync(path.join(dir, f), "utf8")) })))
   .sort((a, b) => a.dir.localeCompare(b.dir) || a.segment - b.segment);
 const s = (v) => v == null ? "–" : String(v);
-console.log("| Run | Commit | Caves reached | Minutes | Frames | p50 / p95 / p99 / max ms | Gaps > 33 ms | Streaming > 34 ms (GC-shaped) | Holds | Unsliced in travel (at load) | Dark cave frames | Gate |");
-console.log("|---|---|---|---|---|---|---|---|---|---|---|---|");
+console.log("| Run | Commit | Caves reached | Minutes | Frames | p50 / p95 / p99 / max ms | Gaps > 33 ms | Streaming > 34 ms (GC-shaped) | Over 34 ms after stolen time: host / mixed / clean (streaming ours) | Holds | Unsliced in travel (at load) | Dark cave frames | Gate |");
+console.log("|---|---|---|---|---|---|---|---|---|---|---|---|---|");
 for (const r of runs) {
   const f = r.frames ?? {}, l = r.longByCause ?? {}, g = r.gate ?? {};
   console.log(`| ${path.basename(r.dir)} #${r.segment} | ${r.commit} | ${r.reached.length}/${r.reached.length + r.skipped.length} | ${s(r.seconds && (r.seconds / 60).toFixed(1))} | ${s(f.count)} | ` +
-    `${s(f.p50)} / ${s(f.p95)} / ${s(f.p99)} / ${s(f.max)} | ${s(f.over33)} | ${s(l.streamingOver34)}${l.streamingGcShaped != null ? ` (${l.streamingGcShaped})` : ""} | ${s(r.holdFrames)} | ` +
+    `${s(f.p50)} / ${s(f.p95)} / ${s(f.p99)} / ${s(f.max)} | ${s(f.over33)} | ${s(l.streamingOver34)}${l.streamingGcShaped != null ? ` (${l.streamingGcShaped})` : ""} | ` +
+    `${l.host != null ? `${l.host} / ${l.mixed} / ${l.clean}${l.unsampled ? ` (+${l.unsampled} unsampled)` : ""} (${l.streamingOurs})` : "–"} | ${s(r.holdFrames)} | ` +
     `${s(g.travelSync)} (${s(g.loadSync)}) | ${s(g.travelLightPending)} | ${g.pass ? "pass" : "**fail**"} |`);
 }
 // Every streaming sub-part, separately: the worst p99 and max over the runs (ms).
