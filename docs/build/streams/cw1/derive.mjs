@@ -10,7 +10,7 @@
 // usage: node derive.mjs <repo> <outdir> [segments | hops] [cave,...]
 // Deep caves (mouths below the Dart's 350 m): CW1_SAVE=canopy-over-geared
 // CW1_HULL=creel CW1_DEEPEST=-790 tours them in the 800 m Creel.
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, mkdirSync, openSync, readFileSync, utimesSync, writeFileSync } from "node:fs";
 import { execFileSync } from "node:child_process";
 import path from "node:path";
 const [repo, out, segArg, onlyArg] = process.argv.slice(2), B = path.join(repo, ".test-build/");
@@ -18,6 +18,14 @@ const [repo, out, segArg, onlyArg] = process.argv.slice(2), B = path.join(repo, 
 const ONLY = onlyArg ? new Set(onlyArg.split(",")) : null;
 const SEGMENTS = segArg === "hops" ? 0 : Number(segArg ?? 8);
 mkdirSync(out, { recursive: true });
+// Long A* work prints nothing: tell the heavy-check job we are alive (at most every 30 s).
+let beatAt = 0;
+const beat = () => {
+  const f = process.env.SILTWAKE_JOB_HEARTBEAT, t = Date.now();
+  if (!f || t - beatAt < 30000) return;
+  beatAt = t;
+  try { utimesSync(f, t / 1000, t / 1000); } catch { closeSync(openSync(f, "a")); }
+};
 const { CAVE_SOURCES } = await import(B + "src/content/regions/caves.js");
 const { worldFloor } = await import(B + "src/content/regions/worldFloor.js");
 const { gameWorld, hullClearance, hullFloor, sweptHullClearance } = await import(B + "src/sim/world.js");
@@ -192,6 +200,7 @@ function plan(a, b, movableGoal) {
   for (const n of near(a)) if (startClear ? sweeps(a, pos(n)) : d3(a, pos(n)) <= 12 * 1.8) { g.set(n, d3(a, pos(n))); from.set(n, -1); open.push([g.get(n) + d3(pos(n), b), n]); }
   let found = -1, expanded = 0;
   while (open.length && expanded < 60000) {
+    if ((expanded & 1023) === 0) beat();
     let bi = 0; for (let j = 1; j < open.length; j++) if (open[j][0] < open[bi][0]) bi = j;
     const [, n] = open[bi]; open[bi] = open[open.length - 1]; open.pop(); expanded++;
     if (goals.has(n)) { found = n; break; }
@@ -285,18 +294,22 @@ const MARGIN = 15;
 const d3 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z);
 const nearestSite = (p) => SITES.reduce((b, s) => !b || d3(p, s) < d3(p, b) ? s : b, null);
 function withService(seg) {
-  let charge = POWER.charge, called = -Infinity;
+  // At most one call before any planned point: a leg that a full battery
+  // cannot cover is flown as planned (the reserve cells and the ledger cover it).
+  const calledFor = new Set();
+  let charge = POWER.charge;
   for (let i = 1; i < seg.length; i++) {
-    if (seg[i].service) { charge = 100; called = i; continue; }
+    beat();
+    if (seg[i].service) { charge = 100; continue; }
     const cost = d3(seg[i - 1], seg[i]) * POWER.boostPerMetre, site = nearestSite(seg[i]);
     const after = charge - cost - (site ? d3(seg[i], site) * 1.5 * POWER.boostPerMetre : 0);
-    // Fresh from a call, a leg is flown as planned (no call loop on one long leg).
-    if (after >= MARGIN || !SITES.length || i - called < 8) { charge -= cost; continue; }
+    if (after >= MARGIN || !SITES.length || seg[i].call || calledFor.has(seg[i])) { charge -= cost; continue; }
+    calledFor.add(seg[i]);
     const here = nearestSite(seg[i - 1]);
     // A call at the site, then back to where the route left off.
-    const call = repair([{ ...seg[i - 1] }, { x: here.x, y: here.y, z: here.z, service: here.id }, { ...seg[i - 1], cave: undefined, cruise: true }]).slice(1);
+    const call = repair([{ ...seg[i - 1] }, { x: here.x, y: here.y, z: here.z, service: here.id, tol: 3 }, { ...seg[i - 1], cave: undefined, cruise: true }]).slice(1)
+      .map(q => q.service ? q : { ...q, call: true });
     seg.splice(i, 0, ...call);
-    charge -= d3(seg[i - 1], seg[i]) * POWER.boostPerMetre;
     i--; // the next leg is to the first point of the call
   }
   return seg;
