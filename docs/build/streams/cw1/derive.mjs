@@ -314,6 +314,10 @@ function withService(seg) {
   }
   return seg;
 }
+// No leg longer than 150 m (a berth exit can carry the tour's first long
+// leg), so the power check sees the route as flown and a call lands where it
+// is needed; the new corners are swept and repaired like any other.
+for (let k = 0; k < segments.length; k++) segments[k] = repair(densify(segments[k]));
 if (SITES.length) for (const seg of segments) withService(seg);
 reportBlocked();
 // Every segment's save is the library save itself, unedited.

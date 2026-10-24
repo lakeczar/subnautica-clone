@@ -277,7 +277,9 @@ try {
   let caveIndex = 0;
   for (const [i, p] of points.entries()) {
     if (i === 0) continue;
-    const ok = await goto(p, { tol: p.tol ?? (p.cave ? 4 : 7), label: p.cave ?? p.view ?? `cruise#${i}`, boost: !(p.view || p.tol), from: points[i - 1] });
+    // At least 100 s a leg, more for a long one (3 m/s made good).
+    const q = points[i - 1], metres = Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z);
+    const ok = await goto(p, { tol: p.tol ?? (p.cave ? 4 : 7), label: p.cave ?? p.view ?? `cruise#${i}`, boost: !(p.view || p.tol), from: q, timeout: Math.max(100, metres / 3) });
     if (p.service) await panelAction(/^(Service|Charge at)/, `call at ${p.service}${ok ? "" : " (not reached)"}`);
     if (p.view) {
       if (p.surface) await rise();
