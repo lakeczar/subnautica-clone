@@ -120,7 +120,7 @@ The before-tree's slow steps were the game's, and are gone after: `carrier-fitou
 ## Checks
 - **Fast tier:** passed at `36dabcf3`, 148 files including the typecheck and the architecture guard (alickers, `261024-093422-d448`). New tests: `hazard-sampling` (the exact reference), `warmup` (no trace), the repository's record reuse and `warmCommit`, and the occupied hosts.
 - **Determinism:** the differential and the cross-commit playthroughs above, at `36dabcf3`.
-- **Build and the six economy checks:** PENDING-GATE.
+- **The rest of the merge gate's manifest** at `db1ef8a2` (game code as `36dabcf3`; alickers, `261024-141742-21a0`): the fast tier again (148 files), `npm run build` (typecheck, headless typecheck, terrain bake, production build), and all six economy checks (`check-campaign-economy`, `check-m1-economy`, `check-m2-a-economy`, `check-m2-b1-economy`, `check-progression-curve`, `upgrade-economy`): every one passed. The playthroughs are the eight above.
 
 ## Missing evidence
 - **A clean 3090 browser frame-time run:** both exclusive traversals are `DISTURBED` (steal 5.4% and 7% in their worst windows); their frame times aren't performance evidence, only the classification is.
