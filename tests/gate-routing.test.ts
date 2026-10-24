@@ -121,7 +121,10 @@ test("--machine moves the batch too; --list shows it", () => {
   assert.deepEqual(submitted()[0]!.slice(0, 5), ["--class", "standard", "--machine", "4070", "--review"]);
   assert.match(r.stdout, /^ {2}pass {2}economy:m2-a /m, r.stdout + r.stderr);
   assert.equal(r.status, 0, r.stdout);
-  const list = spawnSync(process.execPath, ["scripts/gate.mjs", "--list"], { encoding: "utf8" }).stdout;
+  // An agent's environment: the fast tier's own NODE_OPTIONS would (rightly) pin the listing to the 3090.
+  const clean: NodeJS.ProcessEnv = { ...process.env };
+  for (const k of Object.keys(clean)) if (k.startsWith("SILTWAKE_") || k === "NODE_OPTIONS") delete clean[k];
+  const list = spawnSync(process.execPath, ["scripts/gate.mjs", "--list"], { encoding: "utf8", env: clean }).stdout;
   assert.match(list, /local steps, on factory-worker \(anywhere the local-run guard doesn't admit them\), all in one job:\n.*submit --class standard --machine any --review -- node scripts\/gate\.mjs --batch/);
 });
 
