@@ -57,9 +57,9 @@ test("tech, creatures, cycles and decodes fill from state and the slots", () => 
   swimTo(s, SPOTS.a);
   deployOutpost(s, sys, id, SPOTS.a, siteTable({ ventDistance: 2 }));
   installModule(s, sys, id, "s0", give(s, "mod_decoder"));
-  discoverSite(sys, "demo_relay_hut");
-  discoverSite(sys, "demo_survey_cairn");
-  startDecode(s, sys, id, "demo_hut_fragment");
+  discoverSite(sys, "reef_pumphouse_site");
+  discoverSite(sys, "canopy_basket_site");
+  startDecode(s, sys, id, "reef_pumphouse_log");
   const j = buildJournal(s, sys, {
     creatures: [{ id: "demo_grazer", label: "Ledge grazer", region: "refuge_reef", behaviour: "Scrapes algae from glass ledges.", danger: "harmless" }],
     cycles: [{ id: "demo_pulse", label: "Vent pulse", region: "thermal_rift", periodSeconds: 240, windowSeconds: 40, alternative: "the cool flank route" }],
@@ -72,9 +72,9 @@ test("tech, creatures, cycles and decodes fill from state and the slots", () => 
   assert.match(entries(j, "cycles")[0]!.subtitle, /Ember Rift · every 4 min · lasts 40 s/);
   const dec = tab(j, "decodes");
   assert.deepEqual(dec.sections.map((x) => x.id), ["running", "found"]);
-  assert.match(dec.sections[0]!.entries[0]!.subtitle, /Decoding · 0% · 3 min left/);
+  assert.match(dec.sections[0]!.entries[0]!.subtitle, /Decoding · 0% · 6 min left/);
   assert.match(dec.sections[1]!.entries[0]!.subtitle, /Unreadable · about 6 min/);
   assert.ok(searchJournal(j, "grazer").some((r) => r.tab === "creatures"));
-  assert.ok(searchJournal(j, "relay hut").some((r) => r.tab === "decodes"));
+  assert.ok(searchJournal(j, "pump house").some((r) => r.tab === "decodes"));
   assert.deepEqual(searchJournal(j, "  "), []);
 });

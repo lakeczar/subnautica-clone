@@ -8,7 +8,7 @@ import { ITEMS, MATERIALS, RECIPES, SOURCES } from "../src/content/registry.js";
 import type { HullId, SourceId } from "../src/content/registry.js";
 import { UPGRADES } from "../src/content/upgrades/catalogue.js";
 import type { UpgradeId } from "../src/content/upgrades/catalogue.js";
-import { LOST_SITES, DECODABLES } from "../src/content/systems/decodes.js";
+import { LOST_SITES } from "../src/content/systems/decodes.js";
 import { addItem, containerAccessible, podContainerId } from "../src/sim/inventory.js";
 import { makeVehicle } from "../src/sim/state.js";
 import { executeCommand, stepGameInPlace } from "../src/sim/step.js";
@@ -77,7 +77,7 @@ test("Dart wide-sweep sonar: a loud, charged sweep marks cave openings in range 
   saveable(out.state);
 });
 
-test("Dart range tagger: a steady 1.5 s aim captures a lost site's data from 40 m; a drifting aim loses it", () => {
+test("Dart range tagger: a steady 1.5 s aim marks a lost site from 40 m without capturing its data (LS-1); a drifting aim loses it", () => {
   const site = LOST_SITES.reef_pumphouse_site.position;
   const s = creelFirst(), p = { x: site.x + 40, y: site.y, z: site.z };
   withHull(s, "dart", p, ["dart_range_tagger"]);
@@ -89,8 +89,8 @@ test("Dart range tagger: a steady 1.5 s aim captures a lost site's data from 40 
   const events = run(t, 1.6);
   const done = signature(events).find((e) => e.kind === "tag" && e.phase === "done");
   assert.ok(done, "the tag completes");
-  const mine = Object.entries(DECODABLES).filter(([, d]) => d.site === "reef_pumphouse_site").map(([id]) => id);
-  assert.ok(mine.every((d) => (t.systems.found as string[]).includes(d)), "the site's records are found, from range");
+  assert.equal(t.systems.found.length, 0, "seeing is not capturing: the data waits at the logger");
+  assert.ok(t.systems.beacons.some((b) => b.id === "tag:reef_pumphouse_site" && b.category === "site"), "the site is marked on the chart");
   saveable(t);
 
   const drift = act(s, "tag").state;

@@ -1,8 +1,9 @@
 /** The decoder and lost-site framework. Sites are found by visiting them; their
  * data then decodes in the background on a powered decoder module. Without a
  * relay a decoder works only while the player is near its host. */
-import { DECODABLE_IDS, DECODABLES, DECODE_MINUTES, DECODER_LOCAL_RANGE, MAIN_PATH_PLANS } from "../../content/systems/decodes.js";
-import type { DecodableDefinition, DecodableId, MainPathStep } from "../../content/systems/decodes.js";
+import { CODED_DOORS, DECODABLE_IDS, DECODABLES, decodeLog, DECODE_MINUTES, DECODER_LOCAL_RANGE, DOOR_IDS, doorPlaced, placedReveals } from "../../content/systems/decodes.js";
+import type { DecodableDefinition, DecodableId, LostSiteId, RevealDefinition } from "../../content/systems/decodes.js";
+import { LOST_SITES } from "../../content/systems/decodes.js";
 import { moduleOfItem } from "../../content/systems/hosts.js";
 import type { BlueprintId } from "../../content/registry.js";
 import { distance } from "../inventory.js";
@@ -30,12 +31,45 @@ export function discoverSite(sys: SystemsState, siteId: string): DecodableId[] {
 export function recordReadable(sys: SystemsState, recordId: string): boolean {
   return DECODABLE_IDS.every((d) => !(DECODABLES[d].gates as readonly string[]).includes(recordId) || sys.decoded.includes(d));
 }
-/** Sites known on the chart: found by visiting, or revealed by a decoded map. */
-export function knownSites(sys: SystemsState): string[] {
-  const found = sys.found.map((d) => DECODABLES[d].site);
-  const revealed = sys.decoded.flatMap((d) => DECODABLES[d].reveals.filter((r) => r.category === "site").map((r) => r.id));
+/** Every placed reveal the player's decoded maps hold, decode order then reveal order. */
+export const decodedReveals = (sys: SystemsState): RevealDefinition[] => sys.decoded.flatMap((d) => [...placedReveals(d)]);
+/** Lost sites known on the chart: found by visiting, or revealed by a decoded map
+ * that names them. Site IDs only (LS-1: a reveal's own ID is a beacon, not a site). */
+export function knownSites(sys: SystemsState): LostSiteId[] {
+  const found = sys.found.map((d) => DECODABLES[d].site as LostSiteId);
+  const revealed = decodedReveals(sys).flatMap((r) => r.target.kind === "lost-site" && Object.hasOwn(LOST_SITES, r.target.id) ? [r.target.id as LostSiteId] : []);
   return [...new Set([...found, ...revealed])];
 }
+/** Seeing is not capturing (LS-1): sites marked by the range tagger, the listening
+ * array or a decoded map whose data the player has not captured on site yet. */
+export function markedSites(sys: SystemsState): LostSiteId[] {
+  const captured = new Set(sys.found.map((d) => DECODABLES[d].site));
+  const marked = sys.beacons.flatMap((b) => {
+    const m = /^(?:tag|listen):(.+)$/.exec(b.id);
+    return m && Object.hasOwn(LOST_SITES, m[1]!) ? [m[1] as LostSiteId] : [];
+  });
+  return [...new Set([...marked, ...knownSites(sys)])].filter((id) => !captured.has(id));
+}
+/** The one authority for decoded text the player may read (LS-1): nothing before the
+ * decode; after it, every line except one carrying the code of a door not in the
+ * world yet. Site inspection, notices and the journal all read this. */
+export function readableLog(sys: SystemsState, id: DecodableId): string[] {
+  if (!sys.decoded.includes(id)) return [];
+  return decodeLog(id).filter((l) => l.door === null || doorPlaced(l.door)).map((l) => l.text);
+}
+/** What the journal keeps for each placed coded door whose record is decoded (the keypad
+ * is stage 1b): a straight door's code, or a deduction door's clue (the record's part;
+ * the rest is at the door). A deduction door's full code is never written out. */
+export function doorCodes(sys: SystemsState): { door: string; label: string; code: string | null; clue: string | null }[] {
+  return DOOR_IDS.filter((d) => doorPlaced(d) && recordReadableAfterDecode(sys, CODED_DOORS[d].record)).map((d) => {
+    const door = CODED_DOORS[d];
+    return { door: d, label: door.label, code: door.atDoor ? null : door.code, clue: door.atDoor ? door.clue ?? null : null };
+  });
+}
+/** A record a decode gates, and that decode is done (a record no decode gates is not a code). */
+const recordReadableAfterDecode = (sys: SystemsState, record: string): boolean =>
+  DECODABLE_IDS.some((d) => (DECODABLES[d].gates as readonly string[]).includes(record)) && recordReadable(sys, record);
+
 
 export type DecodeStatus = "running" | "unpowered" | "out-of-range" | "not-installed" | "host-unavailable";
 export interface DecodeView {
@@ -90,7 +124,9 @@ export function startDecode(s: GameState, sys: SystemsState, hostId: string, dec
   return null;
 }
 
-export interface DecodeCompletion { decodable: DecodableId; blueprints: string[]; readable: string[]; beacons: string[] }
+/** `blueprints`: every plan the decode carries; `fresh`: the ones the player did not
+ * hold before (the play timeline counts only what is new). */
+export interface DecodeCompletion { decodable: DecodableId; blueprints: string[]; fresh: string[]; readable: string[]; beacons: string[] }
 /** Advances every running decode by `seconds` of active play. */
 export function advanceDecodes(s: GameState, sys: SystemsState, seconds: number, ctx: DecoderContext = {}): DecodeCompletion[] {
   const done: DecodeCompletion[] = [];
@@ -106,48 +142,18 @@ function completeDecode(s: GameState, sys: SystemsState, job: DecodeJob): Decode
   const def = DECODABLES[job.decodable];
   sys.decodes = sys.decodes.filter((j) => j !== job);
   sys.decoded.push(job.decodable);
+  const fresh: string[] = [];
   for (const bp of def.blueprints)
-    if (!(s.knowledge.blueprints as string[]).includes(bp)) s.knowledge.blueprints.push(bp as BlueprintId);
+    if (!(s.knowledge.blueprints as string[]).includes(bp)) { s.knowledge.blueprints.push(bp as BlueprintId); fresh.push(bp); }
   const beacons: string[] = [];
-  for (const r of def.reveals)
+  // A reveal whose target is not in the world yet is withheld (it shows, derived, once placed).
+  for (const r of placedReveals(job.decodable))
     if (!sys.beacons.some((b) => b.id === r.id)) {
       sys.beacons.push({ id: r.id, name: r.label, category: r.category, position: { ...r.position }, source: "decode" });
       beacons.push(r.id);
     }
   // Background completion: reported through SystemsEvent, never over command feedback.
-  return { decodable: job.decodable, blueprints: [...def.blueprints], readable: [...def.gates], beacons };
+  return { decodable: job.decodable, blueprints: [...def.blueprints], fresh, readable: [...def.gates], beacons };
 }
 /** Is this item a decoder module (installed or carried)? */
 export const isDecoderItem = (kind: string): boolean => moduleOfItem(kind) === "decoder";
-
-/** The guarantee: decoder plans are granted on the main path by a step that needs
- * no decode, before any step that needs one. Returns the problems, empty when held. */
-export function decoderPlanProblems(path: readonly MainPathStep[], decoderBlueprint = "bp_decoder",
-  decodables: Readonly<Record<string, unknown>> = DECODABLES): string[] {
-  const problems: string[] = [];
-  const grant = path.findIndex((step) => step.grants.includes(decoderBlueprint));
-  if (grant < 0) problems.push(`${decoderBlueprint} is not granted anywhere on the main path.`);
-  else if (path[grant]!.needsDecoded.length) problems.push(`${decoderBlueprint} is granted at "${path[grant]!.id}", which itself needs a decode.`);
-  path.forEach((step, n) => {
-    if (step.needsDecoded.length && (grant < 0 || n < grant))
-      problems.push(`"${step.id}" needs ${step.needsDecoded.join(", ")} before the decoder plans are reachable.`);
-    for (const d of step.needsDecoded)
-      if (!Object.hasOwn(decodables, d)) problems.push(`"${step.id}" needs an unknown decodable ${d}.`);
-  });
-  return problems;
-}
-
-/** The wider guarantee: every plan the independent route depends on (decoder,
- * all three outpost-kit tiers) is granted on the main path by a step that needs no
- * decode, and the decoder rule above holds. Empty when held. */
-export function mainPathPlanProblems(path: readonly MainPathStep[], plans: readonly string[] = MAIN_PATH_PLANS,
-  decodables: Readonly<Record<string, unknown>> = DECODABLES): string[] {
-  const problems = decoderPlanProblems(path, "bp_decoder", decodables);
-  for (const plan of plans.filter((p) => p !== "bp_decoder")) {
-    const steps = path.filter((step) => step.grants.includes(plan));
-    if (!steps.length) problems.push(`${plan} is not granted anywhere on the main path.`);
-    else if (steps.every((step) => step.needsDecoded.length))
-      problems.push(`${plan} is granted on the main path only behind a decode (${steps.map((x) => `"${x.id}"`).join(", ")}).`);
-  }
-  return problems;
-}

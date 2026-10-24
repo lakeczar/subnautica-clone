@@ -56,3 +56,7 @@ The field guide and found notes ([FIELD-GUIDE](../content/FIELD-GUIDE.md)) are d
 | `pale_drifter` falls | Never seen alive | Ordinary deaths of an open-water animal; the newest Basin fall is "this season" in the pump crew's note, i.e. before the disaster, so years-old by the campaign. The present-day state (scavengers still on it, hide still hanging) is plausible for a giant fall in cold deep water. | Never tie a fall to the disaster or to the extraction. |
 | Threat windows | Field guide and boards | Behaviour of animals, unchanged by the disaster. | No threat is described as changed, angered or caused by people. |
 | `cable_tender` | Field guide | "Live lines" stay the cue from the bible: the district still draws power. | As before: never through the machinery boundary. |
+
+## LS-1 additions
+
+LS-1 (lost sites) adds and amends rows in [LS-1-LORE](LS-1-LORE.md): the dive-school slates, the keeper's racks, the chart room recast, both hatch and vault codes, the seam drainage panel, and the player-text lint list. Its rulings (Ren's name in the rota stays off) bind lost-site content.

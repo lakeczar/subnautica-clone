@@ -42,7 +42,7 @@ export const lowAir: Phase = {
     const floor = d.world.groundHeight(top.x, top.z);
     travel(d, route("down to the ridge", "diver", "vertical dive, played", [{ ...top, y: Math.max(floor + 2.5, -40) }]));
     d.legOf("overstay on suit air", "work", () => {
-      d.waitFor(`the ${LOW_AIR_PERCENT}% oxygen warning`, 400, (s) => s.player.vitals.oxygen <= LOW_AIR_PERCENT);
+      d.waitFor(`the ${LOW_AIR_PERCENT}% oxygen warning`, 400, (s) => s.player.vitals.oxygen <= LOW_AIR_PERCENT, "vitals:low-air");
     });
     const warned = d.run.hazardLog.some((h) => h.phase === "low-air" && h.message.startsWith(`Oxygen ${LOW_AIR_PERCENT}%`));
     d.run.checks.push({ name: `the game warned at ${LOW_AIR_PERCENT}% oxygen`, ok: warned,
@@ -168,7 +168,7 @@ export const depleted: Phase = {
             if (!(e instanceof Blocked) || !/ stalled /.test(e.message) || (d.occupied()?.charge ?? 1) > 0) throw e;
           }
         }
-        d.waitFor("the dead Dart to coast to a stop", 30, () => Math.hypot(v().velocity.x, v().velocity.y, v().velocity.z) < 0.05);
+        d.waitFor("the dead Dart to coast to a stop", 30, () => Math.hypot(v().velocity.x, v().velocity.y, v().velocity.z) < 0.05, "craft:coast");
       });
     } finally { d.watchers.splice(d.watchers.indexOf(listen), 1); }
     const metres = d.state.metrics.pilotMetres - metres0;

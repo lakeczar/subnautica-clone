@@ -170,7 +170,7 @@ test("captures save mid-phase through a fresh slot, reload to the identical hash
   for (let i = 0; i < 4; i++) d.command({ type: "interact" });
   let taken = false;
   d.watchers.push((x) => { if (!taken && x.state.tick >= 30) { taken = true; slot.capture(x, "half-second"); } });
-  d.idle(1);
+  d.idle(1, "test:idle");
   assert.equal(d.commands, 4);
   await slot.flushCaptures(d);
   const record = d.run.saves.find((r) => r.label === "half-second")!;

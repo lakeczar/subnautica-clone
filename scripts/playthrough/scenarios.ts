@@ -13,6 +13,7 @@ import { LIVE_PHASES, REFITS_PHASE } from "./live.js";
 import type { Phase, PlayOptions } from "./live.js";
 import { loadSnapshot, SaveSlot } from "./persistence.js";
 import { runPhases } from "./runner.js";
+import type { PacingTimelines } from "./pacing.js";
 import type { RunRecord } from "./timeline.js";
 
 export interface Scenario {
@@ -26,13 +27,22 @@ export interface Scenario {
   check?: (run: RunRecord) => { name: string; ok: boolean; detail: string }[];
   /** Mid-phase saves (SAVE-1): the first tick each condition holds, the state is captured. */
   captures?: readonly Capture[];
+  /** LS-1: one of the four runs the pacing acceptance judges (both strategies, with
+   * and without optional rewards). */
+  pacing?: boolean;
 }
 export interface Capture { label: string; when: (d: Driver) => boolean }
 
 const inGearRegion = (d: Driver): boolean => d.state.tick % 30 === 0 &&
   regionAtPoint(d.state.player.pose.position.x, d.state.player.pose.position.z) === GEAR_REGION;
 
-const MAIN: PlayOptions = { readOptional: true, reverse: false };
+const MAIN: PlayOptions = { readOptional: true, reverse: false, decodes: true };
+/** LS-1: no optional log, no decode, no cache: the main path on its own. */
+const BARE: PlayOptions = { readOptional: false, reverse: false, decodes: false };
+const noOptionalRead = (run: RunRecord) => {
+  const optional = run.discoveries.filter((x) => isOptional(x.id as DiscoveryId)).map((x) => x.id);
+  return { name: "no optional log read", ok: optional.length === 0, detail: optional.join(", ") || "none" };
+};
 const order = (run: RunRecord, a: string, b: string): boolean => {
   const i = run.discoveries.findIndex((x) => x.id === a), j = run.discoveries.findIndex((x) => x.id === b);
   return i >= 0 && j >= 0 && i < j;
@@ -41,13 +51,13 @@ const order = (run: RunRecord, a: string, b: string): boolean => {
 export const SCENARIOS: readonly Scenario[] = [
   {
     id: "creel", strategy: "creel", description: "Creel route: the Creel with restored service stops",
-    phases: [...LIVE_PHASES, ...CREEL_LATER], options: MAIN,
+    phases: [...LIVE_PHASES, ...CREEL_LATER], options: MAIN, pacing: true,
     captures: [{ label: "canopy-entry", when: inGearRegion }],
   },
   {
     id: "carrier", strategy: "carrier", description: "Carrier route: the Hearthline carrying a Mantle",
     from: { scenario: "creel", milestone: "refits" },
-    phases: CARRIER_LATER, options: MAIN,
+    phases: CARRIER_LATER, options: MAIN, pacing: true,
   },
   {
     id: "creel-loss", strategy: "creel", description: "Adverse: lose the Creel at a deep site, recover it with Bobbin, carry on",
@@ -68,12 +78,15 @@ export const SCENARIOS: readonly Scenario[] = [
     ],
   },
   {
-    id: "no-optional", strategy: "creel", description: "Adverse: every optional log skipped",
-    phases: [...LIVE_PHASES, ...CREEL_LATER], options: { readOptional: false, reverse: false },
-    check: (run) => {
-      const optional = run.discoveries.filter((x) => isOptional(x.id as DiscoveryId)).map((x) => x.id);
-      return [{ name: "no optional log read", ok: optional.length === 0, detail: optional.join(", ") || "none" }];
-    },
+    id: "no-optional", strategy: "creel", description: "Adverse: every optional log skipped and no decode started (LS-1: decode-free)",
+    phases: [...LIVE_PHASES, ...CREEL_LATER], options: BARE, pacing: true,
+    check: (run) => [noOptionalRead(run)],
+  },
+  {
+    id: "no-optional-carrier", strategy: "carrier", description: "Adverse: the carrier route with no optional log and no decode (LS-1: decode-free)",
+    from: { scenario: "no-optional", milestone: "refits" },
+    phases: CARRIER_LATER, options: BARE, pacing: true,
+    check: (run) => [noOptionalRead(run)],
   },
   // SAVE-1's library scenarios: short branches that earn its adverse, gear and tour kinds.
   {
@@ -92,6 +105,8 @@ export const SCENARIOS: readonly Scenario[] = [
 ];
 
 export interface PlayHooks {
+  /** LS-1: the play timeline of each run, and the pacing acceptance on `pacing` scenarios. */
+  pacing?: PacingTimelines | undefined;
   /** Receives every save a scenario itself made (milestones and captures), as written. */
   sink?: ((scenario: string, label: string, text: string) => void) | undefined;
   /** Branch start from the shared save library instead of replaying the parent (TST-21). */
@@ -116,6 +131,7 @@ export async function playScenarios(ids: readonly string[], verbose: boolean, ho
       const from = scenario.from;
       try {
         const got = hooks.fromLibrary!(from.scenario, from.milestone);
+        hooks.pacing?.noHistory(scenario.id);
         d = new Driver(scenario.id, scenario.strategy, loadSnapshot(got.text), got.commands);
         d.run.checks.push({ name: `branch save ${from.scenario}@${from.milestone} from the save library`, ok: true, detail: got.detail });
       } catch (e) {
@@ -128,6 +144,7 @@ export async function playScenarios(ids: readonly string[], verbose: boolean, ho
       }
     } else if (scenario.from) {
       const parent = runs.get(scenario.from.scenario)!;
+      hooks.pacing?.branch(scenario.id, scenario.from.scenario, scenario.from.milestone);
       const text = parent.slot.snapshots.get(scenario.from.milestone);
       const at = parent.run.saves.find((r) => r.label === scenario.from!.milestone && !r.capture);
       d = new Driver(scenario.id, scenario.strategy, text ? loadSnapshot(text) : undefined, at?.commands ?? 0);
@@ -151,6 +168,11 @@ export async function playScenarios(ids: readonly string[], verbose: boolean, ho
       .map((w) => scenario.phases.findIndex((p) => p.id === w.from!.milestone)));
     const run = await runPhases(d, until >= 0 ? scenario.phases.slice(0, until + 1) : scenario.phases, { ...scenario.options, verbose }, slot);
     for (const c of scenario.check?.(run) ?? []) run.checks.push(c);
+    // LS-1: a decode-free run ends with nothing decoding or decoded.
+    if (scenario.options.decodes === false)
+      run.checks.push({ name: "decode-free: no decode running or done", ok: d.state.systems.decodes.length === 0 && d.state.systems.decoded.length === 0,
+        detail: [...d.state.systems.decodes.map((j) => j.decodable), ...d.state.systems.decoded].join(", ") || "none" });
+    if (scenario.pacing && hooks.pacing && ids.includes(scenario.id)) run.checks.push(hooks.pacing.accept(run));
     run.checks.push({ name: "every milestone reload matched", ok: run.saves.every((s) => s.equal), detail: `${run.saves.length} saves` });
     for (const c of scenario.captures ?? [])
       if (!slot.snapshots.has(c.label) && run.outcome === "complete")

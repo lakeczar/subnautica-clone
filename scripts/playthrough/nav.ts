@@ -149,5 +149,5 @@ export function enter(d: Driver, refuge: Refuge): void {
 
 /** Breathe at the surface until the suit is full. */
 export function breathe(d: Driver): void {
-  if (d.state.player.vitals.oxygen < 99.5) d.waitFor("air at the surface", 10, (s) => s.player.vitals.oxygen >= 99.5);
+  if (d.state.player.vitals.oxygen < 99.5) d.waitFor("air at the surface", 10, (s) => s.player.vitals.oxygen >= 99.5, "vitals:air");
 }

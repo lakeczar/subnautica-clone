@@ -155,7 +155,7 @@ export function gather(d: Driver, id: SourceId, want = Infinity, options: { sort
     // An emptied host with finite reserve: sort it (20 s) for two more, as a player would.
     if (node.stock <= 0 && node.reserve > 0 && options.sort && SOURCES[id].item !== "meal") {
       d.command({ type: "interact" });
-      d.waitFor(`sort at ${id}`, 22, (s) => !s.world.action);
+      d.waitFor(`sort at ${id}`, 22, (s) => !s.world.action, "action:sort");
       if (d.state.world.resources.find((n) => n.id === id)!.stock <= 0) throw new Blocked(`Sorting ${id} added nothing: ${d.state.feedback}`, where(d.state));
       continue;
     }
@@ -165,7 +165,7 @@ export function gather(d: Driver, id: SourceId, want = Infinity, options: { sort
     const after = d.state.world.resources.find((n) => n.id === id)!.stock;
     if (after >= before) {
       // Frames are lifted over 10 s: hold still until the lift settles.
-      if (d.state.world.action) d.waitFor(`lift at ${id}`, 12, (s) => !s.world.action);
+      if (d.state.world.action) d.waitFor(`lift at ${id}`, 12, (s) => !s.world.action, "action:lift");
       const settled = d.state.world.resources.find((n) => n.id === id)!.stock;
       if (settled >= before) throw new Blocked(`Collecting ${id} took nothing: ${d.state.feedback}`, where(d.state));
       got += before - settled;
