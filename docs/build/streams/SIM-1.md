@@ -111,6 +111,12 @@ A steady save now writes about 2% of what root's model wrote, and costs about 0.
     - **The store (seed 66769815):** a repair staged a chunk under a number the old journal still named, though that key itself was gone, so a crash image could pair the old journal with the repair's content. Staging now also avoids every number the old journal names. A targeted regression was added.
     - **The harness** (its own drop accounting): an expedition lost to a corrupted v1 record isn't a commit's drop.
   - **Runs:** 2,000 sequences pass at `d75de411` (156 s on factory-worker via the queue). `SILTWAKE_TIMELINE_SEED_BASE` selects another seed range for exploration.
+- **Evidence at `b2aebd6d`, all on `--machine 4070` (RTX 4070 Laptop, alickers):**
+  - `npm run gate -- --only fast,build,economy:…` (all six economy steps): partial gate passed, covering fast (76 s; the architecture guard and headless typecheck included), build and the six economy scripts;
+  - the playthrough, all 8 scenarios: no blockers;
+  - 5,000 more harness sequences on another seed range (`SILTWAKE_TIMELINE_SEED_BASE=77000017`): pass.
+
+  Not run: the gate's bake step. The terrain bake's sources are unchanged.
 - **Cancelled:** the 4070 gate tickets submitted at `5314f3ef` were still queued when R1 landed, and were cancelled so a changed tree couldn't run them locally. The gate is rerun at the R1 head.
 
 ## What changed
