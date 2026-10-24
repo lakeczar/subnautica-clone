@@ -310,7 +310,8 @@ reportBlocked();
 // at cruise (its straight distance, half again for detours), against the charge
 // and cells aboard. A plan that cannot come home on them is refused.
 const metres = (seg) => seg.reduce((m, q, i) => i ? m + Math.hypot(q.x - seg[i - 1].x, q.y - seg[i - 1].y, q.z - seg[i - 1].z) : 0, 0);
-const have = POWER.charge + POWER.cells.reduce((a, c) => a + Math.min(100, c / POWER.capacity), 0);
+// One full reserve cell is 35% of a stock battery (cellTransfer), less of a bigger bank.
+const have = POWER.charge + POWER.cells.reduce((a, c) => a + 0.35 * c / POWER.capacity, 0);
 // With service calls the budget runs from the last call (or the start); home
 // is the berth or the nearest service site, whichever is nearer.
 const energy = segments.map((seg, k) => {
