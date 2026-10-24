@@ -10,7 +10,7 @@ import { FixedStepClock, FIXED_SECONDS } from "../sim/clock.js";
 import { aimedInteraction, reachPreview } from "../sim/targeting.js";
 import type { GameCommand, GameEvent, GameState } from "../sim/types.js";
 import { encodeSave } from "../save/codec.js";
-import { SaveRepository } from "../save/repository.js";
+import { SaveRepository, warmCommit } from "../save/repository.js";
 import type { StoragePort } from "../save/repository.js";
 import { browserWriterLock } from "./browserLock.js";
 import { ExpeditionSession } from "./session.js";
@@ -571,13 +571,13 @@ export class SiltwakeApp {
   }
 
   /** SIM-PERF-1: the first steps' compilation, the hull contact meshes and the save path's
-   * first encode are paid here, behind the entry pause, not in the first seconds of play
+   * first commit are paid here, behind the entry pause, not in the first seconds of play
    * (5–8, about 3 and 12–17 ms). Nothing live changes: the step runs on a copy. */
   private warm(): void {
     if (!this.state) return;
     warmSimulation(this.state, this.world);
     const save = this.session.envelope();
-    if (save) encodeSave(save);
+    if (save) warmCommit(save);
   }
 
   private resume(capture = false): boolean {

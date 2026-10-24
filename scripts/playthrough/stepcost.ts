@@ -32,7 +32,7 @@ import v8 from "node:v8";
 import { PerformanceObserver } from "node:perf_hooks";
 import { Worker } from "node:worker_threads";
 import { createEnvelope, encodeSave } from "../../src/save/codec.js";
-import { SaveRepository } from "../../src/save/repository.js";
+import { SaveRepository, warmCommit } from "../../src/save/repository.js";
 import type { WriterLockPort } from "../../src/save/writer-lock.js";
 import { PHASE, SLOW_STEP_MS, StepCosts, stepMeter } from "../../src/sim/stepCosts.js";
 import type { StepRecord } from "../../src/sim/stepCosts.js";
@@ -151,7 +151,7 @@ class AppWork {
   constructor(readonly run: string, s: GameState, world: WorldQueries) {
     // The app's entry warm-up (SiltwakeApp.warm), outside any measured step.
     warmSimulation(s, world);
-    encodeSave(createEnvelope(structuredClone(s), { sessionId: "stepcost-warm", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:00.000Z" }));
+    warmCommit(createEnvelope(structuredClone(s), { sessionId: "stepcost-warm", createdAt: "2026-10-24T00:00:00.000Z", savedAt: "2026-10-24T00:00:00.000Z" }));
     this.rec = timeline.createRecorder({ id: `stepcost-${run}`.slice(0, 64), started: "2026-10-24T00:00:00.000Z" }, { regionAt: regionAtPoint });
     this.timelineSaved = this.lastAutosave = s.tick;
     this.repository.load();

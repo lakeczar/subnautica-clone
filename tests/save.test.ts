@@ -5,7 +5,7 @@ import { CARRIER_LAYOUT, carrierCommand, fixtureGame, localToWorld } from "../sr
 import { createWorldQueries } from "../src/sim/world.js";
 import { WORLD_VERTICAL_BOUNDS } from "../src/content/routes.js";
 import type { SaveEnvelope } from "../src/save/codec.js";
-import { LOCAL_SAVE_KEY, SaveRepository } from "../src/save/repository.js";
+import { LOCAL_SAVE_KEY, SaveRepository, warmCommit } from "../src/save/repository.js";
 import type { CommitResult } from "../src/save/repository.js";
 import { SAVE_WRITER_LOCK } from "../src/save/writer-lock.js";
 import { browserWriterLock } from "../src/runtime/browserLock.js";
@@ -401,4 +401,10 @@ test("carrier saves preserve all transforms; a walking pose inside a sealed comp
   s.player.interiorPose!.position = { ...CARRIER_LAYOUT.helm };
   s.player.pose.position = localToWorld(s.player.interiorPose!.position, h);
   assert.equal(encodeSave(envelope).ok, true, "the authored helm is clear");
+});
+
+test("warming the commit path (SIM-PERF-1) leaves the envelope as it was", () => {
+  const save = sample(40), before = structuredClone(save);
+  warmCommit(save);
+  assert.deepEqual(save, before);
 });

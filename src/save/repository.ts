@@ -115,3 +115,15 @@ export class SaveRepository {
     }
   }
 }
+
+/** A commit's whole path, run twice on a throwaway in-memory slot, so the first autosave of
+ * a session doesn't pay its compilation in play (SIM-PERF-1: 10–17 ms headless). Called at
+ * entry, behind the pause. Nothing real is read or written. */
+export function warmCommit(save: SaveEnvelope): void {
+  const data = new Map<string, string>();
+  const repository = new SaveRepository({ getItem: (k) => data.get(k) ?? null, setItem: (k, v) => { data.set(k, v); } },
+    { runExclusive: async (_name, _signal, action) => action() });
+  repository.load();
+  void repository.commit(save);
+  void repository.commit(save);
+}
