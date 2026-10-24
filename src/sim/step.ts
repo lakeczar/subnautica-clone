@@ -100,6 +100,7 @@ import { dampIntoFace, impactLoss, supportedDrift } from "./currents/move.js";
 import { flowAt, worldCurrents } from "./currents/world.js";
 import { stepUpgrades, upgradeAction } from "./fittings.js";
 import { stepSystems, systemsCommand } from "./systemsLink.js";
+import { hostUpgradeCommand } from "./hostUpgrades.js";
 import { serviceCommand, servicePreview } from "./serviceLink.js";
 import { observeWorldCycles } from "./cyclesLink.js";
 import { faunaCommand, stepFauna } from "./fauna/link.js";
@@ -111,6 +112,7 @@ import { restBaseHere } from "./survival.js";
 import { vehicleProfile } from "./fittings.js";
 import { hullDamage, motion } from "./upgrades/effects.js";
 import { BALLAST, ballastStep, overdriveMotion } from "./upgrades/tools.js";
+import { activeDrone, isSignatureAction, lineHolds, signatureCommand, signatureLoudness, steerDrone, stepSignatures } from "./signatures.js";
 const ZERO: Vec3 = { x: 0, y: 0, z: 0 };
 /** Highest rock lip a swimmer glides up onto, metres (one cave voxel, plus margin). */
 const SWIM_LIP = 0.6;
@@ -176,6 +178,8 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     if (fauna === null && s.feedback) actionResult(s, events, s.feedback);
     return fauna;
   }
+  const hostUpgrade = hostUpgradeCommand(s, c, events);
+  if (hostUpgrade !== undefined) return hostUpgrade;
   const systems = systemsCommand(s, c, w);
   if (systems !== undefined) {
     if (systems === null && s.feedback) actionResult(s, events, s.feedback);
@@ -256,8 +260,8 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
       const target = armTarget(s);
       if (!target) return "No salvage host within reach of the tool arms. Bring the bow within a few metres.";
       if (target.refusal) return target.refusal;
-      s.world.action = { sourceId: target.sourceId, seconds: ARM_LIFT_SECONDS, kind: "arm" };
-      events.push({ type: "notice", channel: "action", message: `Tool arms on ${SOURCES[target.sourceId].label} · ${ARM_LIFT_SECONDS} s · hold position.` });
+      s.world.action = { sourceId: target.sourceId, seconds: target.work.seconds, kind: "arm" };
+      events.push({ type: "notice", channel: "action", message: `${target.work.seconds === ARM_LIFT_SECONDS ? "Tool arms" : "Cutting arm"} on ${SOURCES[target.sourceId].label} · ${target.work.seconds} s · hold position.` });
       return null;
     }
     case "hint": {
@@ -292,6 +296,7 @@ function action(s: GameState, c: GameCommand, w: WorldQueries, events: GameEvent
     case "lamp":
       return toggleLamp(s);
     case "upgrade": {
+      if (isSignatureAction(c.action)) return signatureCommand(s, c.action, w, events);
       const no = upgradeAction(s, c.action, w, c.itemId);
       // A flare is a bright light that sight hunters turn to: S4's lure, at the flare.
       if (!no && c.action === "flare") placeDeterrent(s, "lure", s.world.flares.at(-1)!.position);
@@ -492,14 +497,15 @@ function updateAction(s: GameState): void {
     if (a.seconds > 0) return;
     const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId)!;
     const def = SOURCES[a.sourceId], node = s.world.resources.find((n) => n.id === a.sourceId)!;
-    const n = Math.min(def.bundle, node.stock);
+    // The fitted arm's work (SIG-1: the cutting arm cuts faster and yields more).
+    const { bundle: n, charge } = target.work;
     addItem(s, def.item, n, v.cargoId);
     node.stock -= n;
-    v.charge = Math.max(0, v.charge - ARM_CHARGE);
-    s.metrics.powerUsed += ARM_CHARGE;
+    v.charge = Math.max(0, v.charge - charge);
+    s.metrics.powerUsed += charge;
     s.metrics.collections++;
     if (!s.knowledge.scans.includes(a.sourceId)) s.knowledge.scans.push(a.sourceId);
-    s.feedback = `Tool arms · ${n} × ${ITEMS[def.item].label} → Creel hold · −${ARM_CHARGE}% power.`;
+    s.feedback = `Tool arms · ${n} × ${ITEMS[def.item].label} → Creel hold · −${charge}% power.`;
     s.world.action = null;
     return;
   }
@@ -652,8 +658,10 @@ export function stepGameInPlace(
     vertical = 0,
     sprint = false,
     quiet = false;
-  let yaw = s.player.pose.yaw,
-    pitch = s.player.pose.pitch;
+  // SIG-1: while the Mantle's scout drone is out, look and move steer the drone.
+  const droneHost = activeDrone(s);
+  let yaw = droneHost ? droneHost.upgrades.drone!.yaw : s.player.pose.yaw,
+    pitch = droneHost ? droneHost.upgrades.drone!.pitch : s.player.pose.pitch;
   for (const c of commands) {
     if (c.type === "look") {
       yaw += clamp(c.yawDelta, -0.8, 0.8);
@@ -667,6 +675,11 @@ export function stepGameInPlace(
     }
   }
   yaw = ((yaw % TAU) + TAU) % TAU;
+  if (droneHost) {
+    steerDrone(s, droneHost, yaw, pitch, { forward, right, vertical }, world);
+    yaw = s.player.pose.yaw; pitch = s.player.pose.pitch;
+    forward = right = vertical = 0; sprint = false;
+  }
   const v = s.fleet.vehicles.find((v) => v.id === s.player.controlledVehicleId);
   const handling = v ? hullHandling(v.hull) : null;
   if (v && handling) {
@@ -723,7 +736,7 @@ export function stepGameInPlace(
     const stopped = Math.hypot(target.x, target.y, target.z) < MOTION.stopped;
     const current = v.berth ? null : respondToFlow(flowAt(v.pose.position, s.tick).flow, {
       id: v.hull, authority: profile.current, cruise: profile.speed.cruise, drain: cruiseDrain,
-    }, drive, v.upgrades.anchored && stopped ? "anchor" : powered && stopped ? "station" : "none", powered);
+    }, drive, (v.upgrades.anchored || lineHolds(v)) && stopped ? "anchor" : powered && stopped ? "station" : "none", powered);
     const driftDelta = current ? { x: current.drift.x * DT, y: current.drift.y * DT, z: current.drift.z * DT } : ZERO;
     // Emergency ballast: a mechanical rise through the same sweep, power or not.
     const ballast = ballastStep(v.upgrades, Math.max(0, -(v.pose.position.y + 0.5)), DT);
@@ -812,7 +825,7 @@ export function stepGameInPlace(
     v.charge = Math.max(0, v.charge - drain);
     s.metrics.powerUsed += drain;
     loudness = Math.max(quiet ? pilot.loudness : sprint || moving ? pilot.loudness : idle.loudness,
-      ballast.rise > 0 ? BALLAST.loudness : 0);
+      ballast.rise > 0 ? BALLAST.loudness : 0, signatureLoudness(s, v));
     if (move.hitBoundary) events.push({ type: "foundation-boundary" });
     if (move.hitBoundary || move.forwardBoundary) thrust = null;
     else if (thrust) thrust.actual = Math.hypot(move.position.x - old.x, move.position.z - old.z);
@@ -1051,6 +1064,7 @@ export function stepGameInPlace(
   updateAction(s);
   stepUpgrades(s, new Set(s.fleet.vehicles.filter((a) => distance(a.pose.position,
     pre.vehicles.get(a.id) ?? a.pose.position) > 0.003).map((a) => a.id)));
+  stepSignatures(s, world, events);
   stepSystems(s, events);
   stepFauna(s, world, events);
   observeWorldCycles(s, world, events);

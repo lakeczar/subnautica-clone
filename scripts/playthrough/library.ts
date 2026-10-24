@@ -10,8 +10,8 @@
  * factory-worker worktree). Consumers ask for "the newest save of kind X
  * compatible with this commit" (`pickSave`, `librarySave`, or the `saves.js pick`
  * CLI). Compatible means: the library's commit is this commit or one of its
- * ancestors, its schema and content versions are this build's (or schema 5,
- * which this build bridges), and this build's own decoder accepts the file. The
+ * ancestors, its schema and content versions are this build's (or the one
+ * previous schema, which this build bridges), and this build's own decoder accepts the file. The
  * nearest such commit wins. Anything else is refused with every candidate's
  * reason; nothing falls back silently. */
 import { execFileSync, spawn, spawnSync } from "node:child_process";
@@ -21,7 +21,7 @@ import os from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 import { CONTENT_VERSION } from "../../src/content/registry.js";
-import { decodeSave, MAX_SAVE_BYTES, SAVE_SCHEMA_VERSION } from "../../src/save/codec.js";
+import { BRIDGED_SCHEMA_VERSION, decodeSave, MAX_SAVE_BYTES, SAVE_SCHEMA_VERSION } from "../../src/save/codec.js";
 import type { GameState } from "../../src/sim/types.js";
 import { KINDS, kindsOf, summarize } from "./kinds.js";
 import { stateHash } from "./persistence.js";
@@ -178,8 +178,8 @@ export interface PickOptions {
 /** The version this build reads for a library commit, or why it cannot. */
 function versionCompatibility(m: Manifest): Compatibility | string {
   if (m.schemaVersion === SAVE_SCHEMA_VERSION && m.contentVersion === CONTENT_VERSION) return "same-version";
-  if (m.schemaVersion === 5 && m.contentVersion === "expedition.6") return "bridged";
-  return `schema ${m.schemaVersion} / ${m.contentVersion}; this build reads schema ${SAVE_SCHEMA_VERSION} / ${CONTENT_VERSION} (and bridges schema 5 / expedition.6)`;
+  if (m.schemaVersion === BRIDGED_SCHEMA_VERSION && m.contentVersion === CONTENT_VERSION) return "bridged";
+  return `schema ${m.schemaVersion} / ${m.contentVersion}; this build reads schema ${SAVE_SCHEMA_VERSION} / ${CONTENT_VERSION} (and bridges schema ${BRIDGED_SCHEMA_VERSION})`;
 }
 
 /** The newest library save of `kind` compatible with the target commit, decoded by this build. Throws LibraryRefusal. */
@@ -235,7 +235,7 @@ export function pickSave(kind: string, o: PickOptions = {}): Picked {
   let decoded: ReturnType<typeof decodeSave>;
   try { decoded = decodeSave(text); } catch (e) { return refuse(`breaks this build's decoder: ${(e as Error).message}`); }
   if (!decoded.ok) return refuse(`does not load in this build: ${decoded.error}`);
-  // Migrated only when this build's decoder actually changed the state (the schema 5 bridge, additive content).
+  // Migrated only when this build's decoder actually changed the state (the previous-schema bridge, additive content).
   const migrated = stateHash(decoded.value.state) !== entry.hash;
   if (o.exact && migrated) refuse("loads to a different hash than it was saved with (it needs migration in this build)");
   return { kind, path: file, text, state: decoded.value.state, manifest: best.m, entry, compatibility: best.compatibility, distance: best.distance, migrated,

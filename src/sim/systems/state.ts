@@ -16,6 +16,8 @@ import { BEACON_CATEGORIES, BEACON_NAME_MAX } from "../../content/systems/naviga
 import type { BeaconCategory } from "../../content/systems/navigation.js";
 import type { Vec3 } from "../types.js";
 import { TRAP } from "../../content/fauna/items.js";
+import { HOST_UPGRADES, hostUpgradeId } from "../../content/upgrades/hosts.js";
+import type { HostUpgradeId } from "../../content/upgrades/hosts.js";
 
 export type PowerSource = "solar" | "thermal" | "cells" | "plant";
 export interface OutpostState {
@@ -64,12 +66,14 @@ export interface SystemsState {
   categoriesOff: BeaconCategory[];
   /** Explored chart cells, "cx:cz". Scans and decodes reveal derived cells on top. */
   chart: string[];
+  /** SIG-1: module item ID → the host upgrade fitted to it (decoder lattice, survey array). */
+  moduleUpgrades: Record<string, HostUpgradeId>;
 }
 
 export function createSystems(): SystemsState {
   return {
     outposts: [], packed: [], sockets: [], found: [], decoded: [], decodes: [], planters: [], traps: [],
-    beacons: [], beaconsOff: [], categoriesOff: [], chart: [],
+    beacons: [], beaconsOff: [], categoriesOff: [], chart: [], moduleUpgrades: {},
   };
 }
 
@@ -87,8 +91,11 @@ const POWER: readonly string[] = ["solar", "thermal", "cells", "plant"];
  * against the inventory (module and kit IDs) belong to the composed validator. */
 export function validSystems(v: unknown): v is SystemsState {
   if (!record(v) || !exactKeys(v, ["outposts", "packed", "sockets", "found", "decoded", "decodes", "planters", "traps",
-    "beacons", "beaconsOff", "categoriesOff", "chart"])) return false;
-  const arrays = Object.values(v);
+    "beacons", "beaconsOff", "categoriesOff", "chart", "moduleUpgrades"])) return false;
+  const { moduleUpgrades, ...lists } = v;
+  if (!record(moduleUpgrades) || !Object.entries(moduleUpgrades).every(([k, u]) => id(k) && hostUpgradeId(u) && HOST_UPGRADES[u].scope === "module"))
+    return false;
+  const arrays = Object.values(lists);
   if (!arrays.every(Array.isArray)) return false;
   const s = v as unknown as SystemsState;
   if (!s.outposts.every((o) => record(o) && exactKeys(o as never, ["id", "tier", "name", "position", "region", "power"]) &&

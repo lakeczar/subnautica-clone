@@ -6,6 +6,9 @@ import { createGame, makeVehicle } from "./state.js";
 import { completeOpening } from "./progression.js";
 import { createWorldQueries, sweptHullClearance, withinWorldBounds, WORLD_BOUNDS, type HorizontalBounds, type Solid } from "./world.js";
 import { YARD_BUILD } from "../content/yard.js";
+import { BERTH_SLOT_SIZES } from "./upgrades/fitting.js";
+import { craftProfile } from "./upgrades/effects.js";
+import { fittedUpgradeKinds } from "./fleet.js";
 import { SITES } from "../content/regions/sites.js";
 import { siteDatum } from "../content/regions/access.js";
 import { worldFloor } from "../content/regions/worldFloor.js";
@@ -41,8 +44,33 @@ export const CARRIER_LAYOUT = {
   interior: { minX: -4.7, maxX: 4.7, minZ: -11, maxZ: 10, y: 4 },
 } as const;
 
+/** SIG-1: with the berth extension the starboard compact room stands 0.25 m further
+ * outboard beside the medium room, so the bow-to-stern walkway stays 0.74 m clear
+ * between their walls (the diver is 0.68 m wide). Its berth datum moves with it. */
+export const MIXED_COMPACT_ROOM = { id: "carrier.berth.starboard", min: { x: 1, y: 4, z: -2.8 }, max: { x: 6, y: 8.4, z: 4.8 } } as const;
+export const MIXED_COMPACT_BERTH: Vec3 = { x: 3.5, y: 4, z: 1 };
 export function carrierRooms(configuration: CarrierState["configuration"]): readonly Solid[] {
-  return configuration === "compact" ? CARRIER_LAYOUT.compact : [CARRIER_LAYOUT.medium];
+  return configuration === "compact" ? CARRIER_LAYOUT.compact : configuration === "medium" ? [CARRIER_LAYOUT.medium]
+    : [CARRIER_LAYOUT.medium, MIXED_COMPACT_ROOM];
+}
+/** A slot's berth datum (carrier-local keel) in a layout. */
+export const berthLocal = (configuration: CarrierState["configuration"], slot: 0 | 1): Vec3 =>
+  configuration === "mixed" && slot === 1 ? MIXED_COMPACT_BERTH : BERTH_LOCAL[slot]!;
+/** The berth size a slot takes in a layout, or null where the layout has no such slot. */
+export const slotSize = (configuration: CarrierState["configuration"], slot: number): "compact" | "medium" | null =>
+  BERTH_SLOT_SIZES[configuration][slot] ?? null;
+/** The free berth this craft fits now, or null. */
+export function freeBerth(s: Readonly<GameState>, h: Readonly<VehicleState>, v: Readonly<VehicleState>): 0 | 1 | null {
+  const dock = s.fleet.docking;
+  if (!dock) return null;
+  return ([0, 1] as const).find((n) => slotSize(dock.configuration, n) === HULLS[v.hull].berth &&
+    !s.fleet.vehicles.some((a) => a.berth?.carrierId === h.id && a.berth.slot === n)) ?? null;
+}
+/** The layout a berth refit moves to: compact → medium (→ mixed, with the extension) → compact. */
+export function nextBerthLayout(s: Readonly<GameState>, h: Readonly<VehicleState>): CarrierState["configuration"] {
+  const current = s.fleet.docking?.configuration ?? "compact";
+  const mixed = craftProfile(h.hull, h.rating, fittedUpgradeKinds(s, h)).mixedBerths;
+  return current === "compact" ? "medium" : current === "medium" && mixed ? "mixed" : "compact";
 }
 
 /** Solid shell with only the selected floor hatch and outer gate opened for transfer. */
@@ -128,7 +156,7 @@ export function launchPoint(h: VehicleState, v: VehicleState): Vec3 {
  * `h` defaults to the carrier as it is; a copy at another pose asks "what if". */
 export function carrierTransferPath(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture",
   h: VehicleState = carrierHull(s)!): Vec3[] {
-  const berth = BERTH_LOCAL[slot]!;
+  const berth = berthLocal(s.fleet.docking?.configuration ?? "compact", slot);
   const path = [berth, { ...berth, y: CARRIER_LAYOUT.lockKeelY },
     { x: 0, y: CARRIER_LAYOUT.lockKeelY, z: berth.z }, CARRIER_LAYOUT.railTurn].map((p) => localToWorld(p, h));
   path.push(launchPoint(h, v));
@@ -154,7 +182,7 @@ export function transferBlock(s: GameState, v: VehicleState, slot: 0 | 1, type: 
   const path = carrierTransferPath(s, v, slot, type, h);
   // The in-carrier keel route stays exactly carrier-local: at an oblique heading a
   // world round trip lands the lock leg an ulp below the lock floor's top and grazes it.
-  const berth = BERTH_LOCAL[slot]!, lockY = CARRIER_LAYOUT.lockKeelY;
+  const berth = berthLocal(dock.configuration, slot), lockY = CARRIER_LAYOUT.lockKeelY;
   const inner = [berth, { ...berth, y: lockY }, { x: 0, y: lockY, z: berth.z }, CARRIER_LAYOUT.railTurn,
     v.hull === "spindle" ? worldToLocal(launchPoint(h, v), h) : LAUNCH_LOCAL];
   const local = type === "capture" ? [worldToLocal(v.pose.position, h), ...inner.reverse()] : inner;
@@ -576,13 +604,14 @@ export function carrierCommand(
       s.fleet.vehicles.some((v) => v.berth?.carrierId === h.id)
     )
       return "Refit the berths only with both empty, moored and holding station at a dock with repair services.";
-    const configuration = dock.configuration === "compact" ? "medium" : "compact";
+    const configuration = nextBerthLayout(s, h);
     if (s.player.interiorPose && !createWorldQueries([
       ...carrierStructure(configuration), ...carrierRooms(configuration),
     ], () => -200).clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 }))
       return "Step into the passage clear of the berth rooms before refitting them. Nothing changed.";
     dock.configuration = configuration;
-    s.feedback = dock.configuration === "medium" ? "Berths refitted: one service berth for a medium craft." : "Berths refitted: two compact berths.";
+    s.feedback = dock.configuration === "medium" ? "Berths refitted: one service berth for a medium craft."
+      : dock.configuration === "mixed" ? "Berths refitted with the extension: the service berth beside a compact berth." : "Berths refitted: two compact berths.";
     return null;
   }
   const v = s.fleet.vehicles.find((v) => v.id === vehicleId);
@@ -613,18 +642,9 @@ export function carrierCommand(
       return captureApproach(h, v);
     if (v.hull === "spindle" && h.pose.position.y < -1)
       return "The Spindle is a surface craft. Surface the Hearthline to recover it.";
-    const slot = ([0, 1] as const).find(
-      (n) =>
-        !s.fleet.vehicles.some(
-          (a) => a.berth?.carrierId === h.id && a.berth.slot === n,
-        ),
-    );
-    if (
-      slot === undefined ||
-      (dock.configuration === "medium" && slot !== 0) ||
-      HULLS[v.hull].berth !== dock.configuration
-    )
-      return HULLS[v.hull].berth !== dock.configuration
+    const slot = freeBerth(s, h, v);
+    if (slot === null)
+      return !BERTH_SLOT_SIZES[dock.configuration].includes(HULLS[v.hull].berth!)
         ? `The ${HULLS[v.hull].label} needs ${HULLS[v.hull].berth === "medium" ? "the service berth; refit the berths at a repair dock" : "a compact berth; refit the berths at a repair dock"}.`
         : `No free berth for the ${HULLS[v.hull].label}.`;
     const no = transferRefusal(s, v, slot, "capture", world);
@@ -703,7 +723,7 @@ export function updateBerth(s: GameState, world: WorldQueries): void {
       Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) > 1 ||
       (v.hull === "spindle" && h.pose.position.y < -1) ||
       s.fleet.vehicles.some((a) => a.berth?.carrierId === h.id && a.berth.slot === t.slot) ||
-      HULLS[v.hull].berth !== dock.configuration) {
+      HULLS[v.hull].berth !== slotSize(dock.configuration, t.slot)) {
       dock.transaction = null;
       s.feedback = "The craft drifted out of the lock mouth before the clamps closed. Recover it again.";
       return;
@@ -719,7 +739,7 @@ export function updateBerth(s: GameState, world: WorldQueries): void {
       slot: t.slot,
       pose: {
         frame: "carrier-local",
-        position: { ...BERTH_LOCAL[t.slot]! },
+        position: { ...berthLocal(dock.configuration, t.slot) },
         yaw: 0,
       },
     };

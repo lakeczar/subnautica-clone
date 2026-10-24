@@ -20,7 +20,7 @@ import {
   TECH_RECORDS,
   techRecord,
 } from "../content/registry.js";
-import type { HullId, RecipeId } from "../content/registry.js";
+import type { HullId, RecipeId, SourceId } from "../content/registry.js";
 import { parseEcology } from "../sim/ecology/persist.js";
 import { isSuitProtection } from "../sim/ecologyLink.js";
 import { CREEL_CABIN, fittedMount, holdCapacity, hullToWorld } from "../sim/fleet.js";
@@ -30,10 +30,10 @@ import { CROWN_RESTORATIONS } from "../content/hub/crownStation.js";
 import { RECOVERY_ROUTES, WORLD_VERTICAL_BOUNDS } from "../content/routes.js";
 import { deepRoute, recoveryRouteIds } from "../content/recoveryRoutes.js";
 import type { GameState } from "../sim/types.js";
-import { carrierCompartment, containerAccepts, usedCapacity } from "../sim/inventory.js";
+import { carrierCompartment, containerAccepts, distance, podContainerId, usedCapacity } from "../sim/inventory.js";
 import { installedModuleValid, moduleItem } from "../sim/modules.js";
 import { WORLD_BOUNDS } from "../sim/world.js";
-import { atCarrierSupport, BERTH_LOCAL, CARRIER_LAYOUT, carrierCompartmentContainers, localToWorld } from "../sim/carrier.js";
+import { atCarrierSupport, berthLocal, CARRIER_LAYOUT, carrierCompartmentContainers, localToWorld, slotSize } from "../sim/carrier.js";
 import { HEARTHLINE_SOCKETS } from "../content/fleet/hearthlineInterior.js";
 import { blueprints, validStory } from "../sim/story/index.js";
 import { registryEvidence, storyView } from "../sim/storyLink.js";
@@ -43,21 +43,37 @@ import { UPGRADES, upgradeId } from "../content/upgrades/catalogue.js";
 import type { UpgradeId } from "../content/upgrades/catalogue.js";
 import { slotCapacity, slotOf } from "../sim/upgrades/fitting.js";
 import { craftProfile } from "../sim/upgrades/effects.js";
-import { FLARE } from "../sim/upgrades/tools.js";
+import { DROP_POD, FLARE, GRAPPLE } from "../sim/upgrades/tools.js";
+import { CUE_SPECIES, THREATS } from "../content/ecology/species.js";
 import { BIO_CELL } from "../sim/power/charging.js";
 import { MAX_FLARES } from "../sim/fittings.js";
 import { validSystems } from "../sim/systems/state.js";
 import { instanceProblems } from "../sim/systems/instances.js";
-import { MODULES as SYS2_MODULES, OUTPOST_TIERS } from "../content/systems/hosts.js";
+import { moduleOfItem, MODULES as SYS2_MODULES, OUTPOST_TIERS } from "../content/systems/hosts.js";
+import { HOST_UPGRADES } from "../content/upgrades/hosts.js";
 import { DECODABLES } from "../content/systems/decodes.js";
-/** SYS-1 per-vehicle runtime: flares, ballast, overdrive and the carrier anchor.
- * Grapple and pod stay null until those tools are composed. */
+const TICK = 2147483647;
+/** A saved tag aim names its target kind and ID (`sim/signatures.ts`). */
+const TAG_TARGET = /^(agent|cue|site|source):[a-zA-Z0-9_.:-]{1,96}$/;
+/** SYS-1 per-vehicle runtime: flares, ballast, overdrive and the carrier anchor;
+ * SIG-1's signature tools, each only on the hull that carries it. */
 function validRuntime(v: unknown, hull: string): boolean {
-  return exact(v, ["flares", "ballastArmed", "ascent", "overdrive", "grapple", "pod", "anchored"]) &&
-    int(v.flares, 0, FLARE.magazine) && bool(v.ballastArmed) && (v.ascent === null || n(v.ascent, 0, 40)) &&
-    exact(v.overdrive, ["activeUntil", "readyAt"]) && int(v.overdrive.activeUntil, 0, 2147483647) &&
-    int(v.overdrive.readyAt, 0, 2147483647) && v.grapple === null && v.pod === null && bool(v.anchored) &&
-    (!v.anchored || hull === "hearthline");
+  if (!exact(v, ["flares", "ballastArmed", "ascent", "overdrive", "grapple", "pod", "anchored", "sonar", "tag", "drone", "lift", "tow"]))
+    return false;
+  const g = v.grapple, p = v.pod, so = v.sonar, tg = v.tag, d = v.drone, l = v.lift;
+  return int(v.flares, 0, FLARE.magazine) && bool(v.ballastArmed) && (v.ascent === null || n(v.ascent, 0, 40)) &&
+    exact(v.overdrive, ["activeUntil", "readyAt"]) && int(v.overdrive.activeUntil, 0, TICK) &&
+    int(v.overdrive.readyAt, 0, TICK) && bool(v.anchored) && (!v.anchored || hull === "hearthline") &&
+    (g === null || (hull === "creel" && exact(g, ["anchor", "length", "reeling", "load"]) && vec(g.anchor) &&
+      n(g.length, 0, GRAPPLE.range + 4) && bool(g.reeling) && (g.load === null || (known(SOURCES)(g.load) && SOURCES[g.load as SourceId].item === "tagged_frame")))) &&
+    (p === null || (hull === "creel" && exact(p, ["position"]) && vec(p.position))) &&
+    (so === null || (exact(so, ["at", "readyAt", "origin"]) && int(so.at, 0, TICK) && int(so.readyAt, 0, TICK) && vec(so.origin) && hull === "dart")) &&
+    (tg === null || (hull === "dart" && exact(tg, ["targetId", "since"]) && typeof tg.targetId === "string" && TAG_TARGET.test(tg.targetId) && int(tg.since, 0, TICK))) &&
+    (d === null || (hull === "mantle" && exact(d, ["position", "yaw", "pitch", "launchedAt"]) && vec(d.position) &&
+      n(d.yaw, 0, Math.PI * 2) && n(d.pitch, -1.35, 1.35) && int(d.launchedAt, 0, TICK))) &&
+    (l === null || (exact(l, ["tool", "sourceId", "readyAt"]) && (l.tool === "crane" ? hull === "spindle" : l.tool === "clamp" && hull === "mantle") &&
+      known(SOURCES)(l.sourceId) && int(l.readyAt, 0, TICK))) &&
+    (v.tow === null || (hull === "mantle" && id(v.tow)));
 }
 const isSuit = (kind: string): boolean => Object.hasOwn(SUIT_RATINGS, kind);
 /** The one fitted suit is the highest refit tier crafted, or the 150 m suit. */
@@ -103,7 +119,11 @@ const array = (
 ): v is unknown[] => Array.isArray(v) && v.length <= max && v.every(check);
 const unique = (a: readonly unknown[]): boolean => new Set(a).size === a.length;
 /** Every distinct scan a save can hold: each source, each technical record and the reef filter flow. */
-const SCANNABLE_COUNT = Object.keys(SOURCES).length + Object.keys(TECH_RECORDS).length + 1;
+const SCANNABLE_COUNT = Object.keys(SOURCES).length + Object.keys(TECH_RECORDS).length + 1 +
+  Object.keys(THREATS).length + Object.keys(CUE_SPECIES).length;
+/** SIG-1: a species the range tagger filed (`species:<id>`). */
+const speciesScan = (v: unknown): boolean => typeof v === "string" && v.startsWith("species:") &&
+  (Object.hasOwn(THREATS, v.slice(8)) || Object.hasOwn(CUE_SPECIES, v.slice(8)));
 /** The recipes whose paid costs make up each campaign hull's frame. */
 const HULL_BUILD_RECIPES = {
   dart: ["dart_base"], creel: ["creel_base"], hush: ["hush_base"], spindle: ["spindle_base"], mantle: ["mantle_base"],
@@ -286,7 +306,7 @@ export function validState(value: unknown): value is GameState {
       BLUEPRINTS.includes(v as (typeof BLUEPRINTS)[number]),
     ) ||
     // Unique, known IDs only, so the bound is every scannable thing in the build.
-    !stringSet(k.scans, SCANNABLE_COUNT, (v) => v === "filter_flow" || known(SOURCES)(v) || techRecord(v)) ||
+    !stringSet(k.scans, SCANNABLE_COUNT, (v) => v === "filter_flow" || known(SOURCES)(v) || techRecord(v) || speciesScan(v)) ||
     !array(
       k.evidence,
       Object.keys(EVIDENCE).length,
@@ -485,7 +505,7 @@ export function validState(value: unknown): value is GameState {
         return held === null || (typeof held === "string" && socket.accepts.includes(held));
       }) ||
       !id(d.vehicleId) ||
-      !oneOf(d.configuration, ["compact", "medium"]) ||
+      !oneOf(d.configuration, ["compact", "medium", "mixed"]) ||
       !bool(d.stationKeeping) ||
       !bool(d.supportedDock) ||
       !bool(d.launchBlocked) ||
@@ -623,6 +643,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
     ...s.systems.outposts.map((o) => [`${o.id}_locker`, "locker", OUTPOST_TIERS[o.tier].lockerCu, o.id]),
     ...[...items.filter((i) => i.kind === "mod_locker").map((i) => i.id), ...s.systems.sockets.filter((e) => e.kind === "mod_locker").map((e) => e.itemId)]
       .map((itemId) => [`${itemId}_locker`, "locker", SYS2_MODULES.locker.lockerCu, itemId]),
+    // SIG-1: each Creel cargo pod owns its container, fitted, carried or dropped.
+    ...items.filter((i) => i.kind === "creel_drop_pod").map((i) => [podContainerId(i.id), "locker", DROP_POD.cu, i.id]),
   ];
   if (
     expected.length !== containers.length ||
@@ -686,6 +708,19 @@ function semantic(s: GameState, fresh: GameState): boolean {
       if (kinds.filter((k) => slotOf(v.hull, k) === slot).length > slotCapacity(v.hull, slot, profile)) return false;
     if (!unique(kinds.map((k) => UPGRADES[k].line))) return false;
     if (v.upgrades.anchored && v.hull !== "hearthline") return false;
+    // SIG-1: a tool in use needs its upgrade fitted (fitting refuses removal while
+    // one is out); a tow names another hull, released by the step once it is patched.
+    const rt = v.upgrades;
+    if ((rt.grapple && !profile.tools.includes("grapple")) || (rt.pod && !profile.tools.includes("drop_pod")) ||
+        (rt.tag && !profile.contracts.includes("range_tagger")) || (rt.drone && !profile.contracts.includes("scout_drone")) ||
+        (rt.lift && !profile.tools.includes(rt.lift.tool === "crane" ? "deck_crane" : "salvage_clamp")) ||
+        (rt.tow && (!profile.tools.includes("salvage_clamp") || rt.tow === v.id || !f.vehicles.some((o) => o.id === rt.tow))) ||
+        (rt.tag && rt.tag.since > s.tick) || (rt.drone && rt.drone.launchedAt > s.tick)) return false;
+  }
+  // SIG-1: a host upgrade belongs to an existing decoder or survey module, carried or installed.
+  for (const [itemId, upgrade] of Object.entries(s.systems.moduleUpgrades)) {
+    const kind = items.find((i) => i.id === itemId)?.kind ?? s.systems.sockets.find((e) => e.itemId === itemId)?.kind;
+    if (!kind || moduleOfItem(kind) !== HOST_UPGRADES[upgrade].module) return false;
   }
   const moduleReferences = new Set<string>();
   for (const v of f.vehicles) {
@@ -872,6 +907,8 @@ function semantic(s: GameState, fresh: GameState): boolean {
     )
       return false;
     if (d.supportedDock !== atCarrierSupport(h)) return false;
+    // SIG-1: the mixed layout stands only while the berth extension is fitted.
+    if (d.configuration === "mixed" && !items.some((i) => i.kind === "hearthline_berth_extension" && h.modules.includes(i.id))) return false;
     if (p.interiorPose) {
       const pos = localToWorld(p.interiorPose.position, h);
       if (Math.hypot(p.pose.position.x - pos.x, p.pose.position.y - pos.y, p.pose.position.z - pos.z) > 0.01) return false;
@@ -880,11 +917,10 @@ function semantic(s: GameState, fresh: GameState): boolean {
       if (a.berth) {
         if (
           a.berth.carrierId !== h.id ||
-          HULLS[a.hull].berth !== d.configuration ||
-          (d.configuration === "medium" && a.berth.slot !== 0) ||
+          HULLS[a.hull].berth !== slotSize(d.configuration, a.berth.slot) ||
           a.berth.pose.yaw !== 0 ||
           Math.hypot(a.velocity.x, a.velocity.y, a.velocity.z) > 0.001 ||
-          Math.hypot(a.berth.pose.position.x - BERTH_LOCAL[a.berth.slot]!.x, a.berth.pose.position.y - BERTH_LOCAL[a.berth.slot]!.y, a.berth.pose.position.z - BERTH_LOCAL[a.berth.slot]!.z) > 0.001
+          distance(a.berth.pose.position, berthLocal(d.configuration, a.berth.slot)) > 0.001
         )
           return false;
         const pos = localToWorld(a.berth.pose.position, h);
@@ -917,8 +953,7 @@ function semantic(s: GameState, fresh: GameState): boolean {
         !a ||
         !d.stationKeeping ||
         d.completed.includes(tx.id) ||
-        tx.slot > (d.configuration === "medium" ? 0 : 1) ||
-        HULLS[a.hull].berth !== d.configuration ||
+        HULLS[a.hull].berth !== slotSize(d.configuration, tx.slot) ||
         (tx.type === "launch" && (!a.berth || a.berth.slot !== tx.slot)) ||
         (tx.type === "capture" && (!!a.berth || f.vehicles.some((v) => v.berth?.slot === tx.slot)))
       )

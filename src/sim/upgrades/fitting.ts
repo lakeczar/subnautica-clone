@@ -36,7 +36,8 @@ export interface FitTarget {
   /** The carrier's own berth and system state, for Hearthline structure changes. */
   readonly carrier?: { readonly configuration: BerthConfiguration; readonly berthsEmpty: boolean; readonly systemOccupied: number };
   /** Tools in use in the world: their module cannot come off until they are recovered. */
-  readonly inUse?: { readonly pod?: boolean; readonly grapple?: boolean; readonly anchored?: boolean };
+  readonly inUse?: { readonly pod?: boolean; readonly grapple?: boolean; readonly anchored?: boolean; readonly drone?: boolean;
+    readonly lift?: boolean; readonly tow?: boolean };
 }
 export interface FitPreview {
   readonly action: "install" | "remove";
@@ -145,6 +146,10 @@ function inUseRefusal(t: FitTarget, kind: UpgradeId): string | null {
   if (tool === "drop_pod" && t.inUse?.pod) return "The cargo pod is still out. Collect it before changing its socket. Nothing changed.";
   if (tool === "grapple" && t.inUse?.grapple) return "The grapple line is attached. Release it before changing the tool. Nothing changed.";
   if (tool === "mooring_anchor" && t.inUse?.anchored) return "The anchor is down. Raise it before changing the bay. Nothing changed.";
+  const contract = (def(kind).effect as UpgradeEffect).contract;
+  if (contract === "scout_drone" && t.inUse?.drone) return "The scout drone is out. Recall it before changing the bay. Nothing changed.";
+  if ((tool === "deck_crane" || tool === "salvage_clamp") && t.inUse?.lift) return "A lift is under way. Let it finish first. Nothing changed.";
+  if (tool === "salvage_clamp" && t.inUse?.tow) return "The clamp holds a hull. Release the tow first. Nothing changed.";
   return null;
 }
 
@@ -330,7 +335,12 @@ export function refitPreview(t: Pick<FitTarget, "hull" | "rating" | "dock" | "fi
 }
 
 // ---------------------------------------------------------------- carrier berths
+/** The berth size of each slot in each layout: the one table the carrier, saves and panels read. */
+export const BERTH_SLOT_SIZES: Readonly<Record<BerthConfiguration, readonly ("compact" | "medium")[]>> = {
+  compact: ["compact", "compact"], medium: ["medium"], mixed: ["medium", "compact"],
+};
 /** Berth layouts the carrier can take: one size per slot. Mixed needs the extension. */
 export function berthLayouts(p: CraftProfile): Partial<Record<BerthConfiguration, readonly ("compact" | "medium")[]>> {
-  return { compact: ["compact", "compact"], medium: ["medium"], ...(p.mixedBerths ? { mixed: ["medium", "compact"] as const } : {}) };
+  const { compact, medium, mixed } = BERTH_SLOT_SIZES;
+  return { compact, medium, ...(p.mixedBerths ? { mixed } : {}) };
 }

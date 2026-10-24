@@ -19,8 +19,8 @@ import { createSystems } from "../src/sim/systems/state.js";
 import { initialRuntime } from "../src/sim/upgrades/tools.js";
 import { vehicleProfile } from "../src/sim/fittings.js";
 
-// Save policy (DIRECTION): schema 6 loads; schema 5 / expedition.6 is the one bridged
-// predecessor (C4); schemas 1–4 are refused as older development builds.
+// Save policy (DIRECTION): schema 7 loads; schema 6 / expedition.7 is the one bridged
+// predecessor (SIG-1); schemas 1–5 are refused as older development builds.
 const world = createWorldQueries();
 const meta = { sessionId: "save-bridge-test-01", createdAt: "2026-10-18T00:00:00.000Z", savedAt: "2026-10-19T00:00:00.000Z" };
 const fixture = (name: string) => readFileSync(`tests/fixtures/${name}`, "utf8");
@@ -43,55 +43,46 @@ function progressed(): GameState {
 const older = (schemaVersion: number, contentVersion: string) =>
   JSON.stringify({ ...createEnvelope(createGame(), meta), schemaVersion, contentVersion });
 
-/** A real schema 5 export: today's state without the schema 6 fields, under the
- * schema 5 / expedition.6 tags (what the previous build wrote). */
-function schema5(state: GameState): string {
+const SCHEMA7_RUNTIME = ["sonar", "tag", "drone", "lift", "tow"] as const;
+/** A real schema 6 export: today's state without the schema 7 fields, under the
+ * schema 6 / expedition.7 tags (what the previous build wrote). */
+function schema6(state: GameState): string {
   const s = structuredClone(state) as unknown as Record<string, any>;
-  delete s.systems;
-  delete s.world.flares;
-  delete s.knowledge.cycles;
-  for (const v of s.fleet.vehicles) { delete v.upgrades; delete v.bioFeed; }
-  return JSON.stringify({ ...createEnvelope(state, meta), schemaVersion: 5, contentVersion: "expedition.6", state: s });
+  delete s.systems.moduleUpgrades;
+  for (const v of s.fleet.vehicles) for (const k of SCHEMA7_RUNTIME) delete v.upgrades[k];
+  return JSON.stringify({ ...createEnvelope(state, meta), schemaVersion: 6, contentVersion: "expedition.7", state: s });
 }
 
-test("a schema 5 save bridges once: New Game's systems slice, carried trim vanes fitted, reduced stock clamped", () => {
-  // A Creel carrying resin trim vanes in its hold: under schema 5 they protected it.
+test("a schema 6 save bridges once: New Game's signature runtime and an empty host-upgrade record", () => {
   const s = creelFirst();
-  fund(s, "trim_vanes");
-  const v = creelOf(s), vanes = s.inventory.items.find((i) => i.kind === "trim_vanes")!;
-  vanes.containerId = v.cargoId;
-  // A core shoulder still holding schema 5's stock (now a scan-only site).
-  Object.assign(s.world.resources.find((r) => r.id === "rift_core_shoulder_north")!, { stock: 8, reserve: 6 });
-  const out = decodeSave(schema5(s));
+  const v = creelOf(s);
+  v.upgrades.flares = 2;
+  const out = decodeSave(schema6(s));
   assert.ok(out.ok, out.ok ? "" : out.error);
   const b = out.value.state, creel = b.fleet.vehicles.find((x) => x.id === v.id)!;
-  assert.deepEqual(b.systems, createSystems());
-  assert.deepEqual(b.world.flares, []);
-  assert.deepEqual(creel.upgrades, initialRuntime());
-  assert.equal(creel.bioFeed, null);
-  assert.deepEqual(creel.modules, [vanes.id], "the carried vanes now sit in a socket");
-  assert.equal(b.inventory.items.find((i) => i.id === vanes.id)!.fitted, null, "a socket module stays a hold item");
-  assert.ok(Math.abs(vehicleProfile(b, creel).current - (vehicleProfile(b, { ...creel, modules: [] }).current + 0.25)) < 1e-9, "and it protects as before");
-  assert.deepEqual(b.world.resources.find((r) => r.id === "rift_core_shoulder_north"), { id: "rift_core_shoulder_north", stock: 0, reserve: 0 });
-  assert.equal(out.value.schemaVersion, 6);
-  // Written once, it is a canonical schema 6 save that reads back unchanged.
+  assert.deepEqual(b.systems, { ...s.systems, moduleUpgrades: {} });
+  assert.deepEqual(creel.upgrades, { ...initialRuntime(), flares: 2 }, "schema 6 runtime kept, schema 7 tools at New Game's value");
+  assert.deepEqual(Object.keys(creel.upgrades), Object.keys(initialRuntime()), "in New Game's key order");
+  assert.equal(out.value.schemaVersion, 7);
+  assert.deepEqual(b, s, "nothing else changes");
+  // Written once, it is a canonical schema 7 save that reads back unchanged.
   const written = encoded(out.value), again = decodeSave(written);
   assert.ok(again.ok); assert.deepEqual(again.value, out.value);
 });
 
-test("a schema 5 save holding any schema 6 field, or mixed tags, is refused before bridging", () => {
-  const base = JSON.parse(schema5(progressed()));
-  const withSystems = structuredClone(base); withSystems.state.systems = createSystems();
-  const withFlares = structuredClone(base); withFlares.state.world.flares = [];
-  for (const [raw, pattern] of [[withSystems, /only schema 6 writes/], [withFlares, /only schema 6 writes/],
-    [{ ...base, contentVersion: "expedition.7" }, /another content version/], [{ ...base, schemaVersion: 6 }, /another content version/]] as const) {
+test("a schema 6 save holding any schema 7 field, or mixed tags, is refused before bridging", () => {
+  const base = JSON.parse(schema6(creelFirst()));
+  const withRecord = structuredClone(base); withRecord.state.systems.moduleUpgrades = {};
+  const withTool = structuredClone(base); withTool.state.fleet.vehicles[0].upgrades.drone = null;
+  for (const [raw, pattern] of [[withRecord, /only schema 7 writes/], [withTool, /only schema 7 writes/],
+    [{ ...base, contentVersion: "expedition.6" }, /another content version/]] as const) {
     const out = decodeSave(JSON.stringify(raw));
     assert.equal(out.ok, false); if (!out.ok) assert.match(out.error, pattern);
   }
 });
 
-test("Continue from a stored schema 5 journal reads without writing; the first save keeps the original as previous", async () => {
-  const original = schema5(progressed()), storage = new MemoryStorage();
+test("Continue from a stored schema 6 journal reads without writing; the first save keeps the original as previous", async () => {
+  const original = schema6(progressed()), storage = new MemoryStorage();
   storage.setItem(LOCAL_SAVE_KEY, JSON.stringify({ format: "siltwake.local", version: 1, current: original, previous: null, preserved: null }));
   const raw = storage.getItem(LOCAL_SAVE_KEY), writes = storage.writes;
   const repo = new SaveRepository(storage, new TestWriterLock());
@@ -101,23 +92,25 @@ test("Continue from a stored schema 5 journal reads without writing; the first s
   assert.equal(storage.getItem(LOCAL_SAVE_KEY), raw);
   assert.ok((await repo.commit(loaded.save)).ok);
   const journal = JSON.parse(storage.getItem(LOCAL_SAVE_KEY)!);
-  assert.equal(journal.previous, original, "the original schema 5 generation remains byte-identical");
-  assert.equal(JSON.parse(journal.current).schemaVersion, 6);
+  assert.equal(journal.previous, original, "the original schema 6 generation remains byte-identical");
+  assert.equal(JSON.parse(journal.current).schemaVersion, 7);
 });
 
-test("schemas 1–4 are refused as older development builds, including the archived real exports", () => {
+test("schemas 1–5 are refused as older development builds, including the archived real exports", () => {
   const sources = [
-    older(1, "foundation.1"), older(2, "expedition.2"), older(2, "expedition.3"), older(3, "expedition.4"),
+    older(1, "foundation.1"), older(2, "expedition.2"), older(2, "expedition.3"), older(3, "expedition.4"), older(5, "expedition.6"),
     readFileSync("tests/fixtures/archive/reef-rib-trap-expedition3.json", "utf8"),
     readFileSync("tests/fixtures/archive/earned-c06-expedition4.json", "utf8"),
     readFileSync("tests/fixtures/archive/diagnostic-depleted-expedition5.schema4.json", "utf8"),
+    readFileSync("tests/fixtures/archive/earned-c06.schema5.json", "utf8"),
+    readFileSync("tests/fixtures/archive/reef-rib-trap.schema5.json", "utf8"),
   ];
   for (const raw of sources) {
     const out = decodeSave(raw);
     assert.equal(out.ok, false);
-    if (!out.ok) assert.match(out.error, /older development build.*schema [1234]\).*Keep the original file/);
+    if (!out.ok) assert.match(out.error, /older development build.*schema [12345]\).*Keep the original file/);
   }
-  for (const schemaVersion of [0, 7, 99]) {
+  for (const schemaVersion of [0, 8, 99]) {
     const out = decodeSave(older(schemaVersion, "expedition.7"));
     assert.equal(out.ok, false); if (!out.ok) assert.match(out.error, /unsupported/);
   }
@@ -172,14 +165,15 @@ test("a refused older-build Import preserves the active session, journal and sou
   } finally { session.dispose(); }
 });
 
-test("named fixtures were converted once to schema 6; the archived originals are evidence, never rewritten", () => {
-  for (const [name, archived] of [["earned-c06.json", "earned-c06.schema5.json"], ["reef-rib-trap.json", "reef-rib-trap.schema5.json"]] as const) {
+test("named fixtures were converted once to schema 7; the archived originals are evidence, never rewritten", () => {
+  for (const [name, archived] of [["earned-c06.json", "earned-c06.schema6.json"], ["reef-rib-trap.json", "reef-rib-trap.schema6.json"],
+    ["diagnostic-depleted.json", "diagnostic-depleted.schema6.json"]] as const) {
     const raw = fixture(name), out = decodeSave(raw);
     assert.ok(out.ok, out.ok ? "" : out.error);
-    assert.equal(JSON.parse(raw).schemaVersion, 6);
+    assert.equal(JSON.parse(raw).schemaVersion, 7);
     const written = encoded(out.value);
     assert.equal(JSON.stringify(JSON.parse(written)), JSON.stringify(JSON.parse(raw)), `${name} is already canonical`);
-    // The archived schema 5 original still bridges to exactly this save.
+    // The archived schema 6 original still bridges to exactly this save.
     const bridged = decodeSave(readFileSync(`tests/fixtures/archive/${archived}`, "utf8"));
     assert.ok(bridged.ok); assert.deepEqual(bridged.value, out.value);
   }

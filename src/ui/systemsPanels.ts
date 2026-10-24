@@ -29,6 +29,7 @@ import {
 } from "../sim/systems/index.js";
 import type { JournalTabId } from "../sim/systems/journal.js";
 import type { CreatureEntry, CycleEntry } from "../sim/systems/index.js";
+import { speciesScanId } from "../sim/signatures.js";
 import { berthChargePlan, chartOptions, deployPoint, hostPower, hostPowerReason, OUTPOST_SERVICE_RADIUS, outpostRules, siteQuery, surveyTierAt, systemsContext } from "../sim/systemsLink.js";
 import { surveyRange } from "../sim/systems/survey.js";
 import { serviceLabel, servicePreview } from "../sim/serviceLink.js";
@@ -176,9 +177,12 @@ export function fitPanel(s: GameState, button: CommandButton, group: Group): str
 /** Creatures met: every species of a region whose habitats you have worked. */
 function creatures(s: GameState): CreatureEntry[] {
   const regions = new Set(s.knowledge.scans.filter((id) => Object.hasOwn(SOURCES, id)).map((id) => SOURCES[id as keyof typeof SOURCES].region as RegionId));
+  // SIG-1: a species the Dart's range tagger filed is known wherever it was met.
+  const known = (id: string, region: RegionId): boolean => regions.has(region) || s.knowledge.scans.includes(speciesScanId(id));
+  const tagged = (id: string): readonly string[] => s.knowledge.scans.includes(speciesScanId(id)) ? ["Tagged at range by the Dart."] : [];
   return [
-    ...Object.entries(THREATS).filter(([, t]) => regions.has(t.region)).map(([id, t]) => ({ id, label: t.label, region: t.region, behaviour: t.scan, danger: "hunter" as const })),
-    ...Object.entries(CUE_SPECIES).filter(([, c]) => regions.has(c.region)).map(([id, c]) => ({ id, label: c.label, region: c.region, behaviour: c.scan, danger: "cue" as const })),
+    ...Object.entries(THREATS).filter(([id, t]) => known(id, t.region)).map(([id, t]) => ({ id, label: t.label, region: t.region, behaviour: t.scan, danger: "hunter" as const, notes: tagged(id) })),
+    ...Object.entries(CUE_SPECIES).filter(([id, c]) => known(id, c.region)).map(([id, c]) => ({ id, label: c.label, region: c.region, behaviour: c.scan, danger: "cue" as const, notes: tagged(id) })),
   ];
 }
 /** Natural cycles the player has watched (C4B-07): only timings seen from a
