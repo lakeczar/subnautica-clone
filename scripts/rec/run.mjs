@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--hold S]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -48,6 +48,8 @@ const judged = (() => {
   if (process.env.SILTWAKE_SOAK_DEDICATED === "1") return true;
   try { return !!t && JSON.parse(readFileSync(path.join(process.env.SILTWAKE_SCHED_DIR || "/work/tmp/siltwake-sched", "jobs", t, "grant.json"), "utf8")).exclusive === true; } catch { return false; }
 })();
+/** --hold: the scene's settling time before the measured window. */
+const HOLD_SETTLE_MS = 20_000;
 const machine = arg("machine", hostname() === "factory-worker" ? "RTX 3090 (factory-worker)" : hostname());
 
 // The like-for-like probe (every mode): rAF gaps and the time of the frame's
@@ -82,6 +84,11 @@ try {
     label: "rec1", query, isolate: !flag("no-isolate"), initScripts: [probeScript], log });
   result.renderer = g.renderer; result.chrome = g.chrome;
   log("renderer", g.renderer);
+  // --hold S: no travel. The diver stays at the save's pose; after the scene
+  // settles, S seconds are measured with nothing moving, so the game's own work
+  // is the same in every mode and a recorder's cost is not lost in the scene's.
+  const holdS = Number(arg("hold", 0));
+  if (holdS > 0) { await releaseAll(g); await g.page.waitForTimeout(HOLD_SETTLE_MS); }
   // Measured from here: the travel itself. Main-thread task time over the window
   // (CDP: every task, GC and the recorder's later tasks included) is the inclusive cost (R1-S1).
   await g.page.evaluate(() => window.__recProbe.reset());
@@ -103,7 +110,8 @@ try {
     const { profile } = await g.cdp.send("Profiler.stop");
     writeFileSync(path.join(out, "profile.json"), JSON.stringify(profileSummary(profile, profileS)));
   };
-  for (const [i, pt] of points.entries()) {
+  if (holdS > 0) { await g.page.waitForTimeout(holdS * 1000); await stopProfile(); }
+  for (const [i, pt] of (holdS > 0 ? [] : points).entries()) {
     if (i === 0) continue;
     if (Date.now() > deadline) break;
     if (profileEnd && Date.now() > profileEnd) await stopProfile();

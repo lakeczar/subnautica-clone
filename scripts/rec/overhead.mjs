@@ -21,10 +21,11 @@ const out = arg("out"), rounds = Number(arg("rounds", 2));
 if (!out || !arg("dist") || !arg("save")) { console.error("usage: overhead.mjs --dist DIST --save SAVE --plan PLAN --segment N --seconds S --rounds R --out DIR"); process.exit(2); }
 mkdirSync(out, { recursive: true });
 const MODES = { off: ["--rec", "off"], perf: ["--rec", "on", "--video", "off"], screencast: ["--rec", "on", "--video", "on"], playtest: ["--rec", "playtest"] };
-// --modes off,playtest: a subset; --no-isolate: serve as a static host does (an owner's playtest page is not cross-origin isolated).
+// --modes off,playtest: a subset; --no-isolate: serve as a static host does (an owner's playtest page is not cross-origin isolated);
+// --hold S: every run holds the save's pose for S measured seconds instead of travelling (the scene identical across modes).
 const order = arg("modes") ? arg("modes").split(",") : ["off", "perf", "screencast", "playtest"];
 const pass = [];
-for (const name of ["plan", "segment", "seconds", "chrome", "pw", "gpu", "machine", "size"]) if (arg(name) !== undefined) pass.push(`--${name}`, arg(name));
+for (const name of ["plan", "segment", "seconds", "chrome", "pw", "gpu", "machine", "size", "hold"]) if (arg(name) !== undefined) pass.push(`--${name}`, arg(name));
 if (args.includes("--no-isolate")) pass.push("--no-isolate");
 const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), "run.mjs");
 const runs = [];
