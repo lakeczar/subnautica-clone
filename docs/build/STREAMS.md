@@ -966,3 +966,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Review:** Sol R2 running (`siltwake-sched3-review-r2-sol-fa2078a`).
 - **SIM-PERF-1 merged to root at `a38b951e`:** fast, build and 6 economy pass (`00c8`); playthrough 8/8 (`1f2e`, 4070); the bake rebaked 220 chunks with a clean tree (`31e5`, 3090). Saves export deferred until the 3090 exclusive queue drains (its local build would disturb).
 - **Claude rate limit (about 16:45Z):** LS-1's first run failed and is resumed on its thread. Every other task was checked: CW-1, REC-1, SCHED-3, COL-1 and SIM-PERF-1 had finished their turns; the Sol SCHED-3 R2 review is running. The exclusive "lane" block is the queue's normal turn interleaving with the R2 reviewer's queued suites.
+- **LS-1 plan done at `30ed003b`** (plan `docs/build/streams/LS-1.md`; spoiler appendix separate):
+  - **Today:** 7 exterior sites exist only as invisible triggers; 2 grant anything; cave finds, caches, notes and reveals are unwired and unowned.
+  - **Plan:** presence first (silhouette, tell, approach, readable plate); 4 redundant plans dropped and their rewards reassigned; decodes feel 3–10 min all game; decoded maps chain to more sites; two backtracking gates about 3 h apart; the garden plot on the hub spur; 16 sites, 17 decodables, 10 caches.
+  - **Stages:** 1a framework and 1b rewards (disjoint from CW-1); 2 after CW-1; 3 after COL-1 B; 4 with the BIO streams. It flags OP-1 coordination (the bot's pump-house leg, the pump-house floor, the decoder rack within 250 m).
+  - **Review:** Sol plan review R1 running (`siltwake-ls1-review-r1-sol-30ed003`).
+  - **Owner answers (2026-10-24, in OPENING-DESIGN):** coded doors open by clicking a keypad and typing the code; the first planter at 2.5–4 h is right, with a notably better cultivation upgrade past 4 h.
