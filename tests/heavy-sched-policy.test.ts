@@ -461,7 +461,8 @@ test("the portable runner (SCHED-3 R3, R4): registered spellings map to its argu
   assert.match(R.resolveScript({}, "t").error, /no script t/);
   const env = R.portableEnv({ PATH: "/bin", HOME: "/h", LC_ALL: "C", NODE_OPTIONS: "x", npm_config_script_shell: "/s", SILTWAKE_BUILD_CACHE: "off", SILTWAKE_SCHED_DIR: "/q",
     SILTWAKE_JOB_CPUS: "2", SILTWAKE_HEAVY_POOL_MIB: "9", SILTWAKE_GPU_LEASE: "t", SILTWAKE_TEST_BUILD: ".test-build-2", BAKE_WORKERS: "2", TERM: "xterm" }, "/r");
-  assert.deepEqual(Object.keys(env).sort(), ["BAKE_WORKERS", "HOME", "LC_ALL", "PATH", "SILTWAKE_GPU_LEASE", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_JOB_CPUS", "SILTWAKE_TEST_BUILD"]);
+  // Of the queue's configuration, only SILTWAKE_SCHED_DIR: STEW-2's --require finds its job there (R5).
+  assert.deepEqual(Object.keys(env).sort(), ["BAKE_WORKERS", "HOME", "LC_ALL", "PATH", "SILTWAKE_GPU_LEASE", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_JOB_CPUS", "SILTWAKE_SCHED_DIR", "SILTWAKE_TEST_BUILD"]);
   assert.equal(env.PATH, "/r/node_modules/.bin:/bin");
 });
 
