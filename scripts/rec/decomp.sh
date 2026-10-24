@@ -33,6 +33,7 @@ for v in ${VARIANTS:-telemetry capture-bitmap capture-frame vp9-bitmap vp8-bitma
     vp8-bitmap) run "$v" --codec vp8 ;;
     h264-bitmap) run "$v" --codec h264 ;;
     vp8-frame) run "$v" --codec vp8 --capture frame ;;
+    bench-sample) node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack --rec playtest --video off --hold 5 --bench-sample --out "$out/$v" 2>&1 | grep -E 'bench-sample|Error' ;;
     *) echo "unknown variant $v" ;;
   esac
 done

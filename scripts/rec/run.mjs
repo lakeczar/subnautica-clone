@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp9,vp8,h264,…] [--video-width W] [--alternate W] [--paused] [--encode off] [--capture frame] [--no-sample]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--alloc] [--hold S] [--owner-browser] [--no-timing] [--codec vp9,vp8,h264,…] [--video-width W] [--alternate W] [--paused] [--encode off] [--capture frame] [--no-sample] [--bench-sample]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -91,6 +91,16 @@ try {
   // is the same in every mode and a recorder's cost is not lost in the scene's.
   const holdS = Number(arg("hold", 0));
   if (holdS > 0) { await releaseAll(g); await g.page.waitForTimeout(HOLD_SETTLE_MS); }
+  // --bench-sample: what each part of the recorder's 4 Hz sample costs in this page (R3b attribution), 50 calls each.
+  if (flag("bench-sample")) {
+    result.benchSample = await g.page.evaluate(() => {
+      const time = (f) => { const t0 = performance.now(); for (let i = 0; i < 50; i++) f(); return +((performance.now() - t0) / 50).toFixed(4); };
+      const h = window.__siltwake;
+      return { readMs: time(() => h.read()), sceneMs: time(() => h.scene()), memoryMs: time(() => performance.memory?.usedJSHeapSize),
+        meshes: h.scene()?.meshes ?? null };
+    });
+    log("bench-sample", JSON.stringify(result.benchSample));
+  }
   // --paused: the recorder paused in place for the whole hold (R3b: shows a paused recorder costs what a page without one does).
   if (flag("paused") && !(await g.page.evaluate(() => window.__siltwake.measure.pauseRecorder(true)))) throw new Error("--paused: the page refused to pause its recorder (playtest mode needed)");
   if (flag("paused")) await g.page.waitForTimeout(3000); // the segment's last data drains before the measured window
