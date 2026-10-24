@@ -843,3 +843,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **REC-1 R3b:** the cost is the video path (software VP9 plus GPU readback contention), not timing or allocations. The confirmation design approved is within-run alternation (`?recmeasure=1`) plus off-versus-paused corroboration. Hardware encoder preferred, with a software fallback. The 540p fallback question is with the owner.
 - **Owner (2026-10-24), recorder video encoder:** the owner points out that every player machine has a GPU with a hardware encoder. Decision: a hardware ladder of AV1 → VP9 → H.264 (`prefer-hardware`; H.264 covers integrated GPUs, in MKV or MP4 if needed); the software fallback (effectively our Linux test machines) at 960×540; the pack states the encoder used. The 1% budget is judged on the owner's hardware path (owner-PC check) and on the 540p software path on our machines.
 - **Owner encoder policy (2026-10-24):** the owner's laptop uses the best encoder available; the sandbox may use something else; the CPU route at 960×540 is approved on Linux only if all else fails. A Sol research agent is studying browser hardware video encoding (`siltwake-research-webcodecs-hw-encode-sol`, writing `research/browser-hw-encode`) to give REC-1 concrete probes.
+- **SIM-1b R2** (Sol on `b2aebd6d`, report on `review/sim-1b-r2` `27a3f3ad`): REQUEST CHANGES, 3 P2s and 1 P3. R1's P1s are fixed, and the parse cost is 0.166 ms at 20k.
+  - **Findings:**
+    - the validator misses malformed known fields;
+    - the harness is weak: mutation testing showed the F3 and F4 mutants surviving 2,000 sequences, and its oracle follows production parsers;
+    - a timeline warning suppresses urgent hazard captions (player-facing);
+    - a stale failure warning remains after repair.
+  - **Fix plan:** an independent oracle, read snapshots, deterministic fault schedules, fast-tier seeds that kill the known mutants, and mutants kept as a heavy self-check.
