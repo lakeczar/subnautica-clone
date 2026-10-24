@@ -873,3 +873,11 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Fixes:** full known-field validation; a rewritten independent-oracle harness (read snapshots, full fault and lock families, 40-step replay; all 12 mutants killed in the fast tier, plus a heavy self-check); the timeline warning at rank 2.5, below hazards and game-save warnings; scoped resolution of timeline warnings.
   - **New defect found by the harness:** a 1,001-event seal on reload, now fixed.
   - **Review:** Sol R3 running with fresh mutants (`siltwake-sim1b-review-r3-sol-16961a6`).
+- **CW-1 diagnostic D1 (key finding):**
+  - **What it shows:** all 20 frames over 34 ms coincide with VM-wide host steal of 410–670 ms across 8 vCPUs inside a 100 ms gap, i.e. **the VM is paused about 100 ms, several times a minute**. Steal sometimes shows as run time and sometimes not. Receipts read about 2% because pauses average out over 5 s windows.
+  - **Plan:**
+    - the CW-1 fixes stand (they break convention 4 regardless);
+    - the gate splits frames into host-paused, mixed (remainder after subtracting steal still over budget, which counts as ours) and clean ours;
+    - a targeted remeasure with per-vCPU steal follows.
+  - **Owner and fleet:** a question about what pauses the whole VM for about 100 ms; this strengthens the option-B case.
+  - **Surf cave stall:** a driver drift onto a shallow bump; root fix is the planner sweeping legs with lateral margin.
