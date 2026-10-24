@@ -1129,3 +1129,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Fixes:** one literal wrapper shape with explicit `--machine`; all `X:direct` bodies are grammar-expressible node steps; v1 admission is tied to the exact `SILTWAKE_HEAVY_SCOPE` unit, and unproven claims refuse with 75; `machineFor` is the one machine policy for the guard and the gate.
   - **Checks:** fast 1,653/1,653, heavy 67, a dry run.
   - **Review:** short Sol R3 running (`siltwake-stew2-review-r3-sol-313dc2a`).
+- **Owner (2026-10-24):** the tone of abandoned places depends on the place (early wonder, somewhat eerie and unsettling later; implication, not gore), recorded in GAME-DIRECTION.
+  - **ENV-1 started** (`siltwake-env1-interiors-plan-opus-84d3447`, plan-first): 4–6 dressed explorable interiors, tone-graded; "the room tells you before the log does"; composes with LS-1, PACE-1, OP-1, COL-1 B and WK-1.
+- **Owner question: an asset pipeline (Blender or other tools).** Today everything is procedural TypeScript geometry: no glTF, no loaders, no Blender. A Sol research pass has started (`siltwake-research-asset-pipeline-sol-84d3447`): headless Blender, procedural, hybrid, glTF-Transform, KTX2, CC0 libraries, AI generation; Babylon fit, budgets, a pipeline in the bake, provenance; a recommendation landing before content wave B and the atmosphere pass.

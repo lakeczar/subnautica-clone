@@ -36,6 +36,7 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - **How:** a player can work out what a late task needs from what they've seen: machines visibly built from a material, a rare decoded log, cryptic messages.
   - **No shopping list:** no explicit list is required.
   - **Fair in hindsight:** the clue must exist and be reachable before the point where missing it costs a trip. A player who misses it pays one return trip, never a dead end.
+- **Tone of abandoned places** (owner, 2026-10-24): it depends on the place. Early places lean towards wonder and curiosity; it turns **somewhat eerie and unsettling** the further into the game you get. Fear comes from implication, not gore.
 - **Carrier hold-course** (owner, 2026-10-24): on long journeys in the slow carrier, it can hold a course along lanes you've already sailed, so you can craft, tend planters or decode aboard. Otherwise you always steer.
 - **Gathering:** no single gathering trip for one recipe takes more than about 5 minutes. Tune from playtests.
 - **Waiting** is only allowed when it's part of the gameplay: decoding, growing, cycles with alternatives. No idle charging bars.
