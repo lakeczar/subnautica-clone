@@ -170,7 +170,7 @@ test("decode progress belongs to the decoder module: removed it pauses, socketed
 test("LS-1: the main path grants the decoder, every kit tier and planters from real records on both routes, never only by a decode", () => {
   for (const t of OUTPOST_TIER_ORDER) assert.ok((MAIN_PATH_PLANS as readonly string[]).includes(OUTPOST_TIERS[t].bp), t);
   for (const plan of ["bp_decoder", "bp_cultivation"]) assert.ok((MAIN_PATH_PLANS as readonly string[]).includes(plan), plan);
-  for (const strategy of ["creel", "carrier"] as const) {
+  for (const strategy of ["independent", "carrier"] as const) {
     assert.deepEqual(mainPathPlanProblems(strategy), [], strategy);
     for (const stop of mainPathPlanRoute(strategy)) {
       assert.ok(stop.record && Object.hasOwn(TECH_RECORDS, stop.record), `${strategy}: ${stop.plan} from a real record`);

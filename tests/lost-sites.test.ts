@@ -81,7 +81,7 @@ test("deferred rows stay out of the world until placed", () => {
 test("found notes: every note resolves, is dated before the disaster, and reads by its rule", () => {
   const gated = new Map<string, string>();
   for (const d of DECODABLE_IDS) for (const g of DECODABLES[d].gates) gated.set(g, d);
-  const deferredGates = new Map(Object.values(DEFERRED_LOST_SITES).flatMap((row) => row.decodes.flatMap((d) => d.gates.map((g) => [g, d.id] as const))));
+  const deferredGates = new Map<string, string>(Object.values(DEFERRED_LOST_SITES).flatMap((row) => row.decodes.flatMap((d) => d.gates.map((g) => [g, d.id] as const))));
   for (const n of FOUND_NOTE_TEXTS) {
     assert.match(n.dated, /^(Season \d+|D−\d+)$/, `${n.id} is dated before the disaster`);
     if (n.readable.kind === "decode") {
