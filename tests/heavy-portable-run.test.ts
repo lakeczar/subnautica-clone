@@ -11,7 +11,6 @@ import { pathToFileURL } from "node:url";
 // shim's handling of v2-only options. Each case is a throwaway repository in
 // tmp with a copy of the runner; nothing here reaches the queue.
 const R = await import(pathToFileURL(resolve("scripts/heavy/portable-run.mjs")).href);
-const SIG = constants.signals as Record<string, number>;
 
 /** A repository at a temp root: the runner (and the policy it imports), package.json scripts, files. */
 function repo(scripts: Record<string, string>, files: Record<string, string> = {}) {
@@ -59,7 +58,7 @@ test("signals (R5-F2): a step a signal ended gives 128 + the platform's number, 
     { "scripts/sig.mjs": "process.kill(process.pid, 'SIGUSR2')", "scripts/never.mjs": "console.log('NEVER')" });
   try {
     const r = spawnSync(process.execPath, [runner(root), "--script", "test"], { encoding: "utf8" });
-    assert.equal(r.status, 128 + SIG.SIGUSR2);
+    assert.equal(r.status, 128 + constants.signals.SIGUSR2);
     assert.equal(r.status, spawnSync("sh", ["-c", "node scripts/sig.mjs && node scripts/never.mjs"], { cwd: root }).status, "what npm's sh reports");
     assert.doesNotMatch(r.stdout, /NEVER/);
   } finally { rmSync(root, { recursive: true, force: true }); }
@@ -79,7 +78,7 @@ test("a stop during the last step is never a success (R5-F2): the step gets it, 
     assert.match(out, /READY/);
     p.kill("SIGTERM");
     const code = await new Promise((done) => p.on("exit", (c) => done(c)));
-    assert.equal(code, 128 + SIG.SIGTERM);
+    assert.equal(code, 128 + constants.signals.SIGTERM);
   } finally { rmSync(root, { recursive: true, force: true }); }
 });
 
