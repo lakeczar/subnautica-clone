@@ -472,6 +472,7 @@ export function createRenderer(
         const caveUpload = caveView.stats.uploads > uploadsBefore ? { ms: +caveUploadMs.toFixed(1), bytes: caveView.stats.textureBytes - bytesBefore } : null;
         canvas.dataset.cave = caveView.active ?? "";
         canvas.dataset.caveLight = caveView.active ? (caveView.lightPending ? "pending" : "resident") : "";
+        canvas.dataset.lightsSettled = String(lights.stats.settled);
         const ks = caveWorld.kitCaves.stats;
         canvas.dataset.caveStream = JSON.stringify({ sync: ks.syncBuilds, built: ks.built, evicted: ks.evicted, boxes: ks.residentBoxes,
           stepMs: +ks.maxStepMs.toFixed(2), buildMs: +worstCaveBuildMs.toFixed(2), pending: streamFrame?.pending ?? -1,

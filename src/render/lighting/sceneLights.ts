@@ -25,6 +25,9 @@ export interface SceneLights {
     readonly scanMs: number; readonly placeMs: number; readonly selectMs: number; readonly placed: number;
     /** Lights the selection considered this frame, and the frame's slowest entry to place. */
     readonly considered: number;
+    /** Every known mesh is scanned and its lights placed: the candidate set
+     * is complete, so selection from here depends only on the pose. */
+    readonly settled: boolean;
     readonly slowest: { readonly name: string; readonly ms: number; readonly instances: number; readonly clusters: number; readonly frozen: boolean } | null;
   };
   dispose(): void;
@@ -182,6 +185,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
     // Slack for a moving mesh's bounds, refreshed at render (a frame behind here).
     return Math.sqrt(dx * dx + dy * dy + dz * dz) > LIGHT_RANGE + MAX_LIGHT_RADIUS + 8;
   };
+  let unplaced = 0;
   let sent = 0, scanMs = 0, placeMs = 0, selectMs = 0, placed = 0, considered = 0;
   /** The frame's slowest entry to place (measurement: which mesh a long placement was). */
   let slowest: { name: string; ms: number; instances: number; clusters: number; frozen: boolean } | null = null;
@@ -195,7 +199,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
   };
   send(lightUniforms([]), 0);
   return {
-    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, slowest }; },
+    get stats() { return { sent, known: entries.size, pending: pending.size, scanMs, placeMs, selectMs, placed, considered, slowest, settled: pending.size === 0 && unplaced === 0 }; },
     update(state, eye, daylight, time) {
       // Scan new meshes in a bounded slice per frame, resuming a large one.
       const until = performance.now() + 1.5;
@@ -217,10 +221,10 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
       // for some scatter) are placed once and cached; place a bounded number
       // per frame (CW-1), so a new chunk's lights join over a few frames.
       const placeUntil = performance.now() + 2;
-      slowest = null;
+      slowest = null; unplaced = 0;
       for (const e of entries.values())
         if (e.active && !e.mesh.isDisposed() && e.mesh.isEnabled() && !(hull && (e.mesh === hull || e.mesh.isDescendantOf(hull)))) {
-          if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) continue;
+          if (!e.world && e.mesh.isWorldMatrixFrozen && !e.mesh.parent && performance.now() > placeUntil) { unplaced++; continue; }
           // A non-instanced mesh's lights all lie in its world bounds, each
           // reaching at most MAX_LIGHT_RADIUS: a mesh whose bounds are beyond
           // LIGHT_RANGE of that can give selection nothing, so its lights are
@@ -229,6 +233,7 @@ export function createSceneLights(scene: Scene, cel: ShaderMaterial, targets: re
           if (!e.instances && outOfRange(e.mesh, eye)) continue;
           const t0 = performance.now();
           const placedLights = toWorld(e, placeUntil);
+          if (!placedLights) unplaced++;
           if (placedLights) for (const l of placedLights) lights.push(l);
           const ms = performance.now() - t0;
           if (ms > (slowest?.ms ?? 0)) slowest = { name: e.mesh.name, ms, instances: e.instances?.length ?? 1, clusters: e.clusters.length,
