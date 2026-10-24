@@ -68,58 +68,73 @@ export const defaultMachine = (cls) => (cls === "soak" ? "soak" : LOCAL_CLASSES.
 // nothing the caller needs back, and a suite or the gate runs it there), or
 // its caller asked for `--machine any|4070` and so declares it, with its
 // outputs as --artifact. Add a command here only once a suite proves it.
+// A registered command placed by default runs through the portable runner
+// (portable-run.mjs, R3): `run` is its arguments there, never npm.
 const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
 const PORTABLE = [
-  { name: "the fast tier", match: (a) => same(a, ["npm", "test"]) || same(a, ["npm", "run", "test:fast"]) },
+  { name: "the fast tier", match: (a) => (same(a, ["npm", "test"]) ? ["--script", "test"] : same(a, ["npm", "run", "test:fast"]) ? ["--script", "test:fast"] : null) },
   // test:heavy's own queued command (package.json); `npm run test:heavy` queues itself.
-  { name: "the heavy tier", match: (a) => same(a, ["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]) },
+  { name: "the heavy tier", match: (a) => (same(a, ["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]) ? ["--sh", a[2]] : null) },
   // The gate's playthrough (scripts/gate.mjs): it compiles first and writes nothing back.
-  { name: "the playthrough", match: (a) => same(a.slice(0, 3), ["npm", "run", "playthrough"]) &&
-    (a.length === 3 || (a[3] === "--" && a.slice(4).every((x, i, r) => x === "--quiet" || x === "--jobs" || (r[i - 1] === "--jobs" && /^\d+$/.test(x))))) },
+  { name: "the playthrough", match: (a) => (same(a.slice(0, 3), ["npm", "run", "playthrough"]) &&
+    (a.length === 3 || (a[3] === "--" && a.slice(4).every((x, i, r) => x === "--quiet" || x === "--jobs" || (r[i - 1] === "--jobs" && /^\d+$/.test(x))))) ? ["--script", "playthrough", ...a.slice(4)] : null) },
 ];
-/** The registered portable command `argv` is, by name, or null. */
-export const portableCommand = (argv) => PORTABLE.find((p) => p.match(argv.map(String)))?.name ?? null;
+/** The registered portable command `argv` is: { name, run } (the runner's arguments), or null. */
+export function portableCommand(argv) {
+  const a = argv.map(String);
+  for (const p of PORTABLE) { const run = p.match(a); if (run) return { name: p.name, run }; }
+  return null;
+}
 export const UNDECLARED = "portability not declared: pass --machine any and --artifact for its outputs";
 
-// The submitter's settings that change what a registered command does (R2-F1).
-// The queue never forwards the environment (alickers gets argv and the
-// commit), so a registered command is portable only when none is set. npm's
-// own exports describe where npm and its files are (it sets them inside every
-// `npm run`), or only how much it logs; every other npm_config_* (script-shell,
-// node-options, a registry, …) changes the run. NODE_OPTIONS preloads and
-// flags. The rest are what the test tiers, the test build and the playthrough
-// runner read (scripts/test-tier.mjs, scripts/playthrough, tests/). Not listed:
-// the queue's own per-job variables (SILTWAKE_JOB_*, SILTWAKE_HEAVY_CONCURRENCY,
-// …), which it sets on either machine, and SILTWAKE_TEST_BUILD, which only
-// names where the job compiles (alickers compiles into its own .test-build).
-const NPM_OWN = new Set(["cache", "globalconfig", "global_prefix", "init_module", "local_prefix", "node_gyp", "noproxy", "npm_version", "prefix", "user_agent", "userconfig", "allow_scripts", "loglevel"]);
-const INVOCATION_ENV = ["NODE_OPTIONS", "SILTWAKE_HEAVY_BUDGET_MIB", "SILTWAKE_PLAYTHROUGH_FAULT", "SILTWAKE_SAVES", "SILTWAKE_LIBRARY_PAUSE"];
-const INVOCATION_PREFIXES = ["SILTWAKE_FAST_", "SILTWAKE_TIMELINE_"];
-/** The set variables in `env` that change a registered command, sorted. */
-export const invocationEnv = (env) => Object.keys(env).filter((k) => env[k] != null && env[k] !== "" && (
-  (k.toLowerCase().startsWith("npm_config_") && !NPM_OWN.has(k.slice(11).toLowerCase())) || INVOCATION_ENV.includes(k) || INVOCATION_PREFIXES.some((p) => k.startsWith(p)))).sort();
+// A conservative intent check before the runner (R3): settings in the
+// submitter's environment that the runner would drop. With any, a default
+// `any` runs here as submitted (base behaviour), naming them. Not a list of
+// what changes each command: any SILTWAKE_* the queue doesn't own (a test
+// selector, a cache mode, …), any NODE_*, and any npm_config_* but npm's own
+// descriptive exports. userconfig, globalconfig and prefix select files, so
+// they pass only as npm's own exports inside an `npm run` (npm_lifecycle_event
+// set), where npm also exports every setting those files make.
+/** The queue's own variables: its configuration, and what it sets for each job on either machine. */
+export const QUEUE_OWNED = (k) => /^SILTWAKE_(SCHED_|JOB_|LANE_)/.test(k) ||
+  ["SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_HEAVY_CGROUP", "SILTWAKE_HEAVY_CONCURRENCY", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_HEAVY_CHECK",
+    "SILTWAKE_GPU_LEASE", "SILTWAKE_SOAK_MACHINE", "SILTWAKE_TEST_BUILD", "BAKE_WORKERS"].includes(k);
+const NPM_DESCRIPTIVE = new Set(["global_prefix", "local_prefix", "npm_version", "cache", "init_module", "node_gyp", "noproxy", "user_agent", "allow_scripts", "loglevel"]);
+const NPM_FILES = new Set(["userconfig", "globalconfig", "prefix"]);
+/** The submitter's settings a default `any` must not drop, sorted. */
+export function intentEnv(env) {
+  const inNpm = Boolean(env.npm_lifecycle_event);
+  return Object.keys(env).filter((k) => {
+    if (env[k] == null || env[k] === "") return false;
+    if (k.startsWith("SILTWAKE_")) return !QUEUE_OWNED(k);
+    if (k.startsWith("NODE_")) return true;
+    if (!k.toLowerCase().startsWith("npm_config_")) return false;
+    const key = k.slice(11).toLowerCase();
+    return !(NPM_DESCRIPTIVE.has(key) || (inNpm && NPM_FILES.has(key)));
+  }).sort();
+}
 
 /**
  * The machine a request resolves to. `why`: a reason it can't run on alickers
  * (the lane's eligibility), or null. `explicit`: the caller passed --machine.
- * `portable`: the command is registered (portableCommand). `localConfig`: the
- * submitter's settings that change it (invocationEnv).
+ * `portable`: the registered command (portableCommand). `intent`: the
+ * submitter's settings the runner would drop (intentEnv).
  * - with a reason, `any` goes to the 3090, recording why (`routed`, on the
  *   ticket and its result), and `4070` is refused;
- * - an `any` the caller didn't ask for goes to the 3090 too, if its command
- *   is unregistered (UNDECLARED) or local configuration changes it;
+ * - an `any` the caller didn't ask for goes to the 3090 too, as submitted, if
+ *   its command is unregistered (UNDECLARED) or its settings show an intent;
  * - every other tag stands (`soak` runs here by its own rule).
  * Returns { machine, routed? } or { error }.
  */
-export function resolveMachine(machine, why, { explicit, portable, localConfig = [] }) {
+export function resolveMachine(machine, why, { explicit, portable, intent = [] }) {
   if (why) {
     if (machine === "4070") return { error: `--machine 4070 runs on alickers, but ${why}` };
     if (machine === "any") return { machine: "3090", routed: { from: "any", reason: why } };
     return { machine };
   }
   if (machine === "any" && !explicit && !portable) return { machine: "3090", routed: { from: "any", reason: UNDECLARED } };
-  if (machine === "any" && !explicit && localConfig.length)
-    return { machine: "3090", routed: { from: "any", reason: `local configuration ${localConfig.join(", ")} changes this command; pass --machine any to declare it portable` } };
+  if (machine === "any" && !explicit && intent.length)
+    return { machine: "3090", routed: { from: "any", reason: `local configuration ${intent.join(", ")} changes this command; pass --machine any to declare it portable` } };
   return { machine };
 }
 /** What a ticket that never ran was planned for (its result's `planned`; R1-F3). */

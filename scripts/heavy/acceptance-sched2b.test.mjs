@@ -732,18 +732,22 @@ const commitFiles = (c, files) => {
   git(c.repoDir, "add", "."); git(c.repoDir, "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "fixture");
 };
 const ticketOf = (c, id) => state(c).tickets[id] ?? result(c, id);
+/** The portable runner as a commit carries it (SCHED-3 R3): a registered default runs it, from the commit. */
+const RUNNER = { "scripts/heavy/portable-run.mjs": readFileSync(join(here, "portable-run.mjs"), "utf8"), "scripts/heavy/policy.mjs": readFileSync(join(here, "policy.mjs"), "utf8") };
 const UNDECLARED = /portability not declared: pass --machine any and --artifact for its outputs/;
 
 test("B28 (SCHED-3, R1): a default any goes to alickers only for a registered command; an unregistered one is routed here (portability not declared), as are dirty trees, local paths and build output; the reason is printed, kept on the ticket, in status and the result; explicit tags win; quick stays here", async () => {
   const c = await lane("balance");
   // .test-build is ignored, as in the repo: a running local job's .heavy-job marker lives there.
-  commitFiles(c, { ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "echo fast-tier-ran" } }) + "\n" });
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "echo fast-tier-ran" } }) + "\n" });
   // Registered (the fast tier): default any, to the 4070, unrouted, no "runs here" line.
   const s = hc(c, ["submit", "--class", "standard", "--", "npm", "test"], { cwd: c.repoDir });
   assert.equal(s.code, 0, s.err);
   assert.doesNotMatch(s.err, /runs here/);
   assert.equal(waitFor(c, s.out.trim()).code, 0);
   assert.deepEqual([result(c, s.out.trim()).remote, result(c, s.out.trim()).machineTag, result(c, s.out.trim()).goal.routed], [true, "any", undefined]);
+  assert.deepEqual([result(c, s.out.trim()).argv, result(c, s.out.trim()).goal.portable], [["node", "scripts/heavy/portable-run.mjs", "--script", "test"], { name: "the fast tier", command: ["npm", "test"] }]);
+  assert.match(log(c, s.out.trim()), /portable-run: echo fast-tier-ran\n(.*\n)*fast-tier-ran/);
   // Declared by the caller (--machine any): to the 4070 too.
   const d0 = submit(c, c.repoDir, "--class", "gpu", "--machine", "any", "--", "sh", "-c", "echo declared");
   assert.equal(waitFor(c, d0).code, 0);
@@ -912,7 +916,8 @@ test("B33 (SCHED-3 R1-F3, Sol's R3): a routed ticket cancelled, expired or lost 
 
 test("B34 (SCHED-3 R2-F1, Sol's E1): local npm configuration that changes a registered command routes a default any here, where it applies; an explicit --machine any stays the caller's declaration", async () => {
   const c = await lane("npm-env");
-  commitFiles(c, { ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: 'if [ "$CASE" = REQUESTED ]; then echo CASE-REQUESTED; exit 19; fi; echo CASE-DEFAULT' } }) + "\n" });
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "sh scripts/case.sh" } }) + "\n",
+    "scripts/case.sh": 'if [ "$CASE" = REQUESTED ]; then echo CASE-REQUESTED; exit 19; fi; echo CASE-DEFAULT\n' });
   const shell = join(c.dir, "test-shell");
   writeFileSync(shell, "#!/bin/sh\nexport CASE=REQUESTED\nexec /bin/sh \"$@\"\n", { mode: 0o755 });
   const env = { npm_config_script_shell: shell };
@@ -996,4 +1001,95 @@ test("B37 (SCHED-3 R2-F3, Sol's E4): remote recovery after the payload started k
   const r = result(c, id);
   assert.deepEqual([r.remote, r.ran, r.machine, r.machineTag, r.goal.machine, r.evidence.bound], [true, true, REMOTE, "any", "any", false]);
   assert.deepEqual(r.goal, t.goal, "the frozen goal");
+});
+
+// SCHED-3 R3 ------------------------------------------------------------------
+
+/** A registered `npm test` whose case script fails 19 when its setup (a script-shell) ran. */
+async function caseLane(name) {
+  const c = await lane(name);
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "package.json": JSON.stringify({ name: "fixture", private: true, scripts: { test: "sh scripts/case.sh" } }) + "\n",
+    "scripts/case.sh": 'if [ "$CASE" = REQUESTED ]; then echo CASE-REQUESTED; exit 19; fi; echo CASE-DEFAULT\n' });
+  c.shell = join(c.dir, "test-shell");
+  writeFileSync(c.shell, "#!/bin/sh\nexport CASE=REQUESTED\nexec /bin/sh \"$@\"\n", { mode: 0o755 });
+  return c;
+}
+const npmTest = async (c, args, env) => {
+  const s = hc(c, ["submit", "--class", "standard", ...args, "--", "npm", "test"], { cwd: c.repoDir, env });
+  assert.equal(s.code, 0, s.err);
+  const id = s.out.trim();
+  await done(c, id, 60000);
+  return { id, err: s.err, r: result(c, id), log: log(c, id) };
+};
+
+test("B38 (SCHED-3 R3-F1, Sol's config probes): npm's config-file selectors set by the submitter route a default any here as submitted, where the file's script-shell applies; a private ~/.npmrc is irrelevant to the portable runner, which runs the same on both machines", async () => {
+  for (const key of ["npm_config_userconfig", "npm_config_globalconfig", "npm_config_prefix"]) {
+    const c = await caseLane(`npmrc-${key.slice(11)}`);
+    const rc = join(c.dir, "npmrc");
+    writeFileSync(rc, `script-shell=${c.shell}\n`);
+    let value = rc;
+    if (key === "npm_config_prefix") { mkdirSync(join(c.dir, "prefix", "etc"), { recursive: true }); writeFileSync(join(c.dir, "prefix", "etc", "npmrc"), `script-shell=${c.shell}\n`); value = join(c.dir, "prefix"); }
+    const x = await npmTest(c, [], { [key]: value });
+    assert.match(x.err, new RegExp(`runs here \\(factory-worker\\), not on alickers: local configuration ${key} changes this command`), key);
+    assert.deepEqual([key, x.r.code, x.r.remote, x.r.argv], [key, 19, undefined, ["npm", "test"]], "run as submitted, with the file's shell");
+    assert.match(x.log, /^CASE-REQUESTED/m);
+  }
+  // A private HOME with ~/.npmrc: no setting in the environment, so a default runs through the runner, without npm: the same on alickers and here.
+  const c = await caseLane("npmrc-home");
+  const home = join(c.dir, "private-home");
+  mkdirSync(home);
+  writeFileSync(join(home, ".npmrc"), `script-shell=${c.shell}\n`);
+  const remote = await npmTest(c, [], { HOME: home });
+  assert.doesNotMatch(remote.err, /runs here/);
+  assert.deepEqual([remote.r.code, remote.r.remote, remote.r.argv[1]], [0, true, "scripts/heavy/portable-run.mjs"]);
+  assert.match(remote.log, /^CASE-DEFAULT/m);
+  c.fake.pause(true);
+  await probeNow(c);
+  const here_ = await npmTest(c, [], { HOME: home });
+  assert.deepEqual([here_.r.code, here_.r.remote, here_.r.argv[1], here_.r.goal.machine], [0, undefined, "scripts/heavy/portable-run.mjs", "any"], "placed here, through the same runner");
+  assert.match(here_.log, /^CASE-DEFAULT/m);
+  // Pinned here, it runs as submitted, through npm and that ~/.npmrc (base behaviour).
+  const pinned = await npmTest(c, ["--machine", "3090"], { HOME: home });
+  assert.deepEqual([pinned.r.code, pinned.r.argv], [19, ["npm", "test"]]);
+});
+
+test("B39 (SCHED-3 R3-F2): a requested cache mode (SILTWAKE_BUILD_CACHE, SILTWAKE_BUILD_CACHE_DIR), or any SILTWAKE_* the queue doesn't own, routes a default any here as submitted", async () => {
+  const c = await caseLane("cache-off");
+  for (const env of [{ SILTWAKE_BUILD_CACHE: "off" }, { SILTWAKE_BUILD_CACHE_DIR: join(c.dir, "cache") }, { SILTWAKE_NOT_YET_INVENTED: "1" }]) {
+    const x = await npmTest(c, [], env);
+    const name = Object.keys(env)[0];
+    assert.match(x.err, new RegExp(`not on alickers: local configuration ${name} changes this command`), name);
+    assert.deepEqual([name, x.r.remote, x.r.argv, x.r.code], [name, undefined, ["npm", "test"], 0]);
+  }
+  // The queue's own variables and npm's descriptive exports don't.
+  const quiet = await npmTest(c, [], { SILTWAKE_TEST_BUILD: ".test-build-2", npm_config_user_agent: "npm/x", npm_config_cache: join(c.dir, "npm-cache") });
+  assert.doesNotMatch(quiet.err, /runs here/);
+  assert.equal(quiet.r.remote, true);
+});
+
+test("B40 (SCHED-3 R3-F3, Sol's crash probe): a holder killed after its claim but before the payload's start: recovery says it never ran, from the start marker", async () => {
+  const c = context("orphan-before-launch");
+  const repo = c.repo("r"), bin = join(c.dir, "bin");
+  mkdirSync(bin);
+  // Only the holder's admission tree check is paused (a private git shim), so it dies between claim and launch.
+  writeFileSync(join(bin, "git"), `#!/bin/sh\nif [ -e "${join(c.dir, "pause-git")}" ]; then touch "${join(c.dir, "holder-paused")}"; sleep 90; fi\nexec /usr/bin/git "$@"\n`, { mode: 0o755 });
+  c.env.PATH = `${bin}:${process.env.PATH}`;
+  host(c, { memAvailableMiB: 1000 });
+  const id = submit(c, repo, "--class", "standard", "--machine", "3090", "--", "sh", "-c", "echo PAYLOAD-RAN");
+  writeFileSync(join(c.dir, "pause-git"), "");
+  host(c, { memAvailableMiB: 12000 });
+  await until("holder paused before the payload's launch", () => existsSync(join(c.dir, "holder-paused")), 30000);
+  const t = await holderOf(c, id), dir = join(c.sched, "jobs", id);
+  assert.equal(spawnSync("systemctl", ["--user", "kill", "--kill-whom=all", "--signal=KILL", `${t.holderUnit}.scope`]).status, 0);
+  await until("holder scope gone", () => spawnSync("systemctl", ["--user", "is-active", "--quiet", `${t.holderUnit}.scope`]).status !== 0, 30000);
+  hc(c, ["status"]);
+  await done(c, id, 60000);
+  const r = result(c, id);
+  assert.equal(existsSync(join(dir, "started")), false);
+  assert.doesNotMatch(log(c, id), /PAYLOAD-RAN/);
+  assert.deepEqual([r.ran, r.planned, r.machine, r.evidence.bound], [false, "RTX 3090 (factory-worker)", undefined, false]);
+  assert.match(r.label, /not started: its holder died before the command started/);
+  assert.deepEqual(r.goal, t.goal);
+  assert.match(hc(c, ["wait", id]).err, /never ran; planned for RTX 3090/);
+  assert.deepEqual(JSON.parse(hc(c, ["status", id]).out), r);
 });

@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 // heavy-check v2 admission policy (scripts/heavy/policy.mjs), pure: classes,
@@ -403,19 +404,46 @@ test("portability is declared (SCHED-3 R1-F1): a default any goes to alickers on
     assert.equal(P.portableCommand(argv), null, argv.join(" "));
 });
 
-test("local configuration (SCHED-3 R2-F1): settings that change a registered command route a default any here; npm's own exports and the queue's job variables don't", () => {
-  assert.deepEqual(P.invocationEnv({ npm_config_script_shell: "/x/sh", NODE_OPTIONS: "--require x", SILTWAKE_FAST_FILE_BUDGET_S: "30", SILTWAKE_TIMELINE_SEED: "7", SILTWAKE_SAVES: "/x", npm_config_node_options: "--x", NPM_CONFIG_REGISTRY: "http://x" }),
-    ["NODE_OPTIONS", "NPM_CONFIG_REGISTRY", "SILTWAKE_FAST_FILE_BUDGET_S", "SILTWAKE_SAVES", "SILTWAKE_TIMELINE_SEED", "npm_config_node_options", "npm_config_script_shell"]);
-  // What `npm run` exports itself, the queue's per-job variables, the scheduler's own and an empty value: not invocation-changing.
-  const quiet = Object.fromEntries(["cache", "globalconfig", "global_prefix", "init_module", "local_prefix", "node_gyp", "noproxy", "npm_version", "prefix", "user_agent", "userconfig", "allow_scripts", "loglevel"].map((k) => [`npm_config_${k}`, "x"]));
-  Object.assign(quiet, { SILTWAKE_JOB_CPUS: "2", SILTWAKE_HEAVY_CONCURRENCY: "2", SILTWAKE_SCHED_DIR: "/x", SILTWAKE_TEST_BUILD: ".test-build-2", NODE_OPTIONS: "", PATH: "/bin" });
-  assert.deepEqual(P.invocationEnv(quiet), []);
-  const portable = { explicit: false, portable: "the fast tier" };
-  assert.deepEqual(P.resolveMachine("any", null, { ...portable, localConfig: ["npm_config_script_shell"] }),
-    { machine: "3090", routed: { from: "any", reason: "local configuration npm_config_script_shell changes this command; pass --machine any to declare it portable" } });
-  assert.deepEqual(P.resolveMachine("any", null, { ...portable, localConfig: [] }), { machine: "any" });
-  assert.deepEqual(P.resolveMachine("any", null, { explicit: true, portable: null, localConfig: ["NODE_OPTIONS"] }), { machine: "any" }, "an explicit --machine any stays the caller's declaration");
-  assert.deepEqual(P.resolveMachine("4070", null, { explicit: true, portable: null, localConfig: ["NODE_OPTIONS"] }), { machine: "4070" });
+test("intent check (SCHED-3 R3): SILTWAKE_* the queue doesn't own, any NODE_*, and npm_config_* beyond npm's descriptive exports route a default any here, as submitted", () => {
+  assert.deepEqual(P.intentEnv({ npm_config_script_shell: "/x/sh", NODE_OPTIONS: "--require x", NODE_ENV: "test", SILTWAKE_BUILD_CACHE: "off", SILTWAKE_BUILD_CACHE_DIR: "/c",
+    SILTWAKE_FAST_FILE_BUDGET_S: "30", SILTWAKE_SOMETHING_NEW: "1", NPM_CONFIG_REGISTRY: "http://x" }),
+  ["NODE_ENV", "NODE_OPTIONS", "NPM_CONFIG_REGISTRY", "SILTWAKE_BUILD_CACHE", "SILTWAKE_BUILD_CACHE_DIR", "SILTWAKE_FAST_FILE_BUDGET_S", "SILTWAKE_SOMETHING_NEW", "npm_config_script_shell"]);
+  // The file selectors (Sol R3's F1): deliberate outside npm; npm's own exports inside an `npm run`, which also exports the files' settings.
+  const files = { npm_config_userconfig: "/x/npmrc", npm_config_globalconfig: "/x/etc/npmrc", npm_config_prefix: "/x" };
+  assert.deepEqual(P.intentEnv(files), ["npm_config_globalconfig", "npm_config_prefix", "npm_config_userconfig"]);
+  assert.deepEqual(P.intentEnv({ ...files, npm_lifecycle_event: "test:heavy" }), []);
+  assert.deepEqual(P.intentEnv({ npm_config_script_shell: "/x/sh", npm_lifecycle_event: "test:heavy" }), ["npm_config_script_shell"], "a setting from those files is still exported, and caught");
+  // Descriptive npm exports, the queue's own variables, an empty value, and NODE (npm's path to node, not NODE_*): no intent.
+  const quiet = Object.fromEntries(["global_prefix", "local_prefix", "npm_version", "cache", "init_module", "node_gyp", "noproxy", "user_agent", "allow_scripts", "loglevel"].map((k) => [`npm_config_${k}`, "x"]));
+  Object.assign(quiet, { SILTWAKE_JOB_CPUS: "2", SILTWAKE_HEAVY_CONCURRENCY: "2", SILTWAKE_SCHED_DIR: "/x", SILTWAKE_TEST_BUILD: ".test-build-2", SILTWAKE_GPU_LEASE: "t", SILTWAKE_HEAVY_CHECK: "/x", NODE_OPTIONS: "", NODE: "/usr/bin/node", PATH: "/bin" });
+  assert.deepEqual(P.intentEnv(quiet), []);
+  const reg = { explicit: false, portable: { name: "the fast tier", run: ["--script", "test"] } };
+  assert.deepEqual(P.resolveMachine("any", null, { ...reg, intent: ["SILTWAKE_BUILD_CACHE"] }),
+    { machine: "3090", routed: { from: "any", reason: "local configuration SILTWAKE_BUILD_CACHE changes this command; pass --machine any to declare it portable" } });
+  assert.deepEqual(P.resolveMachine("any", null, { ...reg, intent: [] }), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("any", null, { explicit: true, portable: null, intent: ["NODE_OPTIONS"] }), { machine: "any" }, "an explicit --machine any stays the caller's declaration");
+});
+
+test("the portable runner (SCHED-3 R3): registered spellings map to its arguments; scripts resolve from package.json without npm; the environment is an allowlist", async () => {
+  const R = await import(pathToFileURL(resolve("scripts/heavy/portable-run.mjs")).href);
+  assert.deepEqual(P.portableCommand(["npm", "test"]), { name: "the fast tier", run: ["--script", "test"] });
+  assert.deepEqual(P.portableCommand(["npm", "run", "playthrough", "--", "--jobs", "3", "--quiet"]), { name: "the playthrough", run: ["--script", "playthrough", "--jobs", "3", "--quiet"] });
+  assert.deepEqual(P.portableCommand(["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]).run, ["--sh", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]);
+  // This repository's own scripts.
+  const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+  assert.equal(R.resolveScript(scripts, "test").command, "node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast");
+  assert.equal(R.resolveScript(scripts, "test").command, R.resolveScript(scripts, "test:fast").command);
+  assert.equal(R.resolveScript(scripts, "playthrough", ["--jobs", "3", "--quiet"]).command, "tsc -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js --jobs 3 --quiet");
+  // What it can't run without npm or a shell's quoting: refused (the job then runs here as submitted).
+  assert.match(R.resolveScript(scripts, "test:heavy").error, /isn't plain && steps/);
+  assert.match(R.resolveScript({ t: "npm ci && x" }, "t").error, /needs npm/);
+  assert.match(R.resolveScript({ t: "x", pret: "y" }, "t").error, /pre\/post/);
+  assert.match(R.resolveScript({}, "t").error, /no script t/);
+  assert.equal(R.resolveScript({ a: "npm run b -- --x && c", b: "d" }, "a", ["o p"]).command, "d --x && c 'o p'");
+  const env = R.portableEnv({ PATH: "/bin", HOME: "/h", LC_ALL: "C", NODE_OPTIONS: "x", npm_config_script_shell: "/s", SILTWAKE_BUILD_CACHE: "off", SILTWAKE_SCHED_DIR: "/q",
+    SILTWAKE_JOB_CPUS: "2", SILTWAKE_HEAVY_POOL_MIB: "9", SILTWAKE_GPU_LEASE: "t", SILTWAKE_TEST_BUILD: ".test-build-2", BAKE_WORKERS: "2", TERM: "xterm" }, "/r");
+  assert.deepEqual(Object.keys(env).sort(), ["BAKE_WORKERS", "HOME", "LC_ALL", "PATH", "SILTWAKE_GPU_LEASE", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_JOB_CPUS", "SILTWAKE_TEST_BUILD"]);
+  assert.equal(env.PATH, "/r/node_modules/.bin:/bin");
 });
 
 test("build-only commands stay here unless an --artifact brings their output back (SCHED-3 R1-F2); one command line only", async () => {

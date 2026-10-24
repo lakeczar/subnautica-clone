@@ -412,7 +412,8 @@ export function reconcile(cfg, state) {
     };
     const exitFile = join(dir, "exit.json");
     const { notRun, ...outcome } = result;
-    if (!existsSync(exitFile)) writeJsonAtomic(exitFile, terminalRecord(t, { ...identity, ...outcome }, { ran: t.state === "running" && !notRun }));
+    // Ran: the payload's own start marker (scope-run.sh), as the holder reads it; a claimed holder isn't one (R3-F3).
+    if (!existsSync(exitFile)) writeJsonAtomic(exitFile, terminalRecord(t, { ...identity, ...outcome }, { ran: t.state === "running" && !notRun && existsSync(join(dir, "started")) }));
     ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...outcome });
     if (t.state === "running" && t.req.exclusive) state.lastExclusiveEnd = Date.now();
     delete state.tickets[t.id];
@@ -455,8 +456,9 @@ function orphanResult(dir, t) {
   if (stats.rc == null) {
     const unavailable = { oomKills: "the in-scope wrapper recorded no stats (killed with the job)", ...(oomLocal ? {} : { reservationOom: "no observer saw the scope's memory.events.local" }) };
     if (oomLocal) return { code: 137, label: oomLabel, stopReason: "oom", reservationOom: true, oomEvidence: "memory.events.local (holder watch, before it died)", oomKills: null, peakMiB, unavailable };
-    return { code: 137, label: t.holder ? "killed: its holder died and the job did not finish" : "not started: its supervisor died during the handoff",
-      ...(t.holder ? {} : { notRun: true }), stopReason: "killed", reservationOom: null, oomKills: null, peakMiB, unavailable };
+    const begun = existsSync(join(dir, "started"));
+    return { code: 137, label: !t.holder ? "not started: its supervisor died during the handoff" : begun ? "killed: its holder died and the job did not finish" : "not started: its holder died before the command started",
+      ...(begun ? {} : { notRun: true }), stopReason: "killed", reservationOom: null, oomKills: null, peakMiB, unavailable };
   }
   const code = Number(stats.rc), oom = Number(stats.oom_local ?? 0) > 0 && code !== 0;
   // The wrapper records whether the scope was stopped around it (BindsTo= after

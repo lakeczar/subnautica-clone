@@ -25,9 +25,10 @@
 // request that can never fit.
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, invocationEnv, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
+import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, intentEnv, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
+import { resolveScript } from "./portable-run.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
 import { buildOnly, builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
@@ -133,8 +134,22 @@ async function submit(opts, command, { quiet = false } = {}) {
     : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)`
     : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …`
     : builds ? `it only builds (${builds.command}) and declares no --artifact ${builds.output ?? "for its output"}: build output must stay here` : null;
-  const routed = resolveMachine(req.goal.machine, why, { explicit: opts.machine != null, portable: portableCommand(command), localConfig: invocationEnv(process.env) });
+  const portable = portableCommand(command);
+  const routed = resolveMachine(req.goal.machine, why, { explicit: opts.machine != null, portable, intent: intentEnv(process.env) });
   if (routed.error) fail(`refused: ${routed.error}`);
+  // A registered command placed by default runs through this commit's portable
+  // runner (R3), on whichever machine takes it: the same command line and
+  // environment on both, and never npm. A commit without one runs here as submitted.
+  let run = command;
+  if (routed.machine === "any" && opts.machine == null && portable) {
+    const show = (path) => spawnSync("git", ["-C", worktree, "show", `${tree.head}:${path}`], { encoding: "utf8", maxBuffer: 16 * 1048576 });
+    let r = show("scripts/heavy/portable-run.mjs").status !== 0 ? { error: "this commit has no portable runner (scripts/heavy/portable-run.mjs)" } : {};
+    if (!r.error && portable.run[0] === "--script") {
+      try { r = resolveScript(JSON.parse(show("package.json").stdout).scripts, portable.run[1], portable.run.slice(2)); } catch { r = { error: "its package.json can't be read" }; }
+    }
+    if (r.error) Object.assign(routed, { machine: "3090", routed: { from: "any", reason: `${r.error}; pass --machine any to declare it portable` } });
+    else { run = ["node", relative(cwd, join(worktree, "scripts", "heavy", "portable-run.mjs")), ...portable.run]; req.goal.portable = { name: portable.name, command }; }
+  }
   const machine = req.goal.machine = routed.machine;
   if (routed.routed) req.goal.routed = routed.routed;
   req.goal.remoteOk = machine !== "3090" && !why;
@@ -156,7 +171,7 @@ async function submit(opts, command, { quiet = false } = {}) {
   const testBuild = process.env.SILTWAKE_TEST_BUILD || ".test-build";
   if (!/^\.test-build(-[A-Za-z0-9_.]+)?$/.test(testBuild)) fail(`SILTWAKE_TEST_BUILD=${testBuild}: use .test-build-<name>`);
   writeJsonAtomic(join(dir, "request.json"), {
-    id, key, worktree, cwd, argv: command, opts: { ...opts, class: cls }, req, tree, snapshot, testBuild,
+    id, key, worktree, cwd, argv: run, opts: { ...opts, class: cls }, req, tree, snapshot, testBuild,
     submittedAt: Date.now(), queueTimeoutS: opts.queueTimeoutS ?? cfg.queueTimeoutS,
   });
   writeFileSync(join(dir, "output.log"), "");

@@ -35,6 +35,35 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
 
+## R3 review responses
+
+Review `7c188ded` on `review/sched-3-r3`, by Sol on `3850c9bd`: REQUEST CHANGES. E1–E5 and the base control pass 6/6. The findings:
+- **F1 (P1):** npm's config-file selectors (`userconfig`, `globalconfig`, `prefix`) and `~/.npmrc` can set `script-shell`.
+- **F2 (P2):** the test-cache controls were missing from the list.
+- **F3 (P3):** local recovery inferred `ran` from a claimed holder.
+
+The coordinator's decision: stop extending lists, and fix the mechanism so npm configuration can't matter.
+- **The portable runner** (`scripts/heavy/portable-run.mjs`, in the commit):
+  - **What it runs:** a registered command placed by default (`policy.mjs` `portableCommand` now returns the runner's arguments) runs as `node scripts/heavy/portable-run.mjs --script test` (or `--sh` for the heavy tier's command line), from the commit under test. So both machines run the same file and the same `package.json` by construction.
+  - **No npm:** `resolveScript` expands `npm test`/`npm run X` steps from the commit's scripts. It refuses a script with pre/post hooks, shell quoting or a remaining npm step.
+  - **How it runs:** under `sh -c` at the package root, with `portableEnv`: an allowlist of `PATH` (with `node_modules/.bin` first), home, user, locale, temp and session variables, and the queue's own job variables.
+  - **What can no longer differ:** npm, `.npmrc`, prefixes, `script-shell` and the submitter's or the machine's other variables.
+  - **Checks at submit:** `heavy-check` verifies the commit has the runner and the script resolves, else runs it here as submitted with the reason.
+  - **What's recorded:** the ticket's `argv` is the runner's, and `goal.portable` keeps what was typed.
+  - **Explicit `--machine any`** is unchanged: the caller's declaration, run as typed.
+- **The intent check** (`policy.mjs` `intentEnv`) replaces R2's `invocationEnv` blocklist, which is deleted. A default `any` runs here as submitted, through npm (base behaviour), naming the variables, if the environment has:
+  - any `SILTWAKE_*` the queue doesn't own (`QUEUE_OWNED`: its configuration and per-job variables). This covers `SILTWAKE_BUILD_CACHE`, `SILTWAKE_BUILD_CACHE_DIR` and any future selector;
+  - any `NODE_*`;
+  - any `npm_config_*` beyond npm's descriptive exports. `userconfig`, `globalconfig` and `prefix` pass only inside an `npm run` (`npm_lifecycle_event` set), where they are npm's own exports and every setting those files make is exported beside them, so `npm run test:heavy` still balances.
+- **F3:** `reconcile` takes `ran` from the payload's `started` marker, as the holder does. A holder that died after its claim and before the start is "not started: its holder died before the command started", `ran:false`, `planned`.
+- **Tests:**
+  - **B38 (Sol's config probes):** each of `npm_config_userconfig`, `npm_config_globalconfig` and `npm_config_prefix` naming an npmrc with `script-shell` routes the default here as submitted (exit 19, the file's shell applied). A private-HOME `~/.npmrc` is irrelevant: the default runs through the runner with exit 0 on the 4070, and again here with alickers paused. Pinned to the 3090 it runs as submitted, through npm (19).
+  - **B39 (F2):** `SILTWAKE_BUILD_CACHE=off`, `SILTWAKE_BUILD_CACHE_DIR` and an invented `SILTWAKE_NOT_YET_INVENTED` each route here, naming it. The queue's own variables and npm's descriptive exports don't.
+  - **B40 (Sol's crash probe):** the holder killed between claim and launch gives `ran:false`, `planned`, the "never ran" line, and the frozen goal.
+  - **B28** also checks that the registered default ran through the runner.
+  - **Policy units:** `intentEnv`, `resolveMachine` with intent, the runner's `resolveScript` on this repository's own scripts, and `portableEnv`.
+  - The test contexts drop the test runner's own `NODE_TEST_CONTEXT`.
+
 ## R2 review responses
 
 Review `0f6b3b2a` on `review/sched-3-r2`, by Sol on `fa2078a2`: REQUEST CHANGES, P1, P2 and P3, plus the coordinator's new F4. All R1 repros were fixed (9/9). Not installed.

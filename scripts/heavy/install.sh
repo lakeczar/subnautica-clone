@@ -91,7 +91,7 @@ if [[ $remove_excl == 1 ]]; then
   exit $?
 fi
 
-files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
+files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs portable-run.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
   remote.mjs remote-holder.mjs lane-run.sh)
 # The remote lane's transport (SCHED-2b) is scripts/alickers-job.sh; each
 # version carries its own copy, so a running remote ticket keeps its transport.
