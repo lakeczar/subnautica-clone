@@ -33,7 +33,11 @@ TST-16 was accepted at `1bc6c8dc` (R11, `a9196eec` on `review/tst-16-r11`), with
   - **S26:** the killed-installer case now also stops the orphaned shim's child, which holds the inherited lock fd.
   - **S27, new:** a second `install.sh` waits while the first is held in publication (`cp`), after its unit step finished and its mark cleared. The lock stays held, nothing is published until A finishes, then both succeed and `current` is a complete version. The unit helper run outside `install.sh` (no fd, or a fd that isn't the lock) is refused with exit 2 and pauses nothing.
   - **`tests/heavy-sched-config.test.ts`, new:** the production directory in six spellings and by default; a private directory, a symlinked alias of one, missing paths and look-alike names (`-private`, `x`, a subdirectory); a symlink to this machine's production state, only named.
-  - **Negative controls:** with the R10 code (`1bc6c8dc`), S27 fails at "the installer lock is still held through publication".
+  - **Negative controls:** with the R10 code (`1bc6c8dc`), S27 fails at "the installer lock is still held through publication". With the root loader (`4229a17e`), `heavy-sched-config` fails on `/work/tmp/siltwake-sched/` (classified private) and on the missing `sameDir`.
+- **Checks** at `d2e54642` (code), on root `4229a17e`:
+  - **Full suites, local and sequential:** SCHED-1 **23/23**, SCHED-2 **27/27**, SCHED-2b **27/27**. No units, slices or unit files left behind.
+  - **Fast tier:** through the queue on alickers (`--machine 4070`, ticket `261024-010219-b252`, exit 0, 142 files). This was during CW-1's 3090 exclusive window. The first try, at `feedbf69`, failed typecheck on the rAF restore under `exactOptionalPropertyTypes`, fixed in this commit.
+  - **R4-F3, repeated:** 25/25 on alickers (ticket `261024-004957-9e69`), plus the whole soak-runner file 21/21. The policy, contention and config units passed 44/44.
 
 ## R10 review responses
 
