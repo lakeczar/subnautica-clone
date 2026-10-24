@@ -1,6 +1,6 @@
 {
   "format": "siltwake.save",
-  "schemaVersion": 7,
+  "schemaVersion": 8,
   "contentVersion": "expedition.7",
   "meta": {
     "sessionId": "5c1ce9fd-ce62-45ac-9d9e-e3794226e913",
@@ -162,7 +162,8 @@
       ],
       "crafted": [],
       "hintLevel": 1,
-      "cycles": []
+      "cycles": [],
+      "legacyGrants": []
     },
     "world": {
       "resources": [
@@ -469,6 +470,26 @@
         {
           "id": "basin_pale_spores",
           "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "hub_racks_cups",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "hub_racks_fans",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "hub_racks_fronds",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "rift_kiln_tubers",
+          "stock": 3,
           "reserve": 0
         },
         {
@@ -848,7 +869,8 @@
       "beaconsOff": [],
       "categoriesOff": [],
       "chart": [],
-      "moduleUpgrades": {}
+      "moduleUpgrades": {},
+      "opened": []
     },
     "story": {
       "discoveries": [],
