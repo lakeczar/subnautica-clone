@@ -19,10 +19,15 @@ export async function composer(opts = {}) {
   const wrapper = chrome === sandbox;
   const pw = opts.pw ?? process.env.REC_PW ?? ["/work/tmp/gpu-prep/pw/", "/work/tmp/pw/"].find((d) => existsSync(path.join(d, "node_modules", "playwright-core"))) ?? "/work/tmp/gpu-prep/pw/";
   const { chromium } = createRequire(pw)("playwright-core");
+  // A label on the command line finds this browser's processes (/proc), for measurements that need them.
+  const label = `--siltwake-composer=${process.pid}-${Date.now()}`;
   const browser = await chromium.launch({ executablePath: chrome, headless: true, timeout: 30000,
-    ...(wrapper ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}), args: wrapper ? [] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"] });
+    ...(wrapper ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}), args: [...(wrapper ? [] : ["--use-angle=swiftshader", "--enable-unsafe-swiftshader"]), label] });
   const page = await (await browser.newContext({ viewport: { width: 1280, height: 800 }, deviceScaleFactor: 1 })).newPage();
-  return { page, close: () => browser.close().catch(() => {}) };
+  const browserPid = readdirSync("/proc").filter((d) => /^\d+$/.test(d)).map(Number).find((p) => {
+    try { const c = readFileSync(`/proc/${p}/cmdline`, "utf8"); return c.includes(label) && !c.includes("--type="); } catch { return false; }
+  }) ?? null;
+  return { page, browserPid, close: () => browser.close().catch(() => {}) };
 }
 
 const esc = (s) => String(s ?? "").replace(/[&<>"]/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]);
