@@ -26,7 +26,9 @@ const log = [], note = (...a) => { const line = `[${(performance.now() / 1000).t
 const plan = JSON.parse(readFileSync(path.join(saves, "plan.json"), "utf8"));
 const result = { commit: existsSync(path.join(dist, "COMMIT")) ? readFileSync(path.join(dist, "COMMIT"), "utf8").trim() : null, scenarios: {}, shots: [], errors: [] };
 const browser = await chromium.launch({ executablePath: chromePath || `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`,
-  headless: true, args: ["--use-gl=angle", `--use-angle=${process.env.SIG1_ANGLE ?? "gl-egl"}`, "--ignore-gpu-blocklist", "--sig1-play"], timeout: 30000 });
+  headless: true, args: ["--use-gl=angle", `--use-angle=${process.env.SIG1_ANGLE ?? "gl-egl"}`, "--ignore-gpu-blocklist", "--sig1-play"], timeout: 30000,
+  // A GPU session never falls back to software (siltwake-chrome refuses the flag).
+  ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] });
 let page, scenario = "";
 const wrap = (a) => ((a + Math.PI * 3) % (Math.PI * 2)) - Math.PI;
 async function shot(name) {
