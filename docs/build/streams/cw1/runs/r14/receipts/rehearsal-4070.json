@@ -1,0 +1,67 @@
+{
+ "ticket": "261024-203024-2a4b",
+ "code": 0,
+ "label": null,
+ "stopReason": null,
+ "class": "gpu",
+ "review": false,
+ "tokens": 0,
+ "memMiB": 3072,
+ "gpu": true,
+ "express": false,
+ "exclusive": false,
+ "machine": "RTX 4070 Laptop (alickers, shared desktop host)",
+ "machineTag": "4070",
+ "remote": true,
+ "attempts": 1,
+ "mode": "normal",
+ "worktree": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "cwd": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "argv": [
+  "sh",
+  "docs/build/streams/cw1/rehearse-4070.sh"
+ ],
+ "submittedAt": 1792873824141,
+ "admittedAt": 1792874201465,
+ "endedAt": 1792875971919,
+ "ranS": 1770.4,
+ "peakMiB": null,
+ "cpuS": null,
+ "unavailable": {
+  "peakMiB": "measured by the sandbox's siltwake-job, not reported over the lane",
+  "cpuS": "the same"
+ },
+ "goal": {
+  "v": 2,
+  "limitS": 14400,
+  "explicitDeadline": false,
+  "ceilingS": 14400,
+  "stallS": 300,
+  "soak": false,
+  "snapshot": false,
+  "machine": "4070",
+  "remoteOk": true
+ },
+ "head": "571186bee7fabbe8426d40500b47903ce340feee",
+ "dirty": "clean",
+ "headAtAdmit": "571186bee7fabbe8426d40500b47903ce340feee",
+ "dirtyAtAdmit": "clean",
+ "changedTree": false,
+ "changedDuringRun": false,
+ "evidence": {
+  "commit": "571186bee7fabbe8426d40500b47903ce340feee",
+  "bound": true,
+  "why": null,
+  "snapshot": false,
+  "machine": "RTX 4070 Laptop (alickers, shared desktop host)",
+  "dirtyAtAdmit": "clean",
+  "changedDuringRun": false
+ },
+ "artifacts": [
+  {
+   "remote": "cw1-4070",
+   "local": "/work/tmp/261024-203024-2a4b/cw1-4070",
+   "bytes": 24613680
+  }
+ ]
+}

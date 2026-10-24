@@ -1,0 +1,62 @@
+{
+ "ticket": "261024-201819-5697",
+ "code": 0,
+ "label": null,
+ "class": "standard",
+ "review": false,
+ "tokens": 2,
+ "memMiB": 3072,
+ "gpu": false,
+ "express": false,
+ "exclusive": false,
+ "mode": "normal",
+ "worktree": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "cwd": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "argv": [
+  "sh",
+  "-c",
+  "node scripts/test-build.mjs && rm -rf /work/tmp/cw1/saves-r14t && node --max-old-space-size=6144 docs/build/streams/cw1/derive.mjs $PWD /work/tmp/cw1/saves-r14t 8"
+ ],
+ "submittedAt": 1792873100328,
+ "admittedAt": 1792873183004,
+ "endedAt": 1792873608110,
+ "ranS": 424.7,
+ "peakMiB": 1471,
+ "cpuS": 441.1,
+ "oomKills": 0,
+ "reservationOom": false,
+ "oomGroupKill": false,
+ "oomEvidence": null,
+ "leftovers": false,
+ "stopReason": null,
+ "goal": {
+  "v": 2,
+  "limitS": 14400,
+  "explicitDeadline": false,
+  "ceilingS": 14400,
+  "stallS": 900,
+  "soak": false,
+  "snapshot": true,
+  "machine": "3090",
+  "remoteOk": false
+ },
+ "head": "fc5059ff2c55c041e0b97c38509f3f8d111a4cf6",
+ "dirty": "clean",
+ "headAtAdmit": "fc5059ff2c55c041e0b97c38509f3f8d111a4cf6",
+ "dirtyAtAdmit": "clean",
+ "changedTree": false,
+ "changedDuringRun": false,
+ "evidence": {
+  "commit": "fc5059ff2c55c041e0b97c38509f3f8d111a4cf6",
+  "bound": true,
+  "why": null,
+  "snapshot": true
+ },
+ "snapshot": {
+  "root": "/work/tmp/siltwake-sched/jobs/261024-201819-5697/tree",
+  "kept": false
+ },
+ "context": null,
+ "machine": "RTX 3090 (factory-worker)",
+ "machineTag": "3090"
+}

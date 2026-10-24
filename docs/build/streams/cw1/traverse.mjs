@@ -496,12 +496,14 @@ try {
       .map(w => ({ tick: w.tick, ms: +w.ms.toFixed(2), phases: Object.fromEntries(Object.entries(w.phases).filter(([, v]) => v >= 0.05).map(([k, v]) => [k, +v.toFixed(2)])) })) : undefined;
     const hostIn = hostData ? (() => {
       // The renderer's time in each state over the gap (changes at the poll that saw them; unobserved time as "?").
-      const states = {}, rs = sched.threads.renderer.states;
+      const states = {}, rs = sched.threads.renderer.states, cover = sched.threads.renderer.cover;
+      const observedIn = (a, b) => cover.reduce((n, [s, e]) => n + Math.max(0, Math.min(e, b) - Math.max(s, a)), 0);
       for (let k = 0; k < rs.length; k++) {
         const [, seen, st, w] = rs[k], next = rs[k + 1]?.[1] ?? t1, a = Math.max(seen, t0), b = Math.min(next, t1);
-        if (b > a) { const key = w ? `${st}:${w}` : st; states[key] = +((states[key] ?? 0) + b - a).toFixed(1); }
+        const ms = b > a ? observedIn(a, b) : 0;
+        if (ms > 0) { const key = w ? `${st}:${w}` : st; states[key] = +((states[key] ?? 0) + ms).toFixed(1); }
       }
-      const observed = sched.threads.renderer.cover.reduce((n, [a, b]) => n + Math.max(0, Math.min(b, t1) - Math.max(a, t0)), 0);
+      const observed = observedIn(t0, t1);
       if (t1 - t0 - observed > 0.05) states["?"] = +(t1 - t0 - observed).toFixed(1);
       return { canary: hostData.late.filter(([t, ms]) => t < t1 && t + ms > t0).map(([, ms]) => ms), states };
     })() : undefined;

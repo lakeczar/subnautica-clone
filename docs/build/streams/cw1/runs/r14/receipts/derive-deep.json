@@ -1,0 +1,62 @@
+{
+ "ticket": "261024-201820-b8e4",
+ "code": 0,
+ "label": null,
+ "class": "standard",
+ "review": false,
+ "tokens": 2,
+ "memMiB": 3072,
+ "gpu": false,
+ "express": false,
+ "exclusive": false,
+ "mode": "normal",
+ "worktree": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "cwd": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "argv": [
+  "sh",
+  "-c",
+  "node scripts/test-build.mjs && rm -rf /work/tmp/cw1/saves-r14d && env CW1_SAVE=canopy-over-geared CW1_HULL=creel CW1_DEEPEST=-790 node --max-old-space-size=6144 docs/build/streams/cw1/derive.mjs $PWD /work/tmp/cw1/saves-r14d 3 basin_buried_hut,divide_mirror_pocket,divide_crest_hollow,divide_east_pocket,divide_lee_burrow,divide_fissure_window,divide_lintel_galleries,divide_brine_cistern,meridian_footing_void,meridian_culvert_north,meridian_spire_footing,meridian_escarp_pocket,meridian_terrace_crack,meridian_window_gallery,meridian_escarp_culvert"
+ ],
+ "submittedAt": 1792873100899,
+ "admittedAt": 1792873608939,
+ "endedAt": 1792873719155,
+ "ranS": 109.8,
+ "peakMiB": 1468,
+ "cpuS": 125.5,
+ "oomKills": 0,
+ "reservationOom": false,
+ "oomGroupKill": false,
+ "oomEvidence": null,
+ "leftovers": false,
+ "stopReason": null,
+ "goal": {
+  "v": 2,
+  "limitS": 14400,
+  "explicitDeadline": false,
+  "ceilingS": 14400,
+  "stallS": 900,
+  "soak": false,
+  "snapshot": true,
+  "machine": "3090",
+  "remoteOk": false
+ },
+ "head": "fc5059ff2c55c041e0b97c38509f3f8d111a4cf6",
+ "dirty": "clean",
+ "headAtAdmit": "fc5059ff2c55c041e0b97c38509f3f8d111a4cf6",
+ "dirtyAtAdmit": "clean",
+ "changedTree": false,
+ "changedDuringRun": false,
+ "evidence": {
+  "commit": "fc5059ff2c55c041e0b97c38509f3f8d111a4cf6",
+  "bound": true,
+  "why": null,
+  "snapshot": true
+ },
+ "snapshot": {
+  "root": "/work/tmp/siltwake-sched/jobs/261024-201820-b8e4/tree",
+  "kept": false
+ },
+ "context": null,
+ "machine": "RTX 3090 (factory-worker)",
+ "machineTag": "3090"
+}

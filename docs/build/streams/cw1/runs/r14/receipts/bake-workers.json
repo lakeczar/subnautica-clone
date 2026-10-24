@@ -1,0 +1,62 @@
+{
+ "ticket": "261024-220648-bb64",
+ "code": 0,
+ "label": null,
+ "class": "bake",
+ "review": false,
+ "tokens": 2,
+ "memMiB": 3072,
+ "gpu": false,
+ "express": false,
+ "exclusive": false,
+ "mode": "normal",
+ "worktree": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "cwd": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "argv": [
+  "sh",
+  "-c",
+  "for w in 1 2 4; do echo \"workers $w\"; BAKE_WORKERS=$w node /work/tmp/cw1/r4/peak.mjs node scripts/bake-terrain.mjs --force 2>&1 | grep -E \"peak|bake-terrain: 220\"; done"
+ ],
+ "submittedAt": 1792879608611,
+ "admittedAt": 1792879608701,
+ "endedAt": 1792879893785,
+ "ranS": 284.6,
+ "peakMiB": 2323,
+ "cpuS": 610,
+ "oomKills": 0,
+ "reservationOom": false,
+ "oomGroupKill": false,
+ "oomEvidence": null,
+ "leftovers": false,
+ "stopReason": null,
+ "goal": {
+  "v": 2,
+  "limitS": 7200,
+  "explicitDeadline": false,
+  "ceilingS": 7200,
+  "stallS": 900,
+  "soak": false,
+  "snapshot": true,
+  "machine": "3090",
+  "remoteOk": false
+ },
+ "head": "571186bee7fabbe8426d40500b47903ce340feee",
+ "dirty": "clean",
+ "headAtAdmit": "571186bee7fabbe8426d40500b47903ce340feee",
+ "dirtyAtAdmit": "clean",
+ "changedTree": false,
+ "changedDuringRun": false,
+ "evidence": {
+  "commit": "571186bee7fabbe8426d40500b47903ce340feee",
+  "bound": true,
+  "why": null,
+  "snapshot": true
+ },
+ "snapshot": {
+  "root": "/work/tmp/siltwake-sched/jobs/261024-220648-bb64/tree",
+  "kept": false
+ },
+ "context": null,
+ "machine": "RTX 3090 (factory-worker)",
+ "machineTag": "3090"
+}
