@@ -890,3 +890,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **13:03Z check (owner asked whether we're just waiting):**
   - **Stalled builder:** COL-1 had been silent about 14 h. Its CW-1+R7 traversal was rejected (exit 3, tree changed) at 22:40Z yesterday and never resubmitted, its wake lost to the limit pauses. Nudged to resubmit detached on CW-1's current harness.
   - **The 3090 is the bottleneck:** about 25 exclusive tickets queued (REC-1 11, SIM-PERF-1 6, CW-1 8), several hours deep.
+- **COL-1 A R7 fixes done at `79dff359`:**
+  - **Fixes:** a constructed seam boundary per side plane (`seamCap.ts`) with in-build exact-tiling and overlap checks; the clip duplicate-vertex fix; a frozen coarse ring (0 off-plane edges).
+  - **Art and tests:** fine art ≤0.31 m from pre-R6; coarse up to 1.44 m (closing cracks); bake 220/220; heavy tier on the 4070.
+  - **Build-cost answer:** shells are bake-time only (STR-13 refuses foreign bakes); the live path is a dev fallback only, recorded as a compromise (root fix WK-1).
+  - **Review:** 3090 confirmation pending; Sol R8 running (`siltwake-col1a-review-r8-sol-79dff35`).
