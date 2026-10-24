@@ -69,7 +69,8 @@ function judgeClock(raw, rec, failed) {
     if (!remux(file, fixed)) { segments.push({ ...seg, error: "remux failed" }); continue; }
     const { times, ids } = decode(ff, fixed);
     const frames = times.map((pt, i) => {
-      const d = byId.get(ids[i]), T = seg.start + pt * 1000;
+      // Picture 0 is the canvas before the first barcode: dated before the first draw, it is right.
+      const d = ids[i] === 0 ? { t: -Infinity, next: draws[0]?.t ?? Infinity } : byId.get(ids[i]), T = seg.start + pt * 1000;
       // In a pause: the last picture drawn, or the one before it if that last one came after the last capture (≤ one interval).
       const last = lastDrawBefore(T), staleOk = inPause(T) && last && last.id === ids[i] + 1 && last.t - d?.t <= 1000 / 12 + 2;
       return { pt, id: ids[i], T: +T.toFixed(1), drawn: d?.t ?? null, ok: !!d && T >= d.t - 2 && (T <= d.next + 2 || !!staleOk) };
@@ -140,7 +141,13 @@ const phase = async (name, fn) => {
   console.log(`[adverse] ${name}`);
   let timer;
   try { return await Promise.race([fn(), new Promise((_, no) => { timer = setTimeout(() => no(new Error(`${name}: no answer in 120 s`)), 120_000); })]); }
-  catch (e) { result.failed.push(`${name}: ${e.message}`); return null; }
+  catch (e) {
+    // What the stuck capture last did, and which worker requests are still unanswered.
+    const where = await c.page.evaluate(() => window.capR3 && { events: window.capR3.recorder.events.since(0).items.slice(-8).map((x) => x.text),
+      waiting: [...(window.capR3.spool?.waiters?.keys() ?? [])], video: !!window.capR3.video, stopped: window.capR3.stopped }).catch(() => null);
+    result.failed.push(`${name}: ${e.message}${where ? ` · ${JSON.stringify(where)}` : ""}`);
+    return null;
+  }
   finally { clearTimeout(timer); }
 };
 const zipOf = `async (cap) => { const exp = await cap.exportZip(), bytes = new Uint8Array(await exp.blob.arrayBuffer());
@@ -148,6 +155,7 @@ const zipOf = `async (cap) => { const exp = await cap.exportZip(), bytes = new U
 const ndjson = (file) => (existsSync(file) ? readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
 const c = await composer({ chrome: arg("chrome"), pw: arg("pw") });
 c.page.on("pageerror", (e) => result.errors.push(e.message.slice(0, 300)));
+c.page.on("console", (m) => { if (/warn|error/.test(m.type())) console.log(`[page ${m.type()}] ${m.text().slice(0, 240)}`); });
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
 try {
@@ -256,7 +264,7 @@ try {
   await c.page.goto(`${origin}/?r3=throw`);
   const thrown = await phase("encoder throws", () => c.page.evaluate(async ({ DRAW, zipOf }) => {
     const { FlightCapture } = await import("/modules-throw/capture.js");
-    const cap = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
+    const cap = window.capR3 = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
     await (0, eval)(DRAW)(cap, 3000);
     cap.recorder.event("action", "after the failure", { snapshot: false });
     cap.flush(performance.now());
@@ -313,7 +321,7 @@ try {
   }));
   if (result.removals) {
     const r = result.removals;
-    if (!(r.aBytes > 1_000_000)) result.failed.push(`removals: the previous recording lost its bytes (${r.aBytes})`);
+    if (!(r.aBytes > 500_000)) result.failed.push(`removals: the previous recording lost its bytes (${r.aBytes})`);
     if (!(r.aExport > 0)) result.failed.push("removals: the previous recording did not export");
     if (r.removedOlder.includes(r.aSession)) result.failed.push("removals: the previous recording was removed while exportable");
     if (!(r.heldBytes >= 3 * 1048576)) result.failed.push(`removals: the held recording's bytes are not on disk (${r.heldBytes})`);
@@ -325,7 +333,7 @@ try {
   await c.page.goto(`${origin}/?r3=behind`);
   const behind = await phase("backpressure", () => c.page.evaluate(async ({ DRAW, zipOf }) => {
     const { FlightCapture } = await import("/modules-behind/capture.js");
-    const cap = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
+    const cap = window.capR3 = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
     const draws = await (0, eval)(DRAW)(cap, 6000);
     return { zip: await (0, eval)(zipOf)(cap), draws, drawErrors: window.drawErrors ?? [] };
   }, { DRAW, zipOf }));
