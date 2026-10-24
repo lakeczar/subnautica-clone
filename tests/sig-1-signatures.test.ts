@@ -306,10 +306,11 @@ test("R4: a running lift re-checks its host by ID, never by scanning the roster,
   started.world.resources = started.world.resources.map((r) => ({ ...r }));
   const forbid = (rows: unknown[]): void => { Object.defineProperty(rows, "find", { value: () => { throw new Error("roster scanned per step"); } }); };
   forbid(started.world.resources);
-  for (let i = 0; i < 60; i++) stepSignatures(started, world, []);
+  // The signature step alone, with the clock advanced as the fixed step does.
+  for (let i = 0; i < 60; i++) { started.tick++; stepSignatures(started, world, []); }
   assert.ok(hullIn(started, v).upgrades.lift, "still lifting after a second of steps");
   const done: GameEvent[] = [];
-  for (let i = 0; i < 6 * 60; i++) stepSignatures(started, world, done);
+  for (let i = 0; i < 6 * 60; i++) { started.tick++; stepSignatures(started, world, done); }
   assert.ok(signature(done).some((e) => e.kind === "lift" && e.phase === "done"));
   assert.equal(count(started, "tagged_frame", v.cargoId), 2);
 });
