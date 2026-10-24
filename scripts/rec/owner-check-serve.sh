@@ -17,7 +17,7 @@ echo "build $(cat dist/COMMIT)"
 setsid npx vite preview --host 127.0.0.1 --port 4173 --strictPort > /tmp/owner-check-serve.log 2>&1 &
 pid=$!
 trap 'kill -- -"$pid" 2>/dev/null; wait "$pid" 2>/dev/null' EXIT
-for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:4173/ && break; sleep 1; done
+for _ in $(seq 1 30); do curl -fsS -o /dev/null http://127.0.0.1:4173/ 2>/dev/null && break; sleep 1; done
 curl -fsS -o /dev/null http://127.0.0.1:4173/ || { echo "the server did not start"; tail -5 /tmp/owner-check-serve.log; exit 1; }
 echo "serving: http://localhost:4173/?rec=playtest&recmeasure=1&reccheck=300 for $mins min"
 end=$(( $(date +%s) + mins * 60 ))

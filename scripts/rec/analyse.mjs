@@ -345,7 +345,7 @@ export function videoSource(header) {
   if (v.source !== "game") return `${v.source ?? "driver"} ${v.fps ?? ""} fps`.trim();
   const sizes = [...new Set((v.segments ?? []).map((x) => (x.width ? `${x.width}x${x.height}` : null)).filter(Boolean))];
   const size = sizes.length ? sizes.join(", ") : v.size ? `${v.size.width}x${v.size.height}` : "";
-  const codec = { V_VP9: "VP9", V_VP8: "VP8", V_AV1: "AV1", "V_MPEG4/ISO/AVC": "H.264" }[v.codec] ?? v.codec ?? "?";
+  const codec = { V_VP9: "VP9", V_VP8: "VP8", V_AV1: "AV1", "V_MPEG4/ISO/AVC": "H.264", "V_MPEGH/ISO/HEVC": "HEVC" }[v.codec] ?? v.codec ?? "?";
   return `in-game ${v.hardware ? "hardware" : "software"} ${codec} ${size} ${v.fps} fps${v.hardware ? "" : " (test-machine fallback; the owner's hardware path is 12 fps)"}`.replace(/\s+/g, " ").trim();
 }
 
