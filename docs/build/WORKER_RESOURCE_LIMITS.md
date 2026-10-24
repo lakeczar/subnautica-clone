@@ -208,7 +208,7 @@ scripts/alickers-job.sh --deadline 1800 -- npm run test:heavy
 
 ## Recorded runs and evidence packs (REC-1)
 
-Every build records itself: the flight recorder costs 0.05–0.11 ms a frame (REC-1's exclusive A/B; frame-time p50 and p99 unchanged). An automated browser (`navigator.webdriver`) gets **driver mode** unless the URL names another (`?rec=off|driver|playtest`): bounded memory, no in-game video, read through the test hook `window.__siltwake`. Use the hook, not DOM attributes, for new drivers: `read()` (tick, camera, feet, yaw, pitch, depth, region, cave, hold, vitals, craft), `scene()` (counts, streamed bytes, CW-1's cave counters) and `recorder.*` (cursor reads).
+Every build records itself. The flight recorder's own code takes about 0.09 ms a frame (its self-time). Its whole cost on the page, collections and later tasks included, is in REC-1's handoff (R3), measured at a fixed pose; frame-time p50 and p99 are unchanged. An automated browser (`navigator.webdriver`) gets **driver mode** unless the URL names another (`?rec=off|driver|playtest`): bounded memory, no in-game video, read through the test hook `window.__siltwake`. Use the hook, not DOM attributes, for new drivers: `read()` (tick, camera, feet, yaw, pitch, depth, region, cave, hold, vitals, craft), `scene()` (counts, streamed bytes, CW-1's cave counters) and `recorder.*` (cursor reads).
 
 **A recorded run** writes one directory (the remote lane fetches it whole):
 

@@ -51,7 +51,7 @@ export async function openGame(opts) {
     executablePath: opts.chrome ?? (onSandbox ? sandboxChrome : `${process.env.HOME}/.cache/ms-playwright/chromium-1248/chrome-linux64/chrome`), headless: true, timeout: 30000,
     // The sandbox's wrapper sets its own GPU flags and refuses Playwright's SwiftShader fallback flag.
     ...(onSandbox || opts.chrome === sandboxChrome ? { ignoreDefaultArgs: ["--enable-unsafe-swiftshader"] } : {}),
-    args: [...(software ? ["--use-angle=swiftshader"] : onSandbox ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), "--enable-precise-memory-info", `--siltwake-soak=${label}`],
+    args: [...(software ? ["--use-angle=swiftshader"] : onSandbox ? [] : ["--use-gl=angle", "--use-angle=gl-egl", "--ignore-gpu-blocklist"]), ...(opts.preciseMemory === false ? [] : ["--enable-precise-memory-info"]), `--siltwake-soak=${label}`],
   });
   const g = { browser, server, errors: [], crash: null, label, held: new Set(), eye: 0, port: bound, chrome: browser.version() };
   g.browserPid = readdirSync("/proc").filter((d) => /^\d+$/.test(d)).map(Number).find((p) => {

@@ -5,7 +5,7 @@
 //
 //   node scripts/rec/run.mjs --dist DIST --save SAVE --plan PLAN --segment N --out DIR
 //     [--rec on|off|playtest] [--video on|off] [--seconds S] [--machine LABEL]
-//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--hold S]
+//     [--chrome BIN] [--pw DIR] [--gpu REGEX] [--port N] [--no-isolate] [--no-pack] [--profile S] [--hold S] [--owner-browser]
 //
 // --rec on (default): the game records in driver mode (?rec=driver); the video
 //   is the CDP screencast (--video on, default) or none (--video off: an
@@ -81,7 +81,8 @@ const result = { mode, video: videoOn, machine, commit, segment, errors: [], rea
 let exit = 0, g = null;
 try {
   // The soak's own browser session (scripts/soak/browser.mjs): one driver for both.
-  g = await openGame({ dist, save, port: Number(arg("port", 0)), software: flag("software"), gpu: arg("gpu"), chrome: arg("chrome"), pw: arg("pw"),
+  // --owner-browser: no --enable-precise-memory-info (a player's Chrome reads performance.memory cached and coarse, nearly free).
+  g = await openGame({ dist, save, port: Number(arg("port", 0)), software: flag("software"), gpu: arg("gpu"), chrome: arg("chrome"), pw: arg("pw"), preciseMemory: !flag("owner-browser"),
     label: "rec1", query, isolate: !flag("no-isolate"), initScripts: [probeScript], log });
   result.renderer = g.renderer; result.chrome = g.chrome;
   log("renderer", g.renderer);

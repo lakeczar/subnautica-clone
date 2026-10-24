@@ -131,10 +131,18 @@ const DRAW = `async (cap, ms) => {
   await new Promise((done) => { const f = (now) => {
     if (now - last > 83) { last = now; id++; draws.push({ id, t: now }); x.fillStyle = "#246578"; x.fillRect(0, 0, 640, 360);
       for (let bit = 0; bit < 16; bit++) { x.fillStyle = id & (1 << bit) ? "#fff" : "#000"; x.fillRect(bit * 40, 0, 40, 80); } }
-    cap.afterRender(now);
+    try { cap.afterRender(now); } catch (e) { (window.drawErrors ??= []).push(String(e?.message ?? e)); }
     if (now - t0 < ms) requestAnimationFrame(f); else done(); }; requestAnimationFrame(f); });
   return draws;
 }`;
+/** A phase in the page, bounded: a hang is a recorded failure, not a stalled job. */
+const phase = async (name, fn) => {
+  console.log(`[adverse] ${name}`);
+  let timer;
+  try { return await Promise.race([fn(), new Promise((_, no) => { timer = setTimeout(() => no(new Error(`${name}: no answer in 120 s`)), 120_000); })]); }
+  catch (e) { result.failed.push(`${name}: ${e.message}`); return null; }
+  finally { clearTimeout(timer); }
+};
 const zipOf = `async (cap) => { const exp = await cap.exportZip(), bytes = new Uint8Array(await exp.blob.arrayBuffer());
   let s = ""; for (let i = 0; i < bytes.length; i += 0x8000) s += String.fromCharCode(...bytes.subarray(i, i + 0x8000)); return btoa(s); }`;
 const ndjson = (file) => (existsSync(file) ? readFileSync(file, "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)) : []);
@@ -219,7 +227,8 @@ try {
   result.clock = { marks: data.marks, visibility: data.vis, hiddenSeen, codec: data.header.video?.codec ?? null, ...judgeClock(data, rec, result.failed) };
 
   // --- R2-5: superseded recordings retire their workers ----------------------
-  await c.page.evaluate(async () => {
+  console.log("[adverse] clock judged; workers");
+  await phase("workers", () => c.page.evaluate(async () => {
     const { FlightCapture } = await import("/modules/capture.js");
     const canvas = document.getElementById("c");
     window.cap.stop();
@@ -234,7 +243,7 @@ try {
     }
     window.cap = done;
     window.lastExport = (await done.exportZip()).blob.size;
-  });
+  }));
   await cdp.send("HeapProfiler.collectGarbage");
   await sleep(500);
   const browserCdp = await c.page.context().browser().newBrowserCDPSession();
@@ -245,22 +254,22 @@ try {
 
   // --- R3-1: an encoder that throws leaves the spool working ------------------
   await c.page.goto(`${origin}/?r3=throw`);
-  const thrown = await c.page.evaluate(async ({ DRAW, zipOf }) => {
+  const thrown = await phase("encoder throws", () => c.page.evaluate(async ({ DRAW, zipOf }) => {
     const { FlightCapture } = await import("/modules-throw/capture.js");
     const cap = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
     await (0, eval)(DRAW)(cap, 3000);
     cap.recorder.event("action", "after the failure", { snapshot: false });
     cap.flush(performance.now());
     const t0 = performance.now(), zip = await (0, eval)(zipOf)(cap);
-    return { zip, exportMs: Math.round(performance.now() - t0), lost: cap.header.retention.lost };
-  }, { DRAW, zipOf });
-  {
+    return { zip, exportMs: Math.round(performance.now() - t0), lost: cap.header.retention.lost, drawErrors: window.drawErrors ?? [] };
+  }, { DRAW, zipOf }));
+  if (thrown) {
     const dir = path.join(out, "throw");
     writeFileSync(path.join(out, "throw.zip"), Buffer.from(thrown.zip, "base64"));
     unzip(path.join(out, "throw.zip"), dir);
     const header = JSON.parse(readFileSync(path.join(dir, "header.json"), "utf8"));
     const after = ndjson(path.join(dir, "events.ndjson")).some((e) => e.text === "after the failure");
-    result.encodeThrow = { exportMs: thrown.exportMs, lossFact: header.retention.lost.some((l) => /video encoder failed/.test(l.why)), telemetryAfter: after,
+    result.encodeThrow = { exportMs: thrown.exportMs, drawErrors: thrown.drawErrors, drawErrors: thrown.drawErrors, lossFact: header.retention.lost.some((l) => /video encoder failed/.test(l.why)), telemetryAfter: after,
       lost: header.retention.lost.map((l) => l.why).slice(0, 3) };
     if (!result.encodeThrow.lossFact) result.failed.push("encode throw: no loss fact in the exported ledger");
     if (!after) result.failed.push("encode throw: telemetry after the failure missing from the export");
@@ -268,7 +277,7 @@ try {
 
   // --- R3-2: Off → on keeps the previous recording; a refused removal is not credited ---
   await c.page.goto(`${origin}/?recbudget=1`);
-  result.removals = await c.page.evaluate(async () => {
+  result.removals = await phase("removals", () => c.page.evaluate(async () => {
     const { FlightCapture } = await import("/modules/capture.js");
     const canvas = document.getElementById("c"), build = { content: "adverse", bake: "", commit: "adverse" };
     const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -301,8 +310,8 @@ try {
     const ledger = b.header.retention;
     return { aSession: a.session, aBytes, aExport, heldBytes, bStopped: b.stopped, bStopWhy: ledger.stopped?.why ?? null,
       removedOlder: ledger.removedOlder.map((r) => r.session), removalRefused: ledger.removalRefused.map((r) => ({ session: r.session, why: r.why })) };
-  });
-  {
+  }));
+  if (result.removals) {
     const r = result.removals;
     if (!(r.aBytes > 1_000_000)) result.failed.push(`removals: the previous recording lost its bytes (${r.aBytes})`);
     if (!(r.aExport > 0)) result.failed.push("removals: the previous recording did not export");
@@ -314,13 +323,13 @@ try {
 
   // --- R3-3: encoder backpressure: a recorded gap, an honest pack and held strip tiles ---
   await c.page.goto(`${origin}/?r3=behind`);
-  const behind = await c.page.evaluate(async ({ DRAW, zipOf }) => {
+  const behind = await phase("backpressure", () => c.page.evaluate(async ({ DRAW, zipOf }) => {
     const { FlightCapture } = await import("/modules-behind/capture.js");
     const cap = new FlightCapture(document.getElementById("c"), "playtest", true, { content: "adverse", bake: "", commit: "adverse" });
     const draws = await (0, eval)(DRAW)(cap, 6000);
-    return { zip: await (0, eval)(zipOf)(cap), draws };
-  }, { DRAW, zipOf });
-  {
+    return { zip: await (0, eval)(zipOf)(cap), draws, drawErrors: window.drawErrors ?? [] };
+  }, { DRAW, zipOf }));
+  if (behind) {
     const zip = path.join(out, "behind.zip"), pack = path.join(out, "behind-pack");
     writeFileSync(zip, Buffer.from(behind.zip, "base64"));
     const packed = spawnSync(process.execPath, [path.join(repo, "scripts/rec/pack.mjs"), "--zip", zip, pack], { encoding: "utf8" });
@@ -347,6 +356,7 @@ try {
   }
 
   // --- R2-4: a campaign-length timeline ---------------------------------------
+  console.log("[adverse] timeline");
   const frames = Array.from({ length: 360_000 }, (_, i) => ({ t: i * 100, gap: i % 50_000 === 7 ? 140 : 16.7 }));
   const mem = Array.from({ length: 144_000 }, (_, i) => ({ t: i * 250, v: 200 + (i % 13) }));
   const series = { tab: [], heap: mem, vram: [], gpuUsed: [], resident: mem };

@@ -45,6 +45,7 @@ if (collect) {
   const pass = [];
   for (const name of ["plan", "segment", "seconds", "chrome", "pw", "gpu", "machine", "size", "hold"]) if (arg(name) !== undefined) pass.push(`--${name}`, arg(name));
   if (args.includes("--no-isolate")) pass.push("--no-isolate");
+  if (args.includes("--owner-browser")) pass.push("--owner-browser");
   const runner = path.join(path.dirname(fileURLToPath(import.meta.url)), "run.mjs");
   for (let r = 0; r < rounds; r++) {
     for (const mode of r % 2 ? [...order].reverse() : order) {
