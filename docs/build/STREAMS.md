@@ -1052,3 +1052,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **STEW-2 R1** (Sol on `e8764aa`, report on `review/stew-2-r1` `bfa2cc92`): REQUEST CHANGES.
   - **Findings:** P1 local-run leases aren't mutual exclusion (read-then-publish race, children outlive the PID, 20-minute expiry releases live work); P1 fail-open on unknown or unreadable state; P2 economy modules load before the guard; P2 cgroup prefix matching; P2 unclassified `Date.now` timing.
   - **Decision (root fix):** drop leases. On factory-worker, guarded entry points re-exec themselves through `heavy-check run --machine any`, so the queue sees all sanctioned CPU work. Refuse if the queue is unavailable; alickers identified positively; a guarded launcher; exact cgroup path components (a shared helper for SCHED-3 to adopt); full clock coverage. Bare tools stay a documented convention.
+- **CW-1 done at `a431d253`** (game `64bf2565`, harness `da1c83b0`):
+  - **Fixes:** R3-1/2/3 fixed with tests (the provable gate with SIM-PERF-1's classifier; one upload scheduler; readiness bound to the presented pose).
+  - **r13 under the strict rule:** tours 3, 4 and 7 and the surf hop pass with nothing excused. Deep 2 fails (light selection at 63.7 and 102.4 ms, mixed; a quiet replay measures 0.17 ms max). Tour 1 fails (one unsampled 95.2 ms region-activation frame); its R3 re-entry checks pass (12/12 caves, light bound about 0.4 s after re-entry).
+  - **Overall:** 7 of 9 judged segments pass.
+  - **R4 proposal:** a co-located vCPU-following canary.
+  - **Review:** Sol R4 running (`siltwake-cw1-review-r4-sol-a431d25`).
