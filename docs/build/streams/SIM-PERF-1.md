@@ -57,6 +57,15 @@ Phases over 1 ms, before → after: threat 2,423 → off the list; autosave 2,25
 
 **Focused costs:** threat p99 1,117 → 21 µs and step p99 1.22 → 0.28 ms (held, `hull-damaged` and `carrier-fitout`, factory-worker shared); `repository.commit` 3.4 → 1.2 ms on a 46 KB save; the first autosave after a load 9.1 → 1.6 ms (`pre-ending-carrier`) and 10.1 → 1.3 ms (`tour-ready`).
 
+**3090 exclusive, headless** (ticket `261024-121720-fdb7`, not DISTURBED: the job's CPU wait 0.05% (worst window 0.14%), no faults or swap-ins, host steal 0.65% (worst window 4.0%), boosted slice applied, no throttling). Held travel from all 16 library kinds, 576,000 steps a run, before (`a35da972`, `probe/sim-perf-1-base`) and after (compiled at `c4406b84`; game sources as `2af18fa1`) interleaved over two rounds, with `--verify --host`:
+
+| | p99 | p99.9 | max | steps over 8 ms | minor collections |
+|---|---|---|---|---|---|
+| Before, rounds 1 and 2 | 0.279, 0.304 ms | 1.33, 1.45 ms | 13.9, 14.7 ms | 1, 2 | 1,122, 1,144 |
+| After, rounds 1 and 2 | **0.197, 0.197 ms** | **0.664, 0.664 ms** | **5.9, 8.7 ms** | **0, 1** (an 8.1 ms collection) | **631, 637** |
+
+The before-tree's slow steps were the game's, and are gone after: `carrier-fitout` at tick 330,173 (13.9 and 14.7 ms, in both rounds, no steal on its vCPU; 0.63 ms re-executed warm: the first hunter contact's contact mesh and compilation, now warmed at entry), and `hull-damaged` at tick 158,546 (11.3 ms, threat 10.4 ms; still 4 ms re-executed warm: the per-sweep roster scan, now once per world).
+
 **Browser, 4070 control** (`probe/sim-perf-1-cw1` at `99425bc4`: this branch at `9e6d3e99` with CW-1; segments 2 and 3 of CW-1's `saves-t6` plan, `SIMPERF_HOST=1`): 87,845 steps, **none over 8 ms**, p99 0.61 ms, p99.9 1.6–1.7 ms, max 4.6 ms (an autosave). The frame's own work p99 4.2–7 ms, max 9.9 ms; the gate passed and no long frame was the simulation's. Every long gap (GPU-bound, up to 200 ms) had the renderer's main thread **blocked** (`S futex` for 95–98% of the gap, 2–7 ms on CPU), the canary running through it and no steal.
 
 **Browser, 3090** (profiled, `gpu` class, before-tree probe `81ee4a12`, segment 2): 52,969 steps, two over 8 ms: the 61.7 ms movement step (Chrome's sampler caught no movement code; the guest counted 86 ms of 100 on CPU) and a 12.2 ms step (presentation 5.7, upgrades 5.3). PENDING: the exclusive runs.
