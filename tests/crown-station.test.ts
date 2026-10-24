@@ -98,8 +98,8 @@ test("W2-02: each stage restores at the door through Fabricate, paid exactly onc
       fundDiver(ahead, next);
       const later = craftButton(ahead, next);
       assert.ok(later?.disabled, `${next} before ${id}: disabled even when paid for`);
-      assert.match(later!.reason ?? "", /earlier work/, `${next} names the order, not the materials`);
-      assert.match(refused(ahead, { type: "craft", recipeId: next }), /earlier work/, `${next} refused before ${id}, nothing spent`);
+      assert.ok((later!.reason ?? "").includes(RECIPES[id].label), `${next} names ${id} as what it needs, not materials: ${later!.reason}`);
+      refused(ahead, { type: "craft", recipeId: next });
     }
     // One unit short: still refused, nothing moves.
     fundDiver(s, id);

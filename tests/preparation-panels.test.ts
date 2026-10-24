@@ -570,8 +570,9 @@ test("the fabricator lists only known plans; Basin plans add exactly the earned 
   // C4: the same plans carry the SYS-1 upgrades drawn on them.
   const c4 = Object.keys({ ...UPGRADE_RECIPES, ...UPGRADE_REFIT_RECIPES, ...HOST_KNOWLEDGE_RECIPES })
     .filter((id) => s.knowledge.blueprints.includes(RECIPES[id as RecipeId].bp));
-  assert.deepEqual(c4.sort(), ["cell_bank_2", "creel_service_head", "dart_450", "drive_tuning_2", "floodlights_2", "hush_450",
-    "plating_ceramic", "thermal_exchanger"]);
+  // SIG-1: the Creel service plans also carry its cutting arm, grapple and cargo pod.
+  assert.deepEqual(c4.sort(), ["cell_bank_2", "creel_cutting_arm", "creel_drop_pod", "creel_grapple", "creel_service_head", "dart_450",
+    "drive_tuning_2", "floodlights_2", "hush_450", "plating_ceramic", "thermal_exchanger"]);
   assert.deepEqual(new Set(listed()), new Set(["pod_repair", "essential_tools", "suit_150", "reserve_cells",
     "creel_base", "creel_cargo_rack", "creel_cabin", "strip_frame", "creel_350", ...campaign, ...c4,
     // HUB-2: the crown station's stages ride on the Creel and Rift plans.
