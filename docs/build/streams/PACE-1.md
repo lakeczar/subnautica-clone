@@ -355,3 +355,91 @@ No owner questions are open.
 | --- | --- | --- |
 | **F4 [P2]** F10's provenance and migration | **Fixed.** `LEGACY_GRANTS` rows carry `source: { kind: "scan" \| "discovery", id }`. Cultivation stays a `scan` source; the pod-buffer row is `discovery: C07`, checked against `storyView(s).discoveries`. The shape is agreed with LS-1. F10 lands atomically with a schema step and depends on LS-1 1b: in 1b's 7 → 8 bridge if unmerged, else in 8 → 9, never a retrofit of `bridge7`. Existing rows are untouched, and the four earned-plan cases run through real strict validation with C07 in `story.discoveries`. | F10 *Saves*; stage 2 needs; coordination |
 | Owner: the 90 s guide, the predator cue, hold-course | **Adopted.** Empty stretches are reported, not gated; stage 3 is judgement only; hold-course is a follow-up stream. | Ratchet; stage 3; §6 |
+
+## Stage 1 handoff (interim: B4 and core pending)
+
+Code at **`43645268`** on `t3/pace-1-stage-1`, stacked on LS-1's head `4593705d` plus this plan. This section is the docs-only commit after it. Spoiler-safe.
+
+**Interim** (coordinator, 2026-10-24):
+- **What waits for LS-1 1a's merge:** B4 (the 800 m refits at the Divide dock) and the deletion of the core pre-budget. After the merge come the two branch moves in `scenarios.ts` and the tour's own core in `libraryplay.ts`.
+- **Figures:** against LS-1's branch head, labelled **"B4 and core pending"**.
+
+**What changed** (bot only, no game file):
+- **New: `scripts/playthrough/stock.ts`,** a pure stock planner (R2).
+  - **What it reserves:** stock only for recipes whose plan is held and not yet made, plus clues seen (`CLUES`, which stage 2 fills).
+  - **Options:** an item filter and declared extras.
+  - **Tests:** `tests/playthrough-stock.test.ts`, 7 cases.
+- **`scripts/playthrough/later.ts`** (the late phases):
+  - **R1:** away from home, the bot eats from the craft's hold or the carrier's stores. The carrier's meals ride in its stores.
+  - **R2:** both pre-budgets are gone: the air assembly's lattice (Creel and carrier) and the pre-staged Divide stock.
+  - **R3:** C12 is read at the Divide dock.
+  - **R4:** the carrier stays forward. It goes home only for yard work and the works' forced return.
+  - **R5:** the hall and the food bay are restored while the galleries drain.
+  - **R6:** the ceramic reserve is sorted at the Rift lips, so there is no seam trip. The fall-through to the seam logs its reason.
+  - **R7:** the craft charges when the next legs need it.
+  - **R9:** every return is logged with its reason, from `recipeSites`, `available` and the nearest source with stock.
+  - **The pod buffer** is fitted on the first visit home after C07.
+  - **The ending** follows the works in the same district visit.
+  - **R8 is not wired:** the economy ledger lacks the crown (stage 2).
+  - **Removed:** the ending's home round trip, and the dead `carrierHome`.
+
+**Checks at `43645268`** (queue, `--machine any`):
+
+| Check | Ticket | Result |
+| --- | --- | --- |
+| Fast tier | `261024-224542-5a68` | 1,662 tests, 169 files pass |
+| Heavy tier | `261024-224543-0bab` | 67 files pass, 0 failures. The queue's "OOM-killed by a sub-limit" note is a budgeted child process; no file failed |
+| Six economy steps | `261024-224543-1cad` | All pass; the campaign ledger is solvent for both strategies |
+| Playthrough | `261024-224543-79fb` | **9/9 complete, every milestone reload matches.** The run still exits 1, but only the pacing ratchet fails (compromise 2) |
+
+**Figures** (B4 and core pending; works beats uncounted until F5). LS-1 head `4593705d` (ticket `261024-195617-cdf9`) against stage 1:
+
+| Route | Play (min) | Longest gap | Gaps over 20 min | Empty legs over 90 s (longest) |
+| --- | --- | --- | --- | --- |
+| Creel | 203.7 → **163.5** | 50.6 → **23.6** (C14 → end: the uncounted works) | 1 → 1 | 31 (850 s) → 30 (850 s) |
+| No-optional | 200.2 → **159.4** | 50.9 → **23.6** | 1 → 1 | 31 → 30 |
+| Carrier | 372.5 → **290.9** | 94.2 → **61.6** (air assembly → end) | 4 → 3 (61.6, 39.9, 30.6) | 55 (753 s) → 44 (753 s) |
+| No-optional carrier | 362.3 → **276.6** | 87.1 → **53.1** | 4 → 3 | 55 → 44 |
+
+- **Creel:** every gap except the uncounted works is 18.6 min or less, so with F5 the Creel route should pass the gap gate.
+- **Carrier:** it stays over the gate until stage 2. Its forced return gathers depleted commons at home.
+
+**Scenarios A and B** (§1.2's open question, now measured on the bot's clock, active and idle):
+- **A, Creel:** 37.8 min from the last district record to the first works step (no-optional 38.6, reverse 39.2). The plan's estimate was about 41.
+- **A, by carrier:** 90.4 min (no-optional 76.9).
+  - The carrier sails home (about 16 min) and back (about 16 min).
+  - Gathering at home takes 44 min, because the near-home commons are spent and gathering is diver-only (compromise 3).
+- **B, crown return: not a cheaper loop on today's map.**
+  - The works need 8 glass, and none is left near the crown.
+  - What remains lies on the isles: the stack, 685 m from the crown, and the headland, which is beyond a full Mantle charge from the Basin anchorage (113%, run note in `261024-215931-126c` and `261024-220136-a2b9`).
+  - So a crown return still needs an isles trip, and the carrier's forced return goes home instead (R4).
+- **The best-play minimum on today's game** is therefore about 38 min (Creel) and longer on the carrier. This confirms structural problems 1 and 2 (stage 2).
+
+**The R9 log, the structural list by route** (run notes):
+- **Creel:**
+  - **Rift → home, forced:** the Divide dock's 3 alloy, 3 glass and 3 crust. Its plan is read at the Rift ledger, and glass lies only on the isles. This is a new finding the old pre-staged stock hid. It costs one home trip, and the gap around it is 15.7 min, so it passes.
+  - **Divide → home, pending (B4).**
+  - **District → home, forced:** the assemblies are made only at the workshop or crown, from commons that lie only behind.
+- **Carrier:**
+  - **Divide → yard, chosen:** yard work and the suit's workshop refit.
+  - **District → home, forced:** the same as the Creel.
+
+**Adverse case:** every forced return in the runs names its reason from the game's authorities. The plan's case, R6 falling through to the deep seam, now logs its reason too. No scenario exercises it, because the sorted lip reserve covers both routes.
+
+**Compromises** (each with its root fix):
+1. **B4 and the core pre-budget pending.**
+   - **What happens:** both wait for LS-1 1a's merge.
+   - **Root fix:** the branch moves in `scenarios.ts` (`tour` and `over-geared` from the home milestone), the tour gathers its own core, then the refits move to the dock and the pre-budget is deleted.
+2. **The pacing ratchet fails the playthrough step.**
+   - **What happens:** `pacing-debt.ts` is LS-1's file. Its two-way ratchet reports "better than recorded" on the old rows and "worse" on new or longer gaps: Creel C14 → end, and carrier controller → power assembly at 39.9, against 26.5 recorded. The old bot's 26.5 began with the carrier already home, because the bot pre-budgeted the air assembly's lattice. The return now starts in the district.
+   - **Root fix:** PACE-1 rewrites its rows against LS-1's merged baseline, and REC-2's F5 counts the works beats.
+3. **Gathering at home is diver-only** (`procure`, in `actions.ts`, not PACE-1's).
+   - **What happens:** on the carrier route the hall stock takes 44 min.
+   - **Root fix:** stage 2's district sources, so the stock no longer comes from home. Otherwise, a craft-assisted gatherer through that file's owner.
+4. **Scenario B is not played to the end by the bot.**
+   - **What happens:** the crown's bench works, but the isles glass is beyond the Mantle's charge or in shallows the bot's Mantle doesn't navigate.
+   - **Root fix:** stage 2 makes B moot, since the district has its own bench and sources.
+
+**Known limits:**
+- The Creel's longest stretch, 850 s (the forced haul home → gate), stays until stage 2.
+- Food on the long carrier legs is 6 meals in the stores. Nothing starved, and the lowest food reading was 28.
