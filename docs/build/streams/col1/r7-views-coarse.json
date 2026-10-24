@@ -1,0 +1,77 @@
+[
+ {
+  "id": "isles_blowhole",
+  "lab": "authored",
+  "at": [
+   1084,
+   -22.48,
+   124
+  ],
+  "view": {
+   "cam": [
+    1080.01,
+    -20.43,
+    127.99
+   ],
+   "dist": 6,
+   "el": 20,
+   "az": 135,
+   "side": [
+    -1,
+    0,
+    0
+   ],
+   "inward": true
+  }
+ },
+ {
+  "id": "canopy_root_arch",
+  "lab": "canopy-basin",
+  "at": [
+   1237.67,
+   -266.94,
+   -260
+  ],
+  "view": {
+   "cam": [
+    1241.66,
+    -264.89,
+    -256.01
+   ],
+   "dist": 6,
+   "el": 20,
+   "az": 45,
+   "side": [
+    0,
+    0,
+    -1
+   ],
+   "inward": false
+  }
+ },
+ {
+  "id": "basin_dish_lee_vault",
+  "lab": "canopy-basin",
+  "at": [
+   572.84,
+   -273.85,
+   -629
+  ],
+  "view": {
+   "cam": [
+    572.84,
+    -271.8,
+    -623.36
+   ],
+   "dist": 6,
+   "el": 20,
+   "az": 90,
+   "side": [
+    0,
+    0,
+    -1
+   ],
+   "inward": false
+  }
+ }
+]

@@ -1,0 +1,84 @@
+{
+  "commit": "9c7b3f8",
+  "segments": [
+    {
+      "label": "surface → west ledge",
+      "seconds": 2.1,
+      "frames": 125,
+      "fps": 60,
+      "p50": 16.7,
+      "p95": 16.8,
+      "p99": 16.8,
+      "max": 16.8,
+      "over50": 0
+    }
+  ],
+  "shots": [
+    "01-title.jpg",
+    "02-hud-objective.jpg",
+    "03-journal-notebook.jpg",
+    "04-journal-materials.jpg",
+    "05-journal-tech.jpg",
+    "06-journal-decodes.jpg",
+    "07-fit.jpg",
+    "08-base-kit-ready.jpg",
+    "09-base-outpost-deployed.jpg",
+    "10-outpost-in-world.jpg",
+    "11-base-packed.jpg"
+  ],
+  "errors": [],
+  "captions": [
+    {
+      "t": 36.5,
+      "text": "|"
+    }
+  ],
+  "checks": {
+    "titlePrimary": [
+      "new-game"
+    ],
+    "objective": "Restore the outer-crown mooring on the Canopy's east margin: a tagged frame, glass and crust. Its mast charges craft and does 350 m refits.",
+    "oldHeader": false,
+    "journalTabs": [
+      "Notebook",
+      "Materials 2",
+      "Tech & recipes 59",
+      "Creatures 0",
+      "Cycles 0",
+      "Decodes 0"
+    ],
+    "pressed journal tab materials": "7 Tabs",
+    "pressed journal tab tech": "8 Tabs",
+    "pressed journal tab decodes": "11 Tabs",
+    "fitText": "Return Esc Fit Cargo Fabricate Journal Base Fit Paused Creel 240 m · at workshop sockets 0/2 · hull bays 0/2 · major mount 0/1 · tool hardpoint 0/1 Nothing fitted.",
+    "baseBefore": "Return Esc Base Cargo Fabricate Journal Base Fit Paused No base in reach · stand at a host's work area · outposts 0 / 3 Field outpost kit · basic Deploys here · solar power Deploy here Beacons 3 Chart 5 cells",
+    "pressed Deploy here": "6 Tabs",
+    "baseDeployed": "Return Esc Base Cargo Fabricate Journal Base Fit Paused Outpost 1 deployed · solar power. At Outpost 1 · outposts 1 / 3 Outpost 1 outpost · solar power s0 · empty Fit Planter module Pack up Upgrade to standard You need the standard field outpost plans. Pack preview Beacons 4 Chart 5 cells",
+    "pressed Pack up": "7 Tabs",
+    "basePacked": "Return Esc Base Cargo Fabricate Journal Base Fit Paused Outpost 1 packed into diver hold · spent 1 × Structural alloy. No base in reach · stand at a host's work area · outposts 0 / 3 Field outpost kit · basic Deploys here · solar power Deploy here Beacons 3 Chart 5 cells"
+  },
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+  "ok": true,
+  "log": [
+    "[6.9s] renderer ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+    "[7.3s] screenshot /work/tmp/c4/gpu-b/01-title.jpg",
+    "[32.4s] loaded {\"cam\":[-44,0.05,8],\"depth\":0.2,\"eye\":0.65,\"region\":\"Hearth Reef\"}",
+    "[32.4s] screenshot /work/tmp/c4/gpu-b/02-hud-objective.jpg",
+    "[33.0s] screenshot /work/tmp/c4/gpu-b/03-journal-notebook.jpg",
+    "[33.6s] pressed journal tab materials after 7 Tabs",
+    "[33.6s] screenshot /work/tmp/c4/gpu-b/04-journal-materials.jpg",
+    "[34.3s] pressed journal tab tech after 8 Tabs",
+    "[34.3s] screenshot /work/tmp/c4/gpu-b/05-journal-tech.jpg",
+    "[35.1s] pressed journal tab decodes after 11 Tabs",
+    "[35.1s] screenshot /work/tmp/c4/gpu-b/06-journal-decodes.jpg",
+    "[36.1s] screenshot /work/tmp/c4/gpu-b/07-fit.jpg",
+    "[36.5s] caption: |",
+    "[38.6s] segment {\"label\":\"surface → west ledge\",\"seconds\":2.1,\"frames\":125,\"fps\":60,\"p50\":16.7,\"p95\":16.8,\"p99\":16.8,\"max\":16.8,\"over50\":0}",
+    "[40.0s] screenshot /work/tmp/c4/gpu-b/08-base-kit-ready.jpg",
+    "[40.6s] pressed Deploy here after 6 Tabs",
+    "[41.2s] screenshot /work/tmp/c4/gpu-b/09-base-outpost-deployed.jpg",
+    "[48.8s] screenshot /work/tmp/c4/gpu-b/10-outpost-in-world.jpg",
+    "[50.1s] pressed Pack up after 7 Tabs",
+    "[50.7s] screenshot /work/tmp/c4/gpu-b/11-base-packed.jpg"
+  ]
+}

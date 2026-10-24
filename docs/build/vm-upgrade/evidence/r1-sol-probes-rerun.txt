@@ -1,0 +1,64 @@
+# Sol R1 reviewer probes (/work/tmp/sol-vmu-r1-9987231/probes.sh, byte-identical copy) against the corrected scripts
+# Only changes to the copied harness: its own path, and a fake logger so syslog stays in the sandbox.
+=== TERM with VM already off ===
+rc 31
+VM shut off CFG 12582912/12582912 LIVE /
+{"run_id":"probe-term-off","outcome":"aborted","exit_code":31,"message":"stopped unexpectedly (signal or error) in phase 'changing'; re-run to continue from the VM's state","vm_outcome":"aborted","evidence_errors":"","rehearsal":false,"plan":"change","last_phase":"changing","vm":{"state":"shut off","config_memory_kib":"12582912","config_current_kib":"12582912","live_memory_kib":"","live_current_kib":""},"guest_agent":"not checked","backup":"/boot/config/fleet/vm-backups/factory-worker-probe-term-off.xml","script_sha256":"b9e14335e5027ed122686117ae69c34f4d674c2715696757a63048fcccab59d5","pid":1464574,"sid":"1464546","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=0.3 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5","started_at":"2026-10-19T19:55:13Z","finished_at":"2026-10-19T19:55:14Z"}
+virsh shutdown ce0a610b-0a40-b2eb-1bfb-5a7203a24e22 --mode acpi
+=== Concurrent pin edit while Fleet lock is held ===
+grep: /mnt/user/appdata/fleet-vm-upgrade/runs/probe-lock-pins/state.json: No such file or directory
+grep: /mnt/user/appdata/fleet-vm-upgrade/runs/probe-lock-pins/state.json: No such file or directory
+rc 21
+VM running CFG 12582912/12582912 LIVE 12582912/12582912
+{"run_id":"probe-lock-pins","outcome":"started-as-is","exit_code":21,"message":"the VM changed while it was off (vCPU pins are '0:0 1:1 2:8 3:9 4:10 5:7', expected '0:0 1:1 2:8 3:9 4:10 5:11'); memory not changed; started with its definition as it is (12582912/12582912 KiB)","vm_outcome":"started-as-is","evidence_errors":"","rehearsal":false,"plan":"full","last_phase":"starting-as-is","vm":{"state":"running","config_memory_kib":"12582912","config_current_kib":"12582912","live_memory_kib":"12582912","live_current_kib":"12582912"},"guest_agent":"not checked","backup":"/boot/config/fleet/vm-backups/factory-worker-probe-lock-pins.xml","script_sha256":"b9e14335e5027ed122686117ae69c34f4d674c2715696757a63048fcccab59d5","pid":1465510,"sid":"1464546","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=5 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5","started_at":"2026-10-19T19:55:14Z","finished_at":"2026-10-19T19:55:15Z"}
+virsh shutdown ce0a610b-0a40-b2eb-1bfb-5a7203a24e22 --mode acpi
+virsh start ce0a610b-0a40-b2eb-1bfb-5a7203a24e22
+=== Phase and result writes fail ===
+rc 0
+VM running CFG 16777216/16777216 LIVE 16777216/16777216
+{"run_id":"probe-io","outcome":"upgraded","exit_code":0,"message":"running with 16777216 KiB, 6 vCPUs, the same pins, topology, disks and identity; guest agent answered after 0 s","vm_outcome":"upgraded","evidence_errors":"","rehearsal":false,"plan":"change","last_phase":"guest-check","vm":{"state":"running","config_memory_kib":"16777216","config_current_kib":"16777216","live_memory_kib":"16777216","live_current_kib":"16777216"},"guest_agent":"answered after 0 s","backup":"/boot/config/fleet/vm-backups/factory-worker-probe-io.xml","script_sha256":"b9e14335e5027ed122686117ae69c34f4d674c2715696757a63048fcccab59d5","pid":1466570,"sid":"1464546","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=0.3 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5","started_at":"2026-10-19T19:55:15Z","finished_at":"2026-10-19T19:55:16Z"}
+virsh shutdown ce0a610b-0a40-b2eb-1bfb-5a7203a24e22 --mode acpi
+virsh setmaxmem ce0a610b-0a40-b2eb-1bfb-5a7203a24e22 16777216 --config
+virsh setmem ce0a610b-0a40-b2eb-1bfb-5a7203a24e22 16777216 --config
+virsh start ce0a610b-0a40-b2eb-1bfb-5a7203a24e22
+result exists? yes
+=== Running at unhandled 8GiB with old persistent config ===
+VM running CFG 12582912/12582912 LIVE 8388608/8388608
+{"run_id":"case-1","outcome":"preflight-failed","exit_code":10,"message":"state 'running', defined 12582912/12582912 KiB, running 8388608/8388608 KiB is not a state this script handles; nothing was changed","vm_outcome":"preflight-failed","evidence_errors":"","rehearsal":false,"plan":"unexpected","last_phase":"preflight","vm":{"state":"running","config_memory_kib":"12582912","config_current_kib":"12582912","live_memory_kib":"8388608","live_current_kib":"8388608"},"guest_agent":"not checked","backup":"","script_sha256":"b9e14335e5027ed122686117ae69c34f4d674c2715696757a63048fcccab59d5","pid":1467852,"sid":"1464546","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=0.3 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5","started_at":"2026-10-19T19:55:16Z","finished_at":"2026-10-19T19:55:16Z"}
+=== XML read failure while off, 15GiB available ===
+VM shut off CFG 16777216/16777216 LIVE /
+{"run_id":"case-2","outcome":"left-off","exit_code":30,"message":"the VM could not be read once off (its definition could not be read); nothing was changed or started","vm_outcome":"left-off","evidence_errors":"","rehearsal":false,"plan":"restart","last_phase":"changing","vm":{"state":"shut off","config_memory_kib":"","config_current_kib":"","live_memory_kib":"","live_current_kib":""},"guest_agent":"not checked","backup":"/boot/config/fleet/vm-backups/factory-worker-case-2.xml","script_sha256":"b9e14335e5027ed122686117ae69c34f4d674c2715696757a63048fcccab59d5","pid":1468236,"sid":"1464546","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=0.3 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5","started_at":"2026-10-19T19:55:16Z","finished_at":"2026-10-19T19:55:28Z"}
+virsh shutdown ce0a610b-0a40-b2eb-1bfb-5a7203a24e22 --mode acpi
+=== Restore cannot create requested links ===
+restore-tmp-links: /tmp/rtl/nonexistent is not a folder
+rc 1; restored link exists? no
+=== Already at 16GiB, unexpected live pins ===
+VM running CFG 16777216/16777216 LIVE 16777216/16777216
+{"run_id":"case-3","outcome":"preflight-failed","exit_code":10,"message":"not the expected VM: running: vCPU pins are '0:0 1:1 2:2 3:3 4:4 5:5'; nothing was changed","vm_outcome":"preflight-failed","evidence_errors":"","rehearsal":false,"plan":"","last_phase":"preflight","vm":{"state":"running","config_memory_kib":"16777216","config_current_kib":"16777216","live_memory_kib":"16777216","live_current_kib":"16777216"},"guest_agent":"not checked","backup":"","script_sha256":"b9e14335e5027ed122686117ae69c34f4d674c2715696757a63048fcccab59d5","pid":1469087,"sid":"1464546","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=0.3 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5","started_at":"2026-10-19T19:55:29Z","finished_at":"2026-10-19T19:55:29Z"}
+=== Concurrent start while Fleet lock is held ===
+grep: /mnt/user/appdata/fleet-vm-upgrade/runs/probe-lock-start/state.json: No such file or directory
+grep: /mnt/user/appdata/fleet-vm-upgrade/runs/probe-lock-start/state.json: No such file or directory
+rc 21
+VM running CFG 12582912/12582912 LIVE 12582912/12582912
+{"run_id":"probe-lock-start","outcome":"restarted-elsewhere","exit_code":21,"message":"something else started the VM before the change; memory not changed","vm_outcome":"restarted-elsewhere","evidence_errors":"","rehearsal":false,"plan":"full","last_phase":"changing","vm":{"state":"running","config_memory_kib":"12582912","config_current_kib":"12582912","live_memory_kib":"12582912","live_current_kib":"12582912"},"guest_agent":"not checked","backup":"/boot/config/fleet/vm-backups/factory-worker-probe-lock-start.xml","script_sha256":"b9e14335e5027ed122686117ae69c34f4d674c2715696757a63048fcccab59d5","pid":1469469,"sid":"1464546","launcher_pid":"","launcher_alive_at_finish":"unknown","overrides":"VMU_ACPI_RESEND=0.3 VMU_AGENT_TIMEOUT=0.3 VMU_ARM_DELAY=0.1 VMU_FLEET_LOCK_WAIT=5 VMU_MEMINFO=/tmp/vmu-fake/meminfo VMU_POLL=0.02 VMU_REHEARSAL_HOLD=0.5 VMU_SHUTDOWN_TIMEOUT=1 VMU_START_RETRY_DELAY=0.05 VMU_START_TIMEOUT=0.5","started_at":"2026-10-19T19:55:29Z","finished_at":"2026-10-19T19:55:29Z"}
+virsh shutdown ce0a610b-0a40-b2eb-1bfb-5a7203a24e22 --mode acpi
+=== Restore tar failure followed by retry ===
+archive SHA-256 matches (796b7b10b2a6353934779fb9e52978585de965e3271286559a5a666fb58ca1a3)
+extracting to /tmp/rtl/partial-ck/tmp-restored (disk, not /tmp) ...
+injected tar failure
+restore-tmp-links: tar failed; /tmp/rtl/partial-ck/tmp-restored.partial is left for inspection
+first rc 1; partial marker? yes
+archive SHA-256 matches (796b7b10b2a6353934779fb9e52978585de965e3271286559a5a666fb58ca1a3)
+extracting to /tmp/rtl/partial-ck/tmp-restored (disk, not /tmp) ...
+extracted
+linked before: 0, linked now: 1, would link: 0, kept (exist in /tmp/rtl/partial-tmp): 0, missing: 0, failed: 0
+Check the art prototype's Git binding before using it: git -C /tmp/rtl/partial-tmp/siltwake-art-prototype status
+retry rc 0; content evidence
+=== Restore concurrent directory collision ===
+archive SHA-256 matches (796b7b10b2a6353934779fb9e52978585de965e3271286559a5a666fb58ca1a3)
+already extracted in /tmp/rtl/partial-ck/tmp-restored
+ln: failed to create symbolic link '/tmp/rtl/race-tmp/file-a': File exists
+kept, appeared in /tmp/rtl/race-tmp meanwhile: file-a
+linked before: 0, linked now: 0, would link: 0, kept (exist in /tmp/rtl/race-tmp): 1, missing: 0, failed: 0
+Check the art prototype's Git binding before using it: git -C /tmp/rtl/race-tmp/siltwake-art-prototype status
+rc 0; nested symlink created in concurrent directory? no; owner data concurrent

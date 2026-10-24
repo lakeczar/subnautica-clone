@@ -1,0 +1,15 @@
+# M1 A0 coordinator reconciliation
+
+2026-10-17. A0 is staged for provisional dependent work; **no M1 or completed core-batch acceptance**. Original author source `558c28c55c21c5636c847e1702e7c6e3b67c7e7a`, evidence-only tip `aa53661363117e6a9a443cffce3c4b48887aba44`; merge `1c8d81e` preserves the four source commits and evidence on `feat/siltwake-first-expedition`.
+
+Root inspected the source diffs, authoritative carrier/shape definitions, sweep implementation, save compatibility and command/audio regression tests. Production paths match the author source exactly. Root reran `npm run check`: **117 tests pass**, strict typecheck and production build pass. M1 economy checker passes with unchanged recipe/source arithmetic. Logs: `/tmp/siltwake-m1-a0-coordinator-check.log` and `/tmp/siltwake-m1-a0-coordinator-economy.json`.
+
+Build `dist/assets/index-DHJHjWQr.js`, SHA256 `a7025baf46a3300894f3a53d6423b51a931f50eea04e61b6ccea2580ba2fbaa1`, matches author evidence. Large bundle warning remains. Dependencies/lockfile unchanged, so the existing installation was reused after the prior fresh `npm ci`; no new install claim.
+
+Root reran the same independent seeded command diagnostics that failed on source `5fd6338`. Helm snapshot now encodes with pose distance0. Valid disabled-Dart → tow → repair now encodes immediately with `operation:null` and hull enabled. Output `/tmp/siltwake-m1-a0-coordinator-command-repro.json`. This is production command/codec verification with seeded state, not ordinary gameplay recovery.
+
+Root viewed the actual final-source author screenshot `browser-screenshot-localhost-mvcrio4z-f7812e33.png`: a minimal opaque compartment shell and capsule-wide central passage. It is suitable physical scaffolding for a visual pass, not polished carrier art or proof of all walking/launch behaviors. Author's final production fixture smoke and saved tick29 poses remain author evidence; root did not launch a new browser in this reconciliation. Earlier A0 launch recordings belong to earlier A0 source and do not prove the final full fixture matrix.
+
+Reconciled contracts are recorded in CONTRACTS: immediate valid commands, one local layout authority, aligned transfer envelope versus broad piloting proxy, whole-path preflight/commit, transient sound origins, strict semantic validation and player-only visible/idempotent interior relocation for covered legacy poses. Schema2/content remains; no persistent fields/berth transforms moved. Prior Dart physical clearance remains a route check; successful decode is not its proof. Terrain clearance retains 0.2 m slices and footprint samples; arbitrary continuous terrain/rotation is not claimed.
+
+All A0 resources and its worktree were clean/closed at terminal handoff; no live children. Next are the three exclusive [parallel assignments](../tasks/M1-PARALLEL.md), then a separate physical recovery/carrier completion pass and final combined play evidence. A0 stays part of the later core/physical-feasibility review batch. Paired non-author Astra/Sol feature review and separate integrated M1 review still remain.

@@ -1,0 +1,248 @@
+/* Exploration chrome. Menu and panel interiors keep their own layout owners. */
+.experience-layout {
+  position: absolute;
+  inset: 0;
+  padding: 24px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, min(520px, 52vw)) minmax(0, 1fr);
+  grid-template-rows: auto auto minmax(min-content, 1fr) auto;
+  gap: 10px;
+  overflow: auto;
+  pointer-events: none;
+}
+#hud {
+  display: contents;
+  text-shadow: 0 2px 12px #0a263b88;
+}
+.hud-top, .hud-bottom {
+  grid-column: 1 / -1;
+  display: flex;
+  justify-content: space-between;
+  gap: 20px;
+}
+.hud-top { grid-row: 1; align-items: flex-start; }
+.hud-bottom { grid-row: 4; align-items: flex-end; }
+.region, .heading, .telemetry, .explore-note {
+  background: #102d36f2;
+  border-radius: 4px;
+  padding: 9px 12px;
+}
+.region { display: flex; flex-direction: column; gap: 5px; }
+.eyebrow { display: block; color: #d6e5d9; font-size: 11px; letter-spacing: .14em; }
+.region strong { font: 400 22px Georgia, serif; letter-spacing: .02em; }
+.heading {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 80px;
+  border-top: 1px solid #e0e3c673;
+}
+.heading > span { font-size: 14px; letter-spacing: .16em; }
+.heading small { font-size: 12px; color: #d6e5d9; }
+.hud-actions, #hud-tools { display: flex; gap: 8px; }
+.hud-actions { pointer-events: auto; }
+.hud-actions button {
+  white-space: nowrap;
+  border: 1px solid #e0e9c860;
+  background: #102d36f2;
+  border-radius: 3px;
+  font-size: 12px;
+  padding: 8px;
+}
+.hud-actions kbd { font: inherit; font-size: 12px; margin-left: 5px; color: #d6e5d9; }
+/* Outer controls and essential menu information share the HUD's readable floor. */
+.menu-screen .settings label, .menu-screen .settings select,
+.menu-screen .controls div, .menu-screen .save-status,
+.menu-screen .save-safety > span { font-size: 12px; }
+.menu-screen .wordmark > span, .scene-caption > span, .scene-caption small { font-size: 11px; }
+#panel-return kbd { font-size: 12px; }
+.crosshair {
+  position: absolute;
+  top: 50%; left: 50%;
+  width: 4px; height: 4px;
+  border-radius: 50%; background: #eef6d8b0;
+  box-shadow: 0 0 0 3px #163d491a;
+  transform: translate(-50%, -50%);
+}
+.telemetry { display: flex; gap: 18px; align-items: center; }
+.depth { border-right: 1px solid #d6e4c64d; padding-right: 18px; }
+.depth b { font: 400 35px/1 Georgia, serif; }
+.depth small { display: block; font-size: 11px; letter-spacing: .12em; margin-top: 7px; color: #d6e5d9; }
+.mode { display: flex; flex-direction: column; gap: 8px; }
+.mode strong { font-size: 13px; font-weight: 500; }
+.mode small { font-size: 12px; color: #d6e5d9; }
+.explore-note { text-align: right; max-width: 46vw; }
+.explore-note p { font-size: 12px; line-height: 1.5; margin: 0 0 5px; }
+.explore-note small { display: block; margin-top: 5px; font-size: 12px; line-height: 1.5; color: #d6e5d9; }
+.explore-note p:empty, .explore-note small:empty { display: none; }
+.explore-note:not(:has(p:not(:empty), small:not(:empty), #cruise:not([hidden]))) { padding: 0; }
+#cruise { display: inline-block; padding: 5px 8px; border: 1px solid #dbc17f6b; border-radius: 3px; color: #f4db9d; font-size: 12px; margin-bottom: 7px; }
+#pulse-summary:not(:empty) { width: fit-content; margin-left: auto; padding: 4px 7px; border: 1px solid #a9c8b960; border-radius: 3px; background: #0b222bf2; color: #ffe1b2; }
+.hud-instruments { grid-column: 1 / 3; grid-row: 2; display: flex; align-items: center; justify-content: space-between; gap: 16px; }
+.vitals { display: flex; gap: 8px; flex-wrap: wrap; }
+.vitals > div { min-width: 106px; display: grid; align-content: start; gap: 5px; padding: 9px 10px; background: #102d36f2; border: 1px solid #a3c7bd60; border-radius: 4px; }
+.vitals span { font-size: 11px; letter-spacing: .12em; color: #d6e5d9; }
+.vitals b { font-weight: 500; font-size: 16px; }
+.vitals i { height: 3px; background: linear-gradient(90deg, #bddfbc var(--fill), #b7dac433 var(--fill)); }
+.vitals small { font-size: 12px; color: #d6e5d9; }
+.vitals .urgent { border-color: #f3b477; color: #ffe0a3; }
+.vitals[data-air-source="suit"] > div:first-child { border-color: #9bc8d0; }
+.vitals .service-hint { color: #ffe1b2; }
+/* Full warnings and action content share normal flow, including no-target
+   states. Side guidance and durable session notices have separate grid cells. */
+.encounter-stack {
+  grid-column: 2;
+  grid-row: 3;
+  align-self: end;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+.alert-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  pointer-events: none;
+}
+.alert-stack:not(:has(.hazard:not(:empty), .audio-caption:not([hidden]))) { display: none; }
+.hazard, #notification {
+  max-width: min(700px, 100%);
+  padding: 9px 12px;
+  border-radius: 4px;
+  background: #102d36fa;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: center;
+  overflow-wrap: anywhere;
+}
+.hazard { display: grid; gap: 6px; color: #ffdf9c; }
+.hazard:empty { display: none; }
+#notification { border: 1px solid #b6c79b80; color: #e9eddb; }
+#notification.error { background: #38372ffa; color: #ffe1b2; }
+#notification[data-channel="persistence"] { border: 2px solid #e5bd81; }
+[data-screen="menu"] #hazard, [data-screen="panel"] #hazard { display: none; }
+.interaction-stack {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  text-align: center;
+}
+.interact-prompt, .action-result, .look-action {
+  max-width: 100%;
+  padding: 9px 12px;
+  background: #102d36f5;
+  border: 1px solid #dbdfb580;
+  border-radius: 4px;
+  line-height: 1.5;
+  overflow-wrap: anywhere;
+}
+.interact-prompt { font-size: 14px; }
+.interact-prompt:empty { display: none; }
+.interact-prompt small { display: inline; color: #d6e5d9; font-size: 12px; margin-left: 8px; }
+.interact-prompt kbd, .pilot-guidance kbd, .opening kbd { font-size: 12px; }
+.interact-prompt[data-preview="true"] { color: #cedbd4; border-color: #9bb4ac70; font-size: 13px; }
+.action-result { font-size: 13px; color: #e9eddb; border-color: #a3c7bd70; }
+.action-result.error { border-color: #e5bd81; color: #ffe1b2; background: #38372ffa; }
+.look-action { pointer-events: auto; font-size: 12px; border-color: #e7c17880; color: #ffe3ac; }
+.hud-sr { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.opening { grid-column: 1 / 3; grid-row: 3 / 5; align-self: end; width: 570px; max-width: 100%; padding: 16px 20px; background: #0d2936f2; border: 1px solid #debb7c80; box-shadow: 0 8px 35px #0005; border-radius: 4px; pointer-events: auto; }
+.opening h2 { font: 400 24px Georgia, serif; margin: 7px 0; }
+.opening p { margin: 8px 0 12px; font-size: 13px; line-height: 1.55; color: #eef0db; }
+.opening-actions { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+.opening button { padding: 9px 12px; border: 1px solid #b4c9a780; border-radius: 3px; font-size: 12px; background: #264c51; }
+#opening-act { color: #fff0cd; border-color: #e8c58c; }
+#opening-skip { background: transparent; }
+.opening-actions .check { font-size: 12px; gap: 6px; margin-left: auto; color: #d4e0d5; }
+.opening small { display: block; margin-top: 10px; font-size: 12px; color: #c8dcd2; }
+.pilot-guidance { padding: 9px 10px; border-left: 2px solid #c5d4af99; border-radius: 3px; font-size: 12px; line-height: 1.5; background: #102f3ef5; }
+.pilot-guidance small { display: block; margin-top: 5px; font-size: 12px; color: #d2dfcd; }
+.pilot-guidance.urgent { border-color: #ffca89; color: #ffe0ad; }
+/* SIG-1: the craft action bar (number row). Active tools glow; waiting ones dim. */
+.pilot-guidance .craft-actions { display: flex; flex-wrap: wrap; gap: 4px 10px; margin-bottom: 4px; }
+.pilot-guidance .craft-action { white-space: nowrap; }
+.pilot-guidance .craft-action small { display: inline; margin: 0; color: #a9c0b8; }
+.pilot-guidance .craft-action.active { color: #ffe1b2; }
+.pilot-guidance .craft-action.active kbd { border-color: #ffca89; }
+.pilot-guidance .craft-action.waiting { opacity: 0.6; }
+.pilot-guidance .craft-action progress { width: 48px; height: 6px; vertical-align: middle; }
+/* This sibling survives a hidden HUD. In panels and menus its sidebar reserves
+   actual space; an empty sidebar consumes none of the preparation viewport. */
+.session-notices { grid-column: 3; grid-row: 3; align-self: start; display: flex; flex-direction: column; align-items: stretch; gap: 8px; min-width: 0; pointer-events: none; }
+.session-notices:not(:has(> :not([hidden]))) { display: none; }
+.session-notices .graphics-error { position: static; width: 100%; pointer-events: auto; }
+.session-warning { max-width: 100%; display: flex; align-items: center; flex-wrap: wrap; gap: 10px; padding: 8px 12px; font-size: 12px; color: #ffe1b2; border: 1px solid #e5bd81; border-radius: 3px; background: #293e40fa; pointer-events: auto; }
+.session-warning button { border: 1px solid #e5bd8180; padding: 6px 10px; font-size: 12px; }
+[data-opening="true"] .hud-top { justify-content: flex-end; }
+#system-status { max-width: 290px; padding: 7px 10px; border: 1px solid #a3c7bd70; border-radius: 4px; background: #102d36fa; color: #d6e5d9; font-size: 12px; line-height: 1.5; }
+#system-status.error { border-color: #e5bd81; background: #38372ffa; color: #ffe1b2; }
+.experience-layout:has(> #menu:not([hidden])), [data-screen="panel"] .experience-layout { padding: 0; grid-template-columns: minmax(0, 1fr) auto; grid-template-rows: minmax(0, 1fr); gap: 0; overflow: hidden; }
+[data-screen="panel"] .experience-layout { background: #102d3ef5; }
+.experience-layout > .menu-screen, .experience-layout > .game-panel { position: relative; inset: auto; grid-column: 1; grid-row: 1; min-width: 0; min-height: 0; pointer-events: auto; }
+.experience-layout:has(> #menu:not([hidden])) > .session-notices, [data-screen="panel"] .session-notices { grid-column: 2; grid-row: 1; width: min(300px, 30vw); margin: 24px 24px 24px 0; max-height: calc(100vh - 48px); overflow: auto; pointer-events: auto; }
+/* A notice sidebar also reduces the menu's scene space. Let its caption wrap
+   after the menu content instead of floating across controls and settings. */
+.experience-layout:has(> .session-notices > :not([hidden])) > .menu-screen { flex-wrap: wrap; column-gap: 32px; align-content: safe center; }
+.experience-layout:has(> .session-notices > :not([hidden])) > .menu-screen > .scene-caption { position: static; flex: 0 0 auto; margin: 24px 24px 32px auto; }
+.pitch-cue { position: relative; flex: 0 0 40px; width: 7px; height: 56px; border-left: 1px solid #f6e6bc80; pointer-events: none; }
+.pitch-cue::after { content: ""; position: absolute; left: -3px; top: 50%; width: 5px; border-top: 1px solid #f6e6bc80; }
+.pitch-cue i { position: absolute; width: 7px; border-top: 2px solid #ffdf9e; }
+.pitch-cue small { position: absolute; left: 11px; top: 20px; background: #102d36e8; padding: 2px 4px; font-size: 12px; }
+.surface-cue, .impact-notice, .blocked-ascent { padding: 5px 10px; background: #102d36fa; border-radius: 4px; color: #ffdf9e; font-size: 12px; pointer-events: none; }
+.blocked-ascent { text-align: left; }
+.hull-impact { outline: 2px solid #e9b766; background: #563d2de8 !important; }
+/* Fixed acoustic instrument: top of the ring is ahead; the triangle reports
+   elevation separately. Its position never implies a projected source. */
+.call-cue { grid-column: 3; grid-row: 2; align-self: start; display: flex; align-items: center; gap: 8px; max-width: 300px; padding: 6px 9px; border: 1px solid #e5bd8180; border-radius: 4px; background: #102d36f2; color: #ffe1b2; font-size: 12px; line-height: 1.4; }
+.call-dial { display: inline-block; width: 25px; height: 25px; flex: 0 0 25px; border: 1px solid #a9c2b7; border-radius: 50%; position: relative; }
+.call-dial::before { content: ""; position: absolute; left: 10px; top: -3px; width: 3px; height: 5px; background: #d6e5d9; }
+.call-dial::after { content: ""; position: absolute; inset: 3px 10px; border-top: 6px solid #ffe1b2; transform: rotate(var(--turn)); }
+#call-elevation { font-size: 14px; }
+#call-elevation:empty { display: none; }
+/* Empty guidance has no footprint; real guidance grows independently of the
+   centre's full warning/result stack. */
+.motion-guidance { grid-column: 1; grid-row: 3; align-self: end; max-width: 300px; display: flex; flex-direction: column; gap: 6px; }
+@media (max-width: 1050px) {
+  .hud-actions, #hud-tools { gap: 5px; }
+  .hud-actions button { padding: 7px 6px; }
+  .hud-actions kbd { margin-left: 3px; }
+  .region strong { font-size: 20px; }
+  .region .eyebrow { letter-spacing: .06em; }
+  .vitals { gap: 6px; }
+  .vitals > div { min-width: 96px; padding: 8px; }
+  .vitals b { font-size: 15px; }
+}
+@media (max-width: 800px) {
+  .experience-layout { padding: 16px; grid-template-columns: repeat(2, minmax(0, 1fr)); grid-template-rows: auto auto auto minmax(min-content, 1fr) auto; }
+  .hud-top, .hud-bottom { flex-wrap: wrap; }
+  .hud-bottom { grid-row: 5; }
+  .heading { display: none; }
+  .region { max-width: 210px; }
+  .region strong { font-size: 18px; }
+  .call-cue { grid-column: 2; grid-row: 3; }
+  .encounter-stack { grid-column: 1; grid-row: 4; }
+  .session-notices { grid-column: 2; grid-row: 4; }
+  .motion-guidance { grid-row: 3; }
+  .opening { grid-column: 1 / -1; grid-row: 4 / 6; }
+}
+
+/* S6 sound captions: one line under the hazard banners, in the same alert column. */
+.audio-caption { margin: 6px 0 0; padding: 4px 10px; max-width: 34em; border-left: 3px solid #e0ba7c; background: #071a24cc; color: #f3ead2; font-size: 14px; letter-spacing: .02em; }
+
+/* ENC-1 threat edge cue: a pulse on the screen edge toward an engaged animal.
+   Stage reads by size and pulse rate as well as colour; the banner names it. */
+.threat-edge { position: absolute; inset: 0; overflow: hidden; pointer-events: none; }
+.threat-mark { position: absolute; width: var(--size); height: var(--size); margin: calc(var(--size) / -2) 0 0 calc(var(--size) / -2); border-radius: 50%; background: radial-gradient(closest-side, #ffd08ae6, #ffb35a66 45%, transparent); }
+.threat-mark[data-stage="closing"] { background: radial-gradient(closest-side, #ffb070f0, #ff8a4a73 45%, transparent); }
+.threat-mark[data-stage="attack"] { background: radial-gradient(closest-side, #ff7a5af5, #ff4a3a80 45%, transparent); }
+@media (prefers-reduced-motion: reduce) { .threat-mark { opacity: .8 !important; } }
+/* UX-1: the Hearthline helm's instruments, beside the helm guidance. */
+.helm-readout { display: flex; flex-direction: column; gap: 4px; padding: 9px 10px; border-left: 2px solid #8af5d099; border-radius: 3px; font-size: 12px; line-height: 1.45; background: #0b2733f0; }
+.helm-readout .helm-title { font-size: 10px; letter-spacing: .14em; text-transform: uppercase; color: #a9cfc3; }
+.helm-readout .helm-figures { display: flex; flex-wrap: wrap; gap: 4px 12px; color: #e8f1e4; }
+.helm-readout .helm-figures b { font: 400 15px Georgia, serif; color: #fff4d8; }
+.helm-readout .helm-corridor { color: #b8f6dc; }
+.helm-readout .helm-corridor.blocked { color: #ffd59a; }

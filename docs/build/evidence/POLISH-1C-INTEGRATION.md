@@ -1,0 +1,35 @@
+# POLISH-1C provisional integration
+
+2026-10-18. Root Astra xhigh inspected source131079f9985a89ee969079f85c2e8e2cd18b289e and evidence37f0eee3079ad6c02803bf23eb5c6803fd3bacf5 from exact parent3c6ed94f247941d38ee2560a2f09f954afcd2f10. Clean author worktree `/home/worker/.t3/worktrees/subnautica-clone/t3-bda9b21f`, branch `t3/polish-1c-readable-resource-sites`. The task is terminal with no pending children/questions; three actual session turn_context records independently confirm gpt-6.1-sol/max. Its six changed paths match the assignment. Root provisionally assembled the correction at **cd4ef9f832db52742aa127399b5a595ca19fca4b**. This is not acceptance of the combined controls batch.
+
+## Source and contract reconciliation
+
+The correction reauthors only the three named scrap/glass stocks and persistent hosts, their interaction metadata and local rendered terrain. Final source has no new physics, camera, source datum/yield, recipe, saved-state, input or recovery change. No existing test fixture was edited. The two new tests exercise submitted float32 triangles, topology, support, twenty existing target views and retained/disposed geometry.
+
+`createTerrainSurface(): TerrainSurface` is a focused render helper with positions/indices and constants for the original190×178 grid, local X−24..40/Z−46..−18 refinement and workshop deck X3..16/Z−40..−31/Y1.2. Eight subdivisions apply locally, with shared edge vertices and transition fans. Terrain faces hidden by the existing opaque deck are removed; its original art and collision remain. Other coarse cells retain their old triangles apart from the bounded transition ring. Registry `persistentOffsetY` is removed; only the three assigned host entries change. Exact final exports/metadata are in [author evidence](POLISH-1C.md).
+
+## Root checks
+
+- **265/265 tests, strict typecheck, production build and economy checker pass** on cd4ef9f. Existing large-chunk warning remains. All37 source files,25 test files and27 build artifacts match author hashes. JS `index-L7oBd6Sf.js`, SHA256 **89d49a1c1037342f3d82f5481a8916993d559bf12aa08cdefb1b9410e3265065**.
+- All200 sealed artifacts,10 seal entries, committed evidence and12 original input files verify against bytes/hashes. Originals and the author's completed artifacts remain untouched. Root receipts are `/tmp/siltwake-polish-1c-integration/{artifact-verification,source-build-verification,hashes}.json` plus complete check/economy logs.
+- Independent root replay using the combined compiled production simulation reproduces the entire actual reload state after80 no-input ticks,9266→9346, including ongoing workshop sorting. Comparison uses the actual production codec to normalize JSON signed zero; no fields are filtered or values rounded. All28 submitted exports decode/re-encode unchanged, retaining their ordinary/seeded/preliminary classification. Script/result: `replay.mjs`, `replay-results.json` in the root receipt directory. These are offline checks of real author exports, not new root browser play.
+- Root independently interpolated the actual float32 triangle at the original reported coordinate: old eye−21.230 lies0.639953603m above the new rendered surface. The exact unrounded ordinary replay export gives0.644378486m clearance; the author's rounded DOM trace gives0.644456m. These are different observation precisions, not contradictory states. Terrain is80,421 vertices/159,882 triangles.
+
+## Actual imagery and findings
+
+Root inspected all twelve final stock/empty images: workshop east/north, headland north/west and west glass north/east. Plates and faceted nodules are identifiable; pale slope-following frames/tags or mineral ridges remain after depletion. Workshop east retains a real buoy partially obscuring its left frame; the north view after packing it exposes the full anchor. Root also inspected the two before-selection stock images, the exact west-rim replay and the separate seeded rib blocked/clear images. The close rim image is clearance evidence, not a readable resource overview. Rib evidence is an intentionally seeded cache diagnostic, never ordinary earned play.
+
+Root inspected actual deck-video frames40s and44s, showing stable exposed planking and the changed viewing direction; this is sampled motion evidence, not inspection of every video frame. The source removes the coplanar faces that caused the reported deck conflict. Author ordinary branch records cover all three collection/depletion/sort/restock cycles, food/C03/services and affected route movement. Their complete traces/exports are retained with final-source attribution. Root's source, tests, visual inspection and replay provisionally close **P1-VIS-1/2/3** for submission to independent review.
+
+## Costs, limits and next gate
+
+Author's339,296-point local sample reports maximum error0.025906701m; this is not a continuous/global guarantee. Its final route audit reports minimum eye clearance0.640278m and no selected-host terrain intersections, with two startup-camera records explicitly excluded from same-frame assertions. Root's two exact-coordinate checks and committed regression suite support the local correction without claiming a new exhaustive route audit.
+
+The author's full scene comparison increases391,011→485,460 triangles,99→102 meshes and no materials (18). Estimated total buffers grow by about3.45MB; one NullEngine creation sample rises577→823ms. This cost is disclosed, not representative-GPU performance evidence. Local refinement met the sampled tolerance where2/4 subdivisions failed. Later M2 streaming/profile work must include this cost. No new unbounded geometry or lifetime growth is reported in the100-cycle disposal tests.
+
+Inherited synthetic-relative-motion, native-drag-tool timeout, muted-audio, SwiftShader and human-experience limits remain. Root opened no browser/server. Author-owned tab/recordings/server are closed; no live worker ownership remains. The entire1A+1B+1C slice is now ready for **fresh non-author Astra xhigh and Sol6.1 max reviews on one frozen commit**, under [the review brief](../tasks/POLISH-1-SLICE1-REVIEW-R1.md). Slice2 and the end-of-stage Opus loop remain required before M2.
+
+
+## Public checkpoint
+
+PR #4/#3 complete descriptions match their prepared bodies and base/head/draft readbacks at e4b086e/M0a2cb19f, recorded in `/tmp/siltwake-m1-pr/polish-1c-verification.json`. #4 now identifies the full provisional batch and running88f1f71 reviews; #3 remains M0-only. Four final source131079f PNGs show workshop and west-glass stock/empty states on pr-assets. They are explicitly different stock states, not a matched before/after code comparison. Every public file returned HTTP200 image/png with exact local bytes/SHA256; `/tmp/siltwake-m1-pr/polish-1c-public-assets.json`. Earlier1B launch footage retains its8c15277 attribution. No binaries enter the feature branch, and no root browser, game/main merge or deployment occurred. Stack1–4 linked/unwatched. Review candidate production/tests remain frozen.

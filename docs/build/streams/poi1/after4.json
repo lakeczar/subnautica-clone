@@ -1,0 +1,373 @@
+{
+ "value": {
+  "which": "after",
+  "legs": [
+   {
+    "id": "basin_rift",
+    "route": "route.basin.rift",
+    "reverse": false,
+    "waypoints": [
+     {
+      "i": 1,
+      "draws": 112,
+      "lights": "12/128",
+      "vertices": 434868,
+      "meshes": 511,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 2,
+      "draws": 113,
+      "lights": "12/131",
+      "vertices": 449412,
+      "meshes": 554,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 3,
+      "draws": 123,
+      "lights": "12/135",
+      "vertices": 472161,
+      "meshes": 621,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 4,
+      "draws": 149,
+      "lights": "12/138",
+      "vertices": 484565,
+      "meshes": 663,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 5,
+      "draws": 144,
+      "lights": "12/139",
+      "vertices": 485109,
+      "meshes": 670,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 6,
+      "draws": 148,
+      "lights": "12/142",
+      "vertices": 489316,
+      "meshes": 704,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 7,
+      "draws": 161,
+      "lights": "12/145",
+      "vertices": 521501,
+      "meshes": 798,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 8,
+      "draws": 167,
+      "lights": "12/147",
+      "vertices": 534223,
+      "meshes": 835,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 9,
+      "draws": 145,
+      "lights": "12/147",
+      "vertices": 534223,
+      "meshes": 835,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 10,
+      "draws": 156,
+      "lights": "12/150",
+      "vertices": 544609,
+      "meshes": 882,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 11,
+      "draws": 166,
+      "lights": "12/152",
+      "vertices": 556665,
+      "meshes": 915,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 12,
+      "draws": 147,
+      "lights": "12/152",
+      "vertices": 554040,
+      "meshes": 917,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 13,
+      "draws": 152,
+      "lights": "12/152",
+      "vertices": 537765,
+      "meshes": 905,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 14,
+      "draws": 171,
+      "lights": "12/150",
+      "vertices": 545704,
+      "meshes": 926,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "shots": [
+     {
+      "name": "basin_rift-start",
+      "range": 44,
+      "file": "01-after-basin_rift-start.jpg",
+      "mean": 40.5,
+      "darkShare": 0.13,
+      "draws": 115,
+      "lights": "12/127",
+      "vertices": 433201,
+      "meshes": 501,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "stalls": [],
+    "seconds": 116.3,
+    "flyingSeconds": 116.1,
+    "frames": {
+     "frames": 6838,
+     "fps": 58.7,
+     "p50": 16.7,
+     "p95": 16.8,
+     "p99": 33.3,
+     "worst": 66.7
+    },
+    "drawsMax": 171,
+    "drawsMean": 147
+   },
+   {
+    "id": "basin_divide",
+    "route": "route.basin.divide",
+    "reverse": true,
+    "waypoints": [
+     {
+      "i": 1,
+      "draws": 118,
+      "lights": "12/169",
+      "vertices": 510320,
+      "meshes": 911,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 2,
+      "draws": 110,
+      "lights": "12/166",
+      "vertices": 513721,
+      "meshes": 907,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 3,
+      "draws": 93,
+      "lights": "12/164",
+      "vertices": 505982,
+      "meshes": 891,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 4,
+      "draws": 107,
+      "lights": "12/167",
+      "vertices": 499085,
+      "meshes": 877,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 5,
+      "draws": 113,
+      "lights": "12/168",
+      "vertices": 510052,
+      "meshes": 881,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 6,
+      "draws": 115,
+      "lights": "12/172",
+      "vertices": 512323,
+      "meshes": 896,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 7,
+      "draws": 113,
+      "lights": "12/173",
+      "vertices": 527771,
+      "meshes": 893,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 8,
+      "draws": 116,
+      "lights": "12/176",
+      "vertices": 531569,
+      "meshes": 908,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 9,
+      "draws": 113,
+      "lights": "12/176",
+      "vertices": 543617,
+      "meshes": 918,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 10,
+      "draws": 106,
+      "lights": "12/176",
+      "vertices": 543617,
+      "meshes": 918,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 11,
+      "draws": 100,
+      "lights": "12/176",
+      "vertices": 543014,
+      "meshes": 910,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 12,
+      "draws": 93,
+      "lights": "12/182",
+      "vertices": 550146,
+      "meshes": 922,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 13,
+      "draws": 105,
+      "lights": "12/180",
+      "vertices": 550530,
+      "meshes": 895,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 14,
+      "draws": 99,
+      "lights": "12/177",
+      "vertices": 558918,
+      "meshes": 887,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 15,
+      "draws": 101,
+      "lights": "12/177",
+      "vertices": 561724,
+      "meshes": 905,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 16,
+      "draws": 143,
+      "lights": "12/174",
+      "vertices": 552843,
+      "meshes": 892,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 17,
+      "draws": 120,
+      "lights": "12/170",
+      "vertices": 545291,
+      "meshes": 866,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 18,
+      "draws": 102,
+      "lights": "12/175",
+      "vertices": 547193,
+      "meshes": 873,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 19,
+      "draws": 104,
+      "lights": "12/173",
+      "vertices": 528576,
+      "meshes": 863,
+      "regions": "silt_basin,suspended_garden"
+     },
+     {
+      "i": 20,
+      "draws": 94,
+      "lights": "12/164",
+      "vertices": 518727,
+      "meshes": 831,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "shots": [
+     {
+      "name": "basin_divide-start",
+      "range": 40,
+      "file": "02-after-basin_divide-start.jpg",
+      "mean": 19.9,
+      "darkShare": 0.761,
+      "draws": 116,
+      "lights": "12/168",
+      "vertices": 466506,
+      "meshes": 917,
+      "regions": "silt_basin,suspended_garden"
+     }
+    ],
+    "stalls": [],
+    "seconds": 178.6,
+    "flyingSeconds": 178.2,
+    "frames": {
+     "frames": 10519,
+     "fps": 58.9,
+     "p50": 16.7,
+     "p95": 16.8,
+     "p99": 33.2,
+     "worst": 133.3
+    },
+    "drawsMax": 143,
+    "drawsMean": 108
+   }
+  ],
+  "views": [],
+  "errors": [],
+  "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+ },
+ "state": {
+  "cam": [
+   357.808,
+   -237.614,
+   -436.381
+  ],
+  "bearing": 161,
+  "pitch": 0,
+  "depth": 239.4,
+  "region": "Pale Basin",
+  "movement": "Piloting",
+  "vitals": "O₂ 100% Creel air HEALTH 100 FOOD 73 F · eat meal CREEL 23% power Hull 100% · 239 / 800 m · hold 4/96 CU Service here · Tab",
+  "prompt": "",
+  "menu": false,
+  "panel": "",
+  "graphics": "available",
+  "ready": "false",
+  "lights": "12/164",
+  "work": "0.00",
+  "cave": "",
+  "regions": "silt_basin,suspended_garden"
+ },
+ "errors": []
+}

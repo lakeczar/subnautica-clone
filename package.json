@@ -3,14 +3,20 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "engines": { "node": ">=22.12.0" },
+  "engines": { "node": ">=22.18.0" },
   "scripts": {
     "dev": "vite --host 0.0.0.0",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc -p tsconfig.headless.json && node scripts/bake-terrain.mjs && vite build",
+    "bake:terrain": "node scripts/bake-terrain.mjs",
     "preview": "vite preview --host 0.0.0.0",
-    "typecheck": "tsc --noEmit",
-    "test": "tsc -p tsconfig.test.json && node --test .test-build/tests/*.test.js",
-    "check": "npm run typecheck && npm test && npm run build"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.headless.json",
+    "test:build": "node scripts/test-build.mjs",
+    "test:fast": "node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast",
+    "test:heavy": "scripts/heavy-check.sh --class heavy-suite -- sh -c 'node scripts/test-build.mjs && node scripts/test-tier.mjs heavy'",
+    "test": "npm run test:fast",
+    "check": "npm run test:fast && npm run test:heavy && node scripts/bake-terrain.mjs && vite build",
+    "gate": "node scripts/gate.mjs",
+    "playthrough": "tsc -p scripts/playthrough/tsconfig.json && node .test-build/scripts/playthrough/run.js"
   },
   "dependencies": { "@babylonjs/core": "9.31.0" },
   "devDependencies": {

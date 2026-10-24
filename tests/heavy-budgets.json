@@ -1,0 +1,19 @@
+{
+  "comment": "Peak RSS budgets (MiB) per heavy test process. Healthy peaks measured 2026-10-20; budget is about 1.25x peak, rounded up. A file over budget fails. TT-1 (2026-10-22): world-stream peaked at 1286 MiB with three heavy files running at once (1216 MiB alone at root), and caves-reef-isles-retreat at 1009 MiB alone at root (98% of 1024), so both were raised. Budgets cover each file's whole process tree (TT-1 R1-1): regions-bake's terrain bake runs in child processes and peaks at 1469 MiB as a tree (2026-10-22), so it gets 1920.",
+  "defaultMiB": 1024,
+  "files": {
+    "caves-reef-isles-retreat.heavy.test.ts": 1280,
+    "m2-region-render.heavy.test.ts": 2048,
+    "regions-bake.heavy.test.ts": 1920,
+    "render-cache.heavy.test.ts": 1536,
+    "renewal-render.heavy.test.ts": 1280,
+    "world-stream.heavy.test.ts": 1536
+  },
+  "exclusive": [
+    "caves-canopy-basin.heavy.test.ts",
+    "caves-deep-perf.heavy.test.ts",
+    "caves-reef-isles-game.heavy.test.ts",
+    "large-cave-canopy.heavy.test.ts"
+  ],
+  "exclusiveComment": "These files assert elapsed time (build cost or per-step query cost), so the heavy runner starts them with no other heavy file running beside them."
+}

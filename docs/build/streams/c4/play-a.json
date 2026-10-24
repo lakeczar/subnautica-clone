@@ -1,0 +1,176 @@
+{
+ "commit": "d06e4344fc1c7278fc4df3566aa5adccc1105783",
+ "segments": [
+  {
+   "label": "pod \u2192 Fanvault (surface swim)",
+   "seconds": 56.4,
+   "frames": 3376,
+   "fps": 59.9,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 100,
+   "over50": 1
+  },
+  {
+   "label": "dive and swim the Fanvault north passage",
+   "seconds": 14.7,
+   "frames": 884,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  },
+  {
+   "label": "lamp off: vault \u2192 south mouth",
+   "seconds": 10.2,
+   "frames": 614,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  },
+  {
+   "label": "south mouth \u2192 east edge of the race",
+   "seconds": 13.1,
+   "frames": 786,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  },
+  {
+   "label": "swim across the race (W only, heading west)",
+   "seconds": 7.5,
+   "frames": 448,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.8,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  },
+  {
+   "label": "ascent",
+   "seconds": 13.4,
+   "frames": 802,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0
+  }
+ ],
+ "shots": [
+  "01-vault-lamp-off-south-exit.jpg",
+  "02-vault-lamp-off-pocket.jpg",
+  "03-vault-lamp-on-pocket.jpg",
+  "04-vault-skylight.jpg",
+  "05-shelf-race-from-east.jpg",
+  "06-across-the-race.jpg",
+  "07-surfaced.jpg"
+ ],
+ "errors": [],
+ "captions": [
+  {
+   "t": 33.9,
+   "text": "|"
+  },
+  {
+   "t": 105.5,
+   "text": "Lamp off \u00b7 running dark. Light hunters see you less; you see less."
+  },
+  {
+   "t": 105.5,
+   "text": "| "
+  },
+  {
+   "t": 111.1,
+   "text": "Lamp on."
+  },
+  {
+   "t": 142.5,
+   "text": "| Shelf-break race \u00b7 Silt and torn ribbon race down the shelf break in a fast grey stream; the fans beside it all lean downslope."
+  },
+  {
+   "t": 149.9,
+   "text": "LOW OXYGEN \u00b7 35% \u00b7 return to air now"
+  },
+  {
+   "t": 150.8,
+   "text": "LOW OXYGEN \u00b7 34% \u00b7 return to air now"
+  },
+  {
+   "t": 152.6,
+   "text": "LOW OXYGEN \u00b7 33% \u00b7 return to air now"
+  },
+  {
+   "t": 154.4,
+   "text": "LOW OXYGEN \u00b7 32% \u00b7 return to air now"
+  },
+  {
+   "t": 156.2,
+   "text": "LOW OXYGEN \u00b7 31% \u00b7 return to air now"
+  },
+  {
+   "t": 158,
+   "text": "LOW OXYGEN \u00b7 30% \u00b7 return to air now"
+  },
+  {
+   "t": 159.8,
+   "text": "LOW OXYGEN \u00b7 29% \u00b7 return to air now"
+  }
+ ],
+ "checks": {
+  "inVault": {
+   "cave": "fanvault",
+   "pos": {
+    "x": -289.07,
+    "y": -23.1,
+    "z": -63.25
+   },
+   "vitals": "O\u2082 60% Suit air \u00b7 108 s HEALTH 100 FOOD 100 F \u00b7 eat meal"
+  },
+  "outSouth": {
+   "cave": "fanvault",
+   "pos": {
+    "x": -297.379,
+    "y": -23.507,
+    "z": -95.608
+   },
+   "vitals": "O\u2082 49% Suit air \u00b7 89 s HEALTH 100 FOOD 100 F \u00b7 eat meal"
+  },
+  "streaksAtEdge": 139,
+  "race": {
+   "before": {
+    "x": -329.659,
+    "y": -34.171,
+    "z": -112.371
+   },
+   "after": {
+    "x": -352.628,
+    "y": -38.943,
+    "z": -119.371
+   },
+   "crossedWest": true,
+   "sweptDownslope": 7,
+   "vitals": "O\u2082 36% Suit air \u00b7 65 s HEALTH 100 FOOD 100 F \u00b7 eat meal"
+  },
+  "surfaced": {
+   "pos": {
+    "x": -352.628,
+    "y": -1.5170000000000001,
+    "z": -119.371
+   },
+   "vitals": "O\u2082 29% Suit air \u00b7 52 s HEALTH 100 FOOD 100 F \u00b7 eat meal"
+  }
+ },
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)"
+}

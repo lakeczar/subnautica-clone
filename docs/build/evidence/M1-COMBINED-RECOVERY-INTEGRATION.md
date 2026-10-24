@@ -1,0 +1,25 @@
+# Combined recovery evidence and CR-1 disposition
+
+2026-10-17. Coordinator inspection; **M1 acceptance is blocked by CR-1**. Successful recovery evidence is retained, not treated as clearing a separate reproduced defect.
+
+Task `siltwake-m1-combined-recovery-sol-max-e3ed566` completed with no pending children/question. Sole evidence commit `7869a079a98bf912172c416d50f40b10a8a285d1` is preserved by merge `17f46a8467e23008debba1235d69a6052cb6f43c`. [Full author report](M1-COMBINED-RECOVERY.md). Worktree clean; owned incognito tab/server5193/recordings closed. Root launched no browser/server and changed no production code.
+
+## Verified evidence
+
+Archive `/tmp/siltwake-m1-combined-recovery-artifacts.tar.gz`, **12,398,207 bytes**, SHA256 `af7503a802f1ba4159b25f6770cdef3c45f4363832b4786191e62685c2ac8abf`. Root verified **554 indexed payloads and 555 archived files** byte-for-byte, safe paths/no links. All **155 tracked source files** match the exact dispatch-parent Git blobs. Production remains `4d0a7f00e939f5535020ddf674fadee39f5e6bd4`; main JS `index-Ceft9taV.js` hashes to `df8da0d4e639b792b4f27beec29fedaec1a6a2cc8c1a4ca406b9c45b922a63b2`. Root also byte-matched original CORE normal-return and historical RECOVERY attached imports against their original files.
+
+Root read the analyzer and reran it against current combined `.test-build` modules with separate copied inputs/outputs under `/tmp/siltwake-m1-combined-recovery-root/`. **18 full serialized-state comparisons, 17 same-tick command comparisons and 80 valid envelope round-trips pass**. Three state rows differ in raw JavaScript only by `player.velocity.z` negative zero versus JSON zero; no other normalization/tolerance. Current attached tow completes in **956 steps**, every segment swept, one completion, original hull except position/inventory/knowledge preserved. Original artifacts remain unchanged. No unchanged broad test suite was repeated.
+
+Actual inspected images: negative-hull cockpit/refusal, autosave-off menu, successfully recovered cockpit, ready-notice recording frame, and reopened completed/blocked guidance. Capture01's menu does not show the full refusal; capture02 does and shows−23% health. Ready capture04 contains a later Saved notice; the actual recording frame at2seconds shows the automatic ready message. Reopened completed guidance viewed here belongs to the compatibility branch. These distinctions remain in the report, rather than claiming each filename proves its label.
+
+Successful lineage imports the original earned CORE save, retains a separate self-earned checkpoint restart, and performs ordinary collision disablement, injury/refuge fallback, empty-hold food, physical Bobbin staging/attach/tow, paid patch and visible cockpit departure. A further failed cache attempt retains the first cache and same hull; both cargo caches are later retrieved and persist empty. Return/service/store/reload ends at tick43487 with original Dart100/100, failures2/rescues2. Its **2,466 key edges,19 gameplay buttons and8 E attempts** are bounded action accounting, not human playtime or eight successful boardings. The earlier-source preparation and all failed/abandoned branches remain explicit. Separate old-operation and seeded obstruction runs are supplemental, not main progress.
+
+## Blocking CR-1 and correction scope
+
+Ordinary recorded hunter pursuit damages the disabled Dart below zero. Actual Save and Export refuse the invalid live state; the previous valid journal survives. Root reproduced this from the retained actual valid tick24887 save and30 recorded gameplay key edges: **first invalid tick25029 at health−0.2; tick25111 health−16.599999999999973**, with the same codec refusal. The actual invalid state was not exportable; the derived diagnostic is not represented as a live exported save.
+
+`updateThreat` subtracts hull health without a disabled guard; `updateSurvival` only invokes disable normalization while `!v.disabled`. The same file's pressure/Spindle depth-damage paths also subtract from already-disabled controlled hulls. [Focused correction](../tasks/M1-CR1-FIX.md) transfers only survival.ts, expedition tests and its own evidence to a new Sol6.1 max author. Keep health valid under continued damage, retained hull/loss/cargo identities, limited emergency air, normal pre-disable threat behavior and strict codec validation. No schema/UI/geometry/economy expansion.
+
+EXPEDITION continues unchanged on its original frozen validation baseline; it must preserve source attribution and report any issue. After correction, root inspects the source, runs applicable combined checks/replay and reviews remaining expedition evidence before freezing both completion batches for fresh non-author Astra xhigh/Sol max. Separate integrated M1 checks/reviews still follow batch acceptance. Only M0 is accepted.
+
+Ordinary battery exhaustion, full deep/advanced-fleet recovery and registered-mobile-refuge fallback remain open as previously scoped. SwiftShader/muted hosts establish no consumer-GPU or audible quality; agent routes establish no human enjoyment or duration.

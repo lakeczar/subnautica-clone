@@ -1,0 +1,28 @@
+# Fresh combined expedition inspection
+
+2026-10-17. Provisional validation evidence; **CR-1/EXP-1 and EXP-2 require correction before acceptance**.
+
+Task `siltwake-m1-combined-expedition-sol-max-e3ed566` completed with no children/question. Root discovered completion after an informational steer returned `thread_not_sendable`; no steer delivery or extra task is claimed. Evidence commit `ff51dbcda657c4632ad68794d706ec503b7dc6d3`, [full report](M1-COMBINED-EXPEDITION.md). Author worktree clean and own incognito tab/server5190/recordings closed. Root opened no browser/server.
+
+Root verified `/tmp/siltwake-m1-combined-expedition-artifacts.tar.gz`: **8,287,345 bytes**, SHA256 `a9f1c598f7dcf131a5133339439ad7c2d39b3c0605b42fd8707a755e341163f8`, **477 indexed payload hashes/478 archive files**, safe member names and no links. **39 copied source/compiler files** byte-match dispatch-parent Git blobs. Production remains `4d0a7f0`, bundle `index-Ceft9taV.js`, SHA256 `df8da0d4e639b792b4f27beec29fedaec1a6a2cc8c1a4ca406b9c45b922a63b2`.
+
+Root inspected the diagnostic script and reran it against current combined compiled modules, with separate inputs/outputs in `/tmp/siltwake-m1-combined-expedition-root/`. **39 full serialized-state comparisons match;98 envelope decodes pass**. Signed-zero differences are explicitly disclosed by the diagnostic. Actual captured Canopy cockpit/warning, returned workshop locker and sampled lab-entry recording frames were viewed. The lab frames show approach, record station and oxygen recovery after entering air; these are selected recorded frames, not a fresh root playthrough.
+
+## Useful complete main route
+
+Fresh New/opening, C01–C04, regional source gathering, pod/workshop restoration, equipment/buoy/Bobbin/cells, Dart construction, warning/quiet/distraction, lab visit, useful cargo return/store/service and actual reload completed without imported preparation. Optional journal omitted. Separate fresh opening-skip and island-first C03→C02/hand-food branches remain separately attributed.
+
+- **25 collections,31 transfers,8 recipes**;25 includes4 extra preparation collections for a refused duplicate hull attempt. The normal preparation before those extra actions used17 collections, followed by4 Canopy collections. Public spend16 alloy/11 glass/13 membrane; protected Bobbin spend2 maintenance alloy/1 glass/3 membrane. No duplicated vessel or emergency acquisition on the main route.
+- Main minimum oxygen **75.972222%**, pre-recharge return power **93.477%**, hull100%, no failures/rescues. Both exceed25% first-access reserve threshold. Complete original/final saves and input counts close the earlier CORE preparation-trace gap.
+- Actual Continue after reload differs from saved tick20939 by exactly8 no-input ticks; later final camera/save tick21011 is72 elapsed ticks. Complete state and session/creation match. `main-final.json` SHA256 `91e531020ec16cfd9cf7c513f8822cb368be3952b592892a78db5e408103a928` retains original Dart, knowledge, source stocks, tools and stored crust4/resin4.
+- Navigation friction—ramp-side stop, rib detour and return-cradle alignment—remains recorded. Guided simulation time is not human duration/learning evidence. Source-specific controls/captures do not qualify dedicated-GPU or audible quality.
+
+## Findings and remaining coverage
+
+**EXP-1 is the same defect family as CR-1.** A separate imported depth-test extension was interrupted by **hunter pursuit before150m**, not a demonstrated pressure-only browser failure. The ordinary Dart became disabled at−3.2health and Save/Export refused. Root repeated encoding of the exact read-only observed rejected-export clone: invalid, then−3.4 after one no-input step. The raw live clone is explicitly not an exported/importable save; last valid journal remained tick18210. Correction author was informed through `siltwake-m1-cr1-expedition-evidence-b5cedfe` (delivered steering to its original running turn). Existing pressure/Spindle regression coverage in that brief addresses the analogous source invariant, not an invented observed pressure failure.
+
+**EXP-2 is a corroborated direction error.** `view.ts` says launch north, but the earned clear egress moves fromZ−22 towardZ−10.3, compassS/yaw≈π. Source bearing convention confirms north is−Z and south+Z. The voluntary Canopy return hint also calls the homeward clear flank north while the island lies at largerZ. Root adds only these two user-facing copy corrections to the existing Sol author, with no compass/world/registry/save changes. Use explicit south at the cradle and the clear upper flank for the return hint; preserve regional guidance and verify ordinary visible launch alignment.
+
+Actual deep suit-exit refusal was not reached by this extension; earlier CORE evidence remains separately attributed. The correction author may perform a bounded final-source refusal/safe-exit replay using the retained earned checkpoint without repeating preparation. Actual geometric blocked construction remains unexecuted: the existing-Dart guard precedes it and there is no ordinary arbitrary-solid placement. Root reproduced the labelled detached blocking-solid diagnostic with unchanged whole state; do not present it as ordinary controls. Fresh independent reviewers receive this limitation and its meaningful rule coverage.
+
+All three combined validators are now complete. Only the focused correction author remains active. After inspecting its source and actual save/export/reload evidence, root runs applicable combined checks and freezes both named batches for fresh non-author Astra xhigh/Sol max, followed by separate integrated M1 verification/review. No acceptance claim is made from these validator reports alone.

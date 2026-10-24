@@ -1,0 +1,42 @@
+{
+  "retrievedUtc": "2026-10-17T18:42:57.598118+00:00",
+  "method": "HTTP only; exact dated single-article queries; no browser or runtime validation",
+  "sources": [
+    {
+      "source": "S2",
+      "announcementId": "405677533508080906",
+      "publishedUtc": "2015-09-10T14:55:23Z",
+      "url": "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=264710&count=1&maxlength=0&feeds=steam_community_announcements&enddate=1441896924",
+      "httpStatus": 200,
+      "title": "Seamoth Update Released!",
+      "contentsUtf8Sha256": "58f2c68b89d9b4d0299452a51a04064807141acb0581e6332b00d80b1cdd66d4"
+    },
+    {
+      "source": "S3",
+      "announcementId": "3819571572130893407",
+      "publishedUtc": "2017-04-28T05:55:13Z",
+      "url": "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=264710&count=1&maxlength=0&feeds=steam_community_announcements&enddate=1493358914",
+      "httpStatus": 200,
+      "title": "Silent Running Update",
+      "contentsUtf8Sha256": "5b6420ae5fa4099c8aba6363d4fe57fdfd083ebca1d7b49e17a69cfd4014c9b5"
+    },
+    {
+      "source": "S4",
+      "announcementId": "1980870483552153883",
+      "publishedUtc": "2017-06-21T13:05:59Z",
+      "url": "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=264710&count=1&maxlength=0&feeds=steam_community_announcements&enddate=1498050360",
+      "httpStatus": 200,
+      "title": "Voice of the Deep Update",
+      "contentsUtf8Sha256": "757a4f465152b453a1c562872a01a33c4b60e1f0787d1c47262111891050c038"
+    },
+    {
+      "source": "S5",
+      "announcementId": "515997975634130855",
+      "publishedUtc": "2015-02-27T15:22:11Z",
+      "url": "https://api.steampowered.com/ISteamNews/GetNewsForApp/v2/?appid=264710&count=1&maxlength=0&feeds=steam_community_announcements&enddate=1425050532",
+      "httpStatus": 200,
+      "title": "Coming Next: Seabases",
+      "contentsUtf8Sha256": "dc3174780f5aa5edef3c8269ac439c36995c4a1458db253eb724d5c4c686b97d"
+    }
+  ]
+}

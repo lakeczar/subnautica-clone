@@ -1,0 +1,211 @@
+{
+ "commit": "38ac0efc17eeedea889de466d02f6f0bbd285d35",
+ "save": "/work/tmp/c3-play/saves/basin-rift-head.json",
+ "segments": [
+  {
+   "label": "creel basin \u2192 rift edge",
+   "seconds": 176.4,
+   "frames": 10570,
+   "fps": 59.9,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 100,
+   "over50": 2,
+   "over100": 0
+  },
+  {
+   "label": "toward the chimney, lamp on",
+   "seconds": 62,
+   "frames": 3717,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0,
+   "over100": 0
+  },
+  {
+   "label": "lamp off, retreat to cool water",
+   "seconds": 33.1,
+   "frames": 1984,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0,
+   "over100": 0
+  },
+  {
+   "label": "rift \u2192 divide",
+   "seconds": 120.3,
+   "frames": 7219,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0,
+   "over100": 0
+  },
+  {
+   "label": "diver to the lattice",
+   "seconds": 1.6,
+   "frames": 99,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.7,
+   "p99": 16.8,
+   "max": 16.8,
+   "over50": 0,
+   "over100": 0
+  }
+ ],
+ "shots": [
+  "/work/tmp/c3-play/final/01-loaded-basin-rift-head.png",
+  "/work/tmp/c3-play/final/02-rift-edge-south-lip.png",
+  "/work/tmp/c3-play/final/03-glare-stalker-noticed.png",
+  "/work/tmp/c3-play/final/04-stalker-evaded-lamp-off.png",
+  "/work/tmp/c3-play/final/05-divide-west-ledge.png",
+  "/work/tmp/c3-play/final/06-reloaded-title-continue.png",
+  "/work/tmp/c3-play/final/07-continued-at-divide.png",
+  "/work/tmp/c3-play/final/08-aimed-at-lattice.png",
+  "/work/tmp/c3-play/final/09-lattice-collected.png",
+  "/work/tmp/c3-play/final/10-cargo-after-lattice.png",
+  "/work/tmp/c3-play/final/11-craft-panel-at-divide.png"
+ ],
+ "errors": [
+  "HTTP 404 http://127.0.0.1:4723/terrain/t_4_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:4723/terrain/t_5_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:4723/terrain/t_5_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:4723/terrain/t_4_11.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:4723/terrain/t_4_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)",
+  "HTTP 404 http://127.0.0.1:4723/terrain/t_5_12.bin",
+  "Failed to load resource: the server responded with a status of 404 (Not Found)"
+ ],
+ "captions": [
+  {
+   "t": 32.4,
+   "text": "|"
+  },
+  {
+   "t": 271.4,
+   "text": "[Paired hunter calls, right]"
+  },
+  {
+   "t": 271.4,
+   "text": "| Rippling lights run along a long shape in the warm passage. It has seen your lamp. Dim it, or climb to the pale cool ledges."
+  },
+  {
+   "t": 271.4,
+   "text": "| [Paired hunter calls, right]"
+  },
+  {
+   "t": 272.9,
+   "text": "Lamp off \u00b7 running dark. Light hunters see you less; you see less."
+  },
+  {
+   "t": 274.4,
+   "text": "| "
+  },
+  {
+   "t": 275.6,
+   "text": "| The stalker coils back into the warm passage; its lights slow."
+  },
+  {
+   "t": 278.4,
+   "text": "[Hunter calls fade]"
+  },
+  {
+   "t": 278.4,
+   "text": "| The stalker stops at the edge of the cool water and will not follow."
+  },
+  {
+   "t": 278.4,
+   "text": "| [Hunter calls fade]"
+  },
+  {
+   "t": 278.6,
+   "text": "[Paired hunter calls, behind]"
+  },
+  {
+   "t": 278.6,
+   "text": "| A long shape in the warm passage turns its head toward your noise. Slow down, dim your lamp or leave the warm water."
+  },
+  {
+   "t": 278.6,
+   "text": "| [Paired hunter calls, behind]"
+  },
+  {
+   "t": 306.3,
+   "text": "Lamp on."
+  },
+  {
+   "t": 377.6,
+   "text": "LOW POWER \u00b7 25% \u00b7 reserve cell or supported service"
+  },
+  {
+   "t": 381.1,
+   "text": "LOW POWER \u00b7 24% \u00b7 reserve cell or supported service"
+  },
+  {
+   "t": 388.1,
+   "text": "LOW POWER \u00b7 23% \u00b7 reserve cell or supported service"
+  },
+  {
+   "t": 395.1,
+   "text": "LOW POWER \u00b7 22% \u00b7 reserve cell or supported service"
+  },
+  {
+   "t": 402.1,
+   "text": "LOW POWER \u00b7 21% \u00b7 reserve cell or supported service"
+  },
+  {
+   "t": 409.1,
+   "text": "LOW POWER \u00b7 20% \u00b7 reserve cell or supported service"
+  },
+  {
+   "t": 416.1,
+   "text": "LOW POWER \u00b7 19% \u00b7 reserve cell or supported service"
+  },
+  {
+   "t": 423.1,
+   "text": "LOW POWER \u00b7 18% \u00b7 reserve cell or supported service"
+  },
+  {
+   "t": 443,
+   "text": "Left the craft"
+  }
+ ],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "divide": {
+  "pos": {
+   "x": 335.883,
+   "y": -359.452,
+   "z": -1188.563
+  },
+  "vitals": "O\u2082 100% Creel air HEALTH 100 FOOD 40 F \u00b7 eat meal CREEL 18% power Hull 100% \u00b7 359 / 450 m \u00b7 hold 5/96 CU",
+  "region": "Mirror Divide"
+ },
+ "saveStatus": "Saved locally \u00b7 7:48:55 PM",
+ "continueMs": 3737,
+ "afterContinue": {
+  "pos": {
+   "x": 335.994,
+   "y": -359.45500000000004,
+   "z": -1188.524
+  },
+  "vitals": "O\u2082 100% Creel air HEALTH 100 FOOD 40 F \u00b7 eat meal CREEL 18% power Hull 100% \u00b7 359 / 450 m \u00b7 hold 5/96 CU",
+  "region": "Mirror Divide"
+ },
+ "latticeNotice": " | | | | | ",
+ "cargoPanel": "Suit 450 m \u00b7 Dart hull 350 m \u00b7 Carried 4 / 16 CU\n\nHere\nStore materials\nFrom\nDiver hold \u00b7 4 / 16 CU\nCreel hold \u00b7 5 / 96 CU\n\u2192\nTo\nCreel hold \u00b7 5 / 96 CU\nStore \u00b7 4 CU\n\n2 \u00d7 Brine lattice \u00b7 whole stacks\n\nCreel mount \u00b7 Cargo rack\nRack 96 CU \u00b7 cabin 40 CU + 16 CU locker, bunk, cooker \u00b7 bare 64 CU\nCargo rack \u00b7 fitted\nUnfit \u00b7 hold 64 CU\nUse a supported mooring, or bring the service tool and Bobbin kit to a disabled Creel's exterior collar.\nRefuge cabin \u00b7 not made\n3 Structural alloy + 3 Silica glass + 4 Flexible membrane + 1 Conductive crust + 1 Buoyant resin \u00b7 workshop\nCreel\nNW \u00b7 5 m away \u00b7 360 m depth \u00b7 power 18% \u00b7 hull 100% \u00b7 rated 450 m \u00b7 cargo rack \u00b7 hold 5 / 96 CU\nService\nService at pod waters, the workshop cradle, a restored stop or a charging mooring.\nUse reserve cell for hull power\nReserve power & service\nCarried items\nBrine lattice \u00d7 24 CU\nMove\nBrine lattice\nEat a meal\nRequest emergency refuge meal\nRetained equipment 3 fitted\nCreel hold 5 / 96 CU\nPower Pulse G \u00b7 \u221225 points \u00b7 no usable cell\nElsewhere 7 known containers",
+ "craftPanel": "No bench here \u00b7 Suit 450 m \u00b7 Dart hull 350 m\n\nCosts read have here / needed.\n\nNot here 5\nDart acoustic trim\nConductive crust: 0 / 2\nBuoyant resin: 0 / 2\nFabricate\nAt Splitspine workshop \u00b7 S \u00b7 1249 m\nCreel refuge cabin\nStructural alloy: 0 / 3\nSilica glass: 0 / 3\nFlexible membrane: 0 / 4\nConductive crust: 0 / 1\nBuoyant resin: 0 / 1\nFabricate\nAt Splitspine workshop \u00b7 S \u00b7 1249 m\nStrip tagged frame\nTagged structural frame: 0 / 1\nStrip\nAt Splitspine workshop \u00b7 S \u00b7 1249 m\nRefit Creel hull / 350 m\nTagged structural frame: 0 / 2\nConductive crust: 0 / 4\nBuoyant resin: 0 / 2\nFlexible membrane: 0 / 2\nRefit\nAt Splitspine workshop \u00b7 S \u00b7 1249 m\nRefit Dart hull / 350 m\nTagged structural frame: 0 / 1\nConductive crust: 0 / 3\nBuoyant resin: 0 / 2\nSilica glass: 0 / 1\nRefit\nAt Splitspine workshop \u00b7 S \u00b7 1249 m\nOwned craft 2\nLater 17\nCompleted 12"
+}

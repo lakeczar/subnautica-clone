@@ -1,0 +1,1100 @@
+{
+  "format": "siltwake.save",
+  "schemaVersion": 6,
+  "contentVersion": "expedition.7",
+  "meta": {
+    "sessionId": "338a55b0-2d9c-4db0-835f-dca9aefe50fb",
+    "createdAt": "2026-10-19T04:45:41.392Z",
+    "savedAt": "2026-10-19T05:35:47.986Z"
+  },
+  "state": {
+    "tick": 39125,
+    "sequence": 23,
+    "scenario": "expedition",
+    "player": {
+      "pose": {
+        "frame": "world",
+        "position": {
+          "x": 11.224222101862384,
+          "y": 1.2,
+          "z": -34.67884267099434
+        },
+        "yaw": 5.641592653589829,
+        "pitch": 4.85722573273506e-17
+      },
+      "velocity": {
+        "x": 0,
+        "y": -0.2,
+        "z": 0
+      },
+      "mode": "walking",
+      "vitals": {
+        "health": 100,
+        "oxygen": 100,
+        "food": 89.73111111120801
+      },
+      "refugeId": "island_workshop",
+      "controlledVehicleId": null,
+      "interiorId": null,
+      "starvationSeconds": 0,
+      "graceSeconds": 0,
+      "interiorPose": null,
+      "mobileRefuge": null,
+      "lamp": true
+    },
+    "opening": {
+      "phase": 4,
+      "phaseTicks": 0
+    },
+    "inventory": {
+      "items": [
+        {
+          "id": "item_6",
+          "kind": "essential_tools",
+          "quantity": 1,
+          "containerId": "equipment",
+          "fitted": "tools",
+          "charge": null,
+          "provenance": "public"
+        },
+        {
+          "id": "item_7",
+          "kind": "suit_350",
+          "quantity": 1,
+          "containerId": "equipment",
+          "fitted": "suit",
+          "charge": null,
+          "provenance": "public"
+        },
+        {
+          "id": "item_10",
+          "kind": "reserve_cell",
+          "quantity": 1,
+          "containerId": "diver",
+          "fitted": null,
+          "charge": 100,
+          "provenance": "public"
+        },
+        {
+          "id": "item_11",
+          "kind": "reserve_cell",
+          "quantity": 1,
+          "containerId": "dart_17_hold",
+          "fitted": null,
+          "charge": 100,
+          "provenance": "public"
+        },
+        {
+          "id": "item_12",
+          "kind": "bobbin_kit",
+          "quantity": 1,
+          "containerId": "equipment",
+          "fitted": "recovery",
+          "charge": null,
+          "provenance": "maintenance"
+        },
+        {
+          "id": "item_13",
+          "kind": "salvage_buoy",
+          "quantity": 1,
+          "containerId": "diver",
+          "fitted": null,
+          "charge": null,
+          "provenance": "public"
+        },
+        {
+          "id": "item_14",
+          "kind": "meal",
+          "quantity": 1,
+          "containerId": "diver",
+          "fitted": null,
+          "charge": null,
+          "provenance": "public"
+        },
+        {
+          "id": "item_16",
+          "kind": "silica_glass",
+          "quantity": 1,
+          "containerId": "workshop_locker",
+          "fitted": null,
+          "charge": null,
+          "provenance": "public"
+        },
+        {
+          "id": "item_20",
+          "kind": "structural_alloy",
+          "quantity": 2,
+          "containerId": "workshop_locker",
+          "fitted": null,
+          "charge": null,
+          "provenance": "public"
+        },
+        {
+          "id": "item_21",
+          "kind": "flex_membrane",
+          "quantity": 2,
+          "containerId": "workshop_locker",
+          "fitted": null,
+          "charge": null,
+          "provenance": "public"
+        },
+        {
+          "id": "item_22",
+          "kind": "structural_alloy",
+          "quantity": 4,
+          "containerId": "workshop_locker",
+          "fitted": null,
+          "charge": null,
+          "provenance": "public"
+        },
+        {
+          "id": "item_23",
+          "kind": "conductive_crust",
+          "quantity": 2,
+          "containerId": "workshop_locker",
+          "fitted": null,
+          "charge": null,
+          "provenance": "public"
+        }
+      ],
+      "containers": [
+        {
+          "id": "diver",
+          "kind": "diver",
+          "capacity": 16,
+          "ownerId": "player"
+        },
+        {
+          "id": "equipment",
+          "kind": "equipment",
+          "capacity": 0,
+          "ownerId": "player"
+        },
+        {
+          "id": "pod_locker",
+          "kind": "locker",
+          "capacity": 160,
+          "ownerId": "home_pod"
+        },
+        {
+          "id": "workshop_locker",
+          "kind": "locker",
+          "capacity": 160,
+          "ownerId": "island_workshop"
+        },
+        {
+          "id": "buoy_hold",
+          "kind": "buoy",
+          "capacity": 24,
+          "ownerId": "salvage_buoy"
+        },
+        {
+          "id": "canopy_stop_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "canopy_stop"
+        },
+        {
+          "id": "stack_yard_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "stack_yard"
+        },
+        {
+          "id": "rift_station_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "rift_station"
+        },
+        {
+          "id": "divide_dock_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "divide_dock"
+        },
+        {
+          "id": "crown_station_locker",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "crown_station"
+        },
+        {
+          "id": "crown_station_store_a",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "crown_station"
+        },
+        {
+          "id": "crown_station_store_b",
+          "kind": "locker",
+          "capacity": 48,
+          "ownerId": "crown_station"
+        },
+        {
+          "id": "dart_17_hold",
+          "kind": "vehicle",
+          "capacity": 32,
+          "ownerId": "dart_17"
+        }
+      ],
+      "buoy": {
+        "itemId": "item_13",
+        "deployed": false,
+        "position": {
+          "x": 0,
+          "y": 0.18,
+          "z": 14
+        }
+      }
+    },
+    "knowledge": {
+      "blueprints": [
+        "bp_pod_checklist",
+        "bp_reef_recovery",
+        "bp_island_workshop",
+        "bp_carrier_workshop",
+        "bp_canopy_reinforcement",
+        "bp_creel_service",
+        "bp_carrier_basin",
+        "bp_rift_pressure"
+      ],
+      "scans": [
+        "reef_edible_school_north",
+        "reef_glass_ridge_north",
+        "reef_service_scraps_east",
+        "reef_ribbon_catch_north",
+        "filter_flow",
+        "island_workshop_scraps",
+        "island_glass_ledge_east",
+        "canopy_grounding_fins_upper",
+        "canopy_resin_lee_upper",
+        "reef_ribbon_catch_south",
+        "basin_ridge_salvage_north",
+        "basin_survey_fins_east"
+      ],
+      "evidence": [
+        {
+          "id": "C01",
+          "tick": 270,
+          "provenance": "Home pod / regulator serial and repair checklist"
+        },
+        {
+          "id": "C02",
+          "tick": 3901,
+          "provenance": "Hearth Reef / intake inspection and living colony"
+        },
+        {
+          "id": "C03",
+          "tick": 7103,
+          "provenance": "Splitspine / workshop ledger and physical stock"
+        },
+        {
+          "id": "C04",
+          "tick": 15705,
+          "provenance": "Upper Canopy / field sheet and present fauna distribution"
+        },
+        {
+          "id": "C05",
+          "tick": 30958,
+          "provenance": "Pale Basin dormitory / D0 +04:20 transfer tags; Tavi Orr +04:40 witness note"
+        },
+        {
+          "id": "C06",
+          "tick": 32524,
+          "provenance": "Pale Basin boundary station / D−12 profile; D0 +00:35 trace and fractured slope"
+        }
+      ],
+      "journals": [],
+      "markers": [
+        "home_pod",
+        "reef_ribs",
+        "island_workshop",
+        "canopy_lab",
+        "basin_dormitory",
+        "basin_boundary_station",
+        "canopy_stop"
+      ],
+      "crafted": [
+        "pod_repair",
+        "essential_tools",
+        "suit_150",
+        "reserve_cells",
+        "bobbin_kit",
+        "salvage_buoy",
+        "restore_workshop",
+        "dart_base",
+        "suit_350"
+      ],
+      "hintLevel": 0,
+      "cycles": []
+    },
+    "world": {
+      "resources": [
+        {
+          "id": "reef_service_scraps_east",
+          "stock": 0,
+          "reserve": 8
+        },
+        {
+          "id": "reef_service_scraps_west",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "reef_glass_ridge_north",
+          "stock": 0,
+          "reserve": 8
+        },
+        {
+          "id": "reef_glass_ridge_south",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "reef_ribbon_catch_north",
+          "stock": 0,
+          "reserve": 12
+        },
+        {
+          "id": "reef_ribbon_catch_south",
+          "stock": 8,
+          "reserve": 12
+        },
+        {
+          "id": "island_workshop_scraps",
+          "stock": 6,
+          "reserve": 8
+        },
+        {
+          "id": "island_headland_scraps",
+          "stock": 18,
+          "reserve": 8
+        },
+        {
+          "id": "island_glass_ledge_east",
+          "stock": 6,
+          "reserve": 8
+        },
+        {
+          "id": "island_glass_ledge_west",
+          "stock": 10,
+          "reserve": 8
+        },
+        {
+          "id": "island_resin_cove_east",
+          "stock": 6,
+          "reserve": 6
+        },
+        {
+          "id": "island_resin_cove_west",
+          "stock": 6,
+          "reserve": 6
+        },
+        {
+          "id": "canopy_grounding_fins_upper",
+          "stock": 10,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_grounding_fins_lower",
+          "stock": 14,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_resin_lee_upper",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_resin_lee_lower",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "reef_edible_school_north",
+          "stock": 6,
+          "reserve": 0
+        },
+        {
+          "id": "reef_edible_school_south",
+          "stock": 8,
+          "reserve": 0
+        },
+        {
+          "id": "island_shore_crop_east",
+          "stock": 8,
+          "reserve": 0
+        },
+        {
+          "id": "island_shore_crop_west",
+          "stock": 8,
+          "reserve": 0
+        },
+        {
+          "id": "basin_ridge_salvage_north",
+          "stock": 16,
+          "reserve": 8
+        },
+        {
+          "id": "basin_ridge_salvage_south",
+          "stock": 20,
+          "reserve": 8
+        },
+        {
+          "id": "basin_survey_fins_east",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "basin_survey_fins_west",
+          "stock": 14,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_ribbon_margin_north",
+          "stock": 10,
+          "reserve": 6
+        },
+        {
+          "id": "canopy_ribbon_margin_south",
+          "stock": 10,
+          "reserve": 6
+        },
+        {
+          "id": "basin_frame_ridge",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "basin_frame_terrace",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "basin_frame_fracture",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "rift_ceramic_lip_north",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "rift_ceramic_lip_south",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "rift_ceramic_deep_seam",
+          "stock": 16,
+          "reserve": 0
+        },
+        {
+          "id": "rift_core_shoulder_north",
+          "stock": 0,
+          "reserve": 0
+        },
+        {
+          "id": "rift_core_shoulder_west",
+          "stock": 0,
+          "reserve": 0
+        },
+        {
+          "id": "rift_core_plume_seam",
+          "stock": 16,
+          "reserve": 0
+        },
+        {
+          "id": "divide_lattice_ledge_west",
+          "stock": 1,
+          "reserve": 0
+        },
+        {
+          "id": "divide_lattice_ledge_east",
+          "stock": 1,
+          "reserve": 0
+        },
+        {
+          "id": "divide_lattice_fissure",
+          "stock": 20,
+          "reserve": 0
+        },
+        {
+          "id": "meridian_cut_ceramic",
+          "stock": 16,
+          "reserve": 0
+        },
+        {
+          "id": "meridian_service_cache",
+          "stock": 12,
+          "reserve": 12
+        },
+        {
+          "id": "isles_stack_glass_east",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "isles_stack_resin_cove",
+          "stock": 6,
+          "reserve": 4
+        },
+        {
+          "id": "isles_headland_crops",
+          "stock": 8,
+          "reserve": 0
+        },
+        {
+          "id": "isles_headland_resin_cove",
+          "stock": 6,
+          "reserve": 4
+        },
+        {
+          "id": "isles_headland_glass_ledge",
+          "stock": 8,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_east_resin_lee",
+          "stock": 8,
+          "reserve": 4
+        },
+        {
+          "id": "canopy_east_fins",
+          "stock": 8,
+          "reserve": 4
+        },
+        {
+          "id": "basin_dish_fins",
+          "stock": 10,
+          "reserve": 6
+        },
+        {
+          "id": "basin_wreck_frames_north",
+          "stock": 30,
+          "reserve": 12
+        },
+        {
+          "id": "basin_wreck_panels_south",
+          "stock": 20,
+          "reserve": 8
+        },
+        {
+          "id": "canopy_rim_frames",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "canopy_rim_frames_east",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "rift_core_lower_north",
+          "stock": 8,
+          "reserve": 6
+        },
+        {
+          "id": "rift_core_lower_west",
+          "stock": 8,
+          "reserve": 6
+        },
+        {
+          "id": "divide_lattice_flank_north",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "divide_lattice_flank_south",
+          "stock": 12,
+          "reserve": 8
+        },
+        {
+          "id": "reef_staple_cuttings",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "reef_ribbon_cuttings",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "island_salve_fronds",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "canopy_lumen_bulbs",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "basin_pale_spores",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "reef_fish_ribs",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "isles_fish_split",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "basin_fish_ridge",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "hub_fish_crown",
+          "stock": 4,
+          "reserve": 0
+        },
+        {
+          "id": "reef_roe_nursery",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "isles_roe_cove",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "canopy_roe_crowns",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "reef_shed_moults",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "isles_shed_shells",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "canopy_weaver_resin",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "rift_mite_grit",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "basin_scavenger_casts",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "rift_crawler_moults",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "divide_picker_moults",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "meridian_scavenger_casts",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "divide_skate_eggcases",
+          "stock": 0,
+          "reserve": 0
+        },
+        {
+          "id": "hub_ray_eggcases",
+          "stock": 0,
+          "reserve": 0
+        },
+        {
+          "id": "fall_basin_west_hide",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "fall_basin_west_bone",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "fall_basin_east_hide",
+          "stock": 3,
+          "reserve": 0
+        },
+        {
+          "id": "fall_divide_lee_crust",
+          "stock": 2,
+          "reserve": 0
+        },
+        {
+          "id": "fall_divide_lee_bone",
+          "stock": 2,
+          "reserve": 0
+        }
+      ],
+      "renewal": [
+        {
+          "id": "reef_ribbon_catch_north",
+          "progress": 0
+        },
+        {
+          "id": "reef_ribbon_catch_south",
+          "progress": 0
+        },
+        {
+          "id": "canopy_resin_lee_upper",
+          "progress": 0
+        },
+        {
+          "id": "canopy_resin_lee_lower",
+          "progress": 0
+        },
+        {
+          "id": "reef_fish_ribs",
+          "progress": 0
+        },
+        {
+          "id": "isles_fish_split",
+          "progress": 0
+        },
+        {
+          "id": "basin_fish_ridge",
+          "progress": 0
+        },
+        {
+          "id": "reef_roe_nursery",
+          "progress": 0
+        },
+        {
+          "id": "isles_roe_cove",
+          "progress": 0
+        },
+        {
+          "id": "canopy_roe_crowns",
+          "progress": 0
+        },
+        {
+          "id": "reef_shed_moults",
+          "progress": 0
+        },
+        {
+          "id": "isles_shed_shells",
+          "progress": 0
+        },
+        {
+          "id": "canopy_weaver_resin",
+          "progress": 0
+        },
+        {
+          "id": "rift_mite_grit",
+          "progress": 0
+        },
+        {
+          "id": "basin_scavenger_casts",
+          "progress": 0
+        },
+        {
+          "id": "hub_fish_crown",
+          "progress": 0
+        },
+        {
+          "id": "rift_crawler_moults",
+          "progress": 0
+        },
+        {
+          "id": "divide_picker_moults",
+          "progress": 0
+        },
+        {
+          "id": "meridian_scavenger_casts",
+          "progress": 0
+        }
+      ],
+      "facilities": [
+        {
+          "id": "home_pod",
+          "repaired": true
+        },
+        {
+          "id": "pod_fabricator",
+          "repaired": true
+        },
+        {
+          "id": "island_workshop",
+          "repaired": true
+        },
+        {
+          "id": "canopy_lab",
+          "repaired": true
+        },
+        {
+          "id": "canopy_stop",
+          "repaired": false
+        },
+        {
+          "id": "rift_station",
+          "repaired": false
+        },
+        {
+          "id": "divide_dock",
+          "repaired": false
+        },
+        {
+          "id": "crown_power",
+          "repaired": false
+        },
+        {
+          "id": "crown_dock",
+          "repaired": false
+        },
+        {
+          "id": "crown_survey",
+          "repaired": false
+        }
+      ],
+      "maintenance": {
+        "alloy": 14,
+        "glass": 0,
+        "membrane": 7
+      },
+      "ecology": {
+        "agents": [
+          {
+            "id": "rift_stalker_passage",
+            "mode": "rest",
+            "position": {
+              "x": -191,
+              "y": -294,
+              "z": -1065
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "rift_stalker_chimney",
+            "mode": "rest",
+            "position": {
+              "x": -179,
+              "y": -288,
+              "z": -1059
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "divide_skate_saddle",
+            "mode": "rest",
+            "position": {
+              "x": 565,
+              "y": -446,
+              "z": -1456
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "divide_skate_east",
+            "mode": "rest",
+            "position": {
+              "x": 625,
+              "y": -446,
+              "z": -1426
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "district_choir_gallery",
+            "mode": "rest",
+            "position": {
+              "x": 1298,
+              "y": -598.5,
+              "z": -1146
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          },
+          {
+            "id": "district_choir_terrace",
+            "mode": "rest",
+            "position": {
+              "x": 1328,
+              "y": -598.5,
+              "z": -1157
+            },
+            "yaw": 0,
+            "awareness": 0,
+            "modeSeconds": 0,
+            "cycles": 0,
+            "refractory": 0,
+            "cue": null,
+            "struck": false
+          }
+        ],
+        "deterrents": [],
+        "diver": {
+          "heat": 0,
+          "brine": 0,
+          "heatWarned": 0,
+          "brineWarned": 0
+        },
+        "hulls": [],
+        "controlled": ""
+      },
+      "threat": {
+        "mode": "disengage",
+        "position": {
+          "x": 132,
+          "y": -112,
+          "z": -113
+        },
+        "interest": 0,
+        "modeSeconds": 44.433333333332094,
+        "distraction": null,
+        "distractionSeconds": 0
+      },
+      "flares": [],
+      "action": null
+    },
+    "fleet": {
+      "vehicles": [
+        {
+          "id": "dart_17",
+          "hull": "dart",
+          "pose": {
+            "frame": "world",
+            "position": {
+              "x": 20.06241915779874,
+              "y": -1.6122964261436372,
+              "z": -21.358751385677376
+            },
+            "yaw": 6.241592653589837,
+            "pitch": 0.02000000000000005
+          },
+          "velocity": {
+            "x": 0,
+            "y": 0,
+            "z": 0
+          },
+          "charge": 100,
+          "health": 100,
+          "disabled": false,
+          "emergencyAir": 120,
+          "cargoId": "dart_17_hold",
+          "modules": [],
+          "investment": {
+            "structural_alloy": 6,
+            "silica_glass": 3,
+            "flex_membrane": 2
+          },
+          "rating": 180,
+          "boundRepairs": 0,
+          "berth": null,
+          "upgrades": {
+            "flares": 4,
+            "ballastArmed": true,
+            "ascent": null,
+            "overdrive": {
+              "activeUntil": 0,
+              "readyAt": 0
+            },
+            "grapple": null,
+            "pod": null,
+            "anchored": false
+          },
+          "bioFeed": null
+        }
+      ],
+      "docking": null
+    },
+    "systems": {
+      "outposts": [],
+      "packed": [],
+      "sockets": [],
+      "found": [],
+      "decoded": [],
+      "decodes": [],
+      "planters": [],
+      "traps": [],
+      "beacons": [],
+      "beaconsOff": [],
+      "categoriesOff": [],
+      "chart": []
+    },
+    "story": {
+      "discoveries": [],
+      "hints": {},
+      "works": {
+        "power": false,
+        "air": false,
+        "gate": "sealed",
+        "equalizeSteps": 0,
+        "hall": false,
+        "food": false,
+        "hallPower": false,
+        "repairs": []
+      },
+      "resolution": {
+        "phase": "none",
+        "first": null
+      }
+    },
+    "recovery": {
+      "operation": null,
+      "caches": [],
+      "losses": []
+    },
+    "metrics": {
+      "swimMetres": 713.8076333643659,
+      "pilotMetres": 1155.4637237758739,
+      "oxygenUsed": 151.49074074060002,
+      "powerUsed": 24.67941666667232,
+      "collections": 22,
+      "failures": 0,
+      "rescues": 0,
+      "minOxygen": 61.629629629656165,
+      "minPower": 83.96676851849375
+    },
+    "feedback": "Transferred 2 × Conductive crust to workshop locker.",
+    "migration": null
+  }
+}
