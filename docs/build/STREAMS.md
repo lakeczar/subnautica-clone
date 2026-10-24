@@ -857,3 +857,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Capture:** direct `VideoFrame(canvas)` against the scaled bitmap, traced for readback.
   - **Containers:** fMP4 for H.264/HEVC, WebM for VP8/VP9/AV1.
   - Forwarded to REC-1 with its probes. The owner-PC probes are batched for one owner session.
+- **Owner suggestion (2026-10-24): GPU Screen Recorder** (native Linux NVENC/VA-API capture).
+  - **Fit:** viable as the "native NVENC recorder" route from the hw-encode research.
+  - **Not adopted now:** factory-worker's browsers are headless on a display-less GPU (it would need an X server on the 3090, a VM change); the timing is wall-clock only, not page-time; and its docs warn that NVENC causes memory downclocking on NVIDIA drivers before 580 (factory-worker runs 550), which would distort 3090 frame evidence.
+  - **Kept as the fallback** if the 540p software path is over budget on Linux. It would need owner/fleet approval for the X server and a 580+ driver.
