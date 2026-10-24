@@ -887,3 +887,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Sandbox VA-API:** there was no driver or `vainfo` at all, so the owner approved installing `mesa-va-drivers`, `vainfo` and `ffmpeg` inside the WSL sandbox only (no Windows or host changes), recorded with a removal path.
   - **540p confirmation:** stopped by the stall detector (the hold printed nothing), now resubmitted with per-window logging.
   - **Queued:** the decomposition. The owner-PC probe script is being prepared.
+- **13:03Z check (owner asked whether we're just waiting):**
+  - **Stalled builder:** COL-1 had been silent about 14 h. Its CW-1+R7 traversal was rejected (exit 3, tree changed) at 22:40Z yesterday and never resubmitted, its wake lost to the limit pauses. Nudged to resubmit detached on CW-1's current harness.
+  - **The 3090 is the bottleneck:** about 25 exclusive tickets queued (REC-1 11, SIM-PERF-1 6, CW-1 8), several hours deep.
