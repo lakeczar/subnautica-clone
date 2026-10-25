@@ -65,6 +65,16 @@ The SCHED-3 install needs a true idle point, and a busy queue never offers one. 
     - the audit rows.
   - **B46** (both lanes): with a remote job already running, set pauses a local, a 4070 and an `any` job, all blocked `maintenance`, while the remote job finishes. They stay queued with its slot free, and all run after the clear.
 
+- **Checks** at `b9415d2e`, through the queue, nothing skipped:
+  - **One `--class gpu --machine 3090 --review` job** (ticket `261025-054822-6cb5`):
+    - units **57/57**;
+    - the SCHED-3 tests B28, B34–B46 **14/14**, and S28 **1/1**;
+    - SCHED-1 **23/23**;
+    - SCHED-2 **28/28**;
+    - SCHED-2b **46/46**.
+  - **Its "GPU shared" note** is S11's own inner job again, under our lease.
+  - **Fast tier**, `--machine any`, placed on the 4070 (ticket `261025-054823-0028`): exit 0, 172 files.
+
 ## R6 review responses
 
 Review `03764202` on `review/sched-3-r6`, by Sol on `f0d41605`: REQUEST CHANGES, one P1. R5's F1–F3 pass.
