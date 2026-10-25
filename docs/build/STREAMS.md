@@ -1373,6 +1373,12 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **New queue items:**
     - **MAP-1,** the terrain-and-world stream, after the CW-1 merge. It covers the envelope, `MACRO`, organic regions and the patch layer, the patches, bent routes, moorings, the bake and routes, and early performance at about 460 columns.
     - **ECON-2:** silica sand and glass, plus the bot and the six economy scripts. It's sequenced with MAP-1 or just before it.
-    - **SURV-2:** mooring activation as a saved fact, rescue tows retargeted, the carrier bunk module, the Canopy lab rest point, and relabelling `refuge`. It goes with MAP-1.
+    - **No new survival stream.** As routed earlier, the work splits two ways:
+      - **PACE-1 stage 2:** mooring activation as a saved fact, the moved moorings, rescue tows retargeted to the nearest home or restored big stop, and bot logistics. It runs after MAP-1 places the moorings.
+      - **ENV-1 stage 3a:** the Canopy lab and carrier bunk wake points, and relabelling `refuge`.
     - **Per-area owner grill sessions,** starting with the areas around the pod.
-  - ENV-1 has been told about the district move. LS-1, PACE-1 and BIO-1 have notes queued.
+  - **Notes sent:** ENV-1 about the district move (the building proposal comes to me), and LS-1 about deferred patch rows. PACE-1 and BIO-1 get theirs with their next briefs.
+- **PACE-1 stage 1 done at `155a176f`** (code `6230b1d2`; reported 04:43, picked up late by the coordinator).
+  - **Checks:** fast 1,688, heavy, economy, and playthrough 9/9 with pacing matching the new rows.
+  - **Results:** play time is down by about a quarter (Creel 203.7 → 151.5 bot-min), and the longest gap on Creel is down from 50.6 to 26.2 min. Carrier gaps of 30–63 min remain, owned by stage 2.
+  - **Review:** Sol R1 dispatched (`siltwake-pace1-stage1-review-r1-sol-155a176`).
