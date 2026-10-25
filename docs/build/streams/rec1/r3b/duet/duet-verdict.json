@@ -1,0 +1,206 @@
+{
+ "verdict": "met",
+ "why": null,
+ "budgetMs": 0.167,
+ "declared": {
+  "what": "REC-1 R3b acceptance: the recorder's inclusive main-thread cost, software VP9 960x540 at 6 fps (the test machines' rung), recorder on minus paused in place, at a fixed pose, as a duet (both arms in one run, interleaved on/off/off/on)",
+  "amended": "2026-10-25, coordinator ruling (1) after 261025-043054-e104 met the exclusive class's 30-minute ceiling: the same 108 pairs, as two exclusive tickets of 54 pairs, pooled. e104's partial windows are incomplete, never read and excluded",
+  "budgetMs": 0.167,
+  "pairs": 108,
+  "tickets": 2,
+  "pairsPerTicket": 54,
+  "windowS": 10,
+  "confidence": 0.95,
+  "save": "docs/build/streams/rec1/fixtures/hold-refuge-reef.json",
+  "exclusion": {
+   "kind": "level",
+   "overMs": 0.6,
+   "median": "each ticket's own: the median of that ticket's judged windows, both arms pooled"
+  },
+  "verdict": "met if the pooled paired 95% interval's upper end is under budgetMs; not met if its lower end is over it; otherwise inconclusive. Exactly the first 54 pairs of each ticket are judged; the unexcluded interval and each ticket's own estimate are reported beside the pooled one. Pooled regardless of agreement between the tickets: no consistency gate",
+  "pooling": "only when both tickets are complete (54 pairs each) and neither was stopped; both at the same commit, the same prebuilt build (its content hash) and the same machine, submitted back to back",
+  "rerun": "a ticket that ends incomplete, or that heavy-check labels DISTURBED, is rerun once, alone, under this declaration; if the rerun fails too, the result is 'no verdict'. No third try, and no change of design after seeing data",
+  "ceiling": {
+   "class": "exclusive",
+   "ceilingS": 1800,
+   "startupS": 180,
+   "marginPct": 10,
+   "rule": "duet.sh refuses a declaration whose ticket time, (pairsPerTicket x 2 x windowS + startupS) x (1 + marginPct/100), exceeds ceilingS"
+  },
+  "power": "planned for a true cost of 0.10 ms/frame with a pair-difference sd of 0.20 ms (measured: 0.159-0.176 recorder off in both arms after the host's CPU isolation, run 261025-014714-dfd1; 0.184 and 0.205 on/off before it): 96 pairs give about 90% chance of 'met'; 108 leave room for about 10% of pairs excluded",
+  "exclusionReason": "slow windows (+0.6 to +1.8 ms for 10-25 s) recur with no recorder at all (261025-014714-dfd1: recorder off throughout, the VM otherwise quiet, about 280-290 s apart, matching the host's job-matcher bursts of about 4 min 45 s) and hit paused windows as often as recording ones (261024-231132-692c, 261024-203711-5c1c). A pair is dropped as a whole when either of its windows is more than 0.6 ms over its ticket's median of every judged window, both arms pooled, so both arms lose the same time",
+  "seat": "exclusive on the RTX 3090 (factory-worker), from a build made beforehand by another job (exclusive windows never compile); the single-ticket form was rehearsed on the RTX 4070 Laptop (261025-033553-5fd5, indicative)",
+  "disturbedRuling": {
+   "at": "2026-10-25, coordinator ruling on REC-1 thread 9604e156 (message after e5c0 was labelled DISTURBED for startup faults), made blind: only receipt labels and fault timestamps seen, no window value",
+   "rule": "for this duet, a ticket is DISTURBED for major faults only if a fault falls within the measured span, from the start of its first measured window to the end of its last; faults outside that span (Chrome launch, binary reads) are recorded but do not label the ticket. Every other DISTURBED criterion (steal, contention, the canary and so on) stays as declared, over the whole job",
+   "applies": "identically to every ticket: e5c0, 3aeb and any rerun",
+   "how": "fault times from the receipt's contention log (seconds from the job's admission); window boundaries from the run's timing log only ([Ns] window k lines, seconds from run.mjs's start, which is after the admission), never the window values"
+  }
+ },
+ "pooled": {
+  "n": 96,
+  "mean": 0.1085,
+  "sd": 0.1422,
+  "ci95": [
+   0.0797,
+   0.1374
+  ]
+ },
+ "unexcluded": {
+  "n": 108,
+  "mean": 0.0929,
+  "sd": 0.3233,
+  "ci95": [
+   0.0313,
+   0.1546
+  ]
+ },
+ "tickets": [
+  {
+   "dir": "/work/tmp/rec1/r3b/duet2/t1",
+   "complete": true,
+   "judgedPairs": 54,
+   "build": {
+    "commit": "e52841b6baec071713c045e36f29776322f75c27",
+    "build": "bffc97737c9762be",
+    "machine": "factory-worker"
+   },
+   "medianMs": 2.7729,
+   "estimate": {
+    "n": 48,
+    "mean": 0.125,
+    "sd": 0.1252,
+    "ci95": [
+     0.0886,
+     0.1613
+    ]
+   },
+   "unexcluded": {
+    "n": 54,
+    "mean": 0.1447,
+    "sd": 0.3746,
+    "ci95": [
+     0.0425,
+     0.247
+    ]
+   },
+   "excluded": [
+    {
+     "pair": 7,
+     "on": 2.8243,
+     "off": 3.8505,
+     "highArm": "off",
+     "end": 1792907379716
+    },
+    {
+     "pair": 20,
+     "on": 2.8174,
+     "off": 3.7861,
+     "highArm": "off",
+     "end": 1792907649918
+    },
+    {
+     "pair": 21,
+     "on": 4.6002,
+     "off": 3.9309,
+     "highArm": "on",
+     "end": 1792907659931
+    },
+    {
+     "pair": 35,
+     "on": 4.6287,
+     "off": 2.6856,
+     "highArm": "on",
+     "end": 1792907940131
+    },
+    {
+     "pair": 36,
+     "on": 4.0282,
+     "off": 3.1586,
+     "highArm": "on",
+     "end": 1792907970170
+    },
+    {
+     "pair": 50,
+     "on": 4.6621,
+     "off": 4.3327,
+     "highArm": "on",
+     "end": 1792908250380
+    }
+   ]
+  },
+  {
+   "dir": "/work/tmp/rec1/r3b/duet2/t2",
+   "complete": true,
+   "judgedPairs": 54,
+   "build": {
+    "commit": "e52841b6baec071713c045e36f29776322f75c27",
+    "build": "bffc97737c9762be",
+    "machine": "factory-worker"
+   },
+   "medianMs": 2.7329,
+   "estimate": {
+    "n": 48,
+    "mean": 0.0921,
+    "sd": 0.157,
+    "ci95": [
+     0.0465,
+     0.1377
+    ]
+   },
+   "unexcluded": {
+    "n": 54,
+    "mean": 0.0412,
+    "sd": 0.2554,
+    "ci95": [
+     -0.0285,
+     0.1109
+    ]
+   },
+   "excluded": [
+    {
+     "pair": 2,
+     "on": 4.0945,
+     "off": 4.193,
+     "highArm": "off",
+     "end": 1792909731446
+    },
+    {
+     "pair": 16,
+     "on": 2.8108,
+     "off": 3.717,
+     "highArm": "off",
+     "end": 1792910011639
+    },
+    {
+     "pair": 17,
+     "on": 4.4797,
+     "off": 4.3002,
+     "highArm": "on",
+     "end": 1792910021644
+    },
+    {
+     "pair": 32,
+     "on": 4.5712,
+     "off": 4.4934,
+     "highArm": "on",
+     "end": 1792910331871
+    },
+    {
+     "pair": 46,
+     "on": 2.773,
+     "off": 3.6763,
+     "highArm": "off",
+     "end": 1792910612117
+    },
+    {
+     "pair": 47,
+     "on": 3.7244,
+     "off": 4.2709,
+     "highArm": "off",
+     "end": 1792910622124
+    }
+   ]
+  }
+ ]
+}

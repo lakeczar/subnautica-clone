@@ -1,11 +1,153 @@
 # REC-1: the flight recorder and evidence pack (handoff)
 
-> **RESUME (paused for the host reboot, 2026-10-24 19:00 CDT).**
-> - **Where:** the R3b 6 fps acceptance (261024-231132-692c) failed at +0.120 [0.015, 0.224]. Its wide interval comes from slow windows on a 5-minute period, locked to the wall clock (hh:m1:55–m2:30 and hh:m6:50–m7:30, the same in 692c and 5c1c), so probably host-side, not the game. The R3b draft is `rec1/r3b/handoff-r3b-draft.md`. The per-process sampler (`scripts/rec/proc-sample.mjs`, data in `/work/tmp/rec1/r3b/p300/samples.ndjson`) was stopped before its first window was read.
-> - **Next** (coordinator decision (b)): name the 300 s source (read the samples around 18:56:50–18:57:30; if they're gone, sample again over one event). Then one pre-declared, powered duet acceptance after the reboot: n from the measured variance, margin, and an exclusion rule applied to both arms. Then fast tier, handoff, "done at <sha>" with the owner steps (`scripts/rec/owner-check-serve.sh`).
-> - **Resubmit:** nothing queued. 4e09 was cancelled by the coordinator; 692c and 7c3b had finished.
+## R3b (coordinator decision after R3): the recorder's cost, fixed at its root
 
-Opus 5.5 high. Branch `t3/rec-1-flight-recorder`, from CW-1's head `7dc9cc9`; root merged at `f2fd628` (CR-1, UX-1, TT-1, SCHED-1), `51a6b27` (SCHED-2a live), `1bdcc39` and `990e5c1` (the soak's fact reducer, `--snapshot` with a linked `node_modules`); CW-1 merged up to its R1 fixes `14c7a02` (CW-1 is not in root yet). The evidence below ran at `2bf9b14e`, `67e8394d` and `3a07c189`, before the last two merges; a recorded run at the handoff head confirms the recorder against them (below). Story-neutral; `docs/spoilers/*` not read. **The R3 section next is the current state, R2 and R1 below it;** sections from Outcome on are the first handoff, with the compromises, checks and missing lists brought up to date.
+The recorder code is final at `2a34d71f`. After it there are harness and script changes only:
+- `adverse.mjs`'s pause rule at the recording's own rate;
+- `owner-check-serve.sh`;
+- the pack names HEVC;
+- the period check, the duet and its declaration (`scripts/rec/period.sh`, `period.mjs`, `duet.sh`, `duet.mjs`, `span-faults.mjs`, `run.mjs --window`, `decomp.sh` with a prebuilt `DIST`).
+
+R3b was a decision, not a compromise: the owner's 1% budget is part of the recorder's promise.
+
+**Result: the budget is met on our machines.** The 3090 exclusive duet, declared before it ran: recorder on minus paused **+0.109 ms/frame, 95% interval +0.080 to +0.137** (n = 96 of 108 pairs, 12 excluded under the declared rule), under the 0.167 budget. Without the exclusion it is also met: +0.093 (+0.031 to +0.155), n = 108. The test machines' rung is software VP9 at 960×540 and 6 fps. The owner's own hardware path is Missing until the owner-PC check.
+
+### What the cost was, and what fixed it
+
+All runs are within-run alternations: the recorder is paused and resumed in place every 10 s, on/off/off/on, and adjacent windows are paired.
+- "Paused" is truly off. The video segment ends and the encoder is flushed and closed; no frames, events or renderer timing are recorded. The recording's timing setting is restored on resume (`296d21a5`).
+- Main-thread task time per frame (CDP).
+- Fixed pose: the refuge-reef fixture (`docs/build/streams/rec1/fixtures/hold-refuge-reef.json`).
+- Owner-browser Chrome, 3090 exclusive unless named.
+
+1. **The recorder's direct page costs (`3141b1e9`).**
+   - What changed: a playtest's GPU timer queries run on one frame in eight (a driver's on every frame); the JS heap is read only in the 4 Hz sample and on long frames; a playtest's snapshots are encoded and written in the spool worker.
+   - Telemetry alone before (`29df729f`, 30 pairs): +0.24 (0.09 to 0.40).
+   - Telemetry alone after (`9b92d2ff`, 15 pairs): +0.02 (−0.25 to +0.30), and +0.05 (−0.07 to +0.18) with timing off.
+   - The 4 Hz sample costs about 0.04 ms a sample (`--bench-sample`).
+2. **What remained was taking each picture off the WebGL canvas, not encoding it.**
+   - At `81b6979d` (15 pairs each): capture only (encoder off) +0.26 as an ImageBitmap and +0.28 as a direct VideoFrame; the full VP9 path +0.18.
+   - At `3fcd3e3c`: `canvas.captureStream` with `requestFrame` was no cheaper. Capture alone was +0.23 and VP9 +0.25, with renderer process CPU 466 ms/s against 333 for the bitmap.
+   - At 12 fps the whole playtest path was +0.178 (+0.073 to +0.284; `9b92d2ff`, 45 pairs, 15 min; one major page fault flagged it DISTURBED), against +0.224 (+0.161 to +0.287) at `dcc64dfc` before the direct fixes.
+   - The cost scales with pictures per second, and every way a page can take a picture pays it.
+3. **The decision (coordinator, 2026-10-24): the software rung captures 6 fps; the hardware path keeps the owner's 12 fps.** The reasoning, as given: "This isn't a quality compromise. The software rung exists only for our bot and test footage, and agents combing test footage don't need 12 fps."
+   - It is an explicit ladder property (`fps` on every rung in `encoders.ts`). The recording's header, `summary.json`'s `video` and the story's video check all state it, for example "in-game software VP9 960x540 6 fps (test-machine fallback; the owner's hardware path is 12 fps)".
+   - Key frames are every 2 s at either rate. The pack's gaps, coverage, held tiles and strips read the recording's own rate.
+   - `adverse.mjs` passes every phase at 6 fps: clock (0 misdated, H.264 across rotations included), throw, removals, backpressure, timeline and dpr2. Its pause rule now allows the last picture captured before a pause, which is one capture interval at the recording's rate.
+4. **The first 6 fps acceptance was inconclusive, because of noise from the host.**
+   - At `eed2f2e8` (261024-231132-692c, 45 pairs, 15 min): +0.120 (+0.015 to +0.224).
+   - About every 5 minutes, frames slowed to 3.6–4.6 ms against 2.9 for 10–25 s, in paused windows as often as recording ones. The pair sd was 0.34.
+   - **The slow windows are locked to the wall clock:** in 5c1c and 692c, started 2.5 h apart, at the same time modulo 5 min.
+   - **After the host's CPU isolation** (2026-10-25), a recorder-off hold in 5 s windows ran with a per-process sampler beside it (`scripts/rec/period.sh`, 261025-014714-dfd1).
+     - Bursts of +0.9 to +1.8 ms for 15–25 s remain while the VM is quiet (other processes below their median, no steal), about 280–290 s apart.
+     - That fits the host's Hermes `job-matcher` (bursts about every 4 min 45 s; fleet's report). Before the isolation, the gaps were 300–310 s.
+     - It is not the recorder (off throughout), and not the game: the game's periodic work follows its own clock, not the wall clock.
+     - Routed by the coordinator to the owner and fleet.
+   - The run also showed that an exclusive job that compiles inside its window disturbs itself: 692c's 80 major faults all came in its first 26 s, during its own build. Exclusive windows never compile (DIRECTION convention 9).
+5. **The acceptance: a duet, declared before it ran** (`docs/build/streams/rec1/r3b/duet-declaration.json`; approved by the coordinator at `a934d88d`, amended by two rulings before any window was read).
+   - **Design:** 108 pairs of 10 s windows; the budget 0.167 ms/frame; a paired 95% t interval.
+     - Verdict: met if the upper end is under the budget, not met if the lower end is over it, otherwise inconclusive.
+     - Exclusion: a pair is dropped as a whole when either window is more than 0.6 ms over its ticket's median, so both arms lose the same time. Justified beforehand by the recorder-off bursts (4).
+     - Power: planned for a true 0.10 at sd 0.20 (null pairs after the isolation: 0.159–0.176), about 90% chance of "met".
+   - **Amendment 1 (`e52841b6`):** the single 36-minute ticket (261025-043054-e104) was stopped at the exclusive class's 30-minute ceiling, which `--deadline` does not raise; that was my sizing error. The same 108 pairs became two exclusive tickets of 54, pooled only when both are complete at one commit, build hash and machine. One rerun of a failed ticket, else no verdict. `duet.sh` now refuses a declaration whose ticket time, startup and a 10% margin included, exceeds the class ceiling. e104's partial windows are archived as incomplete, never read and excluded.
+   - **Amendment 2 (`d686040c`, made blind):** major faults label a ticket DISTURBED only inside its measured span. e5c0's 16 faults all came at 2–7 s, during Chrome's launch; its span starts at 45 s at the earliest (`scripts/rec/span-faults.mjs`, timing only). So it was clean, and its queued rerun (261025-062916-91a8) was cancelled unrun. 3aeb took no faults and no other label.
+   - **Jobs:** the build on an ordinary seat (261025-051941-8bd7, build `bffc97737c9762be` at `e52841b6`), then two exclusive tickets back to back from it on the 3090: 261025-052049-e5c0 (05:46–06:05Z) and 261025-052049-3aeb (06:27–06:46Z). Both complete; frame gaps p99 16.8 ms, none over 33 ms.
+   - **Result:**
+
+     | Ticket | On minus paused | n (excluded) | Excluded pairs' high window | Median window |
+     | --- | --- | --- | --- | --- |
+     | e5c0 | +0.125 (+0.089 to +0.161) | 48 (6) | off, off, on, on, on, on | 2.77 ms |
+     | 3aeb | +0.092 (+0.047 to +0.138) | 48 (6) | off, off, on, on, off, off | 2.73 ms |
+     | **Pooled (the verdict)** | **+0.109 (+0.080 to +0.137): MET** | 96 (12) | 6 on, 6 off | |
+     | Pooled, nothing excluded | +0.093 (+0.031 to +0.155) | 108 | | |
+
+   - **The excluded pairs are the host's bursts:** they fall about 280–290 s apart (e5c0: 05:49:39, 05:54:09–19, 05:59:00–30, 06:04:10; 3aeb: 06:28:51, 06:33:31–41, 06:38:51, 06:43:32–42), and their high window is the paused arm as often as the recording one.
+   - **Known external event:** STEW-3's builder ran one 50 ms local `node` probe outside the queue while a REC-1 exclusive was running, most likely during e5c0 (05:46:24–06:05:11Z). STEW-3's handoff records no time, so it can't be placed in a window. It is not grounds for exclusion either way.
+   - Renderer process CPU 322 ms/s in both tickets (the encoder and readback in the page's process, against 315 off at R3).
+
+### The encoder ladder (owner policy: hardware first; the CPU at 960×540 only on Linux test machines)
+
+- **One ladder** (`src/runtime/flight/encoders.ts`): hardware AV1, then H.264, then HEVC, then VP9 (the research's order for an RTX 40 laptop); then software VP9 and VP8.
+  - Each rung names its codec, hardware or software, container, Matroska codec ID, WebCodecs extras and capture rate.
+  - The page asks the browser down the ladder once per recording, VBR then CBR, and takes the first rung it supports. The worker opens that rung, or the ones below it in the same container if the browser refuses it after all.
+  - A new codec, profile or container is a row (plus a writer for a new container), not new control flow.
+- **Windows never encodes on the CPU automatically:** no hardware encoder means no video, recorded as such. Software rungs are allowed only on Linux.
+- **H.264 and HEVC** are written as Matroska (`.mkv`) by the same writer as WebM: H.264 has its `avcC` as CodecPrivate. HEVC would have its `hvcC`, but that's untested, because no machine here encodes HEVC. The worker keeps the encoder's decoder configuration, so every segment after a rotation has it too.
+- **The pack** remuxes `.mkv` in place and writes a playable `.mp4` beside it for the timeline page. Strips fall back to the system ffmpeg, because Playwright's has no H.264.
+- **The software fallback** is 960×540 at 6 fps. It's owner-approved, and it doesn't touch the owner's footage.
+
+**Encoders the test machines' Chrome offers** (`scripts/rec/encoder-probe.mjs`: `isConfigSupported` with `prefer-hardware`, at 720p and 540p, from a secure local page, for AV1, VP9, HEVC, and H.264 baseline, main and high):
+
+| Machine | Hardware | Software | `chrome://gpu` |
+| --- | --- | --- | --- |
+| factory-worker, RTX 3090, run flags (`--use-angle=gl-egl`) | none | all except HEVC | "Accelerated video encode has been disabled, either via blocklist, about:flags or the command line." |
+| Same, plus `--enable-features=VaapiVideoEncoder,VaapiVideoDecodeLinuxGL,VaapiIgnoreDriverChecks,AcceleratedVideoEncoder` (probe only) | none | the same | the same |
+| alickers sandbox, RTX 4070 Laptop (WSL2, Linux Chrome) | none | the same | the same |
+
+The media log names the encoder that ran (`VpxVideoEncoder`, `kIsPlatformVideoEncoder: false`).
+
+**Why there's no hardware encoder on Linux:**
+- Chrome on Linux encodes in hardware only through VA-API.
+- factory-worker has libva but no VA-API video driver, and NVIDIA ships none that encodes.
+- No Chrome flag exposes NVENC on Linux.
+
+So no flag is enabled, and none would be safe to ship.
+
+**The sandbox's D3D12 VA-API path (research §8) isn't testable yet.** The owner approved installing `mesa-va-drivers`, `vainfo` and `ffmpeg` inside the WSL sandbox only. The install job (`scripts/rec/alickers-vaapi.sh`, ticket 261024-130307-d219) found that the sandbox user has no non-interactive `sudo`. It stopped with nothing installed, as instructed.
+- **The inventory:** `/dev/dxg` and `/dev/dri/renderD128` are present; there's no VA driver, no `vainfo` and no system ffmpeg.
+- **To proceed:** someone with sudo inside the sandbox runs `sudo apt-get install --no-install-recommends mesa-va-drivers vainfo ffmpeg`.
+  - To remove: `sudo apt remove mesa-va-drivers vainfo ffmpeg && sudo apt autoremove`.
+  - Then the same script probes read-only: `vainfo` encode entrypoints with `LIBVA_DRIVER_NAME=d3d12`, the native `h264_vaapi` encode, and Chrome's VA-API path only if that encodes.
+
+### R3b evidence, by the commit it ran at
+
+| Run | Commit | Ticket | Result (ms/frame, paired 95% interval) |
+| --- | --- | --- | --- |
+| **Acceptance duet, 6 fps software rung, two 3090 exclusive tickets, pooled** | `e52841b6` | 261025-052049-e5c0, 261025-052049-3aeb (build 261025-051941-8bd7) | **+0.109 (+0.080 to +0.137), MET**; n = 96 of 108 (12 excluded as declared); unexcluded +0.093 (+0.031 to +0.155) |
+| Single-ticket duet, stopped at the exclusive ceiling | `a934d88d` | 261025-043054-e104 | incomplete, never read, excluded |
+| Duet rehearsal, the same two-phase command, `--stall 300` (RTX 4070 Laptop, indicative test-machine result: about 42 fps, p99 frame gap 50 ms, recording windows 6% fewer frames) | `a934d88d` | 261025-033553-5fd5 | +0.205 (+0.186 to +0.224), 108 pairs, 0 excluded, sd 0.099. The first attempt, 261025-021147-dcbb, ended when the laptop left the network |
+| 15-min rehearsal, `--stall 200` (RTX 4070 Laptop, indicative test-machine result: about 56 fps, p99 33 ms) | `2a34d71f` | 261024-222630-f4fb | +0.107 (+0.044 to +0.169), 45 pairs |
+| 6 fps playtest, 15 min, 3090 exclusive (built inside the window) | `eed2f2e8` | 261024-231132-692c | +0.120 (+0.015 to +0.224), 45 pairs, sd 0.34, DISTURBED (its own build) |
+| Recorder-off hold, 5 s windows, with a per-process sampler (3090, non-exclusive, after the CPU isolation) | `f4811a2a` | 261025-014714-dfd1 | host bursts +0.9 to +1.8 ms, about 280–290 s apart; null 10 s pairs sd 0.159–0.176 |
+| 12 fps playtest, 15 min, 3090 exclusive | `9b92d2ff` | 261024-203711-5c1c | +0.178 (+0.073 to +0.284), 45 pairs, DISTURBED (one major fault) |
+| 12 fps playtest before the direct fixes | `dcc64dfc` | 261024-130050-fb9a | +0.224 (+0.161 to +0.287), 45 pairs |
+| Per-window CPU profiles: telemetry, telemetry without timing, VP9 (after the fixes) | `9b92d2ff` | 261024-203711-eb08 | +0.02, +0.05, +0.19 (15 pairs each) |
+| Capture paths: bitmap, VideoFrame, VP9 from VideoFrame | `81b6979d` | 261024-211638-b094 | +0.26, +0.28, +0.18 |
+| captureStream: capture only, VP9 | `3fcd3e3c` | 261024-215134-7c3f | +0.23, +0.25 |
+| Fast tier | `2a34d71f` | 261024-222630-d899 | 1,476 pass |
+| `adverse.mjs` at 6 fps | `2a34d71f` | 261024-222630-5596 | every phase passes once the harness's pause rule reads the rate (re-judged at `eed2f2e8`) |
+
+Curated copies of these runs are in `docs/build/streams/rec1/r3b/`.
+
+**Decomposition provenance.** The 4070 run 261024-131031-f36a used CW-1's derived save (`/work/tmp/cw1/saves-8x/seg0.json`, which is present on the sandbox) through a default path in `decomp.sh`. That hid a factory-worker-style path from the lane's guard. Relative shares are what that run is for, so it was allowed to finish. From `7bcbfb90` on, `decomp.sh` takes its save from the SAVE-1 library (`saves.js pick`) or a repository fixture, and records which in `save.json`.
+
+### The owner-PC check (Missing until the owner runs it)
+
+The owner's own path is hardware on their Windows laptop, which our machines can't reach. `docs/build/streams/rec1/OWNER-PC-CHECK.md` is the one-page procedure. The build is served from the alickers sandbox on the owner's own laptop with `scripts/rec/owner-check-serve.sh`, through the 4070 lane:
+- the lane pins the commit and keeps other jobs off the laptop while the owner measures;
+- WSL2 forwards the sandbox's localhost to Windows Chrome. This is untested from Windows; the one-minute test (261024-231230-7c3b) checked the server from inside the sandbox only.
+
+The steps, in plain words:
+1. The coordinator starts the server: `heavy-check submit --machine 4070 --deadline 4200 --stall 600 -- bash scripts/rec/owner-check-serve.sh 60`. Wait for its "serving" line. It builds the commit of the submitting worktree, so submit it from REC-1's head.
+2. The owner closes heavy programs, plugs in the laptop and opens `http://localhost:4173/?rec=playtest&recmeasure=1&reccheck=300` in Windows Chrome.
+3. They follow `OWNER-PC-CHECK.md`: begin a new expedition or import a save; hold still in open water for 5 minutes; copy the media-internals and `chrome://gpu` lines; send the downloaded `siltwake-recorder-check.json`.
+
+The check reports:
+- the browser's encoder grid;
+- the encoder the recording chose;
+- an in-page on/off frame-work A/B, judged against the same 0.167 budget.
+
+### Follow-ups (not in REC-1)
+
+- **OffscreenCanvas rendering (option 3; not now):** this is a possible future root fix for the capture cost.
+  - If the game rendered on an OffscreenCanvas in a worker, the picture could be taken off the main thread at no cost to the game's frame.
+  - It would also let the software rung return to 12 fps.
+  - It belongs to a future renderer stream, not the recorder.
+- **REC-1b, storage risk 3** (STORAGE-ENVELOPE §4): probe a denied OPFS and route that case to `memoryZip`.
+- **REC-2, storage risks 2, 4, 7 and 8** (STORAGE-ENVELOPE §4).
+- **The sandbox's D3D12 VA-API probe,** once someone with sudo installs the three packages (above).
+- **For a future 30 fps preset** (input, not a finding against REC-1): the software rung's cost appears to grow when the machine is saturated. On the RTX 4070 Laptop it was +0.107 ms/frame at about 56 fps and +0.205 at about 42 fps (both indicative).
+- **The host's periodic bursts** (+0.9 to +1.8 ms for 15–25 s, about every 4 min 45 s, fitting Hermes `job-matcher`): with the owner and fleet (coordinator).
 
 ## R3 (Sol R3 `31378375` on `becc169f`: four P2s, one P3)
 
@@ -16,7 +158,7 @@ Recorder code final at `68d0d60c` (the fixes below). After it: measuring options
 | **R3-1** a video exception rejected the shared queue | Each worker operation runs inside one handler whose failure the queue catches. A failed video operation closes its picture and the encoder, keeps the segment written so far, and reports `videoError`. Every request still gets its reply, with the error, so nothing waits. The capture ends the video and records a loss fact ("the video encoder failed …; no video after this moment") and a gap | `adverse.mjs` on the 3090 host, with a worker whose encoder throws on its tenth picture: the export finishes in 20 ms; the loss fact and the telemetry recorded after the failure are both in the export. `rec1-capture`: the same through the fake worker |
 | **R3-2** a locked older recording reported as removed | The worker tells a deletion that happened from an absent file (fine) and a refused one (`NoModificationAllowedError` and similar: nothing freed). Space is credited, and a removal recorded, only on confirmation. A refused file is recorded (`removalRefused`, with session, file, bytes and why), stays counted, and is never planned again; with it counted, an exhausted budget stops the recording and names it. Recordings this page still holds (the running one and the latest completed, exportable) are pinned against any other capture's budget. A stopped recording releases its file handles, which an export reopens | `adverse.mjs` against real OPFS bytes. Off → on with a 1 MiB budget: the previous recording keeps its bytes (640,971) and still exports. Another context holds a 3 MiB older file: its bytes stay on disk (3,145,728), its refusal is in the ledger, nothing is credited, and the new recording stops honestly. `rec1-capture`: refused and pinned cases |
 | **R3-3** encoder drops invisible | Every picture not captured is a timestamped stretch in the ledger (`videoGaps`), kept after Off with counts (`videoDrops`): `lost` (skipped on the main thread, refused by the encoder, or after an encoder failure) or `still` (no frame drawn: a stall or a hidden tab). Each names the picture the video holds. Completeness reports lost stretches. Coverage counts only fresh pictures. Strip tiles inside a stretch are dimmed and labelled ("NO PICTURE (not captured) · held from 1.98s"). The timeline marks stretches on its chart and names them over the video when the cursor is in one | `adverse.mjs`: an encoder held behind for 2 s while 22 barcodes were drawn. The exported pack says "recording complete: partial: 24 video pictures not captured in 1 stretch (2.0 s: the encoder was behind)" and "video: partial: 67% with fresh pictures; 2.0 s without". The gap strip's 24 tiles are marked held from the picture before the gap. `rec1-capture`: the gap, its counts after Off, completeness, coverage, the tile label |
-| **R3-4** the inclusive cost | **Measured; the budget is not met; not yet fixed.** See below | twelve exclusive tickets |
+| **R3-4** the inclusive cost | **Measured; the budget is not met; not yet fixed.** See below. **Fixed and met in R3b** (above) | twelve exclusive tickets |
 | **R3-5** "conclusive" | `overhead.mjs` prints each mode's figures and, against off, the paired differences with their range and a paired t 95% interval, labelled with n and its assumptions. The owner's budget is a separate line. `--collect` builds the report from runs made one per ticket; renderer and GPU process CPU are columns | the reports below |
 
 
@@ -241,5 +383,5 @@ Side by side: `final/compare-seg0/` (driver marks line the runs up by place: bot
 - **The owner's own browser:** the in-game video, the spool and the export in a headed Chrome on the owner's Windows PC (and whether it shows the 4070 sandbox's 30 fps stretches), including a genuinely hidden tab: checked headless only (`playtest-check.mjs`, `adverse.mjs`), on both machines.
 - **A completed soak with the recorder:** the two-lap tour proved the wiring and the pack, but its own driver stalled before the first cave; a full three-lap tour and a dwell soak are MEM-1's and PT-0's.
 - **Memory flatness** is judged only from 10 minutes up; every run here was shorter.
-- **The recorder's inclusive cost (R1-S1, R2-6, R3-4): measured at a fixed pose, and over budget** (about 0.3–0.4 ms per frame against 0.167; see R3). The fix waits on the queued decomposition.
+- **The recorder's inclusive cost on the owner's hardware path** (R1-S1, R2-6, R3-4): met on our machines' software rung (R3b: +0.109, 95% up to 0.137, against 0.167, 3090 exclusive duet). The owner's Windows laptop with a hardware encoder is the owner-PC check (R3b), not yet run.
 - **The fixed-view set's taste:** some framings are weak (the crown station's work pose faces a wall, the dish field shows open water, a few interiors face sand or are near black). The once-per-wave Opus taste review decides version 2; `make-views.mjs` regenerates it.

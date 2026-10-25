@@ -1,0 +1,1 @@
+{"job":"261025-052049-e5c0","windows":108,"spanStartsNoEarlierThanS":45,"jobS":1126,"faults":[{"s":2,"count":2,"where":"before the span"},{"s":4,"count":5,"where":"before the span"},{"s":7,"count":9,"where":"before the span"}],"insideSpan":0,"labelForFaults":"clean (faults outside the measured span only)"}

@@ -1,0 +1,571 @@
+{
+ "mode": "playtest",
+ "video": false,
+ "machine": "RTX 3090 (factory-worker)",
+ "commit": "eed2f2e8b10c5b1650f2b16b70b2051a195c5e8e",
+ "segment": 0,
+ "errors": [],
+ "reached": [],
+ "skipped": [],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "chrome": "156.0.8078.4",
+ "travelS": 946,
+ "probe": {
+  "frames": 53971,
+  "seconds": 900.7,
+  "gap": {
+   "p50": 16.7,
+   "p99": 16.8,
+   "max": 116.6
+  },
+  "work": {
+   "p50": 2.3,
+   "p99": 5.3,
+   "mean": 2.53
+  },
+  "over33": 18,
+  "mainThread": {
+   "taskMsPerFrame": 2.959,
+   "scriptMsPerFrame": 2.547,
+   "taskMsPerSecond": 177.31,
+   "heapMiBEnd": 167.2
+  },
+  "alternation": {
+   "windowS": 10,
+   "windows": [
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.8085
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.7593
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8139
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.9745
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 3.0387
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 3.0255
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.7419
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.8968
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.8866
+    },
+    {
+     "on": false,
+     "frames": 599,
+     "msPerFrame": 2.8496
+    },
+    {
+     "on": false,
+     "frames": 594,
+     "msPerFrame": 2.9553
+    },
+    {
+     "on": true,
+     "frames": 593,
+     "msPerFrame": 3.2082
+    },
+    {
+     "on": true,
+     "frames": 594,
+     "msPerFrame": 3.1702
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.7862
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.7842
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.9365
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 3.011
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8815
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.7559
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 3.2319
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 3.0218
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 3.2447
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 4.3132
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 3.3683
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.7724
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8606
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.9609
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 3.1444
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 3.0289
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.7022
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.7105
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.9256
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.9305
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.7473
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8874
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.9283
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.9714
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.7332
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.6481
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.6911
+    },
+    {
+     "on": true,
+     "frames": 595,
+     "msPerFrame": 3.064
+    },
+    {
+     "on": false,
+     "frames": 593,
+     "msPerFrame": 3.1898
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 3.0988
+    },
+    {
+     "on": true,
+     "frames": 588,
+     "msPerFrame": 2.9761
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.9212
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.6359
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.7562
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.8767
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 3.0002
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.8956
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8871
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 3.0667
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 4.1999
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 4.0168
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 3.3558
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 3.0533
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 3.0393
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.8131
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8091
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.6717
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.7106
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.6492
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8913
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 3.0338
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 3.017
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.6224
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.5771
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.6948
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.7123
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.5945
+    },
+    {
+     "on": false,
+     "frames": 599,
+     "msPerFrame": 2.8057
+    },
+    {
+     "on": true,
+     "frames": 593,
+     "msPerFrame": 3.1358
+    },
+    {
+     "on": true,
+     "frames": 587,
+     "msPerFrame": 2.874
+    },
+    {
+     "on": false,
+     "frames": 597,
+     "msPerFrame": 2.8401
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.7965
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.7868
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.7059
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.9662
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 3.0924
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.8672
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.7828
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 2.5714
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8906
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 3.6113
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 4.6316
+    },
+    {
+     "on": false,
+     "frames": 601,
+     "msPerFrame": 3.0108
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.8509
+    },
+    {
+     "on": true,
+     "frames": 601,
+     "msPerFrame": 2.7225
+    },
+    {
+     "on": true,
+     "frames": 600,
+     "msPerFrame": 2.7571
+    },
+    {
+     "on": false,
+     "frames": 600,
+     "msPerFrame": 2.6987
+    }
+   ],
+   "pairs": 45,
+   "diffs": [
+    0.0492,
+    0.1606,
+    0.0132,
+    0.1549,
+    0.037,
+    0.2529,
+    0.384,
+    0.1523,
+    0.1295,
+    0.476,
+    -0.2229,
+    -0.9449,
+    -0.0882,
+    0.1835,
+    0.3267,
+    0.2151,
+    0.1832,
+    0.0409,
+    0.2382,
+    0.043,
+    -0.1258,
+    -0.1227,
+    0.2853,
+    0.1205,
+    0.1046,
+    0.1796,
+    0.1831,
+    -0.3025,
+    0.2262,
+    -0.1374,
+    0.0614,
+    0.1425,
+    0.3946,
+    0.1177,
+    0.1178,
+    0.3301,
+    0.0339,
+    -0.0097,
+    -0.2603,
+    -0.2252,
+    0.2114,
+    0.7207,
+    1.6208,
+    -0.1284,
+    0.0584
+   ],
+   "mean": 0.1196,
+   "sd": 0.3415,
+   "lo": 0.0152,
+   "hi": 0.2239,
+   "budget": "not shown"
+  },
+  "processCpu": {
+   "rendererMsPerS": 332.2,
+   "gpuMsPerS": 445.1,
+   "treeMsPerS": 787.6
+  }
+ },
+ "recorderOverhead": {
+  "meanMs": 0.04911670422445873,
+  "worstMs": 4.4000000059604645,
+  "frames": 29322,
+  "parts": {
+   "sample": 0.0064,
+   "frame": 0.0072,
+   "heap": 0.0007,
+   "gpu-timer": 0.0039,
+   "snapshot": 0.0008,
+   "video": 0.022,
+   "spool": 0.0052,
+   "events": 0.0028
+  }
+ },
+ "end": {
+  "tick": 201756,
+  "feet": [
+   -297,
+   -14.1,
+   -94
+  ],
+  "region": "refuge_reef"
+ }
+}

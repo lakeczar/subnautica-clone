@@ -1,0 +1,15 @@
+11 events (windows over the run's median by more than 0.6 ms)
+  01:50:49Z  2 window(s), peak 3.94 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  01:55:29Z  4 window(s), peak 4.54 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:05:29Z  2 window(s), peak 3.69 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:05:44Z  1 window(s), peak 3.63 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:06:09Z  4 window(s), peak 3.81 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:06:34Z  1 window(s), peak 3.45 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:08:19Z  1 window(s), peak 3.46 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:08:29Z  3 window(s), peak 3.46 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:08:59Z  1 window(s), peak 3.39 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:09:14Z  1 window(s), peak 3.44 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+  02:09:29Z  1 window(s), peak 3.44 ms against 2.76  /work/tmp/rec1/r3b/period-3090/hold/run.json
+gaps within a run (s): 280, 600, 15, 25, 25, 105, 10, 30, 15, 15
+period 285 s: phases 10, 35, 140, 150, 180, 195, 210, 224, 229, 255, 270; spread 180 s
+period 300 s: phases 29, 30, 45, 49, 70, 95, 200, 210, 240, 255, 270; spread 195 s
