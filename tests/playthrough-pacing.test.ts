@@ -67,6 +67,18 @@ test("a gap improvement fails until the debt is lowered, printing the figures; t
   assert.match(back.detail, /worse than the recorded pacing debt/);
 });
 
+test("a coordinator's named exception passes the ratchet but every verdict names it as over its accepted ceiling", () => {
+  const debt = debtOf(route()), id = "discovery: d → discovery: e";
+  const excepted: RouteDebt = { ...debt, gaps: { [id]: { ...debt.gaps[id]!, exception: "over the accepted ceiling (40): a named cause" } } };
+  const v = judge(route(), excepted);
+  assert.ok(v.ok, v.detail);
+  assert.match(v.detail, /named exceptions over the accepted ceiling: discovery: d → discovery: e \(over the accepted ceiling \(40\): a named cause\)/);
+  assert.ok(!judge(route(), debt).detail.includes("named exceptions"), "only an excepted row is named");
+  const worse = route();
+  worse.events = worse.events.map((e) => e.id === "e" ? beat(81, "e") : e).sort((x, y) => x.tick - y.tick);
+  assert.equal(judge(worse, excepted).ok, false, "an excepted row may never rise again");
+});
+
 test("a one-tick decode wait fails before any debt is considered", () => {
   const tick: TimelineEvent = { kind: "idle", tick: 40 * 3600, play: 40 * MIN, seconds: 1 / 60, waiting: [], cause: "decode:reef_pumphouse_log" };
   const v = judge(route({ idle: [tick] }), debtOf(route()));

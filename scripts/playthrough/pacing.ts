@@ -135,7 +135,11 @@ export function judgePacing(scenario: string, a: TimelineAnalysis, debts: Readon
   if (g.worse.length) return { ok: false, detail: `worse than the recorded pacing debt: ${g.worse.join("; ")} (${figures})${legs}` };
   if (g.better.length)
     return { ok: false, detail: `better than the recorded pacing debt (${g.better.join("; ")}): lower pacing-debt.ts["${scenario}"].gaps to ${JSON.stringify(rowsOf(m.gaps, debt.gaps))} (${figures})${legs}` };
-  return { ok: true, detail: `gaps exactly the recorded pacing debt (pacing-debt.ts): ${figures}${legs}` };
+  // A coordinator's named exception passes the ratchet but is never described as within
+  // its accepted ceiling: every verdict names it.
+  const excepted = Object.entries(debt.gaps).filter(([, r]) => r.exception).map(([id, r]) => `${id} (${r.exception})`);
+  const named = excepted.length ? `; named exceptions over the accepted ceiling: ${excepted.join("; ")}` : "";
+  return { ok: true, detail: `gaps exactly the recorded pacing debt (pacing-debt.ts): ${figures}${legs}${named}` };
 }
 /** Measured values as debt rows, keeping each recorded owner (a new identity has none yet). */
 const rowsOf = (measured: Record<string, number[]>, rows: Readonly<Record<string, DebtRow>>) =>
