@@ -41,7 +41,7 @@ import { vehicleProfile } from "../fittings.js";
 import { airLineSupply, type AirLineCraft } from "../power/airline.js";
 import { SUIT_OXYGEN_DRAIN_PER_SECOND } from "../survival.js";
 import type { Capsule, GameState, Vec3, WorldQueries } from "../types.js";
-import { board, exit } from "../vehicles.js";
+import { board, exit, exitBlock } from "../vehicles.js";
 import { AUTHORED_CAVE_SOURCES } from "../../content/regions/caves.js";
 import { CANOPY_BASIN_GROUPS } from "../../content/regions/caves/index.js";
 import { interiorBoxes, interiorWorld, type IdBox, type InteriorExterior } from "./world.js";
@@ -466,8 +466,9 @@ function scenarioProblems(def: InteriorDef, exterior: InteriorExterior, regions:
     const m = plain.moveCapsule(from, { x: keel.x - from.x, y: keel.y - from.y, z: keel.z - from.z }, { ...c });
     if (Math.hypot(m.position.x - keel.x, m.position.y - keel.y, m.position.z - keel.z) > 0.1)
       out.push({ code: "approach", message: `${tag}: the ${vehicle.hull} can't reach ${staging.id} from its approach`, at: m.position });
-    const s = parked(state, def, staging, vehicle.id), why = exit(s, plain);
-    if (why) out.push({ code: "exit", message: `${tag}: leaving the ${vehicle.hull} at ${staging.id}: ${why}`, at: keel });
+    // The sim's own exit rule: a suit too shallow for the parking depth keeps the diver aboard (a depth problem).
+    const s = parked(state, def, staging, vehicle.id), refused = exitBlock(s, plain), why = refused ? refused.message : exit(s, plain);
+    if (why) out.push({ code: refused?.code === "depth" ? "depth" : "exit", message: `${tag}: leaving the ${vehicle.hull} at ${staging.id}: ${why}`, at: keel });
     else {
       // The exit pose joins the lattice by a checked move to its nearest pose.
       const p = s.player.pose.position, e = nearest(p);
