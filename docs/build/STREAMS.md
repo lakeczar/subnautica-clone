@@ -1400,3 +1400,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - the library re-export is assigned to integration (coordinator).
   - **F3:** the 45.1 explanation is corrected (a real +18.56 min), and labels fixed.
   - **Stage 2 obligations** updated for the map decisions.
+- **SCHED-3 install:** no idle moment occurred in 2 h, so the coordinator chose a window.
+  - **Ruling (c):** after REC-1's second duet ticket ends, pause admission with the existing maintenance pause, let running work finish naturally (bounded at 45 min), install per R7, then resume.
+  - Installing while remote work runs (option b) is refused, because that claim is unreviewed.
+  - Canary step 3 waits for the next natural exclusive.
