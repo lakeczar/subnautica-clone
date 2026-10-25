@@ -30,6 +30,6 @@ for (const def of INTERIORS) {
     t.diagnostic(used.join("\n"));
     // The pump house waits for stage 2's composed world: a cave owns the ground beside it (see interiors-defs).
     const expected = def.id === "reef_pump_house" ? ["exterior"] : [];
-    assert.deepEqual(validateInterior({ def, exterior: exteriorFor(def), scenarios }).map((p) => `${p.code}: ${p.message}`).map((m) => m.split(":")[0]), expected);
+    assert.deepEqual(validateInterior({ def, exterior: exteriorFor(def), scenarios }).map((p) => p.code), expected);
   });
 }
