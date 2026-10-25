@@ -114,7 +114,8 @@ function hut(o: HutOptions = {}): InteriorDef {
       ...slab("floor", "floor", -3.2, 3.2, -2.2, 2.2, -0.3, 0, holes), ...slab("roof", "roof", -3.2, 3.2, -2.2, 2.2, H, H + 0.2),
       ...wall("w", "z", -2, 2, -3.2, -3, 0, H, [door]), ...wall("e", "z", -2, 2, 3, 3.2, 0, H, [door]),
       ...wall("s", "x", -3.2, 3.2, -2.2, -2, 0, H), ...wall("n", "x", -3.2, 3.2, 2, 2.2, 0, H),
-      ...(o.loft ? [{ id: "loft", module: "ceiling" as const, min: v(0.5, 1.5, -1.9), max: v(2.9, 1.7, 1.9) }] : []),
+      // A low loft over the south side only, leaving a walkway to the east door along the north.
+      ...(o.loft ? [{ id: "loft", module: "ceiling" as const, min: v(0.5, 1.5, -1.9), max: v(2.9, 1.7, -0.5) }] : []),
       ...pit,
     ],
     dressing: [], stacks: [], lights: [], sounds: [], hosts: [],
