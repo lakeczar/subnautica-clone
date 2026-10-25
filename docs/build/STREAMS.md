@@ -1317,3 +1317,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - The C12 +0.3 s is deterministic and attributed to 1b content.
   - **Checks:** fast, heavy, economy, build and playthrough 9/9 all pass.
   - **Review:** Sol R2 dispatched (`siltwake-ls1-1b-review-r2-sol-53d054e`).
+- **ART-0, the Blender style exploration (owner request), started** (`siltwake-art0-style-exploration-opus-5c0b6b9`, Opus high):
+  - **Subjects:** a creature, a natural environment piece and a plant.
+  - **Styles:** 4 or 5, plus the current game as a baseline.
+  - **Per style:** a vignette, close-ups, and an in-engine Babylon view; plus deeper, eerier vignettes for the top two styles.
+  - **Output:** a contact sheet for the owner to pick a direction. This feeds the style board and AP-1's bake-off.
+  - **Setup:** portable Blender through the queue, with no install or ledger row needed. Scripts on `t3/art0-style-exploration`.
