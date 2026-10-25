@@ -311,7 +311,9 @@ test("S11: a GPU client outside the lease is reported by status and recorded on 
   const probe = spawn("sh", ["-c", "exec 7</dev/nvidia0; exec sleep 20", "sched2-acceptance-unleased-gpu-probe"], { stdio: "ignore" });
   try {
     const line = new RegExp(`GPU in use outside the lease: pid ${probe.pid} \\(sleep 20\\)`);
-    await until("status reports the probe", () => line.test(hc(c, ["status"]).out), 10000);
+    let last = "";
+    try { await until("status reports the probe", () => line.test(last = hc(c, ["status"]).out), 10000); }
+    catch (e) { assert.fail(`${e.message}; the probe ${probe.exitCode == null ? "is alive" : `exited ${probe.exitCode}`}; last status:\n${last}`); }
     const g = submit(c, c.wt("g"), "--class", "gpu", "--", "sh", "-c", "exec 7</dev/nvidia0; sleep 1");
     const w = waitFor(c, g);
     assert.equal(w.code, 0, w.err);
