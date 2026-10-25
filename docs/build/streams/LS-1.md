@@ -674,11 +674,7 @@ Shared-host runs are functional evidence only. The timelines are copied to `/wor
 
 ## Stage 1b handoff (rewards, caches, keypad model, schema 8)
 
-> **Resume note (paused for the host reboot, 2026-10-24):** 1b code at `24eddb36`. Fast tier (5fad8a39), heavy tier, the six economy checks and the build (9629fdbc, same source) pass. Full playthrough `261024-235145-1fa4` completes 9/9 routes; it fails only the pacing ratchet, by design, now that the racks run changed the timelines.
-> **Next:** write the printed rows from `/work/tmp/siltwake-sched/jobs/261024-235145-1fa4/output.log` into `scripts/playthrough/pacing-debt.ts`, giving the new `dart in refuge_reef` leg an owner; rerun the fast tier and the full playthrough at that SHA (`--snapshot`, artifacts in `/work/tmp/ls1-1b-evidence`); fill `CODE_SHA` and the checks table here; report "LS-1 stage 1b done at <sha>".
-> **Tickets to resubmit:** none queued or cancelled. Only those two reruns.
-
-Code at **`CODE_SHA`** (branch `t3/ls-1-lost-sites`, on the accepted 1a). Everything here is outside CW-1's files. The keypad panel's registration in `App.openPanel` and the pause path, and its real-browser acceptance, wait for CW-1 to land, as the coordinator sequenced. Spoiler-safe; canon notes stay in `docs/spoilers/LS-1-LORE.md`.
+Code at **`17f4520a`** (branch `t3/ls-1-lost-sites`, on the accepted 1a; this section is the docs-only commit after it). Everything here is outside CW-1's files. The keypad panel's registration in `App.openPanel` and the pause path, and its real-browser acceptance, wait for CW-1 to land, as the coordinator sequenced. Spoiler-safe; canon notes stay in `docs/spoilers/LS-1-LORE.md`.
 
 **What a player gets now:**
 - **The keeper's racks** (the spur's second step) are the planter plan's home. The *planting card* on the racks grants `bp_cultivation`, and the racks carry three seed patches: staple cups on the summit lip, ribbon fans at the riser's foot, salve fronds in its shade. The workshop's outpost sheet now grants only the outpost kit.
@@ -708,3 +704,27 @@ Code at **`CODE_SHA`** (branch `t3/ls-1-lost-sites`, on the accepted 1a). Everyt
 - **The air-line reel** stays in stage 2, as sequenced.
 - **A staged interact before any tick** at an unfound cache opens Cargo without the cache, because the find happens in the fixed step and `src/sim/step.ts` is CW-1's. In play the diver swims there, so the step always finds it first.
 - **Grow-bed speed needs power; its extra yield doesn't.** The extra produce is per harvest, so an unpowered bed still yields one more once its crop ripens at the base rate. This is deliberate and tested.
+
+**Pacing after 1b** (playthrough `261024-235145-1fa4`, rows written from the analyzer, then reproduced exactly by `261025-014819-dd7f`). Gaps are play minutes, PACE-1's; legs are REC-2's, reported for judgement.
+
+| Route | Longest gap (was at 1a R1) | Empty legs over 90 s | Decode waits |
+| --- | --- | --- | --- |
+| Creel | 50.0 min (50.6) | 31 | 0 |
+| Carrier | 94.7 min (94.2), plus 50.8, 29.8 and 26.5 | 55 | 0 |
+| No-optional | 50.8 min (50.9) | 31 | 0 |
+| No-optional carrier | 86.2 min (87.1), plus 50.8, 29.8 and 24.1 | 55 | 0 |
+
+- **The one worse gap:** the carrier's works stretch, `service_air_assembly → pod_buffer`, grew 0.55 min. The content between the two beats is the same in both runs (compared event by event). The difference is the bot's haul order early in the stretch: it crosses the reef and isles boundary a few more times and takes the ridge salvage sooner, because its hold and stock differ after the racks run. That is logistics inside PACE-1's row.
+- **The racks run adds no empty leg over 90 s:** the 136.95 s Dart leg recorded under `dart in island_chain` now ends across the reef boundary (`dart in refuge_reef`). Every other change is seconds, or an improvement.
+
+**Checks** (all `--machine any`, queued):
+
+| Check | Ticket | Commit | Machine | Result |
+| --- | --- | --- | --- | --- |
+| Fast tier | `261025-014819-1915` | `17f4520a` | 4070 | 169 files pass |
+| Heavy tier | `261025-015607-2887` | `17f4520a` | factory-worker | 67 files pass, 0 failures (the queue notes 3 sub-limit OOM kills inside files, the same as other streams' factory-worker heavy runs today) |
+| Six economy steps and the production build | `261025-015608-faf2` | `17f4520a` | 4070 | all six pass; the build passes |
+| Playthrough | `261025-014819-dd7f` | `17f4520a` | 4070 | **9/9 complete**, every milestone reload matches, both decode-free runs end with nothing decoding or decoded, and the four judged routes' gaps are exactly the record |
+
+The timelines are in `/work/tmp/ls1-1b-evidence-final/`. Focused LS-1 files (`ls1-rewards`, `save-bridge`): 19/19 (`261024-231815-ea36`).
+
