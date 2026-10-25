@@ -1,9 +1,5 @@
 # PACE-1: late-game pacing (design plan, stage 0, revision 1)
 
-> **Resume note (paused for the host reboot, 2026-10-24).**
-> **Where:** stage 1 completion on `t3/pace-1-stage-1`, merged with root `3c90df9f`. B4, the core-pre-budget deletion, the branch moves and the tour's own core are wired. The last full run (`261024-234452-74fc`) completed 7/9: every Creel scenario, tour and over-geared. The two carrier scenarios then blocked in works: the Mantle runs flat at the shelf (`261024-235111-ed52`).
-> **Next:** top up the Mantle (and the carrier) before the works trips after the long forced return; rerun all nine; rewrite `pacing-debt.ts` rows against the merged baseline; rerun the fast tier, heavy tier, economy and playthrough at the final SHA; update the stage 1 handoff below. No tickets are outstanding to resubmit.
-
 
 Opus 5.5 high, design authority for the stream. Branch `t3/pace-1-late-game`, with root `3ed91bc0` merged. **Docs only: no code stage starts until the coordinator approves this plan.** Spoiler-safe. Canon notes for the lore owner are in `docs/spoilers/PACE-1-NOTES.md`.
 
@@ -361,90 +357,74 @@ No owner questions are open.
 | **F4 [P2]** F10's provenance and migration | **Fixed.** `LEGACY_GRANTS` rows carry `source: { kind: "scan" \| "discovery", id }`. Cultivation stays a `scan` source; the pod-buffer row is `discovery: C07`, checked against `storyView(s).discoveries`. The shape is agreed with LS-1. F10 lands atomically with a schema step and depends on LS-1 1b: in 1b's 7 → 8 bridge if unmerged, else in 8 → 9, never a retrofit of `bridge7`. Existing rows are untouched, and the four earned-plan cases run through real strict validation with C07 in `story.discoveries`. | F10 *Saves*; stage 2 needs; coordination |
 | Owner: the 90 s guide, the predator cue, hold-course | **Adopted.** Empty stretches are reported, not gated; stage 3 is judgement only; hold-course is a follow-up stream. | Ratchet; stage 3; §6 |
 
-## Stage 1 handoff (interim: B4 and core pending)
+## Stage 1 handoff
 
-Code at **`43645268`** on `t3/pace-1-stage-1`, stacked on LS-1's head `4593705d` plus this plan. This section is the docs-only commit after it. Spoiler-safe.
+Code at **`481d4f3f`** on `t3/pace-1-stage-1`, merged with root (LS-1 1a at `a3409226`, STEW-2). This section is the docs-only commit after it. Spoiler-safe.
 
-**Interim** (coordinator, 2026-10-24):
-- **What waits for LS-1 1a's merge:** B4 (the 800 m refits at the Divide dock) and the deletion of the core pre-budget. After the merge come the two branch moves in `scenarios.ts` and the tour's own core in `libraryplay.ts`.
-- **Figures:** against LS-1's branch head, labelled **"B4 and core pending"**.
+**What a player gets:** nothing yet. Stage 1 changes only the bot. The bot now plays the late game as a sensible player would, so the pacing figures measure the game rather than the bot's ordering.
 
-**What changed** (bot only, no game file):
+**What changed:**
 - **New: `scripts/playthrough/stock.ts`,** a pure stock planner (R2).
   - **What it reserves:** stock only for recipes whose plan is held and not yet made, plus clues seen (`CLUES`, which stage 2 fills).
-  - **Options:** an item filter and declared extras.
   - **Tests:** `tests/playthrough-stock.test.ts`, 7 cases.
-- **`scripts/playthrough/later.ts`** (the late phases):
-  - **R1:** away from home, the bot eats from the craft's hold or the carrier's stores. The carrier's meals ride in its stores.
-  - **R2:** both pre-budgets are gone: the air assembly's lattice (Creel and carrier) and the pre-staged Divide stock.
-  - **R3:** C12 is read at the Divide dock.
-  - **R4:** the carrier stays forward. It goes home only for yard work and the works' forced return.
+- **`scripts/playthrough/later.ts`, rules R1–R9:**
+  - **R1:** away from home, the bot eats from the craft's hold or the carrier's stores.
+  - **R2:** every pre-budget is gone: the air assembly's lattice, the power assembly's core, and the pre-staged Divide stock.
+  - **R3:** C12 is read at the Divide dock, and both 800 m refits happen at the restored dock (B4).
+  - **R4:** the carrier stays forward.
   - **R5:** the hall and the food bay are restored while the galleries drain.
-  - **R6:** the ceramic reserve is sorted at the Rift lips, so there is no seam trip. The fall-through to the seam logs its reason.
-  - **R7:** the craft charges when the next legs need it.
-  - **R9:** every return is logged with its reason, from `recipeSites`, `available` and the nearest source with stock.
-  - **The pod buffer** is fitted on the first visit home after C07.
-  - **The ending** follows the works in the same district visit.
-  - **R8 is not wired:** the economy ledger lacks the crown (stage 2).
-  - **Removed:** the ending's home round trip, and the dead `carrierHome`.
+  - **R6:** the ceramic reserve is sorted at the Rift lips, so there is no seam trip. The fall-through to the seam is logged.
+  - **R7:** craft charge when the next legs need it. The Mantle charges at the shelf and the Rift station before berthing (a berthed craft isn't serviced), and the carrier charges at the shelf.
+  - **R9:** every return is logged with its reason, from `recipeSites`, `available` and the nearest stock.
+  - **The pod buffer** is fitted on the first visit home after C07, and the ending follows the works in the same visit.
+  - **R8 is not wired:** the ledger lacks the crown (stage 2).
+- **The Creel's late order** is now rift → divide → meridian → deep-records → works → ending.
+  - **deep-records** is the forced return home: lattice from the Divide flank and core from the Rift on the way, then the workshop, the pod record and C11. It ends at home with the 800 m Creel.
+- **Branch moves** (`scenarios.ts`, two lines): `tour` and `over-geared` branch from `creel@deep-records`.
+- **The tour** fetches its own core (`libraryplay.ts`, `coreFromRift`).
+- **`pacing-debt.ts`** is rewritten against the merged baseline (below).
 
-**Checks at `43645268`** (queue, `--machine any`):
+**Checks at `481d4f3f`** (queue, `--machine any`):
 
 | Check | Ticket | Result |
 | --- | --- | --- |
-| Fast tier | `261024-224542-5a68` | 1,662 tests, 169 files pass |
-| Heavy tier | `261024-224543-0bab` | 67 files pass, 0 failures. The queue's "OOM-killed by a sub-limit" note is a budgeted child process; no file failed |
-| Six economy steps | `261024-224543-1cad` | All pass; the campaign ledger is solvent for both strategies |
-| Playthrough | `261024-224543-79fb` | **9/9 complete, every milestone reload matches.** The run still exits 1, but only the pacing ratchet fails (compromise 2) |
+| Fast tier | `261025-021659-6e32` | 1,688 tests, 172 files pass |
+| Heavy tier | `261025-021700-dcec` | Pass, 0 failures |
+| Six economy steps | `261025-021700-0463` | All pass |
+| Playthrough | `261025-021700-722a` | **Exit 0.** 9/9 complete, every milestone reload matches, and the pacing acceptance passes on all four judged routes ("gaps exactly the recorded pacing debt") |
 
-**Figures** (B4 and core pending; works beats uncounted until F5). LS-1 head `4593705d` (ticket `261024-195617-cdf9`) against stage 1:
+**Final figures** (works beats uncounted until REC-2's F5):
 
 | Route | Play (min) | Longest gap | Gaps over 20 min | Empty legs over 90 s (longest) |
 | --- | --- | --- | --- | --- |
-| Creel | 203.7 → **163.5** | 50.6 → **23.6** (C14 → end: the uncounted works) | 1 → 1 | 31 (850 s) → 30 (850 s) |
-| No-optional | 200.2 → **159.4** | 50.9 → **23.6** | 1 → 1 | 31 → 30 |
-| Carrier | 372.5 → **290.9** | 94.2 → **61.6** (air assembly → end) | 4 → 3 (61.6, 39.9, 30.6) | 55 (753 s) → 44 (753 s) |
-| No-optional carrier | 362.3 → **276.6** | 87.1 → **53.1** | 4 → 3 | 55 → 44 |
+| Creel | 203.7 → **151.5** | 50.6 → **26.2** | 1 → 2 (21.4, 26.2) | 31 (850 s) → 30 (850 s) |
+| No-optional | 200.2 → **149.8** | 50.9 → **26.2** | 1 → 2 (23.7, 26.2) | 31 → 30 |
+| Carrier | 372.5 → **285.5** | 94.2 → **51.8** | 4 → 3 (30.6, 44.4, 51.8) | 55 (753 s) → 46 (753 s) |
+| No-optional carrier | 362.3 → **281.6** | 87.1 → **51.6** | 4 → 3 | 55 → 46 |
 
-- **Creel:** every gap except the uncounted works is 18.6 min or less, so with F5 the Creel route should pass the gap gate.
-- **Carrier:** it stays over the gate until stage 2. Its forced return gathers depleted commons at home.
+**Reading the figures:**
+- **Creel's 26.2:** the works and ending after the visit home, whose steps aren't counted yet.
+- **Creel's 21.4:** the forced return, now including the honest core detour into the Rift. The pre-budget had hidden it.
+- **Carrier:** the gaps are home gathering of commons the carrier route has spent near home, done by diver, plus the forced return's sailing. Its controller → power-assembly gap is 44.4 against LS-1's 26.5. **That is a disclosed re-measurement, not a regression** (coordinator, 2026-10-24): the 26.5 began with the carrier already home, because the bot pre-budgeted the air assembly's lattice.
+- **Every gap row** in `pacing-debt.ts` names its cause and owner. PACE-1 stage 2 covers the forced returns and the carrier's home gathering; REC-2's F5 with stage 2 covers the uncounted works.
 
-**Scenarios A and B** (§1.2's open question, now measured on the bot's clock, active and idle):
-- **A, Creel:** 37.8 min from the last district record to the first works step (no-optional 38.6, reverse 39.2). The plan's estimate was about 41.
-- **A, by carrier:** 90.4 min (no-optional 76.9).
-  - The carrier sails home (about 16 min) and back (about 16 min).
-  - Gathering at home takes 44 min, because the near-home commons are spent and gathering is diver-only (compromise 3).
-- **B, crown return: not a cheaper loop on today's map.**
-  - The works need 8 glass, and none is left near the crown.
-  - What remains lies on the isles: the stack, 685 m from the crown, and the headland, which is beyond a full Mantle charge from the Basin anchorage (113%, run note in `261024-215931-126c` and `261024-220136-a2b9`).
-  - So a crown return still needs an isles trip, and the carrier's forced return goes home instead (R4).
-- **The best-play minimum on today's game** is therefore about 38 min (Creel) and longer on the carrier. This confirms structural problems 1 and 2 (stage 2).
+**Scenarios A and B** (the bot's clock, from the last district record to the first works step):
+- **A, Creel:** 46.8 min (no-optional 49.4, reverse 50.4). That is 37.8 for the return itself plus the core detour into the Rift, which the pre-budget used to hide.
+- **A, by carrier:** 85.4 min (no-optional 82.2).
+- **B, crown:** not a cheaper loop on today's map. The works need 8 glass and none is left near the crown. The isles' glass is beyond a full Mantle charge from the Basin anchorage (113%), or in shallows. So the carrier's forced return goes home.
 
-**The R9 log, the structural list by route** (run notes):
-- **Creel:**
-  - **Rift → home, forced:** the Divide dock's 3 alloy, 3 glass and 3 crust. Its plan is read at the Rift ledger, and glass lies only on the isles. This is a new finding the old pre-staged stock hid. It costs one home trip, and the gap around it is 15.7 min, so it passes.
-  - **Divide → home, pending (B4).**
-  - **District → home, forced:** the assemblies are made only at the workshop or crown, from commons that lie only behind.
-- **Carrier:**
-  - **Divide → yard, chosen:** yard work and the suit's workshop refit.
-  - **District → home, forced:** the same as the Creel.
+**The R9 log:**
+- **Rift → home, forced, both routes:** the Divide dock's commons. Its plan is read at the Rift ledger, and glass lies only on the isles.
+- **District → home, forced:** the assemblies are made only behind, and their commons lie only behind.
+- **District → Rift, forced:** the power assembly's core. Its plan is read at C07, past the Rift.
+- **Carrier, Divide → yard, chosen:** yard work.
 
-**Adverse case:** every forced return in the runs names its reason from the game's authorities. The plan's case, R6 falling through to the deep seam, now logs its reason too. No scenario exercises it, because the sorted lip reserve covers both routes.
+**Adverse case:** every forced return names its reason from the game's authorities. The R6 fall-through to the seam is logged but not exercised, because the sorted lip reserve suffices on both routes.
 
 **Compromises** (each with its root fix):
-1. **B4 and the core pre-budget pending.**
-   - **What happens:** both wait for LS-1 1a's merge.
-   - **Root fix:** the branch moves in `scenarios.ts` (`tour` and `over-geared` from the home milestone), the tour gathers its own core, then the refits move to the dock and the pre-budget is deleted.
-2. **The pacing ratchet fails the playthrough step.**
-   - **What happens:** `pacing-debt.ts` is LS-1's file. Its two-way ratchet reports "better than recorded" on the old rows and "worse" on new or longer gaps: Creel C14 → end, and carrier controller → power assembly at 39.9, against 26.5 recorded. The old bot's 26.5 began with the carrier already home, because the bot pre-budgeted the air assembly's lattice. The return now starts in the district.
-   - **Root fix:** PACE-1 rewrites its rows against LS-1's merged baseline, and REC-2's F5 counts the works beats.
-3. **Gathering at home is diver-only** (`procure`, in `actions.ts`, not PACE-1's).
-   - **What happens:** on the carrier route the hall stock takes 44 min.
-   - **Root fix:** stage 2's district sources, so the stock no longer comes from home. Otherwise, a craft-assisted gatherer through that file's owner.
-4. **Scenario B is not played to the end by the bot.**
-   - **What happens:** the crown's bench works, but the isles glass is beyond the Mantle's charge or in shallows the bot's Mantle doesn't navigate.
-   - **Root fix:** stage 2 makes B moot, since the district has its own bench and sources.
+1. **Gathering at home is diver-only** (`procure`, the playthrough core's `actions.ts`, left alone as ruled). It dominates the carrier's gaps. Root fix: stage 2's district sources.
+2. **Scenario B isn't played to the end by the bot** (glass geography). Root fix: stage 2 makes it moot.
 
 **Known limits:**
-- The Creel's longest stretch, 850 s (the forced haul home → gate), stays until stage 2.
-- **Food runs lower on the carrier route.** The lowest reading is 13.7, in carrier-deep on both carrier routes, against 28 at LS-1's head. There is no incapacity or starvation recovery. Carrier-deep no longer goes home for the seam trip in the middle of the phase, so the bot eats only from the 3 meals it carries. The forward legs after it carry 6 meals in the stores. Root fix, if a playtest finds it tight: the carrier's galley crop (an optional purchase already in the ledger).
+- **Food:** the carrier route's lowest reading is 13.7, in carrier-deep (28 at LS-1's head). There's no incapacity.
+- **Longest stretch:** the Creel's 850 s (home → gate) stays until stage 2.
