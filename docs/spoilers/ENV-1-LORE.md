@@ -54,3 +54,20 @@ That stage would get its own rows here before it starts.
 ## Player-text lint
 
 ENV-1's test reads LS-1-LORE's `ls1-lint` block for every ENV-1 player string, so there is one list. ENV-1 adds no second list.
+
+## District big stop (proposal, 2026-10-25; MAP-LAYOUT decision 23)
+
+The owner-facing options are in the ENV-1 plan. This section gives the canon reasoning behind the recommendation, C (the district air plant), and why A and B are set aside.
+
+| Option | Canon reading | Verdict |
+| --- | --- | --- |
+| **A. The commons, moved down** | The upper hall *is* the canon's "upper living area": where the woken will eat. Its laid table is the ending's promise. Restoring it as a service stop before the works spends that promise early. Moving it down also contradicts "upper". | Set aside |
+| **B. Maintenance quarters** | Quarters kept ready for a returning shift read, in hindsight, as quarters for the first repair specialist to wake, which is Ren's designated role (chronology step 5, C14). It foreshadows the protagonist's identity more directly than any tier-2 clue may, and competes with C07/C08's deliberate pacing of Ren's involvement. | Set aside |
+| **C. District air plant** | Chronology step 3: dense, oxygen-poor water entered the settlement's seawater oxygen-extraction circuits. The plant is where that physical failure lands. It's the controller summary's "dense, oxygen-poor water in the extraction circuits" made visible. The failure of the air is *why* the refuge plan had to be suspension: sleeping beds use far less oxygen than waking people (step 4). Restoring the plant in Act V is a quiet hindsight echo: the player makes the district breathe again, the thing the sleepers will need. | **Recommended** |
+
+**Constraints for C** (CONTENT_BIBLE_LORE's six rules and this appendix's rules 1–7 apply):
+- **It is not where the twenty died.** Canon doesn't place their deaths, and ENV-1 doesn't either. The plant shows the failure (frozen alarms, emergency closures, the flooded intake hall), never bodies, names or a death count. The racked masks with gaps imply people left in a hurry, not that they died.
+- **Times in its records sit inside the first hour of disaster day,** consistent with C06's D0 +00:35 trace. Its last automatic record may follow the controller rule (an instrument, never a person) and must not state a count, a refuge or suspension.
+- **It never substitutes for the story's works.** The plant gives the stop's local air only. The works' independent power and air assemblies, the gate procedure and the ending are unchanged. The echo is atmosphere, not a mechanic.
+- **It stays outside the machinery boundary** (about 150 m from the gate hall). No window, duct or passage in it shows the gate gallery, the service window or the inner hall. The cable tenders may gather on its dead feed only after restoration, never leading inward.
+- **Player strings pass the LS-1 lint list.** Signs read as an air plant ("Air plant", "Intake hall", "Filter stage"), never "life support for…" or anything that implies sleepers.

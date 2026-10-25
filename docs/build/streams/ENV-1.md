@@ -722,3 +722,32 @@ Code at **`78e61736`**. All four findings are fixed as written, each with its re
 | --- | --- | --- |
 | Fast tier at `78e61736` (the guard and typecheck included) | `261025-060603-f2c6` (4070) | **176/176 files pass** |
 | Library-save air proof at `78e61736` | `261025-060604-e17b` (3090) | **4/4 pass, 0 skipped**: dormitory, field station and cold store clean; the pump house exactly `exterior` |
+
+## Proposal for the coordinator: the district big stop's building (MAP-LAYOUT decision 23)
+
+Spoiler-safe; the canon reasoning is in `docs/spoilers/ENV-1-LORE.md`, *District big stop*. Nothing moves in code until the coordinator decides.
+
+**The site.** Around (1330, −1470), the terrain falls from the 680 m terrace (the medical annex's) towards the 770 m floor (the gate hall and the works): about 700–740 m on a lower terrace cut into that slope. That's about 150 m from the gate hall, outside the machinery boundary, and 398 m from M2, so its first visit has no mooring nearby. The interior is diver-only (decision 14), with the craft parked on the terrace's edge. Before restoration, the ENV-1 air proof must pass from that one parked craft (the line, or a timed return within the 25% reserve). After restoration, the drained room is its air, rest and wake point, through the existing air-room table (one row, activated by the stop's own facility).
+
+| | **A. The commons, moved down** | **B. The maintenance crew's quarters** | **C. The district air plant** (recommended) |
+| --- | --- | --- | --- |
+| **What it is** | The settlement's dining and meeting hall (the upper-hall concept), rebuilt on the lower terrace | A small quarters beside the works, where the machinery's maintenance crew lived and slept | The settlement's air-making plant: intake hall, filter stage, control room, crew room |
+| **First visit** | Dark, a collapsed frame, a dead food bay | The one place still kept: bunks made, lockers stocked, a duty board ready, a few machine lamps still on | Dead and frozen mid-emergency: pressure doors shut on their own, alarm lamps stopped mid-cycle, a rack of breathing masks by the door with gaps in it |
+| **Restoration** | Lights along a long table; the hall drains | The bunk room drains; the lamps steady | You rebuild the filter stage (the stop's restoration recipe, the same shape as the others). The lights come up hall by hall, the crew room drains, and the plant makes air again. |
+| **Dry-room ending** | The hall is the air room and bunk | The bunk room | The control and crew rooms are the air room and bunk. The failed intake hall stays flooded behind a viewing window: seen, plainly impassable, never a puzzle door. |
+| **Tone** | Warm, which works against "eerie further in" | Eerie: kept and waiting | The most unsettling built place you can rest in: you sleep beside the machine that failed, fear by implication only. Its restoration is the deepest "make it work again" in the game. |
+| **Costs** | It duplicates the works' upper hall (PACE-1's work faces would move too) and spends the late game's warm moment on a service stop | Its strongest reading leans too close to a late story beat (lore appendix) | One new restoration recipe and facility, the same shape as the Rift station's |
+| **Recommendation** | No | No | **Yes** |
+
+**Why C.**
+- **It shows what the records already say happened.** It adds no new cause, no new casualties and no new fact.
+- **Restoring air is the plant's own job,** so the dry room explains itself.
+- **The building's role is a sentence, not a riddle,** which keeps owner-facing text general.
+- **It leaves the works and its warm ending untouched.**
+
+**What the decision touches** (for the coordinator to dispatch; none of it starts before the decision):
+- a facility, restoration recipe, stop row and rest base (the stop and economy owners);
+- whether PACE-1's district works bench moves here from the staging office, which stays service-only (PACE-1);
+- the air-room row: `RESTORATION_ROOM_FACILITIES` gains the district facility, replacing the upper hall's works activation (ENV-1);
+- the interior: replacing stage 4's upper-hall dressing (ENV-1);
+- the terrain terrace (the terrain-and-world stream).
