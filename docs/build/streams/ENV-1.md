@@ -698,7 +698,7 @@ Code at **`b125ace3`** (branch `t3/env-1-interiors`, root `e136beb6` merged). No
 
 ### Stage 1 R1 fixes (Sol, `review/env-1-s1-r1` `dad0f28f`)
 
-Code at **`R1_SHA`**. All four findings are fixed as written, each with its rejection fixture and a passing control (`tests/interiors-air.test.ts`).
+Code at **`78e61736`**. All four findings are fixed as written, each with its rejection fixture and a passing control (`tests/interiors-air.test.ts`).
 
 | Finding | Fix | Proof |
 | --- | --- | --- |
@@ -720,5 +720,5 @@ Code at **`R1_SHA`**. All four findings are fixed as written, each with its reje
 
 | Check | Ticket | Result |
 | --- | --- | --- |
-| Fast tier at `R1_SHA` | R1_FAST_TICKET | R1_FAST_RESULT |
-| Library-save air proof at `R1_SHA` | R1_HEAVY_TICKET | R1_HEAVY_RESULT |
+| Fast tier at `78e61736` (the guard and typecheck included) | `261025-060603-f2c6` (4070) | **176/176 files pass** |
+| Library-save air proof at `78e61736` | `261025-060604-e17b` (3090) | **4/4 pass, 0 skipped**: dormitory, field station and cold store clean; the pump house exactly `exterior` |
