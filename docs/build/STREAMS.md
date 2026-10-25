@@ -1295,3 +1295,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Ruling (b):** no entry wait, since it would add decode-only waits, which are a hard pacing gate.
   - **Residual:** a long-reach, non-player query meeting an unbuilt cluster while the pack is pending, recorded as a counted theoretical open item. It trips the gate as a `query` unsliced build. Owner: BIO-1, whose long-reach queries must go through `withoutQueryBuilds` or admission.
   - **R6** was steered to verify this independently.
+- **LS-1 1b, F3 closed at `3aeac541`** (the procure overshoot deferral):
+  - 8 of 10 pacing rows ratcheted down; the carrier works row −9.5 min.
+  - The 2 no-optional-carrier rows (+0.51 min works, +0.3 s at C12) are recorded as a named exception, not a pass. Ceilings are at their measured values with the causes, and PACE-1 owns the re-ratchet at the second merge.
+  - Determinism check requested on the C12 +0.3 s.
+  - Next: R2.
