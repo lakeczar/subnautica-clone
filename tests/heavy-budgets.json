@@ -20,6 +20,7 @@
   ],
   "exclusiveComment": "These files assert elapsed time (build cost or per-step query cost), so the heavy runner runs them last, one at a time, in a timing phase with no other heavy file beside them, and reports the CPU wait each one saw (STEW-2).",
   "clockWithoutBound": [
+    "cw1-caves.heavy.test.ts",
     "ecology-render.heavy.test.ts",
     "regions-bake-decode.heavy.test.ts",
     "terrain-borders.heavy.test.ts",
