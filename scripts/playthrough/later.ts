@@ -999,6 +999,10 @@ const works = (strategy: Strategy): Phase => ({
         const left = core - d.count("thermal_core", ["diver", d.vehicle("mantle")!.cargoId]);
         if (left > 0) harvest(d, id, left, { sort: true });
       }
+      // R7: the Mantle charges at the restored Rift station beside the ledge before its berth
+      // (a berthed craft is not serviced), so it comes to the works trips charged.
+      pilotTo(d, "moor at the Rift station to charge", WORKING_STOPS.rift_station.mooring);
+      d.command({ type: "service", vehicleId: d.vehicle("mantle")!.id }, { allowRefusal: true });
       // At the helm the hold and the diver are both local; mantleHome takes the diver's into the stores.
       const mantleHold = d.vehicle("mantle")!.cargoId;
       move(d, "thermal_core", d.count("thermal_core", [mantleHold]), mantleHold, "diver");
@@ -1021,6 +1025,11 @@ const works = (strategy: Strategy): Phase => ({
     deliverToCarrier(d, cargo, "stack_yard");
     carrierIn(d);
     carrierTo(d, CARRIER_TO_SHELF);
+    // R7: the shelf is a charging mooring; the carrier charges there before the Mantle's trips.
+    boardCraft(d, "hearthline");
+    chargeAtMooring(d, "meridian.staging_shelf");
+    d.command({ type: "carrier", action: "station-keep" });
+    d.command({ type: "carrier", action: "leave-helm" });
     const assemblies: Cargo = { ids: cargo.ids, stock: {} }, stock: Cargo = { ids: [], stock: cargo.stock };
     const mantle = d.vehicle("mantle")!;
     const together = cargoCu(d, cargo) <= d.freeCu(mantle.cargoId);
