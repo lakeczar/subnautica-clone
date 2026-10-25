@@ -243,16 +243,23 @@ export function procure(d: Driver, needs: Readonly<Partial<Record<ItemKind | "ta
           !(options.skip ?? []).includes(id) &&
           d.state.world.resources.find((n) => n.id === id)!.stock > 0 && -SOURCES[id].position.y <= limit)
         .sort((a, b) => dist(p, SOURCES[a].position) - dist(p, SOURCES[b].position));
-      const id = choices.find((c) => roomFor(d, SOURCES[c].item, Math.min(SOURCES[c].bundle,
-        d.state.world.resources.find((n) => n.id === c)!.stock)));
+      // One take at a source: a bundle, or what is left of its stock.
+      const take = (c: SourceId): number => Math.min(SOURCES[c].bundle, d.state.world.resources.find((n) => n.id === c)!.stock);
+      const roomy = choices.filter((c) => roomFor(d, SOURCES[c].item, take(c)));
+      // LS-1 1b R1 (approved): don't overshoot, as a player wouldn't fill the hold with
+      // more than the job needs. Prefer the nearest source whose take fits what is still
+      // wanted of its kind; only when none does, the nearest that has room.
+      const id = roomy.find((c) => take(c) <= want[SOURCES[c].item]!) ?? roomy[0];
       if (!id) {
         if (!choices.length) throw new Blocked(`No reachable source left for ${open.map(([k, n]) => `${n} ${k}`).join(", ")}`, where(d.state));
         stow();
         if (!locker || options.stow === false) throw new Blocked(`Diver hold full before ${open.map(([k]) => k).join(", ")} was met`, where(d.state));
         continue;
       }
-      const kind = SOURCES[id].item;
-      want[kind] = want[kind]! - gather(d, id, want[kind]!);
+      const kind = SOURCES[id].item, b = take(id);
+      // At a source that fits, whole takes up to the need; the rest from a smaller one.
+      const ask = b <= want[kind]! ? Math.max(b, want[kind]! - (want[kind]! % b)) : want[kind]!;
+      want[kind] = want[kind]! - gather(d, id, ask);
       eatIfHungry(d);
     }
     stow();
