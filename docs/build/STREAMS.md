@@ -1309,3 +1309,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - one commit-bound 3090 tour 5 export check at the default limit;
     - the authored surf approach route.
   - **Next:** CW-1 merges root into the candidate, resolving `bake-terrain` conflicts against STEW-2's guard, makes the docs-only handoff, and runs fast, bake-store and heavy. Then the coordinator gate, then the merge.
+- **REC-1:**
+  - Rehearsal `5fd5` clean. The 4070's indicative result, NOT MET, +0.205 ms [0.186, 0.224], came from the laptop running slow (about 42 fps, against 56 in `f4fb`).
+  - The acceptance run is the exclusive 3090 duet, `261025-043054-e104` at `a934d88d`, about 38 min. No compiling on factory-worker during it.
