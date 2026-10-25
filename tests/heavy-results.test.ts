@@ -395,7 +395,7 @@ test("workload settings: recorded and labelled; queue grants and the harness's p
   assert.deepEqual(H.workloadSettings({ NODE_OPTIONS: "--import=file:///w/scripts/test-heavy-file.mjs" }), {}, "the tier's own preload isn't a setting");
   assert.deepEqual(H.workloadSettings({ NODE_OPTIONS: "--import=file:///w/scripts/test-heavy-file.mjs --max-old-space-size=4096" }), { NODE_OPTIONS: "--max-old-space-size=4096" });
   assert.deepEqual(H.workloadSettings(env), { JOURNEY_TRACE: "1", NODE_OPTIONS: "--x", SILTWAKE_BUILD_CACHE: "off", SILTWAKE_TIMELINE_SEED_BASE: "1", SILTWAKE_TIMELINE_SEQUENCES: "0" });
-  assert.deepEqual(Object.keys(H.canonicalEnv(env)).sort(), ["PATH", "SILTWAKE_EMPTY", "SILTWAKE_HEAVY_CONCURRENCY", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_JOB_CPUS",
+  assert.deepEqual(Object.keys(H.canonicalEnv(env)).sort(), ["PATH", "SILTWAKE_HEAVY_CONCURRENCY", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_JOB_CPUS",
     "SILTWAKE_JOB_TICKET", "SILTWAKE_LANE_TICKET", "SILTWAKE_RESULTS_DIR", "SILTWAKE_SCHED_DIR", "SILTWAKE_TEST_BUILD"]);
   // Every variable a heavy test or its helpers reads is either a workload setting or the harness's own.
   const harness = new Set(["SILTWAKE_HEAVY_CGROUP"]);

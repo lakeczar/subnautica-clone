@@ -11,27 +11,32 @@
 // so an A/B or a review reads root's numbers instead of re-running the control arm,
 // and a later nightly run can alert on files near their budget.
 //
-// The record (v2), with every number's context (WORKER_RESOURCE_LIMITS.md, "Measurement hygiene"):
-// - run: commit and dirty state, machine, ticket, Node, containment, the job's memory
-//   limit, pool, concurrency and CPU grant, the build cache at the start, the
-//   selection (full tier or a subset), the lockfile's and the harness's hashes, and
+// The record (v3), with every number's context (WORKER_RESOURCE_LIMITS.md, "Measurement hygiene"):
+// - run: commit and dirty state, machine, ticket and the attempt of it (`local`, or
+//   `alickers:a<N>`), Node, containment, the job's memory limit, pool, concurrency and
+//   CPU grant, the build cache at the start, the selection (full tier or a subset), the
+//   lockfile's and the harness's hashes, the caller's workload settings (`settings`), and
 //   the budget source: canonical (tests/heavy-budgets.json), or an override
 //   (SILTWAKE_HEAVY_BUDGET_MIB or SILTWAKE_HEAVY_BUDGETS), which is `budgetEvidence: false`.
 // - per file: status, phase (pool or timing), wall s, CPU s (`cpuScope`: the tree, or
 //   the file's own process), peak MiB against its budget, OOM kills (own budget, nested
-//   cgroups), the build cache's hits, misses and fills and the cache use they make
-//   (`cacheUse`: hit, fill, mixed or none), the file's compiled import closure, and
-//   for timing files the CPU wait.
+//   cgroups), the build cache's use over all its processes (`cacheUse`: hit, fill, mixed,
+//   none, or unknown when a descendant never reported), its compiled import closure, and
+//   its provenance: every input its processes loaded or read, hashed, and whether that
+//   account is complete (fileFacts). Timing files add the CPU wait.
 //
-// Using a stored row (STEW-3 R1):
-// - `eligibility`: the record agrees with its job's receipt (the same ticket, a clean
-//   commit the receipt binds, the same machine, a job that ended on its own work) at
-//   canonical budgets, and the file passed. Budget alerts and the gate's full-tier
-//   check read eligible rows only.
+// Using a stored row (STEW-3 R1, R2):
+// - `eligibility`: the record agrees with its job's receipt (the same ticket, the
+//   attempt the receipt reports on, a clean commit the receipt binds, the same machine,
+//   a job that ended on its own work) at canonical budgets, and the file passed. Budget
+//   alerts and the gate's full-tier check read eligible rows only; the gate also needs
+//   the canonical workload (no settings).
 // - a control arm (`controlProblems`): an eligible row at exactly the intended clean
 //   control commit, for the same file, measured by the same harness under the same
 //   conditions (`conditionsOf`: machine, containment, limits, pool, concurrency, CPUs,
-//   budget, phase, Node, and the file's own cache use, never "mixed").
+//   budget, phase, Node, workload settings and the file's cache use: hit, fill or none),
+//   with both arms' provenance complete, and no other complete run of that commit's file
+//   that read different inputs.
 //
 //   node scripts/heavy-results.mjs ingest [TICKET...]   copy new records from the queue's job logs
 //   node scripts/heavy-results.mjs show [--commit SHA] [--machine LABEL] [--file NAME] [--eligible] [--json]

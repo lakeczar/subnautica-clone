@@ -210,7 +210,7 @@ for (const mode of modes) {
     const store = mkdtempSync(join(probes, `cache-${tag}-`));
     // The child loads the build cache and fills, then on the next run hits, one entry; the file's own process uses nothing.
     const user = write(`child-cache-${tag}`, `test("a child uses the build cache", () => {
-  const body = "const s = globalThis.__siltwakeBuildCache; const m = [${JSON.stringify(cacheUrl)}]; if (s.get('k', m) === undefined) s.set('k', m, s.fill(() => 1));";
+  const body = "const s = globalThis.__siltwakeBuildCache; const m = ['${cacheUrl}']; if (s.get('k', m) === undefined) s.set('k', m, s.fill(() => 1));";
   const r = spawnSync(process.execPath, ["--import", ${JSON.stringify(cacheUrl)}, "--input-type=module", "-e", body], { env: { ...process.env, SILTWAKE_BUILD_CACHE_DIR: ${JSON.stringify(store)} } });
   assert.equal(r.status, 0, String(r.stderr));
 });`);
