@@ -1313,7 +1313,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - Rehearsal `5fd5` clean. The 4070's indicative result, NOT MET, +0.205 ms [0.186, 0.224], came from the laptop running slow (about 42 fps, against 56 in `f4fb`).
   - The acceptance run is the exclusive 3090 duet, `261025-043054-e104` at `a934d88d`, about 38 min. No compiling on factory-worker during it.
 - **LS-1 1b R1 fixes done at `53d054e7`** (code `cb2b00bf`):
-  - F1 Base upgrades and crop disclosure; F2 keypad reads committed state; F4 cell-local cache discovery and per-host power, cheaper per step; F3 procure deferral with the named exception for the 2 rows.
+  - F1 Base upgrades and crop disclosure; F2 keypad reads committed state; F4 cell-local cache discovery and per-host power, a structural work reduction (the speed figures were later withdrawn, see R2); F3 procure deferral with the named exception for the 2 rows.
   - The C12 +0.3 s is deterministic and attributed to 1b content.
   - **Checks:** fast, heavy, economy, build and playthrough 9/9 all pass.
   - **Review:** Sol R2 dispatched (`siltwake-ls1-1b-review-r2-sol-53d054e`).
@@ -1386,3 +1386,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Fixes:** F1 `hostPower` quote; F3 exceptions persist on every verdict; F4 numbers withdrawn and a work-counting test added; C12 raw figures recorded.
   - **Checks:** focused 41/41, fast 169 files, four routes with unchanged rows.
   - **Review:** Sol R3 (affected) dispatched (`siltwake-ls1-1b-review-r3-sol-3823f51`).
+- **LS-1 1b R3 (Sol, `02433bbc`): REQUEST CHANGES, 2 narrow P2 findings.**
+  - F1 resolved.
+  - **F3:** an exception vanishes when its gap disappears. Ruling: a separate exceptions list, with retirement only by the coordinator deleting the entry.
+  - **F4:** the counting test is insensitive to Sol's 4 mutations. Ruling: counters at the real operations through `openSiteCaches` and `stepSystems`, and the mutations must fail.
+  - **Confirmed:** C4 heavy, economy and build pass; merges clean against root and CW-1. PACE-1 conflicts only in `pacing-debt.ts`.
