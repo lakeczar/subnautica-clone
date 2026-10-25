@@ -821,3 +821,13 @@ No timing.
 | The four judged routes | `261025-054920-e30a` | factory-worker | 4/4 complete, every milestone reload matches, both decode-free runs end with nothing decoded, gaps exactly the record, no leg differences, and no-optional-carrier's verdict names both exceptions with owner and cause. **The rows are unchanged:** all four timelines are byte-identical to the R1 final run's. |
 
 The timelines are in `/work/tmp/ls1-1b-r3-routes/`.
+
+### Stage 1b R4 fixes (Sol, `review/ls-1-1b-r4` `a62b9cdb`)
+
+Code at **`0d7f1d3e`** (delta from `2249fd67`: 6 files, +58/−12; runner, one test assertion, one verdict string, two tests). F3 and F4 are resolved per R4.
+
+- **F5 (P2):** `r3-focused.sh` is bash with `set -euo pipefail`. It writes the test log, keeps `node --test`'s exit status, filters only afterwards, and exits nonzero on failure before the mutations run. **Negative control** (`r4-control.sh`, `261025-065552-3783`): one deliberately failing test gives 43 tests, 42 pass, 1 fail; the runner exits 1 and the mutations don't run. A normal run gives 42/42 and exits 0.
+- **F6 (P3):** the exact distance-test counts stay (1 at 1, 10 and 100 caches). Coordinate reads are now asserted positive and equal at every count, not exactly 3. The harmless `sqrt` rewrite passes; all four regressions still fail (same ticket).
+- **F7 (P3):** an unjudged route and a missing timeline list the route's exceptions as "retained, not evaluated", never as gone. The exception list is unchanged (`playthrough-pacing`).
+
+Fast tier `261025-065553-ed21`: 169 files pass. No gameplay, heavy or economy replay (runner, assertion and verdict string only). Evidence: `/work/tmp/ls1-1b-r4-evidence/`.
