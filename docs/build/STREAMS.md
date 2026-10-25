@@ -1407,3 +1407,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **SCHED-3 install, revised:** the maintenance pause can't be used outside `install.sh` without new code.
   - **Ruling:** build a small `heavy-check maintenance set|clear|status` on `t3/sched-3-maintenance`, with a focused Sol review. Install it together with SCHED-3 in one coordinator-announced quiet period: builders hold submissions, and queued work drains naturally.
   - **Timing:** after REC-1's duet and the CW-1 gate. Future installs use the command.
+- **SCHED-3 maintenance command done at `596a48d3`** (code `b9415d2e`, on `t3/sched-3-maintenance`):
+  - `set`, `clear` and `status`, with an audit log; `install.sh` nests its mark under the caller's.
+  - **Checks:** units 57; SCHED-1, -2 and -2b at 23, 28 and 46; S28; B46; fast 172.
+  - **Review:** focused Sol R1 dispatched (`siltwake-sched3-maint-review-r1-sol-596a48d`), including the upgrade path and the expiry question.
