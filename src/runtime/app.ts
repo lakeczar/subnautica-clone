@@ -707,7 +707,6 @@ export class SiltwakeApp {
     this.cancelGesture();
     // UX-1: a replaced session inherits no head look or rudder, before its first frame.
     this.helm.clear();
-    this.warm();
     forgetCorridorView();
     this.view.resetPresentation();
     // After the reset, so the new timeline's protection or memory-only notice stays (SIM-1b R1 F5).
@@ -788,6 +787,9 @@ export class SiltwakeApp {
   }
 
   private finishEntry(): void {
+    // SIM-PERF-1's warm-up, once per entry, behind the cover and before reveal or resume, and
+    // only now: records installed, admission clear and the pose lit (CW-1 R5-1).
+    this.warm();
     // CW-1: the legacy region owners are monolithic builds (up to half a
     // second each); make every one now, into retention, behind the load, so
     // crossing into a region during play only re-attaches it.
@@ -813,10 +815,14 @@ export class SiltwakeApp {
 
   /** SIM-PERF-1: the first steps' compilation, the hull contact meshes and the save path's
    * first commit are paid here, behind the entry pause, not in the first seconds of play
-   * (5–8, about 3 and 12–17 ms). Nothing live changes: the step runs on a copy. */
+   * (5–8, about 3 and 12–17 ms). Nothing live changes: the step runs on a copy. The copy's
+   * queries build no cave cluster (CW-1 R5-1): a cluster nobody admitted is answered by the
+   * exterior, so warm-up never builds or, with the pack pending, generates cave collision,
+   * whoever's query meets it. */
   private warm(): void {
     if (!this.state) return;
-    warmSimulation(this.state, this.world);
+    const state = this.state;
+    this.world.kitCaves.withoutQueryBuilds(() => warmSimulation(state, this.world));
     const save = this.session.envelope();
     if (save) warmCommit(save);
   }
