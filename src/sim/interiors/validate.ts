@@ -252,12 +252,18 @@ function stepAcross(world: WorldQueries, a: Vec3, b: Vec3, shape: Capsule): bool
 /** Walk off from `a` by (dx, dz) at its own height, fall straight down, and
  * join the walking pose the landing is nearest (by a checked move): its index, or -1. */
 function fall(world: WorldQueries, a: Vec3, dx: number, dz: number, standing: (x: number, z: number, y: number) => number[], poses: readonly Vec3[]): number {
-  // Walking off steps over the same threshold a doorway crossing does.
-  const lift = { x: a.x, y: a.y + STEP, z: a.z }, over = { x: a.x + dx, y: lift.y, z: a.z + dz };
-  const up = world.moveCapsule(a, { x: 0, y: STEP, z: 0 }, WALK);
-  if (up.hitSolid || Math.abs(up.position.y - lift.y) > 0.02) return -1;
-  const across = world.moveCapsule(lift, { x: dx, y: 0, z: dz }, WALK);
-  if (across.hitSolid || Math.hypot(across.position.x - over.x, across.position.z - over.z) > 0.02) return -1;
+  // Walking off clears the floor's own crease, or steps over a threshold as a
+  // doorway crossing does: the lowest lift that gets across (under a low
+  // ceiling, as on a bunk, only the small one fits).
+  let over: Vec3 | null = null;
+  for (const lift of [0.02, STEP]) {
+    const from = { x: a.x, y: a.y + lift, z: a.z }, to = { x: a.x + dx, y: from.y, z: a.z + dz };
+    const up = world.moveCapsule(a, { x: 0, y: lift, z: 0 }, WALK);
+    if (up.hitSolid || Math.abs(up.position.y - from.y) > 0.02) continue;
+    const across = world.moveCapsule(from, { x: dx, y: 0, z: dz }, WALK);
+    if (!across.hitSolid && Math.hypot(across.position.x - to.x, across.position.z - to.z) < 0.02) { over = to; break; }
+  }
+  if (!over) return -1;
   const land = world.moveCapsule(over, { x: 0, y: -FALL_LIMIT, z: 0 }, WALK).position;
   if (land.y > a.y - LATTICE) return -1;
   for (const c of standing(land.x, land.z, land.y)) {
