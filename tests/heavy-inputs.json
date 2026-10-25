@@ -1,12 +1,17 @@
 {
-  "comment": "Inputs a heavy test file reads that the commit alone doesn't determine, declared so its stored results can serve as an A/B control (STEW-3 R2-1). The tier observes every module a file's processes load and every file they read; anything not tracked at the commit, compiled from it, produced by the file itself, in node_modules (the lockfile) or in the build cache must be declared here, or the file's rows are complete gate evidence but never a control. `generated`: repository paths (prefixes) a file reads that a build or an earlier run produced; `external`: absolute path prefixes outside the repository; both are hashed as the run found them. `programs`: non-node programs it starts, which report nothing; `workers`: it starts worker threads, which preloads don't reach. Each entry says why that is a complete account.",
+  "comment": "The heavy test files whose stored results may serve as an A/B control arm (STEW-3 R3), each opted in after review. A file not listed is never a control; its rows are still full gate evidence. An opt-in names every input outside the commit the file reads (`control.untracked`: repository-relative paths or globs), hashed as found, which both arms must agree on, and says why that is a complete account. The tier's observer is only a tripwire: any read it sees outside tracked files, files compiled from them, the file's own new scratch and this list, any descendant that doesn't report, and any FileHandle, native addon or non-file module make the row ineligible. It can't see everything (descriptor reads opened elsewhere, a worker's reads, native code, the network), so review an opt-in for those before adding it.",
   "files": {
-    "regions-bake.heavy.test.ts": {
-      "generated": ["public/terrain/"],
-      "external": ["/work/tmp/siltwake-terrain-store/"],
-      "programs": ["esbuild"],
-      "workers": true,
-      "why": "The bake bundles src/render/biomes/bake.ts with esbuild (its version is in the lockfile) and hashes every bundled source, the script and the toolchain into its key; public/terrain and the shared store are that key's cached output, restored only on an exact match, and --verify then rebakes in memory and compares with the live recipe. Its workers run the esbuild bundle of those same sources."
+    "caves-deep-perf.heavy.test.ts": {
+      "control": { "untracked": [] },
+      "why": "Builds the deep caves and steps a diver through the composed collision: compiled modules from tracked sources and tracked content only, no children, workers, descriptors or addons. The CA-3 per-step bound's comparisons."
+    },
+    "col1-art.heavy.test.ts": {
+      "control": { "untracked": [] },
+      "why": "COL-1's art collision checks over compiled, tracked content only, no children, workers, descriptors or addons. The CW-1 memory A/B's file."
+    },
+    "timeline-model.heavy.test.ts": {
+      "control": { "untracked": [] },
+      "why": "Reads its tracked sources in src/sim/timeline, copies the compiled build into a fresh mkdtemp directory, transpiles its mutants there with the lockfile's TypeScript and imports them: everything is tracked, compiled from tracked, or its own new scratch. Its workload selectors are recorded settings. The CW-1 memory A/B's file."
     }
   }
 }

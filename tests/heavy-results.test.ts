@@ -17,15 +17,15 @@ import { pathToFileURL } from "node:url";
 interface Cache { hits: number; misses: number; fills: number; fillMs: number }
 interface Row { file: string; status: string; phase: string; seconds: number; cpuS: number | null; cpuScope: string | null; peakMiB: number;
   budgetMiB: number; budgetPct: number | null; oomKillsOwn: number | null; oomKillsNested: number | null; cache: Cache | null; cacheUse: string | null; closure: string | null;
-  provenance: Provenance }
-interface Provenance { complete: boolean; why: string[]; inputs: number; inputsHash: string; unobserved?: string[] }
+  control: Control }
+interface Control { eligible: boolean; why: string[]; untrackedHash: string }
 interface Run { v: number; at: string; commit: string | null; dirty: boolean | null; machine: string; ticket: string | null; containment: string; jobMemoryMiB: number | null;
   poolMiB: number; concurrency: number; jobCpus: number | null; node: string; cache: { state: string; entries: number }; selection: { kind: string; files: number };
-  override: { budgetMiB: number | null; budgetsFile: string | null } | null; budgetEvidence: boolean; lockHash: string; harnessHash: string; attempt: string | null;
+  override: { budgetMiB: number | null; budgetsFile: string | null } | null; budgetEvidence: boolean; lockHash: string; harnessHash: string; attempt: string | null; runtime: Record<string, string>;
   settings: Record<string, string>; files: Row[] }
-interface Receipt { ticket?: string | null; remote?: boolean; attempts?: number; code: number; stopReason?: string | null; label?: string | null; machine: string | null; evidence: { commit: string | null; bound: boolean; why?: string | null } | null; disturbed?: boolean | null }
+interface Receipt { ticket?: string | null; attempt?: string | null; remote?: boolean; attempts?: number; code: number; stopReason?: string | null; label?: string | null; machine: string | null; evidence: { commit: string | null; bound: boolean; why?: string | null } | null; disturbed?: boolean | null }
 interface Stored { ticket: string; receipt: Receipt | null; runs: Run[] }
-interface Report { pid: number; ppid?: number; threadId: number; store?: boolean; cache?: Cache | null; loads?: string[]; reads?: string[]; produced?: string[];
+interface Report { pid: number; ppid?: number; threadId: number; store?: boolean; cache?: Cache | null; loads?: string[]; reads?: string[]; created?: string[]; untraced?: string[];
   spawned?: { pid: number | null; cmd: string }[]; workers?: number[]; cpuMs?: number }
 interface Canonical { files: string[]; budgetOf(js: string): number }
 interface R {
@@ -39,14 +39,16 @@ interface R {
   fullTierProblems(stored: Stored | null, commit: string, canonical?: Canonical | null): string[];
   canonicalAt(root: string, commit: string): Canonical | null;
   nearBudget(rows: { stored: Stored; run: Run; row: Row }[], pct?: number): { row: Row }[];
-  controlProblems(candidate: { run: Run; row: Row }, control: { stored: Stored; run: Run; row: Row }, commit: string, peers?: { ticket: string; run: Run; row: Row }[]): string[];
+  controlProblems(candidate: { run: Run; row: Row }, control: { stored: Stored; run: Run; row: Row }, commit: string): string[];
   schemaProblems(r: unknown): string[];
   workloadSettings(env: Record<string, string | undefined>): Record<string, string>;
   canonicalEnv(env: Record<string, string | undefined>): Record<string, string | undefined>;
   isWorkloadKey(k: string): boolean;
   attemptOf(env: Record<string, string | undefined>): string | null;
   terminalAttempt(rc: Receipt | null): string;
-  fileFacts(reports: Report[], rootPid: number, ctx: object): { cache: Cache | null; cacheUse: string | null; provenance: Provenance };
+  fileFacts(reports: Report[], rootPid: number, ctx: object): { cache: Cache | null; cacheUse: string | null; control: Control };
+  receiptAttempt(exit: object | null): string | null;
+  runtimeEnv(env: Record<string, string | undefined>): Record<string, string>;
   publish(target: string, value: unknown): boolean;
   sweep(o: { max?: number; maxLogBytes?: number; env?: Record<string, string>; now?: number }): { scanned: number; stored: number; noRecord: number; running: number; tooLarge: string[]; failures: string[]; remaining: number };
   sweepStatus(env: Record<string, string>, now?: number): { ok: boolean; why: string };
@@ -63,11 +65,11 @@ const temp = (p: string) => { const d = fs.mkdtempSync(join(tmpdir(), p)); dirs.
 const F3090 = "RTX 3090 (factory-worker)", A4070 = "RTX 4070 Laptop (alickers, shared desktop host)";
 const row = (over: Partial<Row> = {}): Row => ({ file: "a.heavy.test.js", status: "ok", phase: "pool", seconds: 4.2, cpuS: 9.1, cpuScope: "tree", peakMiB: 512,
   budgetMiB: 1024, budgetPct: 50, oomKillsOwn: 0, oomKillsNested: 0, cache: { hits: 3, misses: 0, fills: 0, fillMs: 0 }, cacheUse: "hit", closure: "c0ffee",
-  provenance: { complete: true, why: [], inputs: 3, inputsHash: "1npu7" }, ...over });
-const runOf = (over: Partial<Run> = {}, files: Row[] = [row()]): Run => ({ v: 3, attempt: "local", settings: {}, at: "2026-10-25T00:00:00.000Z", commit: head, dirty: false, machine: F3090, ticket: "261025-000000-aaaa",
+  control: { eligible: true, why: [], untrackedHash: "un7r4cked" }, ...over });
+const runOf = (over: Partial<Run> = {}, files: Row[] = [row()]): Run => ({ v: 4, attempt: "local", settings: {}, runtime: {}, at: "2026-10-25T00:00:00.000Z", commit: head, dirty: false, machine: F3090, ticket: "261025-000000-aaaa",
   containment: "cgroup", jobMemoryMiB: 3072, poolMiB: 2560, concurrency: 3, jobCpus: 3, node: "v24.21.0", cache: { state: "warm", entries: 12 }, selection: { kind: "full", files: files.length },
   override: null, budgetEvidence: true, lockHash: "l0ck", harnessHash: "h4rn", files, ...over });
-const receipt = (over: Partial<Receipt> = {}): Receipt => ({ ticket: "261025-000000-aaaa", code: 0, stopReason: null, machine: F3090, evidence: { commit: head, bound: true }, disturbed: null, ...over });
+const receipt = (over: Partial<Receipt> = {}): Receipt => ({ ticket: "261025-000000-aaaa", attempt: "local", code: 0, stopReason: null, machine: F3090, evidence: { commit: head, bound: true }, disturbed: null, ...over });
 const storedOf = (run: Run, rc: Receipt | null = receipt(), ticket = "261025-000000-aaaa"): Stored => ({ ticket, receipt: rc, runs: [run] });
 
 test("a record is one line; a cut or foreign line isn't a record; v1 records are read but never eligible", () => {
@@ -80,11 +82,12 @@ test("a record is one line; a cut or foreign line isn't a record; v1 records are
   assert.equal(H.machineLabel("siltwake-alickers"), A4070);
 });
 
-test("only complete records are records: a v3 record missing its context or a row's provenance is skipped (never published)", () => {
+test("only complete records are records: a v4 record missing its context or a row's control facts is skipped (never published)", () => {
   assert.deepEqual(H.schemaProblems(runOf()), []);
   const { attempt: _a, ...noAttempt } = runOf();
-  const { provenance: _p, ...noProv } = row();
-  for (const [what, r] of [["no attempt", noAttempt], ["a row without provenance", runOf({}, [noProv as Row])], ["no settings", { ...runOf(), settings: null }],
+  const { control: _c, ...noControl } = row();
+  for (const [what, r] of [["no attempt", noAttempt], ["a row without control facts", runOf({}, [noControl as Row])], ["no settings", { ...runOf(), settings: null }],
+    ["no runtime", { ...runOf(), runtime: null }],
     ["fewer rows than its selection", { ...runOf(), selection: { kind: "full", files: 2 } }], ["an unknown version", { ...runOf(), v: 9 }]] as const) {
     assert.notDeepEqual(H.schemaProblems(r), [], what);
     assert.deepEqual(H.recordsIn(H.recordLine(r as Run)), [], what);
@@ -123,8 +126,11 @@ test("eligibility: the record agrees with its job's receipt, at canonical budget
     // R2-5: only the attempt the receipt reports on is its evidence.
     ["an abandoned alickers attempt", storedOf(runOf({ attempt: "alickers:a1", machine: A4070 })), runOf({ attempt: "alickers:a1", machine: A4070 }), null,
       /from attempt alickers:a1, not the job's terminal attempt \(local\)/],
-    ["an earlier alickers attempt", storedOf(runOf({ attempt: "alickers:a1", machine: A4070 }), receipt({ remote: true, attempts: 2, machine: A4070 })),
+    ["an earlier alickers attempt", storedOf(runOf({ attempt: "alickers:a1", machine: A4070 }), receipt({ attempt: "alickers:a2", machine: A4070 })),
       runOf({ attempt: "alickers:a1", machine: A4070 }), null, /not the job's terminal attempt \(alickers:a2\)/],
+    // R3-2: a receipt that doesn't establish its terminal attempt is refused; nothing defaults to a1.
+    ["no attempt in the receipt", storedOf(runOf({ attempt: "alickers:a1", machine: A4070 }), receipt({ attempt: null, machine: A4070 })),
+      runOf({ attempt: "alickers:a1", machine: A4070 }), null, /receipt doesn't establish the job's terminal attempt/],
   ];
   for (const [what, stored, run, r, re] of cases) assert.ok(H.eligibility(stored, run, r).some((p) => re.test(p)), `${what}: ${H.eligibility(stored, run, r).join("; ")}`);
   // A file's own failure exits the tier 1: that's the file's verdict; its passing siblings stay eligible.
@@ -134,8 +140,11 @@ test("eligibility: the record agrees with its job's receipt, at canonical budget
   const claim = H.eligibility(storedOf(good, receipt({ machine: A4070, evidence: { commit: other, bound: false, why: "the tree changed" } })), good);
   assert.ok(claim.some((p) => /isn't evidence/.test(p)) && claim.some((p) => /ran on RTX 4070/.test(p)), claim.join("; "));
   const remote = runOf({ attempt: "alickers:a1", machine: A4070 });
-  assert.deepEqual(H.eligibility(storedOf(remote, receipt({ remote: true, attempts: 1, machine: A4070 })), remote), [], "a remote terminal attempt");
-  assert.deepEqual([H.terminalAttempt(receipt()), H.terminalAttempt(receipt({ remote: true, attempts: 3 }))], ["local", "alickers:a3"]);
+  assert.deepEqual(H.eligibility(storedOf(remote, receipt({ attempt: "alickers:a1", machine: A4070 })), remote), [], "a remote terminal attempt");
+  // The one normalisation of a queue receipt's attempt: never a default.
+  assert.deepEqual([H.receiptAttempt({ remote: false }), H.receiptAttempt({ remote: true, attempts: 3 }), H.receiptAttempt({ remote: true }),
+    H.receiptAttempt({ remote: true, attempts: 0 }), H.receiptAttempt({ remote: true, attempts: "2" }), H.receiptAttempt(null)], ["local", "alickers:a3", null, null, null, null]);
+  assert.deepEqual([H.terminalAttempt(receipt()), H.terminalAttempt(receipt({ attempt: "alickers:a3" })), H.terminalAttempt({ ...receipt(), attempt: undefined })], ["local", "alickers:a3", null]);
   assert.deepEqual([H.attemptOf({ SILTWAKE_JOB_TICKET: "t" }), H.attemptOf({ SILTWAKE_LANE_TICKET: "t", SILTWAKE_JOB_HEARTBEAT: "/lane/jobs/t/a2/heartbeat" }),
     H.attemptOf({ SILTWAKE_LANE_TICKET: "t" }), H.attemptOf({})], ["local", "alickers:a2", "alickers:?", null]);
 });
@@ -159,7 +168,7 @@ test("the full-tier check: eligible, every heavy file at the gate's commit, each
     // R2-2: a curtailed workload isn't the full tier.
     [storedOf(fullRun({ settings: { SILTWAKE_TIMELINE_SEQUENCES: "0" } })), /ran with workload settings \(SILTWAKE_TIMELINE_SEQUENCES\)/],
     // R2-5: no record from the attempt the receipt reports on.
-    [storedOf(fullRun({ attempt: "alickers:a1", machine: A4070 })), /no complete v3 record from the job's terminal attempt \(local\); records seen from: alickers:a1/],
+    [storedOf(fullRun({ attempt: "alickers:a1", machine: A4070 })), /no complete v4 record from the job's terminal attempt \(local\); records seen from: alickers:a1/],
   ];
   for (const [stored, re] of cases) assert.ok(H.fullTierProblems(stored, head, canonical).some((p) => re.test(p)), `${re}: ${H.fullTierProblems(stored, head, canonical).join("; ")}`);
   assert.ok(H.fullTierProblems(storedOf(fullRun()), head, null).some((p) => /couldn't be read/.test(p)), "no canonical facts: no pass");
@@ -205,23 +214,22 @@ test("a control arm: an eligible row at exactly the intended clean commit, same 
     ["mixed cache use", control(runOf(), row({ cache: { hits: 1, misses: 1, fills: 1, fillMs: 9 }, cacheUse: "mixed" })), /neither a cold nor a warm/],
     ["ineligible", control(runOf(), row(), receipt({ evidence: { commit: head, bound: false } })), /isn't evidence/],
     // R2-1: each arm's inputs must be fully known.
-    ["control's inputs unknown", control(runOf(), row({ provenance: { complete: false, why: ["read inputs the commit doesn't determine: x.json"], inputs: 1, inputsHash: "?" } })),
-      /control's inputs aren't fully known \(read inputs the commit doesn't determine: x\.json\)/],
+    ["control not eligible", control(runOf(), row({ control: { eligible: false, why: ["not opted in as a control (tests/heavy-inputs.json)"], untrackedHash: "un7r4cked" } })),
+      /control isn't eligible as a control \(not opted in/],
+    ["declared untracked inputs differ", control(runOf(), row({ control: { eligible: true, why: [], untrackedHash: "d1ff" } })), /declared untracked inputs differ/],
+    // R3 runtime settings are conditions.
+    ["runtime", control(runOf({ runtime: { TZ: "UTC" } })), /runtime: \{"TZ":"UTC"\} against \{\}/],
     // R2-3: a descendant's cache use unobserved.
     ["unknown cache use", control(runOf(), row({ cacheUse: "unknown" })), /cacheUse: unknown against hit/],
     // R2-2: a different workload.
     ["workload", control(runOf({ settings: { SILTWAKE_TIMELINE_SEQUENCES: "0" } })), /settings: \{"SILTWAKE_TIMELINE_SEQUENCES":"0"\} against \{\}/],
   ];
   for (const [what, c, re] of cases) assert.ok(H.controlProblems(candidate, c, head).some((p) => re.test(p)), `${what}: ${H.controlProblems(candidate, c, head).join("; ")}`);
-  const unknownCandidate = { ...candidate, row: row({ closure: "branchclosure", provenance: { complete: false, why: ["started what never reported: sh"], inputs: 0, inputsHash: "?" } }) };
-  assert.ok(H.controlProblems(unknownCandidate, control(), head).some((p) => /candidate's inputs aren't fully known/.test(p)), "the candidate's provenance too");
-  // Sol's collision: two complete runs of the same commit and closure that read different inputs.
-  const peer = { ticket: "261025-000000-peer", run: runOf({ ticket: "261025-000000-peer" }), row: row({ provenance: { complete: true, why: [], inputs: 3, inputsHash: "d1ff" } }) };
-  assert.ok(H.controlProblems(candidate, control(), head, [peer]).some((p) => /read different inputs \(261025-000000-peer\): not reproducible/.test(p)));
-  assert.deepEqual(H.controlProblems(candidate, control(), head, [{ ...peer, row: row() }]), [], "an agreeing peer is fine");
-  assert.deepEqual(Object.keys(H.identityOf(candidate.run, candidate.row)), ["commit", "file", "closure", "inputs", "lock", "harness"]);
+  const ineligibleCandidate = { ...candidate, row: row({ closure: "branchclosure", control: { eligible: false, why: ["started what never reported: sh"], untrackedHash: "un7r4cked" } }) };
+  assert.ok(H.controlProblems(ineligibleCandidate, control(), head).some((p) => /candidate isn't eligible as a control/.test(p)), "the candidate too");
+  assert.deepEqual(Object.keys(H.identityOf(candidate.run, candidate.row)), ["commit", "file", "closure", "untracked", "lock", "harness"]);
   assert.deepEqual(Object.keys(H.conditionsOf(candidate.run, candidate.row)).sort(),
-    ["budgetMiB", "cacheUse", "concurrency", "containment", "jobCpus", "jobMemoryMiB", "machine", "node", "phase", "poolMiB", "settings"]);
+    ["budgetMiB", "cacheUse", "concurrency", "containment", "jobCpus", "jobMemoryMiB", "machine", "node", "phase", "poolMiB", "runtime", "settings"]);
 });
 
 /** A private queue root with one finished job whose output holds `records`. */
@@ -348,7 +356,23 @@ test("the gate's heavy step after a fallback: alickers finished, its receipt was
   assert.match(ok.stdout, /^ {2}pass {2}heavy .*\[on RTX 3090 \(factory-worker\)\]$/m, ok.stdout);
   // The abandoned attempt alone never passes, and a remote record never stands for the local receipt.
   const lost = run([record(), queued], here);
-  assert.match(lost.stdout, /FAIL {2}heavy .*no complete v3 record from the job's terminal attempt \(local\); records seen from: alickers:a1/);
+  assert.match(lost.stdout, /FAIL {2}heavy .*no complete v4 record from the job's terminal attempt \(local\); records seen from: alickers:a1/);
+});
+
+test("the gate's heavy step after an alickers retry: the receipt's attempt 2 decides; a1 never does; no attempt count, no pass (R3-2)", () => {
+  const { record, run } = heavyGate();
+  const a2 = { machine: A4070, remote: true, attempts: 2 };
+  const retried = "heavy-check: alickers did not admit the job in time: retrying";
+  const terminalOnly = run([record({ attempt: "alickers:a2" })], a2);
+  assert.match(terminalOnly.stdout, /^ {2}pass {2}heavy /m, terminalOnly.stdout);
+  const both = run([record(), retried, record({ attempt: "alickers:a2" })], a2);
+  assert.match(both.stdout, /^ {2}pass {2}heavy /m, both.stdout);
+  const abandonedOnly = run([record()], a2);
+  assert.match(abandonedOnly.stdout, /FAIL {2}heavy .*no complete v4 record from the job's terminal attempt \(alickers:a2\); records seen from: alickers:a1/);
+  assert.equal(abandonedOnly.status, 1);
+  const noCount = run([record()], { machine: A4070, remote: true });
+  assert.match(noCount.stdout, /FAIL {2}heavy .*its receipt doesn't establish the job's terminal attempt \(a remote receipt without its attempt count\)/);
+  assert.equal(noCount.status, 1);
 });
 
 test("the gate's heavy step when a sweep stores the same ticket at the same moment: still a pass (R2-4)", () => {
@@ -393,6 +417,10 @@ test("workload settings: recorded and labelled; queue grants and the harness's p
     SILTWAKE_JOB_TICKET: "t", SILTWAKE_JOB_CPUS: "3", SILTWAKE_HEAVY_CONCURRENCY: "3", SILTWAKE_HEAVY_POOL_MIB: "2560", SILTWAKE_LANE_TICKET: "t", SILTWAKE_SCHED_DIR: "/s",
     SILTWAKE_RESULTS_DIR: "/r", SILTWAKE_HEAVY_BUDGETS: "/b", SILTWAKE_HEAVY_BUDGET_MIB: "9", SILTWAKE_TEST_BUILD: ".test-build-2", PATH: "/bin", SILTWAKE_EMPTY: "" };
   assert.deepEqual(H.workloadSettings({ NODE_OPTIONS: "--import=file:///w/scripts/test-heavy-file.mjs" }), {}, "the tier's own preload isn't a setting");
+  // R3: runtime settings are recorded conditions, and the gate keeps them.
+  const rt = { TZ: "UTC", LANG: "C.UTF-8", LC_ALL: "C", LC_VERBOSE: "1", UV_THREADPOOL_SIZE: "8", CI: "1", HOME: "/h" };
+  assert.deepEqual(H.runtimeEnv(rt), { CI: "1", LANG: "C.UTF-8", LC_ALL: "C", TZ: "UTC", UV_THREADPOOL_SIZE: "8" });
+  assert.deepEqual(Object.keys(H.canonicalEnv(rt)).sort(), ["CI", "HOME", "LANG", "LC_ALL", "TZ", "UV_THREADPOOL_SIZE"], "LC_VERBOSE is a workload knob");
   assert.deepEqual(H.workloadSettings({ NODE_OPTIONS: "--import=file:///w/scripts/test-heavy-file.mjs --max-old-space-size=4096" }), { NODE_OPTIONS: "--max-old-space-size=4096" });
   assert.deepEqual(H.workloadSettings(env), { JOURNEY_TRACE: "1", NODE_OPTIONS: "--x", SILTWAKE_BUILD_CACHE: "off", SILTWAKE_TIMELINE_SEED_BASE: "1", SILTWAKE_TIMELINE_SEQUENCES: "0" });
   assert.deepEqual(Object.keys(H.canonicalEnv(env)).sort(), ["PATH", "SILTWAKE_HEAVY_CONCURRENCY", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_JOB_CPUS",
@@ -407,52 +435,66 @@ test("workload settings: recorded and labelled; queue grants and the harness's p
   for (const k of read) assert.ok(H.isWorkloadKey(k) || harness.has(k), `${k}: classify it (a workload setting, or the harness's own)`);
 });
 
-test("a file's facts: cache use and inputs aggregated over its processes; anything not fully known makes the provenance incomplete (R2-1, R2-3)", () => {
+test("a file's facts: cache use over all its processes; a control only by opt-in, with the observer as a tripwire (R3-1, R3-3)", () => {
   const repo = temp("siltwake-facts-repo-"), build = join(repo, ".test-build"), cacheRoot = join(build, "build-cache"), tmp = temp("siltwake-facts-tmp-");
   for (const [f, text] of [["src/a.ts", "a"], ["tests/x.heavy.test.ts", "x"], [".test-build/src/a.js", "A"], [".test-build/tests/x.heavy.test.js", "X"],
-    [".test-build/gen/mod.js", "generated"], ["public/terrain/manifest.json", "{}"], ["fixtures/ignored.json", "1"], [".test-build/build-cache/k/1.bin", "c"]] as const) {
+    [".test-build/gen/mod.js", "generated"], ["fixtures/ignored.json", "1"], ["fixtures/declared.bin", "d1"], [".test-build/build-cache/k/1.bin", "c"]] as const) {
     fs.mkdirSync(join(repo, f, ".."), { recursive: true }); fs.writeFileSync(join(repo, f), text);
   }
   const tracked = new Set(["src/a.ts", "tests/x.heavy.test.ts"]);
-  const ctx = (declared = {}) => ({ root: repo, build, cacheRoot, tracked, declared, tmp });
+  const optIn = { untracked: [] as string[] };
   const base = (over: Partial<Report> = {}): Report => ({ pid: 10, threadId: 0, store: true, cache: { hits: 2, misses: 0, fills: 0, fillMs: 0 },
     loads: [join(build, "tests/x.heavy.test.js"), join(build, "src/a.js"), join(repo, "node_modules/p/i.js"), "/proc/self/status"],
-    reads: [join(repo, "src/a.ts"), join(cacheRoot, "k/1.bin")], produced: [], spawned: [], workers: [], ...over });
-  const facts = (reports: Report[], declared = {}) => H.fileFacts(reports, 10, ctx(declared));
+    reads: [join(repo, "src/a.ts"), join(cacheRoot, "k/1.bin")], created: [], spawned: [], workers: [], untraced: [], ...over });
+  const facts = (reports: Report[], contract: object | undefined = optIn) => H.fileFacts(reports, 10, { root: repo, build, cacheRoot, tracked, contract });
   const clean = facts([base()]);
-  assert.deepEqual([clean.provenance.complete, clean.provenance.inputs, clean.cacheUse], [true, 3, "hit"], JSON.stringify(clean));
-  // Sol's computed import of a generated module, and a generated fixture read: the commit doesn't determine them.
-  const computed = facts([base({ loads: [...base().loads!, join(build, "gen/mod.js")] })]);
-  assert.match(computed.provenance.why.join(), /read inputs the commit doesn't determine: \.test-build\/gen\/mod\.js/);
-  const fixture = facts([base({ reads: [...base().reads!, join(repo, "fixtures/ignored.json")] })]);
-  assert.match(fixture.provenance.why.join(), /fixtures\/ignored\.json/);
-  const outside = facts([base({ reads: ["/work/tmp/some-library/x.json"] })]);
-  assert.match(outside.provenance.why.join(), /\/work\/tmp\/some-library\/x\.json/);
-  // Declared generated or external inputs are complete, and hashed as the run found them.
-  const terrain = base({ reads: [...base().reads!, join(repo, "public/terrain/manifest.json")] });
-  const declared = facts([terrain], { generated: ["public/terrain/"] });
-  assert.equal(declared.provenance.complete, true);
-  fs.writeFileSync(join(repo, "public/terrain/manifest.json"), "{\"changed\":1}");
-  assert.notEqual(facts([terrain], { generated: ["public/terrain/"] }).provenance.inputsHash, declared.provenance.inputsHash, "a changed generated input changes the identity");
-  // What the file made itself (a mkdtemp, a write) isn't an input; a pre-existing directory it "made" again doesn't hide anything.
+  assert.deepEqual([clean.control.eligible, clean.cacheUse], [true, "hit"], JSON.stringify(clean));
+  // The default: not a control, however clean; still gate evidence (nothing else changes).
+  assert.deepEqual([facts([base()], undefined).control.eligible, facts([base()], undefined).control.why[0]], [false, "not opted in as a control (tests/heavy-inputs.json)"]);
+  // The tripwire: a computed import of a generated module, an ignored fixture, a read outside the repository.
+  for (const [what, extra, re] of [["computed import", { loads: [...base().loads!, join(build, "gen/mod.js")] }, /\.test-build\/gen\/mod\.js/],
+    ["ignored fixture", { reads: [...base().reads!, join(repo, "fixtures/ignored.json")] }, /fixtures\/ignored\.json/],
+    ["outside", { reads: ["/work/tmp/some-library/x.json"] }, /\/work\/tmp\/some-library\/x\.json/]] as const) {
+    const f = facts([base(extra)]);
+    assert.equal(f.control.eligible, false, what);
+    assert.match(f.control.why.join(), re, what);
+  }
+  // Declared untracked inputs pass the tripwire and are hashed as found; a change shows.
+  const declaredRead = base({ reads: [...base().reads!, join(repo, "fixtures/declared.bin")] });
+  const d1 = facts([declaredRead], { untracked: ["fixtures/*.bin"] });
+  assert.equal(d1.control.eligible, true, d1.control.why.join());
+  fs.writeFileSync(join(repo, "fixtures/declared.bin"), "d2");
+  assert.notEqual(facts([declaredRead], { untracked: ["fixtures/*.bin"] }).control.untrackedHash, d1.control.untrackedHash);
+  // New scratch the file made is its own; a symlink in it to an old file still reads the old file (R3-1).
   const scratch = join(tmp, "siltwake-x-1");
-  assert.equal(facts([base({ produced: [scratch], loads: [...base().loads!, join(scratch, "patched.js")], reads: [...base().reads!, join(scratch, "data.json")] })]).provenance.complete, true);
-  // Children: a reporting node child adds its cache use; one that never reports makes it unknown and incomplete.
-  const child = { pid: 11, threadId: 0, store: true, cache: { hits: 0, misses: 1, fills: 1, fillMs: 5 }, loads: [], reads: [], produced: [], spawned: [], workers: [] };
+  fs.mkdirSync(scratch); fs.writeFileSync(join(scratch, "data.json"), "{}"); fs.symlinkSync(join(repo, "fixtures/ignored.json"), join(scratch, "alias.json"));
+  assert.equal(facts([base({ created: [scratch], reads: [...base().reads!, join(scratch, "data.json")] })]).control.eligible, true);
+  const alias = facts([base({ created: [scratch], reads: [...base().reads!, join(scratch, "alias.json")] })]);
+  assert.match(alias.control.why.join(), /fixtures\/ignored\.json/);
+  // A whole directory read (a cpSync source) is each file in it.
+  assert.equal(facts([base({ reads: [join(build, "src")] })]).control.eligible, true, "compiled from tracked");
+  assert.match(facts([base({ reads: [join(build, "gen")] })]).control.why.join(), /\.test-build\/gen\/mod\.js/);
+  // What the tripwire can't follow makes the row ineligible.
+  assert.match(facts([base({ untraced: ["a FileHandle (fs.promises.open)", "a native addon"] })]).control.why.join(), /can't follow: a FileHandle \(fs\.promises\.open\), a native addon/);
+  // Children: a reporting node child adds its cache use; one that never reports, or any worker, makes it unknown (R3-3: no declaration helps).
+  const child = { pid: 11, threadId: 0, store: true, cache: { hits: 0, misses: 1, fills: 1, fillMs: 5 } };
   const withChild = facts([base({ cache: { hits: 0, misses: 0, fills: 0, fillMs: 0 }, spawned: [{ pid: 11, cmd: "node" }] }), child]);
-  assert.deepEqual([withChild.cacheUse, withChild.cache, withChild.provenance.complete], ["fill", { hits: 0, misses: 1, fills: 1, fillMs: 5 }, true]);
+  assert.deepEqual([withChild.cacheUse, withChild.cache, withChild.control.eligible], ["fill", { hits: 0, misses: 1, fills: 1, fillMs: 5 }, true]);
   const silent = facts([base({ spawned: [{ pid: 12, cmd: "node" }, { pid: null, cmd: "sh" }] })]);
-  assert.deepEqual([silent.cacheUse, silent.provenance.complete], ["unknown", false]);
-  assert.match(silent.provenance.why.join(), /started what never reported: node, sh/);
-  const worker = facts([base({ workers: [3] })]);
-  assert.deepEqual([worker.cacheUse, worker.provenance.why.join()], ["unknown", "started what never reported: worker thread 3"]);
-  assert.equal(facts([base({ spawned: [{ pid: 13, cmd: "esbuild" }], workers: [3] })], { programs: ["esbuild"], workers: true }).cacheUse, "hit", "declared ones are accounted for");
-  // A child without a store never touches the cache: its work doesn't depend on it.
-  assert.equal(facts([base({ spawned: [{ pid: 11, cmd: "node" }] }), { ...child, store: false, cache: null }]).cacheUse, "hit");
-  assert.deepEqual([facts([]).cacheUse, facts([]).provenance.why[0]], [null, "the file's own process didn't report (it died before its exit hook)"]);
-  // The tier's declarations: every declared file exists.
-  const manifest = JSON.parse(fs.readFileSync("tests/heavy-inputs.json", "utf8")) as { files: Record<string, { why: string }> };
-  for (const [f, d] of Object.entries(manifest.files)) { assert.ok(fs.existsSync(join("tests", f)), f); assert.ok(d.why.length > 40, `${f}: says why`); }
+  assert.deepEqual([silent.cacheUse, silent.control.eligible], ["unknown", false]);
+  assert.match(silent.control.why.join(), /started what never reported: node, sh/);
+  const worker = facts([base({ workers: [3] })], { untracked: [], workers: true });
+  assert.deepEqual([worker.cacheUse, worker.control.eligible], ["unknown", false], "a worker never reports, declared or not");
+  assert.equal(facts([base({ spawned: [{ pid: 11, cmd: "node" }] }), { ...child, store: false, cache: null }]).cacheUse, "hit", "a child without a store never touches the cache");
+  assert.deepEqual([facts([]).cacheUse, facts([]).control.why[0]], [null, "the file's own process didn't report (it died before its exit hook)"]);
+  // The audited opt-ins: each file exists, declares its untracked inputs and says why.
+  const manifest = JSON.parse(fs.readFileSync("tests/heavy-inputs.json", "utf8")) as { files: Record<string, { control: { untracked: string[] }; why: string }> };
+  assert.ok(Object.keys(manifest.files).length > 0);
+  for (const [f, d] of Object.entries(manifest.files)) {
+    assert.ok(fs.existsSync(join("tests", f)), f);
+    assert.ok(Array.isArray(d.control?.untracked) && d.why.length > 40, `${f}: control.untracked and why`);
+    assert.deepEqual(Object.keys(d).sort(), ["control", "why"], `${f}: an opt-in is only a control contract`);
+  }
 });
 
 test("the daily sweep: bounded, checkpointed, publishes terminal complete records only, and says when it's overdue", () => {
@@ -474,6 +516,14 @@ test("the daily sweep: bounded, checkpointed, publishes terminal complete record
   assert.match(H.sweepStatus(env, Date.now() + 40 * 3600000).why, /overdue after 36 h/);
   assert.equal(cli(env, "sweep-status").status, 0);
   assert.match(H.sweepStatus({ SILTWAKE_RESULTS_DIR: temp("siltwake-sweep-none-") }).why, /no sweep has succeeded yet/);
+  // R3-5: a corrupt last-success record is unhealthy, never "NaN h ago".
+  const corrupt = temp("siltwake-sweep-corrupt-");
+  fs.mkdirSync(join(corrupt, "heavy"));
+  for (const last of [{ at: "not-a-date" }, {}, { at: new Date(Date.now() + 86400000).toISOString() }]) {
+    fs.writeFileSync(join(corrupt, "heavy", "sweep-last.json"), JSON.stringify(last));
+    const st = H.sweepStatus({ SILTWAKE_RESULTS_DIR: corrupt });
+    assert.deepEqual([st.ok, /has no valid time/.test(st.why)], [false, true], JSON.stringify(last));
+  }
   job(sched, "261025-000000-0006", [runOf({ ticket: "261025-000000-0006" })]);
   assert.deepEqual(H.sweep({ env, maxLogBytes: 10 }).tooLarge, ["261025-000000-0006"], "an oversized log is skipped, and noted");
 });
@@ -493,6 +543,11 @@ test("the sweep's timer: a stable installed copy, one quick queued job a day on 
   const copy = fs.realpathSync(join(share, "current", "heavy-results.mjs"));
   assert.equal(fs.readFileSync(copy, "utf8"), fs.readFileSync("scripts/heavy-results.mjs", "utf8"));
   assert.equal(fs.statSync(copy).mode & 0o222, 0, "the installed copy is read-only");
+  // R3-4: reinstalling the same version reuses its immutable copy.
+  const again = spawnSync("bash", ["scripts/heavy-results-timer.sh", "install", "--dry-run", dry], { encoding: "utf8", env: { ...process.env, SILTWAKE_SWEEP_QUEUE: "/q/heavy-check.mjs" } });
+  assert.equal(again.status, 0, again.stderr);
+  assert.equal(fs.realpathSync(join(share, "current", "heavy-results.mjs")), copy);
+  assert.deepEqual(fs.readdirSync(share).filter((n) => n.startsWith(".")), [], "no staging left behind");
   const u = spawnSync("bash", ["scripts/heavy-results-timer.sh", "uninstall", "--dry-run", dry], { encoding: "utf8" });
   assert.equal(u.status, 0, u.stderr);
   assert.ok(!fs.existsSync(join(units, "siltwake-heavy-results.timer")));

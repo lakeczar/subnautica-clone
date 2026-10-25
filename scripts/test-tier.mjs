@@ -42,7 +42,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { grantedMemoryMiB, heavyContainment } from "./heavy-containment.mjs";
 import { guardLocalRun } from "./local-guard.mjs";
 import { cacheRoot, closureHash, pruneBuildCache } from "./test-build-cache.mjs";
-import { HARNESS, NEAR_PCT, RECORD_VERSION, attemptOf, cacheState, fileFacts, filesHash, machineLabel, recordLine, treeState, workloadSettings } from "./heavy-results.mjs";
+import { HARNESS, NEAR_PCT, RECORD_VERSION, attemptOf, cacheState, fileFacts, filesHash, machineLabel, recordLine, runtimeEnv, treeState, workloadSettings } from "./heavy-results.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const build = join(root, process.env.SILTWAKE_TEST_BUILD || ".test-build"); // test-build.mjs checks the name
@@ -265,15 +265,15 @@ const heavyRun = {
   cache: cacheState(cacheRoot), selection: requested.length ? { kind: "subset", files: files.length } : { kind: "full", files: files.length },
   override, budgetEvidence: !override,
   // Identity beyond each file's own closure: the dependencies, and the harness that measures.
-  lockHash: filesHash(root, ["package-lock.json"]), harnessHash: filesHash(root, HARNESS),
+  lockHash: filesHash(root, ["package-lock.json"]), harnessHash: closureHash(HARNESS.map((f) => pathToFileURL(join(root, f)).href), undefined, root),
   // The attempt of the queue ticket this run is (R2-5), and the caller's workload settings (R2-2).
-  attempt: attemptOf(), settings: workloadSettings(),
+  attempt: attemptOf(), settings: workloadSettings(), runtime: runtimeEnv(),
 };
 const WORKLOAD = Object.keys(heavyRun.settings).length
   ? `workload settings: ${Object.entries(heavyRun.settings).map(([k, v]) => `${k}=${v}`).join(" ")}; these files may not test what they test by default` : null;
 if (WORKLOAD) console.log(`test-tier: ${WORKLOAD}`);
-// What each file's provenance is judged against (R2-1): the files tracked at the commit,
-// and the inputs a file declares in tests/heavy-inputs.json.
+// What a file's control eligibility is judged against (R3-1): the files tracked at the
+// commit, and the file's audited opt-in in tests/heavy-inputs.json.
 const tracked = new Set(spawnSync("git", ["-C", root, "ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout?.split("\0").filter(Boolean) ?? []);
 const declaredInputs = (() => { try { return JSON.parse(readFileSync(join(root, "tests", "heavy-inputs.json"), "utf8")).files ?? {}; } catch { return {}; } })();
 /** The file's compiled import closure, named relative to the build (the same in any checkout), with the runtime. */
@@ -323,10 +323,10 @@ function runHeavy(file, phase = "pool") {
       const prefix = `${basename(statsFile)}.`, reports = [];
       for (const n of readdirSync(scratch)) if (n.startsWith(prefix)) try { reports.push(JSON.parse(readFileSync(join(scratch, n), "utf8"))); } catch { /* cut */ }
       const own = reports.find((r) => r.pid === job.child.pid && r.threadId === 0) ?? null;
-      const facts = fileFacts(reports, job.child.pid, { root, build, cacheRoot, tracked, declared: declaredInputs[tsName(file)], tmp: tmpdir() });
+      const facts = fileFacts(reports, job.child.pid, { root, build, cacheRoot, tracked, contract: declaredInputs[tsName(file)]?.control });
       rows.push({ file: basename(file), phase, status, seconds, cpuS: cpuS ?? (own ? own.cpuMs / 1000 : null), cpuScope: cpuS != null ? "tree" : own ? "process" : null,
         peakMiB, budgetMiB: budget, budgetPct: budget ? Math.round((peakMiB / budget) * 1000) / 10 : null, oomKillsOwn, oomKillsNested,
-        cache: facts.cache, cacheUse: facts.cacheUse, closure: closureOf(file), provenance: facts.provenance });
+        cache: facts.cache, cacheUse: facts.cacheUse, closure: closureOf(file), control: facts.control });
       if (killed) console.error(`test-tier: ${basename(file)} went over its ${budget} MiB budget (whole process tree).`);
       done();
     });
@@ -382,7 +382,7 @@ for (const r of rows) {
   const oom = r.oomKillsOwn || r.oomKillsNested ? `  oom-killed ${r.oomKillsOwn ?? "?"} own + ${r.oomKillsNested ?? "?"} nested` : "";
   const cache = r.cache ? `  cache ${r.cache.hits} hit/${r.cache.fills} fill (${r.cacheUse})` : "";
   console.log(`  ${r.file.padEnd(36)} ${r.seconds.toFixed(1).padStart(6)} s  cpu ${fmt(r.cpuS).padStart(6)} s  peak ${String(r.peakMiB).padStart(5)} MiB / ${r.budgetMiB} MiB` +
-    `${cache}${oom}${r.provenance?.complete === false ? "  inputs not fully known" : ""}  ${r.status}` + (r.wait ? `  [timing; CPU wait: job ${r.wait.job ?? "?"}%, host ${r.wait.host ?? "?"}%]` : ""));
+    `${cache}${oom}${r.control?.eligible ? "  control-eligible" : ""}  ${r.status}` + (r.wait ? `  [timing; CPU wait: job ${r.wait.job ?? "?"}%, host ${r.wait.host ?? "?"}%]` : ""));
 }
 console.log(`  total ${rows.reduce((t, r) => t + r.seconds, 0).toFixed(1)} s of file time in ${((Date.now() - started) / 1000).toFixed(1)} s ` +
   `(up to ${concurrency} files within ${poolMiB} MiB of budgets at once)`);

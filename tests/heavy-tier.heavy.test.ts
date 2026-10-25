@@ -48,7 +48,7 @@ function runTier(files: readonly string[], mode: (typeof modes)[number], budgetM
 }
 interface Row { file: string; status: string; cpuS: number | null; cpuScope: string | null; peakMiB: number; budgetMiB: number; budgetPct: number | null;
   oomKillsOwn: number | null; oomKillsNested: number | null; cache: { hits: number; misses: number; fills: number } | null; cacheUse: string | null; closure: string | null;
-  provenance: { complete: boolean; why: string[]; inputs: number; inputsHash: string } }
+  control: { eligible: boolean; why: string[]; untrackedHash: string } }
 interface HeavyRecord { commit: string | null; machine: string; containment: string; jobMemoryMiB: number | null; cache: { state: string }; selection: { kind: string };
   override: { budgetMiB: number | null; budgetsFile: string | null } | null; budgetEvidence: boolean; lockHash: string; harnessHash: string; files: Row[];
   settings: Record<string, string>; attempt: string | null }
@@ -225,11 +225,11 @@ for (const mode of modes) {
 });`);
     const r = rowOf(recordOf(tier([silent], mode, 512).out.stdout), `silent-child-${tag}`);
     assert.equal(r.cacheUse, "unknown");
-    assert.equal(r.provenance.complete, false);
-    assert.match(r.provenance.why.join(), /started what never reported: node/);
+    assert.equal(r.control.eligible, false);
+    assert.match(r.control.why.join(), /started what never reported: node/);
   });
 
-  test(`${mode}: a computed import of a generated module, or a generated fixture, leaves the inputs not fully known (R2-1)`, () => {
+  test(`${mode}: a computed import of a generated module, or a generated fixture, trips the control tripwire (R2-1, R3-1)`, () => {
     const gen = join(probes, `gen-${tag}.mjs`), fixture = join(probes, `fixture-${tag}.json`);
     writeFileSync(gen, "export default 1;\n"); writeFileSync(fixture, "{}");
     const probe = write(`inputs-${tag}`, `import { readFileSync } from "node:fs";
@@ -241,10 +241,10 @@ test("reads what the commit doesn't determine", async () => {
     const out = tier([probe], mode, 512).out;
     assert.equal(out.status, 0, out.stdout + out.stderr);
     const r = rowOf(recordOf(out.stdout), `inputs-${tag}`);
-    assert.equal(r.provenance.complete, false);
-    const why = r.provenance.why.join();
+    assert.equal(r.control.eligible, false);
+    const why = r.control.why.join();
     assert.ok(why.includes(`gen-${tag}.mjs`) && why.includes(`fixture-${tag}.json`), why);
-    assert.match(out.stdout, /inputs not fully known/);
+    assert.doesNotMatch(out.stdout, /control-eligible/);
   });
 
   test(`${mode}: a workload setting is recorded and labelled (R2-2)`, async () => {

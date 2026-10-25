@@ -11,32 +11,31 @@
 // so an A/B or a review reads root's numbers instead of re-running the control arm,
 // and a later nightly run can alert on files near their budget.
 //
-// The record (v3), with every number's context (WORKER_RESOURCE_LIMITS.md, "Measurement hygiene"):
+// The record (v4), with every number's context (WORKER_RESOURCE_LIMITS.md, "Measurement hygiene"):
 // - run: commit and dirty state, machine, ticket and the attempt of it (`local`, or
 //   `alickers:a<N>`), Node, containment, the job's memory limit, pool, concurrency and
 //   CPU grant, the build cache at the start, the selection (full tier or a subset), the
-//   lockfile's and the harness's hashes, the caller's workload settings (`settings`), and
-//   the budget source: canonical (tests/heavy-budgets.json), or an override
-//   (SILTWAKE_HEAVY_BUDGET_MIB or SILTWAKE_HEAVY_BUDGETS), which is `budgetEvidence: false`.
+//   lockfile's and the harness's hashes, the caller's workload settings (`settings`), the
+//   runtime settings (`runtime`: TZ, locale, UV_THREADPOOL_SIZE, CI), and the budget
+//   source: canonical (tests/heavy-budgets.json), or an override (SILTWAKE_HEAVY_BUDGET_MIB
+//   or SILTWAKE_HEAVY_BUDGETS), which is `budgetEvidence: false`.
 // - per file: status, phase (pool or timing), wall s, CPU s (`cpuScope`: the tree, or
 //   the file's own process), peak MiB against its budget, OOM kills (own budget, nested
 //   cgroups), the build cache's use over all its processes (`cacheUse`: hit, fill, mixed,
 //   none, or unknown when a descendant never reported), its compiled import closure, and
-//   its provenance: every input its processes loaded or read, hashed, and whether that
-//   account is complete (fileFacts). Timing files add the CPU wait.
+//   whether it may serve as an A/B control (`control`, fileFacts). Timing files add the CPU wait.
 //
-// Using a stored row (STEW-3 R1, R2):
-// - `eligibility`: the record agrees with its job's receipt (the same ticket, the
-//   attempt the receipt reports on, a clean commit the receipt binds, the same machine,
-//   a job that ended on its own work) at canonical budgets, and the file passed. Budget
-//   alerts and the gate's full-tier check read eligible rows only; the gate also needs
-//   the canonical workload (no settings).
-// - a control arm (`controlProblems`): an eligible row at exactly the intended clean
-//   control commit, for the same file, measured by the same harness under the same
-//   conditions (`conditionsOf`: machine, containment, limits, pool, concurrency, CPUs,
-//   budget, phase, Node, workload settings and the file's cache use: hit, fill or none),
-//   with both arms' provenance complete, and no other complete run of that commit's file
-//   that read different inputs.
+// Using a stored row (STEW-3 R1–R3):
+// - `eligibility`: the record agrees with its job's normalised receipt (the same ticket,
+//   the receipt's terminal attempt, a clean commit the receipt binds, the same machine, a
+//   job that ended on its own work) at canonical budgets, and the file passed. Budget
+//   alerts and the gate's full-tier check read eligible rows only; the gate also needs the
+//   canonical workload (no settings).
+// - a control arm (`controlProblems`): fails closed. Only a file that opts in through
+//   tests/heavy-inputs.json, after review, and whose observed inputs pass the tripwire;
+//   at exactly the intended clean control commit, the same file, harness and declared
+//   untracked inputs, under equal conditions (`conditionsOf`), with a cache use of hit,
+//   fill or none.
 //
 //   node scripts/heavy-results.mjs ingest [TICKET...]   copy new records from the queue's job logs
 //   node scripts/heavy-results.mjs show [--commit SHA] [--machine LABEL] [--file NAME] [--eligible] [--json]
@@ -48,19 +47,19 @@
 //       that stored run's row for the file
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { existsSync, globSync, linkSync, mkdirSync, readdirSync, readFileSync, realpathSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
 import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const RECORD_LINE = "heavy-results: ";
-export const RECORD_VERSION = 3;
+export const RECORD_VERSION = 4;
 /** The share of a file's budget its peak may reach before it is reported as near. */
 export const NEAR_PCT = 85;
 /** The canonical budgets, relative to the repository root. */
 export const CANONICAL_BUDGETS = "tests/heavy-budgets.json";
-/** The harness: the scripts whose behaviour shapes every number a run records. */
-export const HARNESS = ["scripts/test-tier.mjs", "scripts/heavy-containment.mjs", "scripts/test-build-cache.mjs", "scripts/test-heavy-file.mjs"];
+/** The harness: the entry points whose module closure shapes every number a run records (the tier, and the per-file preload). */
+export const HARNESS = ["scripts/test-tier.mjs", "scripts/test-heavy-file.mjs"];
 const MACHINES = { "factory-worker": "RTX 3090 (factory-worker)", "siltwake-alickers": "RTX 4070 Laptop (alickers, shared desktop host)" };
 export const machineLabel = (host = hostname()) => MACHINES[host] ?? host;
 /**
@@ -93,6 +92,10 @@ export function workloadSettings(env = process.env) {
 export const canonicalEnv = (env = process.env) =>
   Object.fromEntries(Object.entries(env).filter(([k]) => !isWorkloadKey(k) && k !== "SILTWAKE_HEAVY_BUDGET_MIB" && k !== "SILTWAKE_HEAVY_BUDGETS"));
 
+/** Runtime settings a row is measured under (R3): recorded, compared for controls, and kept by the gate. */
+export const RUNTIME_KEYS = /^(TZ|LANG|LANGUAGE|LC_(?!VERBOSE$)[A-Z_]+|UV_THREADPOOL_SIZE|CI)$/;
+export const runtimeEnv = (env = process.env) => Object.fromEntries(Object.keys(env).filter((k) => RUNTIME_KEYS.test(k) && env[k] != null).sort().map((k) => [k, env[k]]));
+
 /**
  * Which attempt of a queue ticket this process runs in (STEW-3 R2-5): `local` inside a
  * job here, `alickers:a<N>` inside attempt N on the second worker (its lane runs the job
@@ -103,8 +106,20 @@ export function attemptOf(env = process.env) {
   if (env.SILTWAKE_LANE_TICKET) { const m = /\/a(\d+)\/heartbeat$/.exec(env.SILTWAKE_JOB_HEARTBEAT ?? ""); return m ? `alickers:a${m[1]}` : "alickers:?"; }
   return null;
 }
-/** The attempt a receipt reports on: the job's terminal attempt. */
-export const terminalAttempt = (rc) => (rc?.remote ? `alickers:a${rc.attempts ?? 1}` : "local");
+/**
+ * The attempt a queue receipt reports on, its terminal attempt (R3-2): `alickers:a<N>`
+ * from a remote receipt's attempt count, `local` for a job that ran here (the queue runs
+ * a ticket here at most once: a local run is never retried, only a remote one falls back
+ * here), and null when the receipt doesn't establish it (a remote receipt without a valid
+ * count). Never a default.
+ */
+export function receiptAttempt(exit) {
+  if (!exit) return null;
+  if (!exit.remote) return "local";
+  return Number.isInteger(exit.attempts) && exit.attempts >= 1 ? `alickers:a${exit.attempts}` : null;
+}
+/** The stored (normalised) receipt's terminal attempt: what ingest recorded, nothing derived. */
+export const terminalAttempt = (rc) => rc?.attempt ?? null;
 
 export const resultsDir = (env = process.env) => join(env.SILTWAKE_RESULTS_DIR || "/work/tmp/siltwake-results", "heavy");
 const schedDir = (env = process.env) => env.SILTWAKE_SCHED_DIR || "/work/tmp/siltwake-sched";
@@ -141,83 +156,79 @@ export function cacheUse(cache) {
 
 /**
  * One file's facts from the reports of its processes and workers (scripts/test-heavy-file.mjs),
- * for its stored row (STEW-3 R2-1, R2-3). `rootPid`: the file's own process.
- * ctx: { root, build, cacheRoot, tracked: Set of repo-relative tracked paths, declared:
- * { generated: [prefixes], external: [prefixes], programs: [names], workers: bool }, tmp }.
- * Returns { cache, cacheUse, provenance: { complete, why, inputs, inputsHash, unobserved } }.
+ * for its stored row (STEW-3 R3). `rootPid`: the file's own process. ctx: { root, build,
+ * cacheRoot, tracked: Set of repo-relative tracked paths, contract: the file's opt-in
+ * from tests/heavy-inputs.json ({ untracked: [globs] }) or undefined }.
+ * Returns { cache, cacheUse, control: { eligible, why, untrackedHash } }.
  *
- * - Cache: summed over the processes that had a build-cache store. A descendant that
- *   never reported (not node, started without the preload, or a worker thread, which
- *   preloads don't reach) makes it `unknown`, unless declared.
- * - Inputs: every module loaded and file read, by any of them. Each is accounted for:
- *   node_modules (the lockfile), /proc, /sys and /dev, the build cache (cache use), and
- *   anything the file's own processes created or wrote, aren't inputs; a file tracked at
- *   the commit, or compiled into the build from one, is bound to the commit; a declared
- *   generated or external path is hashed as the run found it. Anything else (an ignored
- *   or generated file, a read outside the repository) makes the provenance incomplete.
- *   `inputsHash` covers every bound and declared input's path and content.
+ * - Cache: summed over the processes that had a build-cache store. Any process or worker
+ *   the file started that never reported makes it `unknown`.
+ * - Control eligibility fails closed: a file is a control only if it opts in, every
+ *   descendant reported, nothing untraced was used (a FileHandle, a native addon, a
+ *   non-file module), and every input the observer saw is tracked at the commit, compiled
+ *   into the build from a tracked file, newly created by the file itself (judged on the
+ *   resolved path) or one of its declared untracked inputs. The observer is only a
+ *   tripwire: what it can't see, the opt-in's review covers. `untrackedHash` hashes every
+ *   file the declared globs match, as found; both arms must agree on it.
  */
 export function fileFacts(reports, rootPid, ctx) {
-  const why = [], declared = ctx.declared ?? {};
+  const why = [], contract = ctx.contract;
   const root = reports.find((r) => r.pid === rootPid && r.threadId === 0);
   if (!root) why.push("the file's own process didn't report (it died before its exit hook)");
-  // Descendants: matched by pid (processes) or pid and thread (workers).
   const reported = new Set(reports.map((r) => `${r.pid}.${r.threadId}`)), unobserved = [];
   for (const r of reports) {
-    for (const s of r.spawned ?? []) if (!(s.pid && reported.has(`${s.pid}.0`)) && !(declared.programs ?? []).includes(s.cmd)) unobserved.push(s.cmd);
-    for (const t of r.workers ?? []) if (!reported.has(`${r.pid}.${t}`) && !declared.workers) unobserved.push(`worker thread ${t}`);
+    for (const c of r.spawned ?? []) if (!(c.pid && reported.has(`${c.pid}.0`))) unobserved.push(c.cmd);
+    for (const t of r.workers ?? []) if (!reported.has(`${r.pid}.${t}`)) unobserved.push(`worker thread ${t}`);
   }
   if (unobserved.length) why.push(`started what never reported: ${[...new Set(unobserved)].slice(0, 4).join(", ")}`);
   let cache = null;
   for (const r of reports) if (r.store && r.cache) { cache ??= { hits: 0, misses: 0, fills: 0, fillMs: 0 }; for (const k of Object.keys(cache)) cache[k] += r.cache[k] ?? 0; }
   const use = !root ? null : unobserved.length ? "unknown" : cacheUse(cache ?? { hits: 0, misses: 0, fills: 0, fillMs: 0 });
-  // Inputs.
+  if (!contract) why.unshift(`not opted in as a control (${CANONICAL_INPUTS})`);
+  const untraced = [...new Set(reports.flatMap((r) => r.untraced ?? []))];
+  if (untraced.length) why.push(`used what the tripwire can't follow: ${untraced.join(", ")}`);
+  // The tripwire, on resolved paths: a symlink in fresh scratch to an old file reads the old file.
+  const real = (p) => { try { return realpathSync(p); } catch { return p; } };
   const under = (p, dir) => dir && (p === dir || p.startsWith(dir.endsWith("/") ? dir : `${dir}/`));
-  const produced = reports.flatMap((r) => r.produced ?? []);
-  const isProduced = (p) => produced.some((d) => under(p, d));
-  const files = new Set();
-  const expand = (p) => {
-    let st; try { st = statSync(p); } catch { files.add(p); return; } // absent now: still an input, hashed as absent
-    if (!st.isDirectory()) { files.add(p); return; }
-    for (const e of readdirSync(p)) expand(join(p, e));
-  };
-  for (const r of reports) for (const p of [...(r.loads ?? []), ...(r.reads ?? [])]) {
-    if (p.split("/").includes("node_modules") || /^\/(proc|sys|dev)(\/|$)/.test(p) || under(p, ctx.cacheRoot) || isProduced(p)) continue;
-    expand(p);
-  }
+  const created = reports.flatMap((r) => r.created ?? []).map(real);
+  const declared = new Set((contract?.untracked ?? []).flatMap((g) => globSync(g, { cwd: ctx.root })).map((f) => join(ctx.root, f)));
   const bound = (p) => {
     const rel = relative(ctx.root, p);
     if (rel.startsWith("..")) return false;
     if (ctx.tracked.has(rel)) return true;
-    const b = relative(ctx.build, p);
-    if (b.startsWith("..")) return false;
-    const m = /^(.*)\.(js|js\.map|json)$/.exec(b);
-    return Boolean(m) && (m[2] === "json" ? [b] : [".ts", ".tsx", ".mts"].map((x) => m[1] + x)).some((src) => ctx.tracked.has(src));
+    const b = relative(ctx.build, p), m = /^(.*)\.(js|js\.map|json)$/.exec(b);
+    return !b.startsWith("..") && Boolean(m) && (m[2] === "json" ? [b] : [".ts", ".tsx", ".mts"].map((x) => m[1] + x)).some((src) => ctx.tracked.has(src));
   };
-  const declaredPath = (p) => (declared.generated ?? []).some((d) => under(p, join(ctx.root, d))) || (declared.external ?? []).some((d) => under(p, d));
-  const hash = createHash("sha256"), unknown = [];
-  let inputs = 0;
-  for (const p of [...files].sort()) {
-    if (under(p, ctx.cacheRoot) || isProduced(p)) continue;
-    if (!bound(p) && !declaredPath(p)) { unknown.push(relative(ctx.root, p).startsWith("..") ? p : relative(ctx.root, p)); continue; }
-    inputs++;
-    hash.update(relative(ctx.root, p)).update("\0");
-    try { hash.update(readFileSync(p)); } catch { hash.update("<absent>"); }
-    hash.update("\0");
-  }
-  if (unknown.length) why.push(`read inputs the commit doesn't determine: ${unknown.slice(0, 3).join(", ")}${unknown.length > 3 ? ` and ${unknown.length - 3} more` : ""}`);
-  return { cache, cacheUse: use, provenance: { complete: why.length === 0, why, inputs, inputsHash: hash.digest("hex").slice(0, 16), unobserved: [...new Set(unobserved)] } };
+  const unknown = new Set();
+  const check = (p0) => {
+    if (p0.split("/").includes("node_modules") || /^\/(proc|sys|dev)(\/|$)/.test(p0) || under(p0, ctx.cacheRoot)) return;
+    const p = real(p0);
+    if (created.some((d) => under(p, d))) return;
+    // A directory read whole (a cpSync source) is each file in it.
+    let dir = false;
+    try { dir = statSync(p).isDirectory(); } catch { /* gone: judged by its path */ }
+    if (dir) { for (const e of readdirSync(p)) check(join(p, e)); return; }
+    if (!bound(p) && !declared.has(p)) unknown.add(relative(ctx.root, p).startsWith("..") ? p : relative(ctx.root, p));
+  };
+  for (const r of reports) for (const p0 of [...(r.loads ?? []), ...(r.reads ?? [])]) check(p0);
+  if (unknown.size) why.push(`read what isn't tracked, compiled from tracked, its own or declared: ${[...unknown].sort().slice(0, 3).join(", ")}${unknown.size > 3 ? ` and ${unknown.size - 3} more` : ""}`);
+  const hash = createHash("sha256");
+  for (const f of [...declared].sort()) { hash.update(relative(ctx.root, f)).update("\0"); try { hash.update(readFileSync(f)); } catch { hash.update("<absent>"); } hash.update("\0"); }
+  return { cache, cacheUse: use, control: { eligible: why.length === 0, why, untrackedHash: hash.digest("hex").slice(0, 16) } };
 }
 
+/** The audited control opt-ins, relative to the repository root. */
+export const CANONICAL_INPUTS = "tests/heavy-inputs.json";
+
 /** What a row measured: the commit and the code under test. Two arms of an A/B differ here by design. */
-export const identityOf = (run, row) => ({ commit: run.commit, file: row.file, closure: row.closure ?? null, inputs: row.provenance?.inputsHash ?? null,
+export const identityOf = (run, row) => ({ commit: run.commit, file: row.file, closure: row.closure ?? null, untracked: row.control?.untrackedHash ?? null,
   lock: run.lockHash ?? null, harness: run.harnessHash ?? null });
 
 /** The conditions a row was measured under: equal for any two rows compared. */
 export const conditionsOf = (run, row) => ({
   machine: run.machine, containment: run.containment, jobMemoryMiB: run.jobMemoryMiB, poolMiB: run.poolMiB, concurrency: run.concurrency,
   jobCpus: run.jobCpus ?? null, budgetMiB: row.budgetMiB, phase: row.phase, node: run.node, cacheUse: row.cacheUse ?? cacheUse(row.cache),
-  settings: JSON.stringify(run.settings ?? null),
+  settings: JSON.stringify(run.settings ?? null), runtime: JSON.stringify(run.runtime ?? null),
 });
 
 /** The record's text line. */
@@ -231,10 +242,10 @@ export function schemaProblems(r) {
   for (const k of ["at", "machine", "containment", "node", "lockHash", "harnessHash"]) if (typeof r[k] !== "string") p.push(`run.${k}`);
   for (const k of ["commit", "ticket", "attempt"]) if (!str(k)) p.push(`run.${k}`);
   if (typeof r.dirty !== "boolean" && r.dirty !== null) p.push("run.dirty");
-  if (typeof r.budgetEvidence !== "boolean" || !r.cache || !r.selection || typeof r.settings !== "object" || r.settings === null) p.push("run context");
+  if (typeof r.budgetEvidence !== "boolean" || !r.cache || !r.selection || typeof r.settings !== "object" || r.settings === null || typeof r.runtime !== "object" || r.runtime === null) p.push("run context");
   if (r.selection && r.selection.files !== r.files.length) p.push(`the selection names ${r.selection.files} files, the record holds ${r.files.length}`);
   for (const f of r.files) {
-    if (typeof f?.file !== "string" || typeof f.status !== "string" || !num(f, "seconds") || !num(f, "peakMiB") || !num(f, "budgetMiB") || !f.provenance || typeof f.provenance.complete !== "boolean")
+    if (typeof f?.file !== "string" || typeof f.status !== "string" || !num(f, "seconds") || !num(f, "peakMiB") || !num(f, "budgetMiB") || !f.control || typeof f.control.eligible !== "boolean")
       { p.push(`row ${f?.file ?? "?"}`); break; }
   }
   return p;
@@ -252,10 +263,10 @@ export function recordsIn(text) {
 
 const readJson = (p) => { try { return JSON.parse(readFileSync(p, "utf8")); } catch { return null; } };
 
-/** The queue receipt's facts a stored run keeps. */
+/** The one normalised receipt a stored run keeps, its terminal attempt included (R3-2). */
 function receiptOf(exit) {
   if (!exit) return null;
-  return { ticket: exit.ticket ?? null, code: exit.code, stopReason: exit.stopReason ?? null, label: exit.label ?? null, class: exit.class ?? null, memMiB: exit.memMiB ?? null,
+  return { ticket: exit.ticket ?? null, attempt: receiptAttempt(exit), attempts: exit.attempts ?? null, code: exit.code, stopReason: exit.stopReason ?? null, label: exit.label ?? null, class: exit.class ?? null, memMiB: exit.memMiB ?? null,
     machine: exit.machine ?? null, machineTag: exit.machineTag ?? null, remote: Boolean(exit.remote), evidence: exit.evidence ?? null,
     disturbed: exit.context?.disturbed ?? null, endedAt: exit.endedAt ?? null };
 }
@@ -283,7 +294,8 @@ export function eligibility(stored, run, row = null) {
   if (run?.ticket !== stored?.ticket) p.push(`the record is from ticket ${run?.ticket}, stored under ${stored?.ticket}`);
   // A ticket can run more than once (an any job whose alickers attempt lost its receipt
   // reruns here); only the attempt the receipt reports on is that receipt's evidence.
-  if (rc && run?.v >= RECORD_VERSION && run.attempt !== terminalAttempt(rc)) p.push(`from attempt ${run.attempt}, not the job's terminal attempt (${terminalAttempt(rc)}): an abandoned attempt`);
+  if (rc && !terminalAttempt(rc)) p.push("its receipt doesn't establish the job's terminal attempt");
+  else if (rc && run?.attempt !== terminalAttempt(rc)) p.push(`from attempt ${run?.attempt}, not the job's terminal attempt (${terminalAttempt(rc)}): an abandoned attempt`);
   if (run?.dirty !== false) p.push("the tree had uncommitted changes (or its state is unknown)");
   if (!run?.budgetEvidence) p.push(`not budget evidence (${run?.override ? `override: ${JSON.stringify(run.override)}` : "non-canonical budgets"})`);
   if (row && row.status !== "ok") p.push(`${row.file} didn't pass (${row.status})`);
@@ -358,7 +370,8 @@ export function fullTierProblems(stored, commit, canonical = null) {
   // attempt's records stay in the store as diagnostics and never decide the gate.
   const terminal = stored.receipt ? terminalAttempt(stored.receipt) : null;
   const runs = all.filter((r) => r.v >= RECORD_VERSION && r.attempt === terminal).slice(-1);
-  if (!runs.length) return [`no complete v${RECORD_VERSION} record from the job's terminal attempt (${terminal ?? "no receipt"}); records seen from: ${[...new Set(all.map((r) => r.attempt ?? `v${r.v}`))].join(", ")}`];
+  if (!terminal) return [`its receipt doesn't establish the job's terminal attempt (${stored.receipt ? "a remote receipt without its attempt count" : "no receipt"})`];
+  if (!runs.length) return [`no complete v${RECORD_VERSION} record from the job's terminal attempt (${terminal}); records seen from: ${[...new Set(all.map((r) => r.attempt ?? `v${r.v}`))].join(", ")}`];
   const problems = [];
   for (const r of runs) {
     problems.push(...eligibility(stored, r));
@@ -395,21 +408,16 @@ export const nearBudget = (rows, pct = NEAR_PCT) =>
 /**
  * Why `control` (a stored row: { stored, run, row }) can't be the control arm for
  * `candidate` ({ run, row }, stored or not) at the intended clean control commit
- * (empty: it can). Identity: exactly that commit, the same file, the same harness.
- * Conditions: all equal, and a cache use that isn't mixed.
+ * (empty: it can). Both arms opted in and passed the tripwire, agree on their declared
+ * untracked inputs, and were measured by the same harness under equal conditions.
  */
-export function controlProblems(candidate, control, controlCommit, peers = []) {
+export function controlProblems(candidate, control, controlCommit) {
   const p = eligibility(control.stored, control.run, control.row);
-  // Each arm's provenance must be complete: every input it read is known and hashed (R2-1).
   for (const [arm, r] of [["control", control.row], ["candidate", candidate.row]])
-    if (!r.provenance?.complete) p.push(`the ${arm}'s inputs aren't fully known${r.provenance?.why?.length ? ` (${r.provenance.why.slice(0, 2).join("; ")})` : ""}`);
-  // Two complete runs of the control commit's file under its code but with different inputs:
-  // its generated inputs aren't a function of the commit.
-  const differ = peers.filter((q) => q.run.commit === controlCommit && q.row.file === control.row.file && q.row.closure === control.row.closure &&
-    q.row.provenance?.complete && q.row.provenance.inputsHash !== control.row.provenance?.inputsHash);
-  if (differ.length) p.push(`other runs of ${control.row.file} at that commit read different inputs (${differ.map((q) => q.ticket).slice(0, 2).join(", ")}): not reproducible`);
+    if (!r.control?.eligible) p.push(`the ${arm} isn't eligible as a control${r.control?.why?.length ? ` (${r.control.why.slice(0, 2).join("; ")})` : ""}`);
   if (control.run.commit !== controlCommit) p.push(`it's for ${String(control.run.commit).slice(0, 12)}, not the intended control ${String(controlCommit).slice(0, 12)}`);
   if (control.row.file !== candidate.row.file) p.push(`it measured ${control.row.file}, not ${candidate.row.file}`);
+  if (control.row.control?.untrackedHash !== candidate.row.control?.untrackedHash) p.push("their declared untracked inputs differ");
   if (!control.run.harnessHash || control.run.harnessHash !== candidate.run.harnessHash) p.push("a different measuring harness (or an unknown one)");
   if (!control.row.closure) p.push("its file's import closure wasn't recorded");
   if (candidate.row.status !== "ok") p.push(`the candidate's ${candidate.row.file} didn't pass`);
@@ -464,7 +472,9 @@ export function sweep({ max = 200, maxLogBytes = 64 * 1024 * 1024, env = process
 export function sweepStatus(env = process.env, now = Date.now()) {
   const last = readJson(join(resultsDir(env), "sweep-last.json"));
   if (!last) return { ok: false, why: "no sweep has succeeded yet", last: null };
-  const ageH = (now - Date.parse(last.at)) / 3600000;
+  const at = typeof last.at === "string" ? Date.parse(last.at) : NaN;
+  if (!Number.isFinite(at) || at > now + 60000) return { ok: false, why: `the last-success record has no valid time (${JSON.stringify(last.at ?? null)})`, last };
+  const ageH = (now - at) / 3600000;
   return ageH > SWEEP_OVERDUE_H ? { ok: false, why: `the last successful sweep was ${ageH.toFixed(1)} h ago (overdue after ${SWEEP_OVERDUE_H} h; the queue prunes logs at 7 days)`, last }
     : { ok: true, why: `last successful sweep ${ageH.toFixed(1)} h ago: ${last.stored} stored, ${last.scanned} scanned, ${last.remaining} left for the next`, last };
 }
@@ -523,7 +533,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const cand = all.find((r) => r.ticket === like && r.row.file.startsWith(file));
     if (!cand) { console.error(`no stored row for ${file} under ticket ${like}`); process.exit(2); }
     for (const c of candidates) {
-      const p = controlProblems(cand, c, commit, all);
+      const p = controlProblems(cand, c, commit);
       console.log(`${c.ticket} ${c.row.file}: ${p.length ? `not a control: ${p.join("; ")}` : "a control"}`);
     }
     process.exit(0);

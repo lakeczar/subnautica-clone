@@ -37,9 +37,17 @@ case "$cmd" in
     node="$(command -v node)" || { echo "heavy-results-timer: node isn't on PATH" >&2; exit 1; }
     [[ -n "$dry" || -f "$queue" ]] || { echo "heavy-results-timer: the installed queue client $queue is missing (scripts/heavy/install.sh)" >&2; exit 1; }
     version="$(sha256sum "$here/heavy-results.mjs" | cut -c1-12)"
-    mkdir -p "$share/$version" "$units"
-    cp "$here/heavy-results.mjs" "$share/$version/heavy-results.mjs"
-    chmod a-w "$share/$version/heavy-results.mjs"
+    mkdir -p "$share" "$units"
+    # A version's copy is immutable: reinstalling the same version reuses it; a new one is
+    # published whole (written, then renamed into place) before anything points at it.
+    if [[ -f "$share/$version/heavy-results.mjs" ]]; then
+      cmp -s "$here/heavy-results.mjs" "$share/$version/heavy-results.mjs" || { echo "heavy-results-timer: $share/$version differs from its own version hash; investigate before removing it" >&2; exit 1; }
+    else
+      stage="$(mktemp -d "$share/.$version.XXXXXX")"
+      cp "$here/heavy-results.mjs" "$stage/heavy-results.mjs"
+      chmod a-w "$stage/heavy-results.mjs"
+      mv -T "$stage" "$share/$version"
+    fi
     ln -sfn "$version" "$share/current"
     cat > "$units/$name.service" <<EOF
 [Unit]
