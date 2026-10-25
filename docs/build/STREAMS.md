@@ -1323,3 +1323,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Per style:** a vignette, close-ups, and an in-engine Babylon view; plus deeper, eerier vignettes for the top two styles.
   - **Output:** a contact sheet for the owner to pick a direction. This feeds the style board and AP-1's bake-off.
   - **Setup:** portable Blender through the queue, with no install or ledger row needed. Scripts on `t3/art0-style-exploration`.
+- **STEW-3 R1 fixes done at `9b909ed7`** (code `c43e5e1`, root merged in):
+  - **R1-1:** both budget variables count as overrides, and the gate derives files and budgets from `heavy-budgets.json`.
+  - **R1-2:** `matchKey` replaced by identity plus conditions, with a `control` command.
+  - **R1-3:** one shared eligibility check, with receipt binding.
+  - **Checks:** fast 1,703 pass; a real gate `--only heavy` passed with 67 eligible rows.
+  - **Review:** Sol R2 dispatched (`siltwake-stew3-review-r2-sol-9b909ed`). Daily ingest: yes in principle; R2 recommends the mechanism.
