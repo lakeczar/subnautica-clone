@@ -1283,3 +1283,71 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P2:** `matchKey` can't establish an equivalent control (needs identity vs conditions, and per-file cache state).
   - **P2:** stored-result eligibility ignores the receipt.
   - **Decision:** fixes adopted as written.
+- **CW-1 R5 response done at `811f0867`** (frozen):
+  - **Fixes:** R5-1 warmup after admission, with a `withoutQueryBuilds` scope and 4/4 entry tests; R5-2 GPU credit off (diagnostic only); R5-3 budgets reverted; R5-4 summaries regenerated; R5-5 the hazard reference restored.
+  - **Checks:** fast 1,669; heavy 71/71 at real budgets.
+  - **Composed seven-segment functional sweep:** 34/34 stops, 0 holds, unsliced builds, fallbacks or unlit frames. The surf approach shows 12 stalls at 89% hull.
+  - **3090 OOM:** an end-of-run clone spike, now sliced (`6d9c2d19`).
+  - **Adjacent gap:** `flowHere` `inside()` for parked craft during an in-flight pack.
+  - **Review:** Sol R6 (the affected review for provisional integration) running (`siltwake-cw1-review-r6-sol-811f086`).
+- **CW-1 `flowHere`: withdrawn by the author.**
+  - **Why:** `flowHere` samples only the controlled craft and the diver, and admission covers both. Probe: `/work/tmp/cw1/flowhere/`.
+  - **Ruling (b):** no entry wait, since it would add decode-only waits, which are a hard pacing gate.
+  - **Residual:** a long-reach, non-player query meeting an unbuilt cluster while the pack is pending, recorded as a counted theoretical open item. It trips the gate as a `query` unsliced build. Owner: BIO-1, whose long-reach queries must go through `withoutQueryBuilds` or admission.
+  - **R6** was steered to verify this independently.
+- **LS-1 1b, F3 closed at `3aeac541`** (the procure overshoot deferral):
+  - 8 of 10 pacing rows ratcheted down; the carrier works row −9.5 min.
+  - The 2 no-optional-carrier rows (+0.51 min works, +0.3 s at C12) are recorded as a named exception, not a pass. Ceilings are at their measured values with the causes, and PACE-1 owns the re-ratchet at the second merge.
+  - Determinism check requested on the C12 +0.3 s.
+  - Next: R2.
+- **CW-1 R6 (Sol, `e6cf1abe` on `review/cw-1-r6`): accept for provisional integration.**
+  - No new P1 or P2 findings; steady-60 withheld.
+  - The `flowHere` parked-craft claim is independently disproved. The residual long-reach query class is owned by BIO-1, with load-phase diagnostics owned by the harness successor; the tripwire covers travel only.
+  - **Follow-ups:**
+    - R6-1 (P3): surface the deferral and live-record counters;
+    - R6-2 (P3): memory evidence qualified;
+    - one commit-bound 3090 tour 5 export check at the default limit;
+    - the authored surf approach route.
+  - **Next:** CW-1 merges root into the candidate, resolving `bake-terrain` conflicts against STEW-2's guard, makes the docs-only handoff, and runs fast, bake-store and heavy. Then the coordinator gate, then the merge.
+- **REC-1:**
+  - Rehearsal `5fd5` clean. The 4070's indicative result, NOT MET, +0.205 ms [0.186, 0.224], came from the laptop running slow (about 42 fps, against 56 in `f4fb`).
+  - The acceptance run is the exclusive 3090 duet, `261025-043054-e104` at `a934d88d`, about 38 min. No compiling on factory-worker during it.
+- **LS-1 1b R1 fixes done at `53d054e7`** (code `cb2b00bf`):
+  - F1 Base upgrades and crop disclosure; F2 keypad reads committed state; F4 cell-local cache discovery and per-host power, cheaper per step; F3 procure deferral with the named exception for the 2 rows.
+  - The C12 +0.3 s is deterministic and attributed to 1b content.
+  - **Checks:** fast, heavy, economy, build and playthrough 9/9 all pass.
+  - **Review:** Sol R2 dispatched (`siltwake-ls1-1b-review-r2-sol-53d054e`).
+- **ART-0, the Blender style exploration (owner request), started** (`siltwake-art0-style-exploration-opus-5c0b6b9`, Opus high):
+  - **Subjects:** a creature, a natural environment piece and a plant.
+  - **Styles:** 4 or 5, plus the current game as a baseline.
+  - **Per style:** a vignette, close-ups, and an in-engine Babylon view; plus deeper, eerier vignettes for the top two styles.
+  - **Output:** a contact sheet for the owner to pick a direction. This feeds the style board and AP-1's bake-off.
+  - **Setup:** portable Blender through the queue, with no install or ledger row needed. Scripts on `t3/art0-style-exploration`.
+- **STEW-3 R1 fixes done at `9b909ed7`** (code `c43e5e1`, root merged in):
+  - **R1-1:** both budget variables count as overrides, and the gate derives files and budgets from `heavy-budgets.json`.
+  - **R1-2:** `matchKey` replaced by identity plus conditions, with a `control` command.
+  - **R1-3:** one shared eligibility check, with receipt binding.
+  - **Checks:** fast 1,703 pass; a real gate `--only heavy` passed with 67 eligible rows.
+  - **Review:** Sol R2 dispatched (`siltwake-stew3-review-r2-sol-9b909ed`). Daily ingest: yes in principle; R2 recommends the mechanism.
+- **LS-1 1b R2 (Sol, `b1642944`): REQUEST CHANGES, 3 P2 findings.**
+  - F2 resolved.
+  - **F1:** the planting estimate uses `locationPower`, not `hostPower`.
+  - **F3:** re-ratchet output drops the exception metadata.
+  - **F4:** the benchmark evidence is invalid; the production fix stands.
+  - **Ruling:** withdraw the timing numbers and prove constant work per step with a counting test.
+  - **Confirmed:** determinism, cache equivalence and procure safety.
+  - **Next:** fixes, then R3.
+- **STEW-3 R2 (Sol, `ddf2bad9`): REQUEST CHANGES.**
+  - R1-1 and R1-3 fixed; R1-2 partial.
+  - **Five P2 findings:**
+    - R2-1 runtime identity misses computed imports and generated inputs;
+    - R2-2 workload variables can curtail a run;
+    - R2-3 child-process cache use is lost;
+    - R2-4 concurrent ingest race;
+    - R2-5 a fallback ticket is poisoned by its abandoned attempt.
+  - **Rulings:**
+    - unknown inputs make a file ineligible for control reuse (it's still gate evidence);
+    - a canonical workload environment in the gate;
+    - per-attempt records;
+    - a no-clobber publish.
+  - **Daily ingest approved:** a user systemd timer on factory-worker, via `quick --review --machine 3090`, installed by the coordinator after the merge.
