@@ -43,6 +43,17 @@ test("the path boundary (R5-F1): a step's file, through its symlinks, stays in t
   } finally { rmSync(root, { recursive: true, force: true }); rmSync(store, { recursive: true, force: true }); }
 });
 
+test("a link to the guard is the guard (R6-F1): with the repository root, the alias rule applies to it; never a plain node step", () => {
+  const root = repo({}, { "scripts/local-guard.mjs": "", "scripts/a.mjs": "" });
+  try {
+    symlinkSync("local-guard.mjs", join(root, "scripts", "g.mjs"));
+    assert.equal(R.isGuard("scripts/g.mjs", root), true);
+    const scripts = { t: "node scripts/g.mjs --class standard --machine any -- node scripts/a.mjs", u: "node scripts/g.mjs --class standard --machine any -- npm run x:direct --", "x:direct": "node scripts/a.mjs" };
+    assert.match(R.resolveScript(scripts, "t", [], 0, root).error, /local-guard step other than its npm alias/);
+    assert.deepEqual(R.resolveScript(scripts, "u", [], 0, root).steps, [["node", "scripts/a.mjs"]]);
+  } finally { rmSync(root, { recursive: true, force: true }); }
+});
+
 test("the runner refuses a step outside the boundary before running anything", () => {
   const root = repo({ test: "node scripts/ok.mjs && node scripts/npm-alias.mjs run inner" }, { "scripts/ok.mjs": "console.log('FIRST-RAN')" });
   try {

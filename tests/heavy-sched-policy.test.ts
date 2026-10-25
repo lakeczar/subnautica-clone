@@ -495,6 +495,14 @@ test("STEW-2's guard wrappers (SCHED-3 R5): the three public expansions are npm-
     "node scripts/local-guard.mjs --status",
     "node scripts/local-guard.mjs -- npm run x:direct --",
   ]) assert.ok(wrap(body).error, body);
+  // Every spelling of the guard's path is the guard (R6-F1): the alias expands the same; any other shape isn't portable.
+  const expanded = wrap("node scripts/local-guard.mjs --class standard --machine any -- npm run x:direct --").steps;
+  for (const g of ["./scripts/local-guard.mjs", "scripts/./local-guard.mjs", "scripts//local-guard.mjs", "tools/../scripts/local-guard.mjs"]) {
+    assert.deepEqual(wrap(`node ${g} --class standard --machine any -- npm run x:direct --`).steps, expanded, g);
+    for (const tail of ["--class standard --machine 3090 -- npm run x:direct --", "--class standard --machine any -- node scripts/a.mjs", "--status"])
+      assert.match(wrap(`node ${g} ${tail}`).error, /local-guard/, `${g} ${tail}`);
+  }
+  assert.equal(R.isGuard("scripts/other.mjs"), false);
 });
 
 test("build-only commands stay here unless an --artifact brings their output back (SCHED-3 R1-F2); one command line only", async () => {

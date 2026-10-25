@@ -1185,3 +1185,30 @@ test("B44 (SCHED-3 R5, STEW-2 composed): a guarded public script runs through th
   assert.equal(waitFor(c, pinned.out.trim()).code, 19);
   assert.match(log(c, pinned.out.trim()), /^CASE-REQUESTED/m);
 });
+
+// SCHED-3 R6 ------------------------------------------------------------------
+
+test("B45 (SCHED-3 R6-F1, Sol's guard spellings): ./scripts/local-guard.mjs, scripts/./local-guard.mjs and scripts//local-guard.mjs are the guard: the alias expands without running it or npm; any other shape runs here as submitted", async () => {
+  const c = await lane("guard-spellings");
+  commitFiles(c, { ...RUNNER, ".gitignore": ".test-build/\n", "scripts/local-guard.mjs": readFileSync(join(here, "..", "local-guard.mjs"), "utf8"),
+    "scripts/cgroup-scope.mjs": readFileSync(join(here, "..", "cgroup-scope.mjs"), "utf8"), "scripts/case.mjs": "console.log('CASE-RAN');\n",
+    "package.json": JSON.stringify({ name: "fixture", private: true, scripts: {
+      test: "node ./scripts/local-guard.mjs --class standard --machine any -- npm run test:fast:direct --",
+      "test:fast": "node scripts/./local-guard.mjs --class standard --machine any -- node scripts/case.mjs",
+      playthrough: "node scripts//local-guard.mjs --class playthrough --machine any -- npm run playthrough:direct --",
+      "test:fast:direct": "node scripts/case.mjs", "playthrough:direct": "node scripts/case.mjs",
+    } }) + "\n" });
+  for (const argv of [["npm", "test"], ["npm", "run", "playthrough"]]) {
+    const s = hc(c, ["submit", "--class", "standard", "--", ...argv], { cwd: c.repoDir });
+    assert.equal(s.code, 0, s.err);
+    assert.doesNotMatch(s.err, /runs here/, argv.join(" "));
+    const id = s.out.trim();
+    assert.equal(waitFor(c, id).code, 0, log(c, id));
+    assert.equal(result(c, id).argv[1], "scripts/heavy/portable-run.mjs");
+    assert.match(log(c, id), /portable-run: node scripts\/case\.mjs\n/, "the :direct body, without the guard or npm");
+  }
+  const other = hc(c, ["submit", "--class", "standard", "--", "npm", "run", "test:fast"], { cwd: c.repoDir });
+  assert.match(other.err, /runs here \(factory-worker\), not on alickers: .*is a local-guard step other than its npm alias/);
+  await done(c, other.out.trim(), 60000);
+  assert.deepEqual([result(c, other.out.trim()).argv, result(c, other.out.trim()).goal.portable], [["npm", "run", "test:fast"], undefined]);
+});

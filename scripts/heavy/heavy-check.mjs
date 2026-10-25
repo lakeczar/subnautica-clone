@@ -146,7 +146,7 @@ async function submit(opts, command, { quiet = false } = {}) {
     const show = (path) => spawnSync("git", ["-C", worktree, "show", `${tree.head}:${path}`], { encoding: "utf8", maxBuffer: 16 * 1048576 });
     let r = show("scripts/heavy/portable-run.mjs").status !== 0 ? { error: "this commit has no portable runner (scripts/heavy/portable-run.mjs)" } : {};
     if (!r.error) {
-      try { r = resolveScript(JSON.parse(show("package.json").stdout).scripts, portable.run[1], portable.run.slice(2)); } catch { r = { error: "its package.json can't be read" }; }
+      try { r = resolveScript(JSON.parse(show("package.json").stdout).scripts, portable.run[1], portable.run.slice(2), 0, worktree); } catch { r = { error: "its package.json can't be read" }; }
     }
     // Every step's file, through its symlinks, inside the repository or its node_modules (R5-F1); the tree is clean, so this is the commit.
     if (!r.error) { const outside = r.steps.map(([, path]) => stepBoundary(worktree, path)).find(Boolean); if (outside) r = { error: outside }; }

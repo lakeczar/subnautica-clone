@@ -1,10 +1,5 @@
 # SCHED-3: queue self-balancing
 
-> **Resume note (paused for the host reboot, 2026-10-24):**
-> - **Where:** R6 (`03764202`, review of `f0d41605`) asked for one P1. Alternate guard-path spellings (`./scripts/local-guard.mjs`, `scripts/./local-guard.mjs`, `scripts//local-guard.mjs`) skip the guard special-casing.
-> - **Next:** normalise every node step's repo-relative path and its realpath before the guard check. A step that resolves to `scripts/local-guard.mjs` must be the exact alias or `--require`, otherwise it runs here as submitted. Add the three variants as regressions, then the queued units, suites and fast tier.
-> - **To resubmit:** none (no tickets were queued or running). SCHED-4, 4b and 5 are planned after R6 and the install.
-
 Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-approved on 2026-10-24, after the 3090 had about 5 h of exclusive work queued while the 4070 sat idle: builders had tagged investigations `3090` (the default for most classes), and a queued job never moves. DIRECTION, "Balance the two GPUs": only acceptance numbers are `--class exclusive` on the 3090; everything else is `--machine any`, pinned only when the question needs a machine. It touches `scripts/heavy`, so it's checked with the full SCHED-1, SCHED-2 and SCHED-2b suites.
 
 ## The change
@@ -39,6 +34,18 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - an explicit `--machine 4070` with the same dirty tree is refused;
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
+
+## R6 review responses
+
+Review `03764202` on `review/sched-3-r6`, by Sol on `f0d41605`: REQUEST CHANGES, one P1. R5's F1–F3 pass.
+- **F1 (P1), guard spellings:** `./scripts/local-guard.mjs`, `scripts/./local-guard.mjs` and `scripts//local-guard.mjs` skipped the guard's special case, so they ran as opaque node steps and npm came back.
+  - **The fix:** `portable-run.mjs` `isGuard(path, root)` takes a step to be the guard by its normalized spelling, and, given the repository root (as both the submit check and the runner pass it), by its real path, so a link to the guard is the guard too.
+  - **Rule:** any step that is the guard must be the exact `--machine any` npm alias, which expands, or `--require`, a plain node step. Anything else isn't portable and runs here as submitted, with the reason.
+- **Tests:**
+  - **Units:** the three spellings and `tools/../scripts/local-guard.mjs` expand the alias exactly as the canonical path does, and refuse `--machine 3090`, other commands and `--status`.
+  - **`tests/heavy-portable-run.test.ts`:** a committed link to the guard is the guard, given the root.
+  - **B45 (Sol's spellings, end to end):** `./` and `//` alias wrappers run their `:direct` body through the runner without the guard or npm. A `scripts/./` wrapper of another shape runs here as submitted.
+- The work paused for the host's reboot (CPU pinning) at `f25d89d2` and resumed after it.
 
 ## R5 review responses (part 2: composed with STEW-2)
 

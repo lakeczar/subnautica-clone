@@ -25,7 +25,7 @@
 import { spawn } from "node:child_process";
 import { existsSync, lstatSync, readFileSync, readlinkSync, realpathSync } from "node:fs";
 import { constants } from "node:os";
-import { basename, dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { basename, dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { QUEUE_OWNED } from "./policy.mjs";
 
@@ -92,7 +92,19 @@ export function stepBoundary(root, path) {
  *     isn't portable.
  * Returns { steps: [argv, …], command } or { error }.
  */
-export function resolveScript(scripts, name, args = [], depth = 0) {
+/**
+ * Whether a node step's path is the guard (R6-F1): by its normalized spelling
+ * (`./scripts/local-guard.mjs`, `scripts/./local-guard.mjs`,
+ * `scripts//local-guard.mjs`, `x/../scripts/local-guard.mjs`), or, given the
+ * repository `root`, by its real path (a link to it), so no spelling of it is
+ * ever run as a plain node step.
+ */
+export function isGuard(path, root = null) {
+  if (normalize(path) === GUARD) return true;
+  return Boolean(root) && realpathLoose(join(root, path)) === realpathLoose(join(root, GUARD));
+}
+
+export function resolveScript(scripts, name, args = [], depth = 0, root = null) {
   const body = scripts?.[name];
   if (typeof body !== "string") return { error: `package.json has no script ${name}` };
   if (scripts[`pre${name}`] != null || scripts[`post${name}`] != null) return { error: `${name} has pre/post scripts` };
@@ -103,10 +115,10 @@ export function resolveScript(scripts, name, args = [], depth = 0) {
   for (const [i, line] of lines.entries()) {
     const w = line.split(" "), last = i === lines.length - 1, extra = last ? args : [];
     if (!line || w.some((x) => !PLAIN.test(x))) return { error: `${name}'s step \`${line}\` isn't plain words` };
-    if (w[0] === "node" && w[1] === GUARD && w[2] !== "--require") {
+    if (w[0] === "node" && w[1] && isGuard(w[1], root) && w[2] !== "--require") {
       const alias = w[2] === "--class" && w[3] && w[4] === "--machine" && w[6] === "--" && w[7] === "npm" && w[8] === "run" && /^[\w:.-]+:direct$/.test(w[9] ?? "") && w[10] === "--";
       if (!alias || w[5] !== "any") return { error: `${name}'s step \`${line}\` ${alias ? `is a local-guard wrapper with --machine ${w[5]}, which is work for factory-worker` : "is a local-guard step other than its npm alias"}` };
-      const r = resolveScript(scripts, w[9], [...w.slice(11), ...extra], depth + 1);
+      const r = resolveScript(scripts, w[9], [...w.slice(11), ...extra], depth + 1, root);
       if (r.error) return r;
       steps.push(...r.steps);
       continue;
@@ -114,7 +126,7 @@ export function resolveScript(scripts, name, args = [], depth = 0) {
     if (w[0] === "node" && repoPath(w[1] ?? "-")) { steps.push([...w, ...extra]); continue; }
     const npm = w[0] === "npm" && (w[1] === "test" ? { inner: "test", rest: w.slice(2) } : w[1] === "run" && w[2] && !w[2].startsWith("-") ? { inner: w[2], rest: w.slice(3) } : null);
     if (!npm || (npm.rest.length && npm.rest[0] !== "--") || (extra.length && !npm.rest.length)) return { error: `${name}'s step \`${line}\` isn't one the portable runner runs` };
-    const r = resolveScript(scripts, npm.inner, [...npm.rest.slice(1), ...extra], depth + 1);
+    const r = resolveScript(scripts, npm.inner, [...npm.rest.slice(1), ...extra], depth + 1, root);
     if (r.error) return r;
     steps.push(...r.steps);
   }
@@ -125,7 +137,7 @@ if (process.argv[1] && import.meta.url === pathToFileURL(resolve(process.argv[1]
   const root = resolve(dirname(fileURLToPath(import.meta.url)), "..", "..");
   const [mode, name, ...rest] = process.argv.slice(2);
   if (mode !== "--script" || !name) { console.error("usage: portable-run.mjs --script NAME [ARGS...]"); process.exit(2); }
-  const r = resolveScript(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts, name, rest);
+  const r = resolveScript(JSON.parse(readFileSync(join(root, "package.json"), "utf8")).scripts, name, rest, 0, root);
   if (r.error) { console.error(`portable-run: ${r.error}`); process.exit(2); }
   const outside = r.steps.map(([, path]) => stepBoundary(root, path)).find(Boolean);
   if (outside) { console.error(`portable-run: ${outside}`); process.exit(2); }
