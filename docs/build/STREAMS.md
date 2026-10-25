@@ -1240,3 +1240,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Duet declared and committed before running** (`a934d88d`): 108 × 10 s pairs, a paired 95% t interval against 0.167, a symmetric whole-pair exclusion at +0.6 ms over the median, a build on an ordinary seat and the run exclusive. Approved; 4070 rehearsal `dcbb`, then the exclusive run.
   - **Side note:** "GPU shared outside the lease by `sleep 20`" was sent to the SCHED builder.
 - **Windows reader installed on alickers** by a fleet thread there (ledger row 1 done; undo and redo via its `Set-Reader.ps1`). It samples only while an acceptance ticket's `active` marker exists (CPU, idle, AC, power scheme, top-5 GPU processes), with JSONL written via `\\wsl.localhost`. The supervisor restart interrupted PACE-1's alickers playthrough `e49b`; the queue confirmed it stopped and reran it with no duplicate. For SCHED-4b: create `active` before measured frames and wait for the first row (1–2 s of priming).
+- **LS-1 stage 1b done at `0337c127`** (code `17f4520a`):
+  - **Delivered:** rewards (locker extension per module, grow bed with heater billing, caches with no reserve cells); keypad model and command (the `app.ts` wiring waits for CW-1); coded doors (straight hatch, deduction vault); schema 8 via `bridge7` (`systems.opened`, `legacyGrants` with source kinds); the planter move to the keeper's racks; pacing rows rewritten from measured timelines (carrier works stretch +0.55 min, PACE-1's).
+  - **Design change, coordinator-approved in principle:** caches are found on first reach instead of stocked at New Game (stocking broke inventory invariants).
+  - **Checks:** fast 169, heavy 67 (3 OOM-killed subprocesses inside passing files), economy, build, playthrough 9/9.
+  - **Review:** Sol R1 running (`siltwake-ls1-1b-review-r1-sol-0337c12`).
+  - **PACE-1's pod-buffer legacy row** goes in the next transition (8→9), not this bridge, since LS-1 1b merges first.
