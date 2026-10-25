@@ -1283,3 +1283,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **P2:** `matchKey` can't establish an equivalent control (needs identity vs conditions, and per-file cache state).
   - **P2:** stored-result eligibility ignores the receipt.
   - **Decision:** fixes adopted as written.
+- **CW-1 R5 response done at `811f0867`** (frozen):
+  - **Fixes:** R5-1 warmup after admission, with a `withoutQueryBuilds` scope and 4/4 entry tests; R5-2 GPU credit off (diagnostic only); R5-3 budgets reverted; R5-4 summaries regenerated; R5-5 the hazard reference restored.
+  - **Checks:** fast 1,669; heavy 71/71 at real budgets.
+  - **Composed seven-segment functional sweep:** 34/34 stops, 0 holds, unsliced builds, fallbacks or unlit frames. The surf approach shows 12 stalls at 89% hull.
+  - **3090 OOM:** an end-of-run clone spike, now sliced (`6d9c2d19`).
+  - **Adjacent gap:** `flowHere` `inside()` for parked craft during an in-flight pack.
+  - **Review:** Sol R6 (the affected review for provisional integration) running (`siltwake-cw1-review-r6-sol-811f086`).
