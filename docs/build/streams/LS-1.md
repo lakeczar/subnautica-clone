@@ -790,3 +790,34 @@ The C12 detail now uses Sol's raw figures (38.683 / 38.900 / 38.917 s), in the R
 | The four judged routes | `261025-051742-78fa` | 4070 | 4/4 complete, every milestone reload matches, both decode-free runs end with nothing decoded, gaps exactly the record with no leg differences, and the excepted route's verdict names both exceptions. **The rows are unchanged:** all four timelines are byte-identical to the R1 final run's (`/work/tmp/ls1-1b-r1-final/`). |
 
 The timelines are in `/work/tmp/ls1-1b-r2-evidence/`. Heavy, economy and build weren't rerun: the R2 changes touch only the plant seam's power argument, the pacing verdict text and two extracted helpers, all covered by the fast tier.
+
+### Stage 1b R3 fixes (Sol, `review/ls-1-1b-r3` `02433bbc`)
+
+Code at **`22d8588c`** (the fixes are `c112a620`; the commit after it adds only the stream's test runner, `docs/build/streams/ls1/r3-*`). This section is the docs-only commit after it. Sol confirmed F1 resolved, and the C4 systems heavy test, the six economy scripts and the build passing at `3823f51e`. Merges are clean against root and CW-1; PACE-1 conflicts only in `pacing-debt.ts`.
+
+| Finding | Fix | Proof |
+| --- | --- | --- |
+| **F3**: an exception vanished with its gap | Exceptions move out of the bound rows into their own list, **`PACING_EXCEPTIONS`** in `pacing-debt.ts`: per route, keyed by gap identity, with owner and cause (the coordinator's ruling). Nothing the verdict prints touches this list. `rowsOf` prints bound rows for the flagged gaps only, so a vanished gap keeps no bound and an improved route can't fail for it. The improvement verdict adds "keep `PACING_EXCEPTIONS[...]` as it is". Every verdict on the route names each exception with its owner and cause: pass, improvement, regression, decode failure, and a route with no bound rows. When the exception's gap is no longer flagged, it says "gap no longer flagged, awaiting coordinator retirement". Retiring is deleting the entry. | `playthrough-pacing`. **Sol's case:** the second of two excepted 50-min gaps drops to 10 min; the printed update keeps no bound for it; once applied, the route passes, naming the first exception and the second as awaiting retirement. **Both vanish:** the printed update is `{}`, the route passes, and both are disclosed as awaiting retirement. **Only deletion removes one:** deleting one entry drops only its disclosure, and deleting both drops both. The 0.1-min improvement, regression and decode-failure cases name both. |
+| **F4**: the counts weren't of work done | **Counters at the two real operations**, `src/sim/workCounts.ts`: the per-cache distance test in `openSiteCaches`, and each SYS-1 `hostPower` evaluation. They're `null` in normal play (one null check per counted operation); a test turns them on and runs `stepSystems`. **Scaled fixtures** go through a test-only seam, `useSiteCacheTable(points)`, which swaps discovery's table, so the step runs its real path over 1, 10 or 100 caches. Those test points count every coordinate read, which exposes a full scan or a linear lookup even when it returns the same candidates. | `ls1-rewards`, "R3 F4", through `stepSystems`. Caches: 5 m from one cache, (distance tests, coordinate reads) = (1, 3) at 1, 10 and 100 caches; far from all = (0, 0); outcomes unchanged (nothing found out of reach). Crops: host power evaluations = 1, 1, 3, 3 for 1 and 20 bed crops on one host and on three, with every crop at the bed's rate. |
+
+**Sensitivity (F4):** `docs/build/streams/ls1/r3-mutations.mjs` mutates the compiled output and reruns the test (`261025-054308-a47f`, evidence in `/work/tmp/ls1-1b-r3-evidence/`). The baseline passes and all four of Sol's regressions fail:
+
+| Mutation | Fails with |
+| --- | --- |
+| Discovery checks every cache again (the candidate lookup returns all) | (10, 30) and (100, 300) where (1, 3) is required |
+| A linear lookup returning the same local candidates (Sol's exact replacement) | 7, 16 and 124 coordinate reads where 3 are required |
+| `hostPower` asked per crop (Sol's exact replacement) | 20 and 60 evaluations where 1 and 3 are required |
+| Both production regressions together | the cache figures above |
+
+No timing.
+
+**Checks at `22d8588c`** (all `--machine any`, queued, no exclusive time):
+
+| Check | Ticket | Machine | Result |
+| --- | --- | --- | --- |
+| Focused (`ls1-rewards`, `save-bridge`, `playthrough-pacing`, `systems-cultivation`) and the F4 mutations | `261025-054308-a47f` | 4070 | 41/41 pass; baseline passes, all four mutations fail |
+| Fast tier | `261025-054919-b2f9` | 4070 | 169 files pass |
+| C4 systems heavy, the six economy scripts and the production build | `261025-054920-d870` | factory-worker | heavy 1/1; all six pass; the build passes |
+| The four judged routes | `261025-054920-e30a` | factory-worker | 4/4 complete, every milestone reload matches, both decode-free runs end with nothing decoded, gaps exactly the record, no leg differences, and no-optional-carrier's verdict names both exceptions with owner and cause. **The rows are unchanged:** all four timelines are byte-identical to the R1 final run's. |
+
+The timelines are in `/work/tmp/ls1-1b-r3-routes/`.
