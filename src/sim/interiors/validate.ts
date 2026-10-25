@@ -58,6 +58,8 @@ export const LINE_CHARGE = 25;
 export const SUIT_SECONDS = 100 / SUIT_OXYGEN_DRAIN_PER_SECOND;
 /** The longest out-and-back an uncovered pose may need, path metres. */
 export const RETURN_BUDGET_M = (1 - RESERVE) * SUIT_SECONDS * ORDINARY_SWIM_SPEED;
+/** How far above a host's resting point it is sighted from, metres. */
+const HOST_SIGHT = 0.15;
 /** Within this of a portal's plane (along its normal), a pose is at the portal. */
 const PORTAL_SLAB = 1;
 
@@ -219,12 +221,13 @@ export function poseGraph(world: WorldQueries, regions: readonly Aabb[], state: 
  * settling: a walker's jump up or drop down to the next floor, and a swimmer
  * climbing out onto a dry floor or slipping back into the water. */
 function stepAcross(world: WorldQueries, a: Vec3, b: Vec3, shape: Capsule): boolean {
-  const top = Math.max(a.y, b.y) + 0.02, near = (m: { position: Vec3; hitSolid: boolean }, p: Vec3): boolean =>
-    !m.hitSolid && Math.hypot(m.position.x - p.x, m.position.y - p.y, m.position.z - p.z) < 0.02;
+  const at = (m: { position: Vec3 }, p: Vec3): boolean => Math.hypot(m.position.x - p.x, m.position.y - p.y, m.position.z - p.z) < 0.02;
+  const top = Math.max(a.y, b.y) + 0.02, near = (m: { position: Vec3; hitSolid: boolean }, p: Vec3): boolean => !m.hitSolid && at(m, p);
   const lift = { x: a.x, y: top, z: a.z }, over = { x: b.x, y: top, z: b.z };
   return near(world.moveCapsule(a, { x: 0, y: top - a.y, z: 0 }, shape), lift) &&
     near(world.moveCapsule(lift, { x: b.x - a.x, y: 0, z: b.z - a.z }, shape), over) &&
-    near(world.moveCapsule(over, { x: 0, y: b.y - top, z: 0 }, shape), b);
+    // Settling ends on b's floor, so touching it there is the landing, not a block.
+    at(world.moveCapsule(over, { x: 0, y: b.y - top, z: 0 }, shape), b);
 }
 
 /** The world's own capsule move gets from a to b. */
@@ -424,9 +427,13 @@ function scenarioProblems(def: InteriorDef, exterior: WorldQueries, regions: rea
       else seeds.push(e);
     }
   }
-  const reach = spread(g, seeds, null), back = spread(g, exitSet, rev);
+  // Out means at a way out or anywhere outside the building; only poses inside it can be trapped.
+  const building = interiorBounds(def), within = (p: Vec3): boolean => p.x >= building.min.x && p.x <= building.max.x &&
+    p.y >= building.min.y && p.y <= building.max.y && p.z >= building.min.z && p.z <= building.max.z;
+  const outside = g.poses.flatMap((p, i) => within(p) ? [] : [i]);
+  const reach = spread(g, seeds, null), back = spread(g, [...exitSet, ...outside], rev);
   let traps = 0, trapAt: Vec3 | undefined;
-  reach.forEach((r, i) => { if (r && !back[i]) { traps++; trapAt ??= g.poses[i]; } });
+  reach.forEach((r, i) => { if (r && !back[i] && within(g.poses[i]!)) { traps++; trapAt ??= g.poses[i]; } });
   if (traps) out.push({ code: "trap", message: `${tag}: ${traps} reachable poses have no way back out`, ...(trapAt ? { at: trapAt } : {}) });
   for (const r of def.rooms) {
     const b = { min: toWorld(def, r.bounds.min), max: toWorld(def, r.bounds.max) };
@@ -479,12 +486,13 @@ function scenarioProblems(def: InteriorDef, exterior: WorldQueries, regions: rea
   });
   if (short) out.push({ code: "air", message: `${tag}: ${short} reachable poses are beyond air: neither covered nor within a ${RETURN_BUDGET_M.toFixed(0)} m round trip (worst ${Number.isFinite(worst) ? `${worst.toFixed(0)} m` : "no route to air"})`, ...(worstAt ? { at: worstAt } : {}) });
   if (deep) out.push({ code: "depth", message: `${tag}: ${deep} reachable poses are deeper than the ${limit} m suit`, ...(deepAt ? { at: deepAt } : {}) });
-  // Hosts: a floor within 4 m below, and seen from a reachable pose within 3 m.
+  // Hosts: a floor within 4 m below, and seen from a reachable pose within 3 m
+  // (sighted a hand above its resting point: a host is an object, not a point in the floor).
   for (const h of def.hosts) {
     const p = hostPosition(h);
     if (!p) continue;
     if (world.supportHeight(p.x, p.z, p.y) < p.y - 4) out.push({ code: "host", message: `${h.id}: no floor within 4 m below`, at: p });
-    const seen = g.poses.some((q, i) => reach[i] && Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z) < 3 && world.lineOfSight({ x: q.x, y: q.y + 0.5, z: q.z }, p));
+    const seen = g.poses.some((q, i) => reach[i] && Math.hypot(q.x - p.x, q.y - p.y, q.z - p.z) < 3 && world.lineOfSight({ x: q.x, y: q.y + 0.5, z: q.z }, { x: p.x, y: p.y + HOST_SIGHT, z: p.z }));
     if (!seen) out.push({ code: "host", message: `${tag}: ${h.id} is not in view from a reachable pose within 3 m`, at: p });
   }
   // `visual` props: no reachable swimmer passes through one.

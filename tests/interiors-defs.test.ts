@@ -32,3 +32,15 @@ test("the field station and the cold store pass walked on a flat stand-in for th
   const hill = createWorldQueries([], (x, z) => Math.abs(x + 232) < 0.6 && z > 3 + 7.6 && z < 3 + 8.8 ? 0 : 24);
   assert.deepEqual(validateInterior({ def: COLD_STORE, exterior: hill, scenarios: COLD_STORE.firstAccess.map((access) => ({ access, state: walker })) }), []);
 });
+
+test("terrain under the real-terrain interiors: at most 0.3 m above the floor (stage 2 masks it, as caves' footprints do)", () => {
+  // Known gap, filed in the stage 1 handoff: the pump house's shoulder rises up to
+  // ~0.29 m above its floor (laid on the lowest terrain so LS-1's logger point
+  // stays on it). Stage 2 makes interior footprints replace terrain in the bake.
+  for (const def of [BASIN_DORMITORY, PUMP_HOUSE]) {
+    let worst = -Infinity;
+    for (const r of def.rooms) for (let x = r.bounds.min.x; x <= r.bounds.max.x; x += 0.25) for (let z = r.bounds.min.z; z <= r.bounds.max.z; z += 0.25)
+      worst = Math.max(worst, worldFloor(def.anchor.x + x, def.anchor.z + z) - def.anchor.y);
+    assert.ok(worst <= 0.3, `${def.id}: terrain ${worst.toFixed(2)} m above the floor`);
+  }
+});

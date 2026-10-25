@@ -9,10 +9,11 @@ import { OUTSIDE, type InteriorDef } from "./types.js";
 import { lowestFloor, place, slab, v, wall } from "./build.js";
 
 const H = 3.6, ROOF = 3.9;
-/** The logger cabinet's local position: the anchor puts it on the site. */
-const CABINET = v(3.6, 0, 2.4);
+/** The logger's local position (LS-1's site point, on the floor): the anchor puts it on the site.
+ * The cabinet stands just behind it against the north wall, facing into the room. */
+const LOGGER = v(3.6, 0, 2.4);
 const site = CB_LOST_SITES.reef_pumphouse_site.position;
-const ax = site.x - CABINET.x, az = site.z - CABINET.z;
+const ax = site.x - LOGGER.x, az = site.z - LOGGER.z;
 
 export const PUMP_HOUSE: InteriorDef = {
   id: "reef_pump_house", label: "Old intake pump house", region: "refuge_reef", site: "reef_pumphouse_site",
@@ -43,7 +44,7 @@ export const PUMP_HOUSE: InteriorDef = {
     place("fans_grate", "fan_growth", v(-2.5, 0, 0)),
     place("fans_pump", "fan_growth", v(-1.3, 0, 1.5)),
     place("fans_cabinet", "fan_growth", v(3.4, 1.2, 2.3)),
-    place("cabinet", "log_cabinet", CABINET, 0, "structure"),
+    place("cabinet", "log_cabinet", v(LOGGER.x, 0, LOGGER.z + 0.25), 2, "structure"),
   ],
   stacks: [],
   lights: [],
