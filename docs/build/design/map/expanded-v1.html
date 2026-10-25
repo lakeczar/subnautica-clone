@@ -1,0 +1,84 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font-family:var(--font-sans);color:var(--foreground)}
+.bar{display:flex;gap:6px;margin:0 0 8px;flex-wrap:wrap}
+.bar button{font:inherit;font-size:12px;padding:5px 10px;border-radius:var(--radius);border:1px solid var(--border);background:var(--secondary);color:var(--secondary-foreground);cursor:pointer}
+.bar button.on{background:var(--primary);color:var(--primary-foreground)}
+.box{position:relative;width:100%;max-width:728px;aspect-ratio:2752/2592;border-radius:var(--radius);overflow:hidden;background:#060b1e}
+svg{position:absolute;inset:0;width:100%;height:100%}
+.note{font-size:12px;color:var(--muted-foreground);margin-top:8px;line-height:1.45}
+text{font-family:var(--font-sans)}
+</style></head><body>
+<div class="bar"><button data-l="bio" class="on">Intertwined biomes</button><button data-l="star" class="on">Stars and spokes</button><button data-l="old" class="on">Today's edge</button></div>
+<div class="box"><svg viewBox="-1280 -960 2752 2592" id="s"></svg></div>
+<div class="note" id="n"></div>
+<script>
+const s=document.getElementById('s'),NS='http://www.w3.org/2000/svg';
+function el(t,a,p=s){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p.appendChild(e);return e}
+const g={};for(const k of ['base','bio','old','star','lab'])g[k]=el('g',{id:k});
+const P=pts=>pts.map(([x,z])=>`${x.toFixed(0)},${(-z).toFixed(0)}`).join(' ');
+let seed=7;const rnd=()=>(seed=(seed*16807)%2147483647)/2147483647;
+function blob(cx,cz,rx,rz,wob=.18,rot=0){const ph=[rnd()*6,rnd()*6,rnd()*6],pts=[];for(let i=0;i<72;i++){const a=i/72*Math.PI*2;const k=1+wob*(Math.sin(3*a+ph[0])*.6+Math.sin(5*a+ph[1])*.3+Math.sin(9*a+ph[2])*.18);const x=Math.cos(a)*rx*k,z=Math.sin(a)*rz*k;pts.push([cx+x*Math.cos(rot)-z*Math.sin(rot),cz+x*Math.sin(rot)+z*Math.cos(rot)])}return pts}
+function smoothPath(pts){let d=`M${pts[0][0]},${-pts[0][1]}`;for(let i=1;i<pts.length-1;i++){const m=[(pts[i][0]+pts[i+1][0])/2,(pts[i][1]+pts[i+1][1])/2];d+=` Q${pts[i][0]},${-pts[i][1]} ${m[0]},${-m[1]}`}const l=pts.at(-1);return d+` L${l[0]},${-l[1]}`}
+const lab=(x,z,t,o={},p=g.lab)=>{const e=el('text',{x,y:-z,fill:o.c||'#fff','font-size':o.f||34,'font-weight':o.w||600,'text-anchor':o.a||'middle','paint-order':'stroke',stroke:'#000c','stroke-width':7},p);e.textContent=t;return e};
+// playable sea: irregular rim, abyss beyond
+el('polygon',{points:P(blob(96,-336,1330,1250,.07)),fill:'#123a6e',stroke:'#2d5c99','stroke-width':6},g.base);
+lab(-1150,-1500,'abyss / world edge',{f:26,w:500,c:'#7d93c9',a:'start'},g.base);
+// BIOMES
+const B=[];const bio=(pts,fill,op=1,stroke='none')=>el('polygon',{points:P(pts),fill,opacity:op,stroke,'stroke-width':4},g.bio);
+const bpath=(pts,stroke,w,op=1,dash)=>el('path',{d:smoothPath(pts),fill:'none',stroke,'stroke-width':w,opacity:op,'stroke-linecap':'round','stroke-linejoin':'round',...(dash?{'stroke-dasharray':dash}:{})},g.bio);
+// deep floors first
+bio(blob(560,-680,520,340,.22,.2),'#1d4f86');                       // Basin bowl
+bio(blob(-330,-460,280,190,.2,.5),'#1d4f86');                      // Basin west lobe
+bpath([[-330,-460],[-640,-300],[-820,-40],[-760,260],[-880,520],[-1000,700]],'#1a4680',150);   // NEW west canyon
+bio(blob(-850,-900,300,240,.25,.4),'#4a2a2a');                      // NEW ash apron
+bpath([[180,-590],[75,-750],[-45,-912],[-165,-1065],[-280,-1235],[-392,-1420],[-470,-1560]],'#6b2a1c',170); // Rift
+bpath([[-45,-912],[-200,-760],[-260,-560],[-250,-380]],'#7a3322',70,.95); // NEW Rift cold finger to Hearth drop foot
+bio(blob(560,-1420,620,200,.12),'#26305e');                         // brine south
+bpath([[-20,-1170],[190,-1205],[330,-1228],[460,-1250],[600,-1262],[740,-1254],[860,-1232],[975,-1205],[1147,-1164]],'#8ea6d6',36);
+bpath([[300,-1000],[420,-860],[470,-760]],'#5d74b0',40,.8);         // Divide valley finger into Basin
+bpath([[640,380],[820,470],[1000,450],[1180,560],[1330,520]],'#3c4c8c',110); // NEW north seep trench (Divide finger)
+for(const r of [700,560,400,240])el('circle',{cx:1490,cy:1650,r,fill:r==240?'#2a1d4f':'none',stroke:'#a58ae6','stroke-width':6,opacity:.8},g.bio);
+bio(blob(1240,-1380,330,260,.15),'#2a1d4f',.55);
+bpath([[1350,-1000],[1380,-700],[1330,-420],[1360,-300]],'#5c4aa0',60);           // escarpment
+// mid shelves
+bio(blob(860,-180,470,190,.22,-.08),'#1f6b5a');                    // Canopy east
+bio(blob(-520,420,270,210,.25,.3),'#1f6b5a');                       // NEW Canopy north tongue
+bio(blob(540,-370,95,70,.3),'#1f6b5a');                             // Canopy grove on crown flank
+bio(blob(1180,-560,120,90,.3),'#1f6b5a',.85);                       // Canopy finger over escarpment
+// shallows
+bio(blob(220,500,320,200,.22,-.2),'#4aa3a8');                       // NEW glass shoals
+bio(blob(-40,40,340,270,.28,.4),'#7fd6cf');                         // Hearth shallows
+bpath([[40,-367],[80,-400],[186,-464],[330,-560]],'#7fd6cf',90);    // hub spur
+for(const[x,z]of[[40,-367],[80,-400],[186,-464],[330,-560]])el('circle',{cx:x,cy:-z,r:z==-560?55:30,fill:'#a8f0e0'},g.bio);
+bio(blob(600,90,220,120,.25),'#5fb8b4');bio(blob(1050,60,220,150,.25),'#5fb8b4'); // isles shoals
+bio(blob(350,800,700,110,.3),'#4aa3a8',.8);                         // NEW north storm banks
+el('circle',{cx:-150,cy:-420,r:48,fill:'#050a24',stroke:'#bff',"stroke-width":5},g.bio); // NEW blue hole
+bpath([[-1150,560],[-700,760],[-200,880],[400,900],[900,820],[1250,700]],'#ffe7a8',8,.9,'4 26'); // NEW grazer migration path
+el('circle',{cx:-950,cy:-650,r:22,fill:'#e9e2d0'},g.bio);            // NEW carcass fall
+// land
+for(const[x,z,rx,rz]of[[-205,-5,100,90],[470,95,48,46],[1040,50,110,80]])el('ellipse',{cx:x,cy:-z,rx,ry:rz,fill:'#e8d9a8',stroke:'#6b5a33','stroke-width':4},g.bio);
+// bio labels
+const bl=[[-40,150,'Hearth shallows 0–40'],[-205,-130,'Lifted Reef isle',24],[220,520,'Glass Shoals 20–90 · NEW'],[350,820,'storm banks · NEW',26],[-520,440,'Canopy north tongue',26],[-520,405,'55–150 · NEW',22],[-150,350,'blue hole 40→300 · NEW',24],[-860,140,'west canyon 180–320 · NEW',24],[-850,-900,'ash apron 280–450 · NEW',24],[-950,600,'carcass fall',22],[-300,-560,'Rift cold finger',22],[1000,560,'north seep trench 300–450 · NEW',24],[300,920,'giant grazer migration path · NEW',22],[860,-150,'Lantern Canopy east 55–220',26],[620,-760,'Pale Basin 150–380'],[-330,-420,'Basin west lobe',24],[-250,-1060,'Ember Rift 250–540'],[560,-1460,'Mirror Divide · brine'],[1240,-1520,'Meridian 520–780'],[1390,-560,'escarpment',22],[60,-470,'hub spur',22]];
+for(const[x,z,t,f]of bl)lab(x,z,t,{f:f||30},g.bio);
+// OLD envelope
+el('rect',{x:-576,y:-160,width:2048,height:1792,fill:'none',stroke:'#ffffffaa','stroke-width':6,'stroke-dasharray':'26 18'},g.old);
+lab(-560,-130,"today's edge",{f:24,a:'start',c:'#ddd'},g.old);
+// STARS
+const star=(cx,cz,spokes,color,name,ring)=>{for(const[x,z]of spokes){const mx=(cx+x)/2+(z-cz)*.12,mz=(cz+z)/2-(x-cx)*.12;el('path',{d:`M${cx},${-cz} Q${mx},${-mz} ${x},${-z}`,fill:'none',stroke:color,'stroke-width':7,opacity:.95},g.star);el('circle',{cx:x,cy:-z,r:13,fill:color,stroke:'#000','stroke-width':3},g.star)}
+el('circle',{cx,cy:-cz,r:ring,fill:'none',stroke:color,'stroke-width':4,'stroke-dasharray':'10 10',opacity:.6},g.star);
+el('circle',{cx,cy:-cz,r:30,fill:color,stroke:'#000','stroke-width':4},g.star);lab(cx,cz+50,name,{f:28,c:color},g.star)};
+star(0,0,[[-205,-5],[-150,420],[220,480],[-480,380],[60,-200],[470,40],[-330,170],[40,-367],[-560,-120]],'#ffd34d','POD (early)',300);
+star(330,-560,[[620,-220],[505,-568],[782,-520],[172,-606],[620,-760],[540,-370],[420,-880],[160,-380]],'#ff7ab8','CROWN (mid)',330);
+star(136,-920,[[40,-1030],[-98,-748],[-165,-1065],[-232,-1150],[150,-1170],[-200,-760]],'#ff9a4d','RIFT STATION',240);
+star(632,-1238,[[336,-1188],[749,-1191],[470,-1268],[520,-1360],[570,-1252],[860,-1300]],'#9fb7ff','DIVIDE DOCK',220);
+star(1250,-1300,[[1298,-1135],[1000,-1406],[1279,-1396],[1400,-1530],[1170,-1396]],'#c9a8ff','DISTRICT',220);
+// carrier star (mobile)
+el('circle',{cx:-650,cy:250,r:26,fill:'none',stroke:'#7dffb0','stroke-width':6},g.star);lab(-650,-320,'carrier = a star you bring',{f:22,c:'#7dffb0'},g.star);
+for(const[x,z]of[[-860,-40],[-850,-420],[-480,-520],[-920,-250]]){el('line',{x1:-650,y1:250,x2:x,y2:-z,stroke:'#7dffb0','stroke-width':5,'stroke-dasharray':'8 8'},g.star)}
+// journeys between stars (winding)
+const J=[[[0,0],[60,-150],[30,-300],[120,-430],[330,-560]],[[330,-560],[260,-680],[140,-760],[136,-920]],[[136,-920],[260,-1000],[420,-1080],[540,-1160],[632,-1238]],[[632,-1238],[760,-1180],[960,-1220],[1100,-1180],[1250,-1300]],[[330,-560],[480,-760],[460,-960],[560,-1100],[632,-1238]]];
+for(const j of J)el('path',{d:smoothPath(j),fill:'none',stroke:'#fff','stroke-width':5,'stroke-dasharray':'2 14','stroke-linecap':'round',opacity:.85},g.star);
+// toggles
+document.querySelectorAll('.bar button').forEach(b=>b.onclick=()=>{b.classList.toggle('on');g[b.dataset.l].style.display=b.classList.contains('on')?'':'none'});
+document.getElementById('n').innerHTML='Pod stays at (0, 0), so no existing coordinate moves. Proposed envelope: X −1280…1472, Z −1632…960 (2.75 × 2.6 km, about 1.9× today). Playable sea is the irregular rim; the corners fall into abyss. White dots = journeys between stars: they wind, and the long ones start at a charging mooring (placed later in this session). Names marked NEW are working names.';
+</script></body></html>

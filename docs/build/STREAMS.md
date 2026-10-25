@@ -1357,3 +1357,22 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - If a ticket is incomplete or DISTURBED, rerun that ticket once; otherwise "no verdict".
     - `e104`'s partial data is archived unread.
     - `duet.sh` gains a ceiling preflight.
+- **Owner's map-layout session done (2026-10-25).** Record in `docs/build/design/MAP-LAYOUT-DECISIONS.md`, visuals in `design/map/`.
+  - **Decisions:**
+    - no hour target;
+    - the map expands to X −1280…1472, Z −1632…960, with the pod fixed;
+    - stars and mix-and-match exploration, tells, and entrance rewards;
+    - six new biome patches, and the south reshaped;
+    - the depth rule and soft gates;
+    - five moorings, fixed and switched on once;
+    - the carrier bunk module;
+    - silica glass is crafted;
+    - the district big stop moves deep, to around (1330, −1470);
+    - the creature plan.
+  - GAME-DIRECTION, DIRECTION and REST-AND-AIR are updated.
+  - **New queue items:**
+    - **MAP-1,** the terrain-and-world stream, after the CW-1 merge. It covers the envelope, `MACRO`, organic regions and the patch layer, the patches, bent routes, moorings, the bake and routes, and early performance at about 460 columns.
+    - **ECON-2:** silica sand and glass, plus the bot and the six economy scripts. It's sequenced with MAP-1 or just before it.
+    - **SURV-2:** mooring activation as a saved fact, rescue tows retargeted, the carrier bunk module, the Canopy lab rest point, and relabelling `refuge`. It goes with MAP-1.
+    - **Per-area owner grill sessions,** starting with the areas around the pod.
+  - ENV-1 has been told about the district move. LS-1, PACE-1 and BIO-1 have notes queued.

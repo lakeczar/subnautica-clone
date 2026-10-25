@@ -3,7 +3,7 @@
 Agreed with the owner, Alek, through a structured design interview. Where it conflicts with older scope or design text, this file wins. That includes `prompts/BUILD_GAME_REVISED.md`, `docs/FLEET_AND_SURVIVAL.md`, `docs/WORLD_PROGRESSION.md` and `WORLD-EVOLUTION-PLAN.md`. Process rules stay in [DIRECTION](DIRECTION.md). Builders may propose better designs inside these decisions; changing a decision needs the owner.
 
 ## Target and feel
-- **Length:** a **skilled player on a first, blind, non-stop playthrough takes about 10 hours or more.** That's a floor with no ceiling, reached organically through content. More good content is always welcome. Playtests remove slog; they never trim good content to fit a length.
+- **Length** (owner, 2026-10-25): **no hour target; the game is done when it's done.** Length comes from content. The pacing rules below are the guard against padding: something new every 15–20 minutes, the empty-travel spacing guide, no decode-only waiting. More good content is always welcome. Playtests remove slog; they never trim good content. The first-timer time factor stays as a measurement, not a gate.
 - **Feel:** atmospheric, with something to do all the time and no padding.
 - **Pacing:** progression keeps moving, and nothing is a chore just to fill time.
 - **Freedom:** **soft gates only** (depth, power, tools, protection), never invisible walls. Bravery and creativity can push you ahead at real risk for real reward. Early pushes are possible but never required. The story makes sense in any order.
@@ -21,10 +21,10 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 - **Done means:**
   - both routes can be finished;
   - the bot's structural checks pass;
-  - the owner's playtest says it's full, atmospheric and unpadded at 10+ hours;
+  - the owner's playtest says it's full, atmospheric and unpadded;
   - a steady 60 fps on a dedicated GPU (owner, 2026-10-24: the gate is "60 fps on GPU, not 3090"; either test GPU, the 3090 or the 4070 laptop, can give acceptance evidence);
   - no progress-breaking bugs.
-- **The bigger interleaved map** (Option B) is re-evaluated once the game is finished.
+- **The bigger interleaved map** (Option B) was brought forward (owner, 2026-10-25). See "World map and layout" below.
 
 ## Pacing rules for builders
 - **Something new** (a tool, area, craft, discovery or story beat) every **15–20 minutes** of efficient play. Tune from playtests.
@@ -90,7 +90,7 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 ## Fleet, power and outposts
 - **Power sources:**
   - restored **big stops**, once earned (see below);
-  - **sparse charging moorings**, placed at the start of long, hard journeys and **never near a big stop** (owner, 2026-10-24). Exact spots are set in the owner's map-layout session;
+  - **sparse charging moorings**, placed at the start of long, hard journeys and **never near a big stop** (owner, 2026-10-24). There are five, each fixed and switched on once (see "World map and layout");
   - field outposts;
   - the carrier's charging dock;
   - crafted reserve cells;
@@ -185,7 +185,8 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - the homes (the pod, the workshop);
   - the Canopy lab, which is already dry (coordinator call);
   - each **restored big stop's dry room**;
-  - the registered **Creel cabin** and the registered **carrier** cabin (coordinator call).
+  - the registered **Creel cabin**;
+  - the **carrier**, once it has a **bunk module**: a carrier-only module that takes one of its system sockets, competing with planters, the decoder and the fabricator. It's built and registered like the Creel cabin (owner, 2026-10-25). The carrier cabin still heals you without it.
 
   Moorings, outposts and the district staging office are **not** rest points.
 - **The pod keeps its guaranteed role:** air, healing, storage and basic fabrication, and it's never stranded by crown power loss.
@@ -202,7 +203,46 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - **Save loads finish admission during the existing load screen.**
 - **Acceptance:** a fast Dart traversal of every region and cave mouth shows no frame over about 33 ms caused by streaming, and no hold state is ever reached.
 
+## World map and layout (owner, 2026-10-25)
+The full record is [design/MAP-LAYOUT-DECISIONS.md](design/MAP-LAYOUT-DECISIONS.md), with visuals in `design/map/`. Its coordinates are the decided anchors. In short:
+- **Footprint:** it grows to X −1280…1472, Z −1632…960, about 2.75 × 2.6 km. The pod stays at (0, 0), so nothing existing moves. The edge is an irregular drop into the abyss, where life thins out and a warning plays. No creature polices it.
+- **Stars and spokes:**
+  - **Stars** are the places you return to: the pod, the crown, each restored big stop, and the carrier.
+  - **Short spokes** wind out and back from each star.
+  - **Long journeys** run between stars, and each one starts at a mooring.
+  - **Everywhere else** mixes loops, strings of pearls, warrens, vertical stacks, set pieces and dead ends with a payoff.
+- **Exploration rules:**
+  - **Tells:** every sub-area has a tell, and the next tell appears before the last one fades.
+  - **Entrances:** any entrance leads to at least one rare reward. Anything required still has a source outside.
+- **Biome families in patches:** the seven regions stay as the top-level identity and appear in patches, shown as "family · place".
+  - **Six new patches:** Glass Shoals with the storm banks, the Canopy north tongue, the blue hole, the west canyon, the north seep trench, and the ash apron.
+  - **The south is reshaped:** organic borders, bent lanes, uneven Canopy ribs, and Divide and Basin fingers. The crown, the stops and the existing sites stay fixed.
+- **Depth:** the floor gets deeper further from the pod, with deep fingers near home and shallow surprises far out. Depth limits are **soft gates**, each tied to a refit.
+- **Nothing straight:**
+  - routes bend about every 250 m, and the land forces the bend;
+  - every journey between stars has at least two ways through;
+  - a landmark is visible at each bend.
+- **Resources:** commons thin out further from home; each frontier keeps a reliable supply of its own new material.
+- **Moorings:** a dead old service post that you fix and switch on once.
+  - **Fixing it:** you swim into a diver-only housing, which has no air, and repair one visibly broken part with a small amount of a common material. Once on, it stays on for good.
+  - **What it gives:** power and repair only.
+  - **Placement:** at least 300 m from any big stop or home, and only where a long, hard leg begins.
+  - **The five:** M1 Dish south, M2 Staging shelf, M3 Seep head, M4 Canyon head, M5 Escarpment head.
+  - **Rescue tows** end at the nearest home or restored big stop.
+- **Glass is crafted:** silica sand → silica glass, 2:1 to start.
+- **The district's big stop** sits deep, on a lower terrace at the district's far end. The staging office is service only.
+- **Shortcuts:** four are earned later, each seen before it's usable.
+- **Build order:**
+  1. one terrain-and-world stream after CW-1 merges;
+  2. one owner grill session per area before its content is built, starting with the areas around the pod.
+
 ## Creatures (owner, 2026-10-22)
+- **The map's threats** (owner, 2026-10-25):
+  - **The early shallows stay threat-free:** the Reef, the Isles, the shoals and the Canopy tongue.
+  - **The Basin family** gets a new mid-game threat with a readable home.
+  - **The north seep trench** holds a creature the size of a building, heard far more than seen. It never leaves its trench.
+  - **Each long journey** routes around at most one territory, and you can see or hear it before entering.
+  - **A giant grazer migration** is kept only if a sandbox prototype is fun.
 - **Helper creatures are allowed** (owner, corrected 2026-10-22). Animals whose natural behaviour helps the player are fine, for example glimmers leaning toward moving water at exits, a school you can follow, or a creature that gathers where a resource is. Use them where they feel natural, not as quest markers.
 - **Every threat has a non-combat way through** that comes from its natural behaviour: feeding, patrol rhythm, resting, being distracted by other animals, territory edges. Timing and observation, not only avoiding the bite.
 - **Creatures as resources** (coordinator recommendation; the owner may adjust):

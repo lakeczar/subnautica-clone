@@ -25,7 +25,7 @@ This came from a live discussion between Alek (the owner) and an Opus 5.5 game d
    - the **crown station**;
    - the **Rift materials station**;
    - the **Divide upper service dock**;
-   - **one district big stop** (ENV-1's upper hall row, position to be confirmed).
+   - **one district big stop** (moved by the map session, 2026-10-25: deep, on a lower terrace at the district's far end, around (1330, −1470); the coordinator and lore owner pick the building; see MAP-LAYOUT-DECISIONS.md).
 
    Each follows the same arc:
    1. **Arrive:** dark, flooded and dead. You breathe from your own parked craft.
@@ -72,7 +72,7 @@ This came from a live discussion between Alek (the owner) and an Opus 5.5 game d
 2. **Each big stop's scenario** is designed per place, with the owner, spoiler-free in owner-facing material.
 3. **The Canopy lab as a rest and wake point.** It's already dry and needs no restoration. Both visuals showed it as an early rest and wake point and the owner didn't object, but it wasn't asked directly. Confirm.
 4. **The carrier as a wake point.** Today only a registered Creel cabin is a mobile wake point; the carrier's cabin heals but isn't a wake point. The designer had loosely said "the Creel cabin and the carrier stay as wake points". Decide.
-5. **The district big stop's exact place and position.** ENV-1 has the upper hall row; the lore owner and coordinator confirm. ENV-1 said the staging office stays the district's rest base, which is now reversed.
+5. **The district big stop's exact place and position.** Superseded by the map session (2026-10-25): deep, on a lower terrace, around (1330, −1470). ENV-1 had the upper hall row. ENV-1 said the staging office stays the district's rest base, which is now reversed.
 6. **The designer's feel conditions** (recommended, not owner-decided):
    - quick repeat entry: surface straight up through a floor well near the mooring, with the two-door lock on the first entry and the deeper rooms;
    - a sensory change when you leave the water, which every dry room ships with: the sound changes, water runs off the lens, footsteps, a room tone, a window onto the water;

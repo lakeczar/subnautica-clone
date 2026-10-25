@@ -2,7 +2,7 @@
 
 These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.md). Where older docs conflict with them, this file wins. That includes the evidence rules in `DELIVERY_AND_ACCEPTANCE.md`, the Astra roles in `BUILD_GAME_REVISED.md`, and the historical `CONTRACTS.md` and `PLAN.md` text. The full owner scope stays the same: seven regions, three islands, six craft, Hearthline, both fleet strategies and one authored ending.
 
-**Game design (owner, 2026-10-20):** [GAME-DIRECTION](GAME-DIRECTION.md) holds the owner-confirmed target, pacing rules, systems, fleet, caves and order of work. The length target is a **floor**: a skilled player on a first, blind, non-stop playthrough takes about 10 hours or more, organically and without padding. There is no ceiling, and playtests never trim good content.
+**Game design (owner, 2026-10-20):** [GAME-DIRECTION](GAME-DIRECTION.md) holds the owner-confirmed target, pacing rules, systems, fleet, caves and order of work. There is **no hour target** (owner, 2026-10-25): the game is done when it's done. The pacing rules guard against padding, and playtests never trim good content. The world map and layout are decided in [design/MAP-LAYOUT-DECISIONS.md](design/MAP-LAYOUT-DECISIONS.md).
 
 **Root branch:** root is **`feat/siltwake-first-expedition`**. Every stream branches from it and merges into it, and `npm run gate` runs on it. `main` is only the owner's initial skeleton; the owner controls `main` and the public deployment.
 
