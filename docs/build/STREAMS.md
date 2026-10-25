@@ -1391,3 +1391,12 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **F3:** an exception vanishes when its gap disappears. Ruling: a separate exceptions list, with retirement only by the coordinator deleting the entry.
   - **F4:** the counting test is insensitive to Sol's 4 mutations. Ruling: counters at the real operations through `openSiteCaches` and `stepSystems`, and the mutations must fail.
   - **Confirmed:** C4 heavy, economy and build pass; merges clean against root and CW-1. PACE-1 conflicts only in `pacing-debt.ts`.
+- **PACE-1 stage 1 R1 (Sol, `4ab0141e`): REQUEST CHANGES** (2 P2, 1 P3).
+  - **Confirmed:** 9/9 routes; all gaps and legs reproduce; fast 1,688; no CW-1 overlap; the LS-1 conflict is only in `pacing-debt.ts`.
+  - **F1:** the R9 return log fires late and is incomplete.
+  - **F2 rulings:**
+    - crown return B amended to "not measured on this map", since the map decisions supersede it and stage 2 measures A and B on the composed map;
+    - the R6 spent-reserve case must be exercised;
+    - the library re-export is assigned to integration (coordinator).
+  - **F3:** the 45.1 explanation is corrected (a real +18.56 min), and labels fixed.
+  - **Stage 2 obligations** updated for the map decisions.
