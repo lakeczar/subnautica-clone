@@ -35,6 +35,36 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
 
+## Maintenance command (after R7, coordinator's ruling)
+
+The SCHED-3 install needs a true idle point, and a busy queue never offers one. Rather than drain once per install, the coordinator asked for a reviewed, coordinator-only pause, installed together with SCHED-3 (branch `t3/sched-3-maintenance`, from the accepted `8063bec4`).
+- **`heavy-check maintenance set --by WHO --reason "<why>"`** sets the same `state.maintenance` mark the installer uses, so admission pauses on both machines (`policy.mjs` `plan()`, before the remote lane).
+  - The mark is `manual`, with an operation nonce, `setBy`, the reason and since; `set` prints the nonce.
+  - Running tickets continue.
+  - A second `set` is refused (exit 3).
+- **`clear --op OP --by WHO --reason "<why>"`** clears only:
+  - its own operation;
+  - or an installer's mark whose process is confirmed dead.
+
+  It refuses while an installer is alive, while an installer's mark says incomplete, or while an install runs under the window or left it incomplete. In those cases, rerun `install.sh` first.
+- **`status`:** shows the mark, its age, owner and operation; `heavy-check status` shows it too.
+- **The audit:** `<state>/maintenance.jsonl`, append-only: who, when, the pid and user, why, and for a clear how long the mark held and its kind.
+- **With `install.sh`:** `exclusive-unit.mjs` still refuses while a ticket runs. Under a manual mark it records its own operation's mark inside it (`under`): it never replaces or clears the caller's, its incomplete reason stays there, and its verified result removes only `under`.
+- **Enforcement:** by convention and audit only. Every agent is the same Unix user.
+- **Tests:**
+  - **S28** (install harness):
+    - usage;
+    - set and its status line;
+    - a refused second set;
+    - queued work waiting and running after the clear;
+    - clear by the wrong op;
+    - install refused while a ticket runs, with the mark untouched;
+    - an incomplete install under the mark blocking the clear;
+    - the rerun completing and leaving only the caller's mark;
+    - an installer's mark: live (refused), dead and incomplete (refused), dead (cleared);
+    - the audit rows.
+  - **B46** (both lanes): with a remote job already running, set pauses a local, a 4070 and an `any` job, all blocked `maintenance`, while the remote job finishes. They stay queued with its slot free, and all run after the clear.
+
 ## R6 review responses
 
 Review `03764202` on `review/sched-3-r6`, by Sol on `f0d41605`: REQUEST CHANGES, one P1. R5's F1–F3 pass.

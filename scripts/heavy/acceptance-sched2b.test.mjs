@@ -1212,3 +1212,30 @@ test("B45 (SCHED-3 R6-F1, Sol's guard spellings): ./scripts/local-guard.mjs, scr
   await done(c, other.out.trim(), 60000);
   assert.deepEqual([result(c, other.out.trim()).argv, result(c, other.out.trim()).goal.portable], [["npm", "run", "test:fast"], undefined]);
 });
+
+// SCHED-3 maintenance ---------------------------------------------------------
+
+test("B46 (SCHED-3 maintenance): a held mark pauses admission on both machines; a remote job already running continues; queued local and remote work waits and runs once it's cleared", async () => {
+  const c = await lane("maint-lanes");
+  const remoteRunning = submit(c, c.repoDir, "--class", "playthrough", "--machine", "any", "--", "sh", "-c", "echo started; sleep 6; echo finished");
+  await until("remote job started", () => log(c, remoteRunning).includes("started"), 30000);
+  assert.equal(state(c).tickets[remoteRunning].remote, true);
+  const s = hc(c, ["maintenance", "set", "--by", "coordinator", "--reason", "lanes"]);
+  assert.equal(s.code, 0, s.err);
+  const op = s.out.trim();
+  const local = submit(c, c.wt("local"), "--class", "quick", "--machine", "3090", "--", "true");
+  const remote = submit(c, c.repoDir, "--class", "gpu", "--machine", "4070", "--", "true");
+  const anyJob = submit(c, c.repoDir, "--class", "standard", "--machine", "any", "--", "true");
+  await sleep(4000);
+  for (const id of [local, remote, anyJob]) {
+    assert.equal(state(c).tickets[id]?.state, "queued", id);
+    assert.equal(blockedBy(c, id), "maintenance", id);
+  }
+  assert.equal(waitFor(c, remoteRunning).code, 0, "the running remote job continued and finished");
+  assert.match(log(c, remoteRunning), /finished/);
+  await sleep(2000);
+  for (const id of [local, remote, anyJob]) assert.equal(state(c).tickets[id]?.state, "queued", `${id}: its slot freed, still paused`);
+  assert.equal(hc(c, ["maintenance", "clear", "--op", op, "--by", "coordinator", "--reason", "done"]).code, 0);
+  for (const id of [local, remote, anyJob]) assert.equal(waitFor(c, id).code, 0, id);
+  assert.deepEqual([result(c, local).remote, result(c, remote).remote], [undefined, true]);
+});

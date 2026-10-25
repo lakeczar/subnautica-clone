@@ -22,7 +22,9 @@
 //    MemoryMax, MemorySwapMax). Every call has a hard deadline: queries are
 //    killed at 10 s; the reload gets TERM at 120 s, KILL 5 s later, and is
 //    waited for.
-// 4. Only this operation's own verified result clears its own mark. Any
+// 4. Only this operation's own verified result clears its own mark. Under a
+//    manual mark (heavy-check maintenance set), its mark is `under` that one,
+//    which stays: the caller clears it. Any
 //    failure after step 2 keeps it, with the reason and the recovery command;
 //    nothing can run on stale settings, and rerunning install.sh recovers.
 // Exit 0 done, 3 refused (busy; nothing paused), 4 incomplete (maintenance kept).
@@ -61,16 +63,22 @@ const op = randomBytes(8).toString("hex"), me = self();
 const refused = transaction(cfg, (state) => {
   const running = Object.entries(state.tickets ?? {}).filter(([, t]) => t.state === "running").map(([id]) => id);
   if (running.length) return { result: `tickets ${running.join(", ")} are running` };
-  const m = state.maintenance;
+  // Under a manual mark (heavy-check maintenance set): admission is already
+  // paused; this operation records its own mark inside it (`under`) and never
+  // replaces or clears the caller's.
+  const holder = state.maintenance?.manual ? state.maintenance : state;
+  const key = holder === state ? "maintenance" : "under", m = holder[key];
   if (m && m.op !== op && alive(m.by)) return { result: `pid ${m.by.pid} holds the queue's maintenance (${m.reason})` };
-  state.maintenance = { op, by: me, since: m?.since ?? Date.now(), reason: `exclusive unit update (${action})${m ? `, taking over ${m.reason}` : ""}`, recover: RECOVER };
+  holder[key] = { op, by: me, since: m?.since ?? Date.now(), reason: `exclusive unit update (${action})${m ? `, taking over ${m.reason}` : ""}`, recover: RECOVER };
   return { changed: true, result: null };
 });
+/** This operation's own mark in `state` (the top-level one, or the one under a manual mark), or null. */
+const ownMark = (state) => { const m = state.maintenance?.manual ? state.maintenance.under : state.maintenance; return m?.op === op ? m : null; };
 if (refused) { console.error(`not ${verb}: ${slice} would change while ${refused}; rerun when the queue is idle`); process.exit(3); }
 
 /** Keeps this operation's mark, with why, and exits 4. */
 const incomplete = (why) => {
-  transaction(cfg, (state) => { if (state.maintenance?.op !== op) return {}; state.maintenance.reason = `unit update incomplete: ${why}; rerun install.sh`; return { changed: true }; });
+  transaction(cfg, (state) => { const m = ownMark(state); if (!m) return {}; m.reason = `unit update incomplete: ${why}; rerun install.sh`; return { changed: true }; });
   console.error(`not ${verb}: ${why}. The queue admits nothing until this is done (heavy-check status shows it); ${RECOVER}`);
   process.exit(4);
 };
@@ -117,5 +125,9 @@ const after = managerMatches();
 if (!after.ok) incomplete(after.why);
 
 // 4. This operation's verified result clears its own mark.
-transaction(cfg, (state) => { if (state.maintenance?.op !== op) return {}; delete state.maintenance; return { changed: true }; });
+transaction(cfg, (state) => {
+  if (!ownMark(state)) return {};
+  if (state.maintenance.manual) delete state.maintenance.under; else delete state.maintenance;
+  return { changed: true };
+});
 console.log(changed ? `${verb} ${slice} (${dir})` : `${slice} unchanged; systemd verified`);

@@ -11,6 +11,9 @@
 //   heavy-check cancel TICKET                 remove a queued ticket or stop a running one
 //   heavy-check release-remote TICKET --reason "…"   coordinator only: free a remote
 //                                             ticket whose sandbox is confirmed gone
+//   heavy-check maintenance set --by WHO --reason "…"     coordinator only: pause admission
+//   heavy-check maintenance clear --op OP --by WHO --reason "…"   resume it
+//   heavy-check maintenance status            the mark, its age and owner
 //
 // OPTIONS: --class quick|standard|heavy-suite|gpu|playthrough|bake|soak|exclusive
 //          --review  --stall S  --deadline S  --cpus N  --mem 3G  --gpu (soak)
@@ -24,7 +27,8 @@
 // changed before admission); 99 still pending (wait only); 2 usage or a
 // request that can never fit.
 import { spawn, spawnSync } from "node:child_process";
-import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
+import { randomBytes } from "node:crypto";
+import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, intentEnv, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
@@ -39,7 +43,7 @@ import {
 
 const here = dirname(fileURLToPath(import.meta.url));
 const cfg = loadConfig();
-const SUBCOMMANDS = new Set(["run", "submit", "wait", "status", "log", "cancel", "release-remote", "help", "--help", "-h"]);
+const SUBCOMMANDS = new Set(["run", "submit", "wait", "status", "log", "cancel", "release-remote", "maintenance", "help", "--help", "-h"]);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const say = (msg) => process.stderr.write(`heavy-check: ${msg}\n`);
 const fail = (msg, code = 2) => { say(msg); process.exit(code); };
@@ -361,11 +365,7 @@ function statusCmd(args) {
   process.stdout.write(`mode ${readMode(cfg)}; pool ${p.used.tokens}/${p.T} cpu, ${p.used.memMiB}/${M} MiB, GPU ${p.used.gpu ? "leased" : "free"}; ` +
     `express ${p.used.express ? "busy" : "free"}; MemAvailable ${host.memAvailableMiB} MiB, memory PSI full ${host.memFullAvg10}%` +
     `${host.legacy.holder ? `; v1 lock HELD (pid ${host.legacy.holders.join(",")})` : ""}${host.legacy.waiter ? "; v1 waiter present: v2 admissions paused" : ""}\n`);
-  if (state.maintenance) {
-    const m = state.maintenance, age = dur(now - (m.since ?? now));
-    process.stdout.write(`MAINTENANCE for ${age}: ${m.reason}${m.by ? ` (pid ${m.by.pid}${alive(m.by) ? ", still running" : ", ended"})` : ""}; nothing is admitted, queued tickets wait. ` +
-      `${m.recover ?? "Recover: rerun scripts/heavy/install.sh"}\n`);
-  }
+  if (state.maintenance) process.stdout.write(`${maintenanceLine(state.maintenance, now)}\n`);
   if (cfg.manageSlice) {
     const sc = sliceCheck(cfg, host.nproc);
     process.stdout.write(`slice ${cfg.slice}: cpu.max ${sc.cpuMax ?? "?"}, memory.max ${sc.memMax ?? "?"}` +
@@ -489,6 +489,68 @@ function recover() {
   transaction(cfg, (state) => ({ changed: reconcile(cfg, state) }));
 }
 
+/** The status line for a maintenance mark: a manual one (heavy-check maintenance) or an installer's. */
+function maintenanceLine(m, now = Date.now()) {
+  const proc = (x) => (x?.by?.pid ? ` (pid ${x.by.pid}${alive(x.by) ? ", still running" : ", ended"})` : "");
+  const head = m.manual ? `MAINTENANCE for ${dur(now - m.since)}: ${m.reason}, set by ${m.setBy} (op ${m.op})` : `MAINTENANCE for ${dur(now - (m.since ?? now))}: ${m.reason}${proc(m)}`;
+  const under = m.under ? `; under it, ${m.under.reason}${proc(m.under)}` : "";
+  return `${head}${under}; nothing is admitted on either machine, queued tickets wait, running ones continue. ${m.recover ?? "Recover: rerun scripts/heavy/install.sh"}`;
+}
+
+/**
+ * Manual maintenance (coordinator only, by convention and audit; SCHED-3
+ * maintenance): `set` pauses admission on both machines with the same mark the
+ * installer uses (state.maintenance), owned by an operation (a nonce) and the
+ * named person; running tickets continue. `clear` takes the operation's own
+ * nonce, or the nonce of an installer's mark whose process is confirmed dead.
+ * It refuses while an install runs under the mark, or one left it incomplete
+ * (rerun install.sh first). Every set and clear is appended to
+ * <state>/maintenance.jsonl: who, when, why, and for a clear how long it held.
+ * install.sh runs under a manual mark without replacing or clearing it.
+ */
+function maintenanceCmd(args) {
+  const action = args[0], opt = (f) => { const i = args.indexOf(f); return i > 0 ? String(args[i + 1] ?? "").trim() : ""; };
+  if (action === "status") {
+    const m = readState(cfg).maintenance;
+    process.stdout.write(m ? `${maintenanceLine(m)}\n` : "no maintenance: admission is open\n");
+    return 0;
+  }
+  const by = opt("--by"), reason = opt("--reason");
+  if (!["set", "clear"].includes(action) || !by || !reason || (action === "clear" && !opt("--op")))
+    fail('usage: heavy-check maintenance set --by WHO --reason "<why>" | clear --op OP --by WHO --reason "<why>" | status');
+  const audit = (row) => appendFileSync(join(cfg.dir, "maintenance.jsonl"), `${JSON.stringify({ at: new Date().toISOString(), user: process.env.USER ?? null, pid: process.pid, ...row })}\n`);
+  ensureDirs(cfg);
+  if (action === "set") {
+    const op = randomBytes(8).toString("hex"), since = Date.now();
+    const r = transaction(cfg, (state) => {
+      if (state.maintenance) return { result: { exists: state.maintenance } };
+      state.maintenance = { op, manual: true, setBy: by, why: reason, since, reason: `maintenance: ${reason}`,
+        recover: `Resume: heavy-check maintenance clear --op ${op} --by <who> --reason "<why>"` };
+      return { changed: true, result: { op } };
+    });
+    if (r.exists) fail(`refused: maintenance is already set (${maintenanceLine(r.exists)})`, 3);
+    audit({ action: "set", op, by, reason });
+    say(`maintenance set (op ${op}): nothing is admitted on either machine; running tickets continue. Resume: heavy-check maintenance clear --op ${op} --by <who> --reason "<why>"`);
+    process.stdout.write(`${op}\n`);
+    return 0;
+  }
+  const op = opt("--op");
+  const r = transaction(cfg, (state) => {
+    const m = state.maintenance;
+    if (!m) return { result: { refused: "no maintenance is set" } };
+    if (m.op !== op) return { result: { refused: `the mark is operation ${m.op}, not ${op}` } };
+    if (!m.manual && alive(m.by)) return { result: { refused: `its installer (pid ${m.by.pid}) is still running` } };
+    if (!m.manual && /incomplete/.test(m.reason)) return { result: { refused: `an install left it incomplete (${m.reason}); rerun scripts/heavy/install.sh, which clears it when it verifies` } };
+    if (m.under) return { result: { refused: `an install runs under it, or left it incomplete (${m.under.reason}); ${alive(m.under.by) ? "wait for it" : "rerun scripts/heavy/install.sh first"}` } };
+    delete state.maintenance;
+    return { changed: true, result: { cleared: m } };
+  });
+  if (r.refused) fail(`refused: ${r.refused}`, 3);
+  audit({ action: "clear", op, by, reason, heldS: Math.round((Date.now() - (r.cleared.since ?? Date.now())) / 1000), kind: r.cleared.manual ? "manual" : "installer" });
+  say(`maintenance cleared (op ${op}): admission resumes`);
+  return 0;
+}
+
 // Dispatch last: commands run during module evaluation, so every helper above
 // must already be initialised.
 const argv = process.argv.slice(2);
@@ -501,5 +563,6 @@ switch (sub) {
   case "log": process.exit(await logCmd(argv));
   case "cancel": process.exit(await cancelCmd(argv));
   case "release-remote": process.exit(releaseRemoteCmd(argv));
+  case "maintenance": process.exit(maintenanceCmd(argv));
   default: process.stdout.write(readFileSync(fileURLToPath(import.meta.url), "utf8").split("\n").slice(1).filter((l, i, all) => all.slice(0, i + 1).every((x) => x.startsWith("//"))).map((l) => l.replace(/^\/\/ ?/, "")).join("\n") + "\n");
 }
