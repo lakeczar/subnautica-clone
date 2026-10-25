@@ -134,6 +134,20 @@ test("R3: an excepted gap that is no longer flagged keeps its exception, waiting
   assert.ok(!judgeEx(droughts(15, 30), cleared, {}).detail.includes("exception"), "both retired");
 });
 
+test("R4: an unjudged route and a missing timeline list the route's exceptions as retained, not evaluated", () => {
+  const ex = { "no-optional-carrier": { [IDS[0]!]: MIN_EX(IDS[0]!), [IDS[1]!]: MIN_EX(IDS[1]!) } };
+  const retained = (detail: string) => IDS.every((id) => detail.includes(`exception ${id} (PACE-1 stage 1): retained, not evaluated`));
+  const unjudged = new PacingTimelines(ex);
+  unjudged.noHistory("no-optional-carrier");
+  const skip = unjudged.accept({ scenario: "no-optional-carrier" } as never);
+  assert.ok(skip.ok && /not judged/.test(skip.detail) && retained(skip.detail), skip.detail);
+  assert.ok(!/no longer flagged/.test(skip.detail), "an unmeasured gap is never inferred gone");
+  const missing = new PacingTimelines(ex).accept({ scenario: "no-optional-carrier" } as never);
+  assert.ok(!missing.ok && /no timeline recorded/.test(missing.detail) && retained(missing.detail), missing.detail);
+  assert.ok(!new PacingTimelines(ex).accept({ scenario: "creel" } as never).detail.includes("exception"), "another route names none");
+  assert.deepEqual(ex["no-optional-carrier"], { [IDS[0]!]: MIN_EX(IDS[0]!), [IDS[1]!]: MIN_EX(IDS[1]!) }, "the list is unchanged");
+});
+
 test("a one-tick decode wait fails before any debt is considered", () => {
   const tick: TimelineEvent = { kind: "idle", tick: 40 * 3600, play: 40 * MIN, seconds: 1 / 60, waiting: [], cause: "decode:reef_pumphouse_log" };
   const v = judge(route({ idle: [tick] }), debtOf(route()));

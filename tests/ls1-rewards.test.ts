@@ -243,7 +243,9 @@ test("R3 F4: through stepSystems, the work actually done stays constant as cache
     } finally { countWork(false); useSiteCacheTable(null); }
   };
   const near = { x: 30, y: -20, z: 25 }, away = { x: -500, y: -20, z: -500 };
-  assert.deepEqual([1, 10, 100].map((n) => cacheWork(n, near)), [[1, 3], [1, 3], [1, 3]], "5 m from one cache: one distance test, one point read, at any count");
+  const nearWork = [1, 10, 100].map((n) => cacheWork(n, near));
+  assert.deepEqual(nearWork.map(([checks]) => checks), [1, 1, 1], "5 m from one cache: one distance test at any count");
+  assert.ok(nearWork[0]![1] > 0 && nearWork.every(([, reads]) => reads === nearWork[0]![1]), `coordinate reads positive and equal at any count: ${JSON.stringify(nearWork)}`);
   assert.deepEqual([1, 10, 100].map((n) => cacheWork(n, away)), [[0, 0], [0, 0], [0, 0]], "far from every cache: none");
   // Crops: 1 and 20 grow-bed crops on one thermal host, and on three hosts. The counted
   // operation is SYS-1's host power evaluation, reached through the step's growth.

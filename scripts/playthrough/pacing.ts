@@ -32,6 +32,7 @@ export class PacingTimelines {
   private readonly branchPoints = new Map<string, TimelineExport>();
   private readonly pendingBranch = new Map<string, string>();
   private readonly unjudged = new Set<string>();
+  constructor(private readonly exceptions: Readonly<Record<string, Readonly<Record<string, PacingException>>>> = PACING_EXCEPTIONS) {}
 
   /** Before a branch's driver is made: resume from `parent@milestone`'s timeline. */
   branch(scenario: string, parent: string, milestone: string): void { this.pendingBranch.set(scenario, `${parent}@${milestone}`); }
@@ -69,10 +70,12 @@ export class PacingTimelines {
   /** The acceptance check for one finished run. */
   accept(run: RunRecord): { name: string; ok: boolean; detail: string } {
     const name = "pacing acceptance (LS-1: new-content gap, empty travel, no decode waits)";
-    if (this.unjudged.has(run.scenario)) return { name, ok: true, detail: "not judged: branched from the save library, no parent history" };
+    // An unmeasured route says nothing about its exceptions' gaps: they are retained, never inferred gone.
+    const kept = retainedNotEvaluated(this.exceptions[run.scenario] ?? {});
+    if (this.unjudged.has(run.scenario)) return { name, ok: true, detail: `not judged: branched from the save library, no parent history${kept}` };
     const t = this.timeline(run.scenario);
-    if (!t) return { name, ok: false, detail: "no timeline recorded" };
-    return { name, ...judgePacing(run.scenario, analyseTimeline(t)) };
+    if (!t) return { name, ok: false, detail: `no timeline recorded${kept}` };
+    return { name, ...judgePacing(run.scenario, analyseTimeline(t), PACING_DEBT, this.exceptions) };
   }
   /** Writes each recorded scenario's timeline export to `dir`. */
   write(dir: string, scenarios: readonly string[]): void {
@@ -142,6 +145,11 @@ export function judgePacing(scenario: string, a: TimelineAnalysis, debts: Readon
     return { ok: false, detail: `better than the recorded pacing debt (${g.better.join("; ")}): lower pacing-debt.ts["${scenario}"].gaps to ${JSON.stringify(rowsOf(m.gaps, debt.gaps))}` +
       `${named ? ` and keep PACING_EXCEPTIONS["${scenario}"] as it is (only the coordinator retires an entry)` : ""} (${figures})${legs}${named}` };
   return { ok: true, detail: `gaps exactly the recorded pacing debt (pacing-debt.ts): ${figures}${legs}${named}` };
+}
+/** A route's named exceptions when nothing was measured (unjudged or no timeline). */
+function retainedNotEvaluated(entries: Readonly<Record<string, PacingException>>): string {
+  const lines = Object.entries(entries).map(([id, e]) => `exception ${id} (${e.owner}): retained, not evaluated`);
+  return lines.length ? `; named exceptions over the accepted ceiling: ${lines.join("; ")}` : "";
 }
 /** A route's named exceptions, for every verdict: each with its owner and cause while its
  * gap is flagged, and as waiting for the coordinator once it is not. */
