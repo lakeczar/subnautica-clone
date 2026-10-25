@@ -1278,3 +1278,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **The 3 OOM kills** come from the deliberate over-budget probe.
   - **Checks:** fast 1,689; a real gate `--only heavy` passed (67 files, about 16 min on the 3090); highest peak 78.4%.
   - **Review:** Sol R1 running (`siltwake-stew3-review-r1-sol-1b5d99d`). The branch predates SCHED-3's merge and needs to compose with root.
+- **STEW-3 R1** (Sol on `1b5d99d7`, report on `review/stew-3-r1` `2a8420fe`): REQUEST CHANGES; 100 checks pass; it merges cleanly with root.
+  - **P1:** alternate budget sources bypass the real-budget gate.
+  - **P2:** `matchKey` can't establish an equivalent control (needs identity vs conditions, and per-file cache state).
+  - **P2:** stored-result eligibility ignores the receipt.
+  - **Decision:** fixes adopted as written.
