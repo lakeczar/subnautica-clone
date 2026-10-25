@@ -58,10 +58,33 @@ Review R5 (Sol 6.1 xhigh on `42786dc4`): REQUEST CHANGES, with the conditions fo
 - **Candidate root fix:** entry waits for the collision pack to settle before reveal, bounded like admission. It costs nothing when the pack has landed, which is the case from the title.
 
 ### Composed functional sweep
-PLACEHOLDER-SWEEP
+**The seven segments not rerun on the composed build, driven by ordinary input from saves and plans derived at the composed commit** (`runs/r15/plans`; `sweep.sh`, which builds the candidate in the job). Function only; frame times are recorded, never judged (non-exclusive). Two jobs:
+- tours 0, 3 and 4 on the 4070 (`261025-020523-7c3b`, at `9b5cee2c`, default 3,072 MiB);
+- tours 5 and 7, hop 2 and the surf hop on the 3090, as a gpu job (`261025-025113-2844`, at `7dea694a`, `--mem 5G`, peak 3,301 of 5,120 MiB).
+
+| Segment | Stops | Holds | Unsliced (travel / load) | Terrain or shell fallbacks | Frames in a cave with its light unbound | Driver stalls (same plan earlier) | End: power, hull, home | Errors |
+|---|---|---|---|---|---|---|---|---|
+| Tour 0 | 6/6 | 0 | 0 / 0 | 0 | 0 | 0 (r12: 1) | 80%, 99%, home ok | 0 |
+| Tour 3 | 5/5 | 0 | 0 / 0 | 0 | 0 | 31 (r13: 31) | 51%, 71%, home ok | 0 |
+| Tour 4 | 4/4 | 0 | 0 / 0 | 0 | 0 | 8 (r13: 6) | 56%, 92%, home ok | 0 |
+| Tour 5 | 13/13 | 0 | 0 / 0 | 0 | 0 | 3 (r12: 3) | 63%, 96%, home ok | 0 |
+| Tour 7 | 4/4 | 0 | 0 / 0 | 0 | 0 | 0 (r13: 1) | 63%, 98%, home ok | 0 |
+| Hop 2 (Meridian culvert north) | 1/1 | 0 | 0 / 0 | 0 | 0 | 0 (r12: 0) | 92%, 100%, home ok (service call at the Meridian office) | 0 |
+| Surf hop | 1/1 | 0 | 0 / 0 | 0 | 0 | **12** (r13: 4) | 86%, **89%**, home ok | 0 |
+
+- **All 34 stops reached**, with no hold, no unsliced build, no production fallback, no frame in an unlit cave, every return viable and no page error. Cave collision and readiness behaved as on CW-1's own builds.
+- **Driver stalls are the keyboard driver's**, as before (*Compromises*, "Coverage by keyboard driver"). Tour 3's 31 at the Isles cove undercut, ending at 71% hull, repeat r13 exactly.
+- **The surf approach got rougher:** 12 stalls and 89% hull, against r13's 4 and 96%. The composed plan's derivation replanned three legs and dropped two unreachable corners, so its legs differ. It still arrives. The approach-route root fix stays as listed.
+- **Not timing evidence:** no timing verdict is given or implied; their composed timing stays missing.
+- **The first 3090 attempt** (`261025-020523-363b`) was OOM-killed at the gpu class's default 3,072 MiB, at tour 5's end. It wasn't a leak. A memory trace of the rerun (`mem-trace.sh`, `runs/r15/sweep-3090-mem.jsonl`) shows each segment flat at 1.1–1.4 GiB during travel, then a spike of about 1.5 GB in the page's renderer process at the segment's end, where the harness pulled every frame's record in one structured clone. The harness now pulls them in slices (`6d9c2d19`). Tour 7 again under the trace (`261025-034638-c653`, `--mem 5G`): job peak **2,056 MiB** (was a 2.6 GiB spike), the renderer process 956 MiB at the end (was 2,125); the same functional result. That receipt is a diagnostic, not commit-bound (the snapshot carried uncommitted handoff text; the measured harness is `6d9c2d19`). With the fix, the gpu class's default 3,072 MiB covers a segment; the limit used is recorded with each result above.
 
 ### Checks after R5
-PLACEHOLDER-CHECKS
+At the candidate after R5's code changes, through the queue (receipts in `runs/r15/receipts/`):
+- **Fast tier** (`261025-020534-5d2f`, 3090, bound to `9b5cee2c`): **1,669 / 1,669**. That includes `cw1-entry-warmup` (R5-1), `cw1-entry`, `hazard-sampling` (R5-5), `warmup` and `app`.
+- **Heavy tier at real budgets** (`261025-020535-baf6`, 3090, bound to `9b5cee2c`): **all 71 files pass within their budgets** (`runs/r15/heavy-real-9b5cee2c.txt`): `regions-bake` 1,385 / 1,920, `col1-art` 921 / 1,024, `terrain-borders` 811 / 1,024, `cw1-bake` 1,124 / 1,536.
+- **Harness units:** `frame-class.test.mjs` 23/23, `step-class.test.mjs` 9/9.
+- **Unchanged since R4's composed checks:** economy 6/6, playthrough 8/8, and the bake and build. R5 changed no bake input or packaging. The coordinator's `npm run gate` reruns them on root.
+
 
 ## R4 response
 
@@ -77,7 +100,7 @@ Review R4 (`review/cw-1-r4`, Sol 6.1 xhigh on `a431d253`): REQUEST CHANGES, thre
 **r13 re-judged under the R4 rule:** unchanged. Tours 3, 4 and 7 and the surf hop pass with nothing excused; deep 2 (2 frames) and tour 1 (1 frame) fail. No r13 streaming frame had any host credit. r13's raw states have no coverage, so they're now "states unobserved".
 
 **Deep 2's explanation, corrected (Sol R4):**
-- The 63.7 ms selection is in an **83.3 ms** gap, the renderer on vCPU **6 → 0** (a migration), with 19.81 ms of canary-capped credit and 63.49 ms remaining.
+- The 63.7 ms selection is in an **83.3 ms** gap, the renderer on vCPU **6 → 0** (a migration), with 19.81 ms of canary-capped credit under the R3 rule and 63.49 ms remaining. Under today's rule its coverage-less states earn zero (Sol R5).
 - The 102.4 ms selection is in a 100 ms gap on vCPU 3, but its row intervals are **24.7 and 81.8 ms**, both over the 12 ms bound: no provable credit.
 - The handoff's earlier "runnable on vCPU 3 throughout" doesn't hold for both frames.
 - The quiet replay (0.06–0.17 ms, after 50 JIT warmups, with fewer real candidates) argues against a persistent selection-algorithm cost. It can't exclude first-use compilation, GC or a scheduling interruption, so **both stay measured failures**.
@@ -370,7 +393,7 @@ The pauses land in whichever part of our frame is running. That is why R1's and 
 - No frame was drawn in a cave with its light unbound: R3-2's hub caves included, and the frames behind each re-entry's cover counted apart (0).
 
 **Deep 2's r13 frames, as Sol R4 corrected them:**
-- **The 63.7 ms selection** sits in an **83.3 ms** gap. The renderer's row endpoints are on vCPU **6 → 0** (a migration). It earns 19.81 ms of canary-capped credit and keeps 63.49 ms.
+- **The 63.7 ms selection** sits in an **83.3 ms** gap. The renderer's row endpoints are on vCPU **6 → 0** (a migration). Under the R3 rule it earned 19.81 ms of canary-capped credit and kept 63.49 ms; under today's rule its coverage-less r13 states earn zero.
 - **The 102.4 ms selection** sits in a 100 ms gap on vCPU 3. Its row intervals are **24.7 and 81.8 ms**, both over the 12 ms bound, so it earns no provable credit. The earlier "runnable on vCPU 3 throughout" claim doesn't hold for both frames.
 - **The quiet replay** (headless, at the same commit; `select-replay.mjs`, `runs/r13/select-replay.txt`): selection costs p99 0.085 ms, max 0.17 ms, at each recorded pose after 50 JIT warmups, with 2,088 fewer real candidates (topped up synthetically). That argues against a persistent selection-algorithm cost. It can't exclude browser first-use compilation, GC or the original scheduling interruption, so both frames stay measured failures.
 

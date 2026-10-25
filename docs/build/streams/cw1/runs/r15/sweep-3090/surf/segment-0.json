@@ -1,0 +1,1253 @@
+{
+ "commit": "7dea694a",
+ "label": "RTX 3090 (factory-worker)",
+ "segment": 0,
+ "caves": [
+  "isles_surf_cave"
+ ],
+ "reached": [
+  "isles_surf_cave"
+ ],
+ "skipped": [],
+ "shots": [
+  "s0-01-isles_surf_cave.jpg"
+ ],
+ "views": [],
+ "errors": [],
+ "holds": [],
+ "long": [],
+ "unsliced": [],
+ "terrainFallbacks": [],
+ "recoveries": 12,
+ "power": [],
+ "stalls": [
+  {
+   "t": 135.5,
+   "label": "cruise#11",
+   "short": 10,
+   "at": "346,-26,124",
+   "target": [
+    351.8,
+    -19.4,
+    124
+   ],
+   "bearing": 95,
+   "pitch": -2,
+   "headingErr": -0.03,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 100% · 27 / 350 m",
+   "notices": ""
+  },
+  {
+   "t": 143.2,
+   "label": "cruise#11",
+   "short": 9.7,
+   "at": "346,-26,124",
+   "target": [
+    351.8,
+    -19.4,
+    124
+   ],
+   "bearing": 95,
+   "pitch": -2,
+   "headingErr": -0.03,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 99% · 27 / 350 m",
+   "notices": ""
+  },
+  {
+   "t": 150.8,
+   "label": "cruise#11",
+   "short": 9.4,
+   "at": "346,-26,124",
+   "target": [
+    351.8,
+    -19.4,
+    124
+   ],
+   "bearing": 95,
+   "pitch": -2,
+   "headingErr": -0.03,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 55 F · eat meal DART 94% power Hull 99% · 27 / 350 m",
+   "notices": ""
+  },
+  {
+   "t": 193.9,
+   "label": "cruise#23",
+   "short": 25.9,
+   "at": "457,-4,48",
+   "target": [
+    467.8,
+    -4,
+    72
+   ],
+   "bearing": 158,
+   "pitch": -2,
+   "headingErr": -0.03,
+   "keys": [
+    "KeyW",
+    "ShiftLeft"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 53 F · eat meal DART 92% power Hull 97% · 5 / 350 m Service here · Tab",
+   "notices": ""
+  },
+  {
+   "t": 201.4,
+   "label": "cruise#23",
+   "short": 24.9,
+   "at": "458,-4,49",
+   "target": [
+    467.8,
+    -4,
+    72
+   ],
+   "bearing": 158,
+   "pitch": -2,
+   "headingErr": -0.04,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 53 F · eat meal DART 92% power Hull 96% · 4 / 350 m Service here · Tab",
+   "notices": ""
+  },
+  {
+   "t": 208.9,
+   "label": "cruise#23",
+   "short": 24.7,
+   "at": "458,-3,49",
+   "target": [
+    467.8,
+    -4,
+    72
+   ],
+   "bearing": 158,
+   "pitch": -2,
+   "headingErr": -0.04,
+   "keys": [
+    "KeyW"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 53 F · eat meal DART 91% power Hull 95% · 4 / 350 m Service here · Tab",
+   "notices": ""
+  },
+  {
+   "t": 226.4,
+   "label": "cruise#24",
+   "short": 47.6,
+   "at": "458,-3,49",
+   "target": [
+    467.8,
+    -4,
+    96
+   ],
+   "bearing": 169,
+   "pitch": -2,
+   "headingErr": -0.02,
+   "keys": [
+    "KeyW",
+    "ShiftLeft"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 52 F · eat meal DART 91% power Hull 95% · 4 / 350 m Service here · Tab",
+   "notices": ""
+  },
+  {
+   "t": 233.8,
+   "label": "cruise#24",
+   "short": 47.6,
+   "at": "458,-3,49",
+   "target": [
+    467.8,
+    -4,
+    96
+   ],
+   "bearing": 169,
+   "pitch": -2,
+   "headingErr": -0.02,
+   "keys": [
+    "KeyW",
+    "ShiftLeft"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 52 F · eat meal DART 90% power Hull 94% · 4 / 350 m Service here · Tab",
+   "notices": ""
+  },
+  {
+   "t": 241.3,
+   "label": "cruise#24",
+   "short": 47.6,
+   "at": "458,-3,49",
+   "target": [
+    467.8,
+    -4,
+    96
+   ],
+   "bearing": 169,
+   "pitch": -2,
+   "headingErr": -0.02,
+   "keys": [
+    "KeyW",
+    "ShiftLeft"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 52 F · eat meal DART 90% power Hull 93% · 4 / 350 m Service here · Tab",
+   "notices": ""
+  },
+  {
+   "t": 258.9,
+   "label": "cruise#25",
+   "short": 30,
+   "at": "458,-3,50",
+   "target": [
+    471.8,
+    -3.5,
+    76
+   ],
+   "bearing": 152,
+   "pitch": -2,
+   "headingErr": 0,
+   "keys": [
+    "KeyW",
+    "ShiftLeft"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 51 F · eat meal DART 89% power Hull 92% · 4 / 350 m Service here · Tab",
+   "notices": ""
+  },
+  {
+   "t": 266.3,
+   "label": "cruise#25",
+   "short": 30,
+   "at": "458,-3,50",
+   "target": [
+    471.8,
+    -3.5,
+    76
+   ],
+   "bearing": 152,
+   "pitch": -2,
+   "headingErr": 0,
+   "keys": [
+    "KeyW",
+    "ShiftLeft"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 51 F · eat meal DART 88% power Hull 91% · 4 / 350 m Service here · Tab",
+   "notices": ""
+  },
+  {
+   "t": 273.8,
+   "label": "cruise#25",
+   "short": 30,
+   "at": "458,-3,50",
+   "target": [
+    471.8,
+    -3.5,
+    76
+   ],
+   "bearing": 152,
+   "pitch": -2,
+   "headingErr": 0,
+   "keys": [
+    "KeyW",
+    "ShiftLeft"
+   ],
+   "hold": "clear",
+   "cave": "",
+   "air": "craft",
+   "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 51 F · eat meal DART 88% power Hull 90% · 4 / 350 m Service here · Tab",
+   "notices": ""
+  }
+ ],
+ "reentries": [],
+ "renderer": "ANGLE (NVIDIA Corporation, NVIDIA GeForce RTX 3090/PCIe/SSE2, OpenGL ES 3.2)",
+ "coldStart": {
+  "titleMs": 4751,
+  "playableMs": 25809,
+  "collisionPackMs": 4047.7999999988824,
+  "records": true
+ },
+ "seconds": 284.7,
+ "powerEnd": {
+  "charge": 86,
+  "cellsLeft": 2,
+  "air": "craft",
+  "vitals": "O₂ 100% Dart air HEALTH 100 FOOD 49 F · eat meal DART 86% power Hull 89% · 10 / 350 m",
+  "at": "565,-9,112",
+  "planned": {
+   "segment": 0,
+   "metres": 1350,
+   "calls": [],
+   "cruise": false,
+   "outPercent": 8.3,
+   "homePercent": 1.1,
+   "havePercent": 135,
+   "viable": true
+  },
+  "homeOk": true
+ },
+ "trace": {
+  "rotations": 3,
+  "chunksWithDataLoss": 0,
+  "events": 105766,
+  "megabytes": 19
+ },
+ "gcTraceAligned": true,
+ "gcTraceNames": [
+  "V8.GC_HEAP_EXTERNAL_PROLOGUE",
+  "MinorGC",
+  "V8.GC_HEAP_PROLOGUE",
+  "V8.GCScavenger",
+  "V8.GC_SCAVENGER_COMPLETE_SWEEP_ARRAY_BUFFERS",
+  "V8.GC_TIME_TO_SAFEPOINT",
+  "V8.GC_SCAVENGER",
+  "V8.GC_HEAP_PROLOGUE_SAFEPOINT",
+  "V8.GC_SCAVENGER_SCAVENGE",
+  "V8.GC_SCAVENGER_SCAVENGE_WEAK_GLOBAL_HANDLES_IDENTIFY",
+  "V8.GC_SCAVENGER_TRACED_HANDLES_COMPUTE_WEAKNESS_PARALLEL",
+  "V8.GC_SCAVENGER_BACKGROUND_TRACED_HANDLES_COMPUTE_WEAKNESS_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_COLLECT_OLD_TO_NEW_PAGES",
+  "V8.GC_SCAVENGER_SCAVENGE_PARALLEL_PHASE",
+  "V8.GC_SCAVENGER_SCAVENGE_ROOTS",
+  "V8.GC_SCAVENGER_BACKGROUND_SCAVENGE_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_WEAK_GLOBAL_HANDLES_PROCESS",
+  "V8.GC_SCAVENGER_TRACED_HANDLES_RESET_PARALLEL",
+  "V8.GC_SCAVENGER_BACKGROUND_TRACED_HANDLES_RESET_PARALLEL",
+  "V8.GC_SCAVENGER_SCAVENGE_FINALIZE",
+  "V8.GC_SCAVENGER_SCAVENGE_RESTORE_AND_QUARANTINE_PINNED",
+  "V8.GC_SCAVENGER_FREE_REMEMBERED_SET",
+  "V8.GC_SCAVENGER_SWEEP_ARRAY_BUFFERS",
+  "V8.GC_SCAVENGER_RESIZE_NEW_SPACE",
+  "V8.GC_MINOR_MS_BACKGROUND_SWEEPING",
+  "V8.GC_HEAP_EPILOGUE_SAFEPOINT",
+  "V8.GC_BACKGROUND_YOUNG_ARRAY_BUFFER_SWEEP",
+  "V8.GC_HEAP_EPILOGUE",
+  "V8.GCTraceGCNVP",
+  "V8.GC_HEAP_DUMP_STATISTICS",
+  "V8.GC_Heap_Stats",
+  "V8.GC_HEAP_EXTERNAL_EPILOGUE",
+  "V8.GCPretenuringFeedback",
+  "V8.GCPretenuringSummary",
+  "V8.GCIncrementalMarkingStart",
+  "V8.GC_HEAP_ENSURE_SWEEPING_COMPLETED",
+  "V8.GC_MC_INCREMENTAL_START",
+  "V8.GC_MC_INCREMENTAL_EXTERNAL_PROLOGUE",
+  "V8.GC_MC_MARK_EMBEDDER_PROLOGUE"
+ ],
+ "sampler": {
+  "rows": 57356,
+  "polls": 140487,
+  "rendererCovered": 0.9994,
+  "gpuCovered": 0.9994,
+  "coverSpans": {
+   "renderer": 10,
+   "gpu": 10
+  },
+  "rowIntervalP99": 5.2,
+  "rowIntervalMax": 11.6,
+  "rowIntervalsOver12": 0,
+  "errors": []
+ },
+ "stepCosts": {
+  "steps": 18550,
+  "slow": 0,
+  "slowMs": 8,
+  "step": {
+   "mean": 0.29659299190414723,
+   "p50": 0.30443702144069656,
+   "p99": 0.6088740428813931,
+   "p999": 1.116679918249224,
+   "max": 3.700000001117587
+  },
+  "phases": {
+   "input": {
+    "mean": 0.005137466306313672,
+    "p99": 0.10763474115247545,
+    "max": 0.2000000011175871,
+    "over1": 0,
+    "over4": 0
+   },
+   "checkpoint": {
+    "mean": 0.005498652290101,
+    "p99": 0.2152694823049509,
+    "max": 0.6999999992549419,
+    "over1": 0,
+    "over4": 0
+   },
+   "commands": {
+    "mean": 0.006797843668358827,
+    "p99": 0.10763474115247545,
+    "max": 0.2000000011175871,
+    "over1": 0,
+    "over4": 0
+   },
+   "movement": {
+    "mean": 0.06494878706344054,
+    "p99": 0.2152694823049509,
+    "max": 0.599999999627471,
+    "over1": 0,
+    "over4": 0
+   },
+   "cues": {
+    "mean": 0.0015633423181597114,
+    "p99": 0.10000000149011612,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "action": {
+    "mean": 0.000630727762963894,
+    "p99": 0.0010905077326652578,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "upgrades": {
+    "mean": 0.013773584901945128,
+    "p99": 0.10763474115247545,
+    "max": 0.2000000011175871,
+    "over1": 0,
+    "over4": 0
+   },
+   "signatures": {
+    "mean": 0.0008032345006649063,
+    "p99": 0.0010905077326652578,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "systems": {
+    "mean": 0.02764959568182895,
+    "p99": 0.10763474115247545,
+    "max": 0.30000000074505806,
+    "over1": 0,
+    "over4": 0
+   },
+   "fauna": {
+    "mean": 0.012409703504404611,
+    "p99": 0.10763474115247545,
+    "max": 0.8000000007450581,
+    "over1": 0,
+    "over4": 0
+   },
+   "cycles": {
+    "mean": 0.002991913745425782,
+    "p99": 0.10000000149011612,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "renewal": {
+    "mean": 0.005417789757111163,
+    "p99": 0.10000000149011612,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "story": {
+    "mean": 0.0005175202152116922,
+    "p99": 0.0010905077326652578,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "berth": {
+    "mean": 0.0012129380060937206,
+    "p99": 0.10000000149011612,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "recovery": {
+    "mean": 0.0008301886792653655,
+    "p99": 0.0010905077326652578,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "threat": {
+    "mean": 0.010954177896329013,
+    "p99": 0.10763474115247545,
+    "max": 0.40000000037252903,
+    "over1": 0,
+    "over4": 0
+   },
+   "ecology": {
+    "mean": 0.022975741236337593,
+    "p99": 0.10763474115247545,
+    "max": 0.2000000011175871,
+    "over1": 0,
+    "over4": 0
+   },
+   "survival": {
+    "mean": 0.003638814015469622,
+    "p99": 0.10000000149011612,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "journal": {
+    "mean": 0.005121293799233726,
+    "p99": 0.10000000149011612,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   },
+   "events": {
+    "mean": 0.008641509432596658,
+    "p99": 0.10763474115247545,
+    "max": 0.6999999992549419,
+    "over1": 0,
+    "over4": 0
+   },
+   "timeline": {
+    "mean": 0.020857142857665,
+    "p99": 0.10763474115247545,
+    "max": 3.399999998509884,
+    "over1": 1,
+    "over4": 0
+   },
+   "timelineSave": {
+    "mean": 0.000404312668564024,
+    "p99": 0.0010905077326652578,
+    "max": 0.30000000074505806,
+    "over1": 0,
+    "over4": 0
+   },
+   "presentation": {
+    "mean": 0.0713315363956309,
+    "p99": 0.2152694823049509,
+    "max": 1.099999999627471,
+    "over1": 1,
+    "over4": 0
+   },
+   "autosave": {
+    "mean": 0.0021239892172443898,
+    "p99": 0.10763474115247545,
+    "max": 2.099999999627471,
+    "over1": 10,
+    "over4": 0
+   },
+   "other": {
+    "mean": 0.0003611859837873284,
+    "p99": 0.0010905077326652578,
+    "max": 0.10000000149011612,
+    "over1": 0,
+    "over4": 0
+   }
+  },
+  "worst": [
+   {
+    "tick": 316020,
+    "at": 261678.59999999963,
+    "ms": 3.700000001117587,
+    "phases": {
+     "movement": 0.09999999962747097,
+     "fauna": 0.10000000149011612,
+     "timeline": 3.399999998509884,
+     "presentation": 0.10000000149011612
+    }
+   },
+   {
+    "tick": 313315,
+    "at": 216596.90000000037,
+    "ms": 2.599999999627471,
+    "phases": {
+     "movement": 0.19999999925494194,
+     "threat": 0.09999999962747097,
+     "timelineSave": 0.10000000149011612,
+     "presentation": 0.09999999962747097,
+     "autosave": 2.099999999627471
+    }
+   },
+   {
+    "tick": 311515,
+    "at": 186598.19999999925,
+    "ms": 2.400000000372529,
+    "phases": {
+     "cycles": 0.10000000149011612,
+     "ecology": 0.09999999962747097,
+     "presentation": 0.09999999962747097,
+     "autosave": 2.099999999627471
+    }
+   },
+   {
+    "tick": 304315,
+    "at": 66603.09999999963,
+    "ms": 2.400000000372529,
+    "phases": {
+     "upgrades": 0.09999999962747097,
+     "events": 0.10000000149011612,
+     "timeline": 0.09999999962747097,
+     "timelineSave": 0.09999999962747097,
+     "autosave": 2
+    }
+   },
+   {
+    "tick": 307915,
+    "at": 126600.69999999925,
+    "ms": 2.300000000745058,
+    "phases": {
+     "systems": 0.10000000149011612,
+     "ecology": 0.09999999962747097,
+     "timelineSave": 0.19999999925494194,
+     "autosave": 1.900000000372529
+    }
+   },
+   {
+    "tick": 302515,
+    "at": 36604.199999999255,
+    "ms": 2.300000000745058,
+    "phases": {
+     "movement": 0.10000000149011612,
+     "threat": 0.09999999962747097,
+     "timeline": 0.09999999962747097,
+     "presentation": 0.09999999962747097,
+     "autosave": 1.900000000372529
+    }
+   },
+   {
+    "tick": 306115,
+    "at": 96601.80000000075,
+    "ms": 2.299999998882413,
+    "phases": {
+     "movement": 0.09999999962747097,
+     "threat": 0.09999999962747097,
+     "timeline": 0.09999999962747097,
+     "timelineSave": 0.09999999962747097,
+     "autosave": 1.900000000372529
+    }
+   },
+   {
+    "tick": 315115,
+    "at": 246595.80000000075,
+    "ms": 2.299999998882413,
+    "phases": {
+     "upgrades": 0.09999999962747097,
+     "timelineSave": 0.19999999925494194,
+     "presentation": 0.09999999962747097,
+     "autosave": 1.900000000372529
+    }
+   },
+   {
+    "tick": 307784,
+    "at": 124417.30000000075,
+    "ms": 2.199999999254942,
+    "phases": {
+     "commands": 0.09999999962747097,
+     "movement": 0.599999999627471,
+     "upgrades": 0.09999999962747097,
+     "systems": 0.09999999962747097,
+     "threat": 0.10000000149011612,
+     "ecology": 0.09999999962747097,
+     "events": 0.6999999992549419,
+     "timeline": 0.09999999962747097,
+     "presentation": 0.30000000074505806
+    }
+   },
+   {
+    "tick": 316915,
+    "at": 276594.5,
+    "ms": 2.199999999254942,
+    "phases": {
+     "movement": 0.09999999962747097,
+     "systems": 0.09999999962747097,
+     "timelineSave": 0.10000000149011612,
+     "presentation": 0.09999999962747097,
+     "autosave": 1.799999998882413
+    }
+   },
+   {
+    "tick": 309715,
+    "at": 156599.30000000075,
+    "ms": 2.099999999627471,
+    "phases": {
+     "checkpoint": 0.09999999962747097,
+     "threat": 0.09999999962747097,
+     "timelineSave": 0.09999999962747097,
+     "autosave": 1.800000000745058
+    }
+   },
+   {
+    "tick": 318715,
+    "at": 306593.30000000075,
+    "ms": 2.099999999627471,
+    "phases": {
+     "commands": 0.09999999962747097,
+     "movement": 0.09999999962747097,
+     "fauna": 0.09999999962747097,
+     "presentation": 0.2000000011175871,
+     "autosave": 1.599999999627471
+    }
+   },
+   {
+    "tick": 300716,
+    "at": 6622.199999999255,
+    "ms": 2,
+    "phases": {
+     "input": 0.2000000011175871,
+     "checkpoint": 0.2999999988824129,
+     "commands": 0.10000000149011612,
+     "upgrades": 0.09999999962747097,
+     "systems": 0.09999999962747097,
+     "fauna": 0.09999999962747097,
+     "threat": 0.09999999962747097,
+     "events": 0.10000000149011612,
+     "timeline": 0.5,
+     "presentation": 0.2999999988824129,
+     "autosave": 0.09999999962747097
+    }
+   },
+   {
+    "tick": 319016,
+    "at": 313504.19999999925,
+    "ms": 1.5,
+    "phases": {
+     "checkpoint": 0.40000000037252903,
+     "movement": 0.09999999962747097,
+     "fauna": 0.8000000007450581,
+     "timeline": 0.09999999962747097,
+     "presentation": 0.09999999962747097
+    }
+   },
+   {
+    "tick": 316736,
+    "at": 273611.69999999925,
+    "ms": 1.400000000372529,
+    "phases": {
+     "input": 0.10000000149011612,
+     "checkpoint": 0.6999999992549419,
+     "movement": 0.19999999925494194,
+     "systems": 0.10000000149011612,
+     "survival": 0.09999999962747097,
+     "events": 0.09999999962747097,
+     "presentation": 0.09999999962747097
+    }
+   },
+   {
+    "tick": 302496,
+    "at": 36287.59999999963,
+    "ms": 1.400000000372529,
+    "phases": {
+     "movement": 0.09999999962747097,
+     "systems": 0.10000000149011612,
+     "ecology": 0.09999999962747097,
+     "presentation": 1.099999999627471
+    }
+   },
+   {
+    "tick": 316803,
+    "at": 274728.19999999925,
+    "ms": 1.200000001117587,
+    "phases": {
+     "commands": 0.10000000149011612,
+     "movement": 0.2999999988824129,
+     "systems": 0.09999999962747097,
+     "renewal": 0.10000000149011612,
+     "story": 0.09999999962747097,
+     "events": 0.09999999962747097,
+     "presentation": 0.40000000037252903
+    }
+   },
+   {
+    "tick": 316616,
+    "at": 271611.4000000004,
+    "ms": 1.199999999254942,
+    "phases": {
+     "input": 0.09999999962747097,
+     "checkpoint": 0.5,
+     "movement": 0.09999999962747097,
+     "renewal": 0.09999999962747097,
+     "ecology": 0.10000000149011612,
+     "presentation": 0.2999999988824129
+    }
+   },
+   {
+    "tick": 307785,
+    "at": 124434,
+    "ms": 1.099999999627471,
+    "phases": {
+     "input": 0.09999999962747097,
+     "movement": 0.09999999962747097,
+     "cues": 0.10000000149011612,
+     "signatures": 0.09999999962747097,
+     "ecology": 0.09999999962747097,
+     "timeline": 0.09999999962747097,
+     "presentation": 0.5
+    }
+   },
+   {
+    "tick": 316770,
+    "at": 274178.0999999996,
+    "ms": 1.099999999627471,
+    "phases": {
+     "commands": 0.09999999962747097,
+     "movement": 0.2000000011175871,
+     "upgrades": 0.09999999962747097,
+     "systems": 0.09999999962747097,
+     "renewal": 0.09999999962747097,
+     "ecology": 0.10000000149011612,
+     "journal": 0.09999999962747097,
+     "presentation": 0.2999999988824129
+    }
+   },
+   {
+    "tick": 316506,
+    "at": 269778.5,
+    "ms": 1,
+    "phases": {
+     "input": 0.09999999962747097,
+     "movement": 0.2000000011175871,
+     "systems": 0.09999999962747097,
+     "ecology": 0.09999999962747097,
+     "survival": 0.09999999962747097,
+     "presentation": 0.30000000074505806,
+     "autosave": 0.09999999962747097
+    }
+   },
+   {
+    "tick": 316804,
+    "at": 274744.9000000004,
+    "ms": 1,
+    "phases": {
+     "commands": 0.09999999962747097,
+     "movement": 0.30000000074505806,
+     "systems": 0.09999999962747097,
+     "renewal": 0.09999999962747097,
+     "ecology": 0.09999999962747097,
+     "timeline": 0.09999999962747097,
+     "presentation": 0.2000000011175871
+    }
+   },
+   {
+    "tick": 316620,
+    "at": 271678.5999999996,
+    "ms": 1,
+    "phases": {
+     "movement": 0.2000000011175871,
+     "upgrades": 0.19999999925494194,
+     "fauna": 0.09999999962747097,
+     "ecology": 0.09999999962747097,
+     "events": 0.10000000149011612,
+     "timelineSave": 0.09999999962747097,
+     "presentation": 0.19999999925494194
+    }
+   },
+   {
+    "tick": 316621,
+    "at": 271695.30000000075,
+    "ms": 1,
+    "phases": {
+     "movement": 0.2999999988824129,
+     "systems": 0.09999999962747097,
+     "cycles": 0.10000000149011612,
+     "ecology": 0.09999999962747097,
+     "timeline": 0.19999999925494194,
+     "presentation": 0.2000000011175871
+    }
+   },
+   {
+    "tick": 316421,
+    "at": 268361.5,
+    "ms": 0.900000000372529,
+    "phases": {
+     "movement": 0.09999999962747097,
+     "renewal": 0.09999999962747097,
+     "threat": 0.10000000149011612,
+     "events": 0.3999999985098839,
+     "presentation": 0.2000000011175871
+    }
+   },
+   {
+    "tick": 316436,
+    "at": 268611.5999999996,
+    "ms": 0.900000000372529,
+    "phases": {
+     "input": 0.09999999962747097,
+     "checkpoint": 0.40000000037252903,
+     "movement": 0.09999999962747097,
+     "ecology": 0.10000000149011612,
+     "presentation": 0.19999999925494194
+    }
+   },
+   {
+    "tick": 316456,
+    "at": 268945.0999999996,
+    "ms": 0.900000000372529,
+    "phases": {
+     "input": 0.09999999962747097,
+     "movement": 0.10000000149011612,
+     "upgrades": 0.19999999925494194,
+     "renewal": 0.09999999962747097,
+     "ecology": 0.09999999962747097,
+     "events": 0.10000000149011612,
+     "presentation": 0.19999999925494194
+    }
+   },
+   {
+    "tick": 316805,
+    "at": 274761.5,
+    "ms": 0.900000000372529,
+    "phases": {
+     "movement": 0.30000000074505806,
+     "upgrades": 0.09999999962747097,
+     "berth": 0.09999999962747097,
+     "ecology": 0.09999999962747097,
+     "presentation": 0.2000000011175871,
+     "autosave": 0.09999999962747097
+    }
+   },
+   {
+    "tick": 316614,
+    "at": 271578.4000000004,
+    "ms": 0.900000000372529,
+    "phases": {
+     "movement": 0.09999999962747097,
+     "upgrades": 0.09999999962747097,
+     "systems": 0.09999999962747097,
+     "cycles": 0.10000000149011612,
+     "ecology": 0.09999999962747097,
+     "journal": 0.09999999962747097,
+     "presentation": 0.19999999925494194,
+     "other": 0.10000000149011612
+    }
+   },
+   {
+    "tick": 316734,
+    "at": 273578.30000000075,
+    "ms": 0.8999999985098839,
+    "phases": {
+     "movement": 0.19999999925494194,
+     "upgrades": 0.09999999962747097,
+     "systems": 0.09999999962747097,
+     "cycles": 0.10000000149011612,
+     "survival": 0.09999999962747097,
+     "timeline": 0.09999999962747097,
+     "presentation": 0.19999999925494194
+    }
+   },
+   {
+    "tick": 316767,
+    "at": 274128.30000000075,
+    "ms": 0.8999999985098839,
+    "phases": {
+     "commands": 0.09999999962747097,
+     "movement": 0.2999999988824129,
+     "systems": 0.10000000149011612,
+     "ecology": 0.19999999925494194,
+     "timeline": 0.09999999962747097,
+     "presentation": 0.09999999962747097
+    }
+   },
+   {
+    "tick": 315836,
+    "at": 258612,
+    "ms": 0.8000000007450581,
+    "phases": {
+     "checkpoint": 0.40000000037252903,
+     "upgrades": 0.09999999962747097,
+     "systems": 0.09999999962747097,
+     "journal": 0.09999999962747097,
+     "presentation": 0.10000000149011612
+    }
+   }
+  ],
+  "caches": [
+   {
+    "owner": "sim/upgrades/effects craftProfile",
+    "eviction": "oldest first (FIFO) past either ceiling",
+    "entries": 2,
+    "maxEntries": 128,
+    "bytes": 950,
+    "maxBytes": 98304,
+    "hits": 212801,
+    "misses": 2,
+    "evictions": 0,
+    "declined": 0
+   },
+   {
+    "owner": "sim/ecology/hazards field centres",
+    "eviction": "none: a fixed table of the world's and caves' fields, built at load",
+    "entries": 18,
+    "maxEntries": 18,
+    "bytes": 1440,
+    "maxBytes": 1440,
+    "hits": 0,
+    "misses": 0,
+    "evictions": 0,
+    "declined": 0
+   }
+  ]
+ },
+ "frames": {
+  "count": 17084,
+  "p50": 16.7,
+  "p95": 16.7,
+  "p99": 16.8,
+  "max": 16.8,
+  "over33": 0,
+  "over50": 0
+ },
+ "work": {
+  "p50": 2.5,
+  "p95": 3.4,
+  "p99": 5,
+  "max": 9.2,
+  "over33": 0
+ },
+ "ncpu": 8,
+ "stepVerdicts": [],
+ "host": {
+  "canaryGaps": 44,
+  "canaryMaxMs": 7.12
+ },
+ "longByCause": {
+  "over34": 0,
+  "streaming": 0,
+  "streamingOver34": 0,
+  "host": 0,
+  "hostStopped": 0,
+  "mixed": 0,
+  "clean": 0,
+  "unsampled": 0,
+  "streamingHost": 0,
+  "streamingHostStopped": 0,
+  "streamingOurs": 0,
+  "simulation": 0,
+  "noWork": 0,
+  "gcShaped": 0,
+  "streamingGcShaped": 0
+ },
+ "parts": {
+  "chunks": {
+   "p99": 0.3,
+   "max": 6.2
+  },
+  "regions": {
+   "p99": 0.2,
+   "max": 0.5
+  },
+  "caves": {
+   "p99": 0.1,
+   "max": 3.4
+  },
+  "caveWanted": {
+   "p99": 0.1,
+   "max": 0.1
+  },
+  "caveBuild": {
+   "p99": 0.1,
+   "max": 3.4
+  },
+  "caveEvict": {
+   "p99": 0,
+   "max": 0.1
+  },
+  "caveLightList": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "caveTexture": {
+   "p99": 0.1,
+   "max": 0.1
+  },
+  "caveUpload": {
+   "p99": 0,
+   "max": 0.3
+  },
+  "caveView": {
+   "p99": 0.1,
+   "max": 0.5
+  },
+  "chunkUpdates": {
+   "p99": 1,
+   "max": 2
+  },
+  "chunkPlan": {
+   "p99": 0.2,
+   "max": 0.5
+  },
+  "chunkDrop": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "chunkBuild": {
+   "p99": 0.1,
+   "max": 5
+  },
+  "chunkUpload": {
+   "p99": 0,
+   "max": 4.8
+  },
+  "chunkDisplay": {
+   "p99": 0.1,
+   "max": 0.1
+  },
+  "chunkEvict": {
+   "p99": 0.1,
+   "max": 0.1
+  },
+  "chunkDispose": {
+   "p99": 0,
+   "max": 0.1
+  },
+  "chunkDisposeMax": {
+   "p99": 0,
+   "max": 0
+  },
+  "lights": {
+   "p99": 0.3,
+   "max": 0.6
+  },
+  "optics": {
+   "p99": 0.1,
+   "max": 0.5
+  },
+  "lightScan": {
+   "p99": 0.1,
+   "max": 0.4
+  },
+  "lightCached": {
+   "p99": 0.1,
+   "max": 0.2
+  },
+  "lightMoving": {
+   "p99": 0,
+   "max": 0.1
+  },
+  "lightPlacing": {
+   "p99": 0,
+   "max": 0.1
+  },
+  "lightSentLag": {
+   "p99": 0,
+   "max": 0
+  },
+  "lightLagWorst": {
+   "p99": 0,
+   "max": 0
+  },
+  "lightPlace": {
+   "p99": 0.2,
+   "max": 0.3
+  },
+  "lightSelect": {
+   "p99": 0.2,
+   "max": 0.4
+  },
+  "render": {
+   "p99": 1.3,
+   "max": 2.9
+  },
+  "sim": {
+   "p99": 0.6,
+   "max": 3.7
+  }
+ },
+ "lightLag": {
+  "framesLagging": 0,
+  "nearestM": null,
+  "worstSentFrames": 0,
+  "worstSentWithin30m": 0
+ },
+ "streamingMax": {
+  "chunks": 6.2,
+  "caves": 3.4
+ },
+ "holdFrames": 0,
+ "stream": {
+  "sync": 0,
+  "built": 16,
+  "evicted": 7,
+  "boxes": 84661,
+  "stepMs": 2.5,
+  "buildMs": 3.4,
+  "pending": 0,
+  "missing": 0,
+  "uploads": 4,
+  "lightBytes": 3002040,
+  "textureBytes": 1937208,
+  "records": true,
+  "recordsMs": 4047.7999999988824,
+  "lightPendingFrames": 0,
+  "maxAllocMs": 0.3,
+  "maxWriteMs": 0.1,
+  "restarts": 0,
+  "active": "isles_surf_cave",
+  "lightPending": false,
+  "presents": 18379,
+  "settling": false,
+  "lightFailed": false,
+  "terrainFallbacks": 0,
+  "terrainFallbackRecent": []
+ },
+ "pageOrigin": 1792899622029.1,
+ "thread": {
+  "pid": "443777",
+  "samples": 57356
+ },
+ "gc": {
+  "collections": 1486,
+  "byKind": {
+   "MinorGC": 733,
+   "V8.GCScavenger": 733,
+   "MajorGC": 12,
+   "V8.GCFinalizeMC": 8
+  },
+  "maxPauseMs": 35.07,
+  "over16": [
+   "MajorGC 35.07 ms at 111139"
+  ]
+ },
+ "gate": {
+  "pass": true,
+  "failures": [],
+  "travelSync": 0,
+  "loadSync": 0,
+  "travelLightPending": 0,
+  "terrainFallbacks": 0
+ },
+ "memory": {
+  "residentCpuMiB": 48,
+  "residentGpuMiB": 35.7,
+  "regionMiB": 12.7,
+  "budgetMiB": 256,
+  "heapMiB": 234.5
+ },
+ "rawOmitted": "functional sweep (non-exclusive, timing not judged): long frames reduced; full JSON: /work/tmp/cw1/r15-sweep-3090b/"
+}

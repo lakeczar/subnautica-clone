@@ -1,0 +1,62 @@
+{
+ "ticket": "261025-020535-baf6",
+ "code": 0,
+ "label": null,
+ "class": "heavy-suite",
+ "review": false,
+ "tokens": 3,
+ "memMiB": 3072,
+ "gpu": false,
+ "express": false,
+ "exclusive": false,
+ "mode": "normal",
+ "worktree": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "cwd": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "argv": [
+  "sh",
+  "-c",
+  "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy > /work/tmp/cw1/r4/heavy-real-9b5cee2c.txt 2>&1; rc=$?; tail -75 /work/tmp/cw1/r4/heavy-real-9b5cee2c.txt; exit $rc"
+ ],
+ "submittedAt": 1792893935605,
+ "admittedAt": 1792895510427,
+ "endedAt": 1792896513288,
+ "ranS": 1002.4,
+ "peakMiB": 2024,
+ "cpuS": 2003.6,
+ "oomKills": 3,
+ "reservationOom": false,
+ "oomGroupKill": false,
+ "oomEvidence": null,
+ "leftovers": false,
+ "stopReason": null,
+ "goal": {
+  "v": 2,
+  "limitS": 14400,
+  "explicitDeadline": false,
+  "ceilingS": 14400,
+  "stallS": 900,
+  "soak": false,
+  "snapshot": true,
+  "machine": "any",
+  "remoteOk": false
+ },
+ "head": "9b5cee2cf64f5684826c462ce2ac20b2341f3e8a",
+ "dirty": "clean",
+ "headAtAdmit": "9b5cee2cf64f5684826c462ce2ac20b2341f3e8a",
+ "dirtyAtAdmit": "clean",
+ "changedTree": false,
+ "changedDuringRun": false,
+ "evidence": {
+  "commit": "9b5cee2cf64f5684826c462ce2ac20b2341f3e8a",
+  "bound": true,
+  "why": null,
+  "snapshot": true
+ },
+ "snapshot": {
+  "root": "/work/tmp/siltwake-sched/jobs/261025-020535-baf6/tree",
+  "kept": false
+ },
+ "context": null,
+ "machine": "RTX 3090 (factory-worker)",
+ "machineTag": "any"
+}

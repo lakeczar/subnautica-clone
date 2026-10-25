@@ -1,0 +1,1555 @@
+
+--- m2-region-render.heavy.test.js
+BJS - [21:32:02]: Babylon.js v9.31.0 - Null engine
+BJS - [21:32:04]: Babylon.js v9.31.0 - Null engine
+BJS - [21:32:05]: Babylon.js v9.31.0 - Null engine
+BJS - [21:32:05]: Babylon.js v9.31.0 - Null engine
+✔ production regional owners survive five return traversals, depletion, replacement and reconstruction without state writes or resource growth (1701.739371ms)
+✔ remote parked hulls hide while unpinned, recovery and transferred assemblies remain pinned with their true identities (1232.551724ms)
+✔ rendering a current export, imported replacement, Continue and fresh state keeps codec and authoritative state intact (472.134056ms)
+✔ eight-metre regional hysteresis prevents boundary thrash and disposal is terminal (0.323484ms)
+✔ retention re-attaches before eviction, prepares by adjacency within its limit and falls back to disposal (0.578873ms)
+✔ prepared and retained production regions draw exactly what a cold construction draws (2129.794888ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6529.147798
+
+--- regions-bake.heavy.test.js
+✔ baked terrain assets equal the live recipe for every chunk (59322.817711ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 59335.312051
+
+--- c3-save-integrity.heavy.test.js
+✔ C3-R1-2: salvaging a heat-disabled Creel drops its ecology exposure, and the save writes at once and after a step (3500.652517ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3961.19463
+
+--- c4-systems.heavy.test.js
+✔ ADVERSE: dying while an outpost runs a decode and grows a crop loses and duplicates nothing; the save round-trips (889.333813ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1345.497631
+
+--- c4-world.heavy.test.js
+✔ a powerless diver anywhere in the shelf race reaches still water within 25 s, unharmed (3801.170192ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4295.485649
+
+--- c4b-fixes.heavy.test.js
+✔ C4B-07: watching the chimney logs it without gathering; timings only after a phase start and end were seen; reload continues (3001.201848ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3452.151517
+
+--- carrier-boundary-sweep.heavy.test.js
+✔ loaded compact/medium assemblies at every edge/corner preserve turns, outward contact and inward/tangential escape (30618.544326ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 31077.112679
+
+--- carrier-boundary.heavy.test.js
+✔ ordinary production carrier ascent/reverse route remains coherent and saveable through the former tick 1681 failure (1646.383771ms)
+✔ boundary launch/capture prepared and lock interruptions keep exactly one vehicle and preserve cargo (3178.69363ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5268.140905
+
+--- cave-light-retreat.heavy.test.js
+✔ negative control: with every opening plugged the same retreat fails (3463.062431ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4565.880543
+
+--- cave-light.heavy.test.js
+BJS - [21:34:02]: Babylon.js v9.31.0 - Null engine
+BJS - [21:34:02]: Babylon.js v9.31.0 - Null engine
+✔ the production cel fragment carries the cave splice exactly once (C4: materials.ts owns it) (1.564747ms)
+✔ the light field's sun is the cel light direction (0.15134ms)
+✔ cave material, field texture and shell build and dispose in a scene (25.077029ms)
+✔ C4: the renderer's cave view activates the nearest cave, feeds the cel material, and frees it (224.801203ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 793.875826
+
+--- cw1-bake.heavy.test.js
+✔ every chunk a cave touches: heightfield out of footprints, shells in them, Y bounds, codec (88944.539293ms)
+✔ every cave chunk shares identical terrain edges with its neighbours, every LOD pair (18969.633602ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 108473.366532
+
+--- cw1-caves.heavy.test.js
+cw1: 55 caves in 44 clusters, 464575 boxes, built in 6.4 s from live records, heap +198 MiB
+✔ sheltered caves are still water: a diver resting in the crest hollow or the lintel galleries stays put; unmasked, the downwelling carries them (1322.493018ms)
+✔ every kit cave cluster of the game builds from its records; their size is what the streamer budgets (6397.595197ms)
+✔ every route and rescue tether that sweeps clear over the plain world still sweeps clear with every cave in (2398.532763ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 10523.760032
+
+--- render-cache.heavy.test.js
+BJS - [21:35:07]: Babylon.js v9.31.0 - Null engine
+BJS - [21:35:07]: Babylon.js v9.31.0 - Null engine
+BJS - [21:35:08]: Babylon.js v9.31.0 - Null engine
+BJS - [21:35:08]: Babylon.js v9.31.0 - Null engine
+BJS - [21:35:08]: Babylon.js v9.31.0 - Null engine
+BJS - [21:35:09]: Babylon.js v9.31.0 - Null engine
+BJS - [21:35:09]: Babylon.js v9.31.0 - Null engine
+✔ Dart recipes preserve exact body, cockpit, gauges and fresh panes across identities and detached live buffers (192.083475ms)
+✔ a production regional revisit re-attaches retained art; after context loss it reconstructs from recipes (827.066318ms)
+✔ the pinned carrier keeps every sign while compatible display materials fit the original trial (443.09791ms)
+✔ immutable baked data is detached, admission is bounded and disposal cannot revive it (1.444464ms)
+✔ full and regional random generation use distinct recipes and retain exact animation poses on warm reconstruction (825.977978ms)
+✔ identical display ownership releases on the last plane and reconstructs after release (1.9281ms)
+✔ Pale Basin water is silt-pale at depth, the Canopy route keeps its hue under the depth light, continuous across the edge (3.245204ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2856.346506
+
+--- world-stream.heavy.test.js
+BJS - [21:35:10]: Babylon.js v9.31.0 - Null engine
+BJS - [21:35:14]: Babylon.js v9.31.0 - Null engine
+BJS - [21:35:22]: Babylon.js v9.31.0 - Null engine
+✔ the terrain streams in chunks: nearby ground first, the rest within budget, regions and chunks under one budget (3934.782956ms)
+✔ repeated region returns stabilize meshes, geometries and accounted bytes (8833.777121ms)
+✔ ADVERSE: a budget smaller than the regions plus terrain degrades the far terrain, never the budget, and context loss frees hidden art (2922.54494ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 16281.518252
+
+--- caves-basin.heavy.test.js
+✔ basin_culvert_north: thick rock in its own footprint and envelope (3.44891ms)
+✔ basin_culvert_north: shell and rock agree (407.826238ms)
+✔ basin_culvert_north: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (50.566395ms)
+✔ basin_culvert_north: every route sweeps its profile, pose to pose, in the composed world (0.68191ms)
+✔ basin_culvert_north: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (8.126653ms)
+✔ basin_culvert_north: coarse LOD never closes an opening or bridges a passage (6.686742ms)
+✔ basin_culvert_north: the collar meets the heightfield at the footprint edge (12.141746ms)
+ℹ corner 398, -507: 0.79 m (bound 2.12 m)
+✔ basin_culvert_north: rooms touch exactly where the portals say (4.751113ms)
+✔ basin_culvert_north: size classes from the generated water (0.356645ms)
+✔ basin_culvert_north: lamp off, a diver anywhere on the routes swims the daylight glow out (73.775557ms)
+ℹ 16 starts, 25 hops, longest swim 14.4 m, exits {"basin_culvert_north.mouth":16}
+✔ basin_culvert_north: negative control: with every opening plugged the same retreat fails (117.573674ms)
+✔ basin_culvert_north: contents sit in their room's water (0.381707ms)
+✔ basin_culvert_north: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (2.863579ms)
+✔ basin_burrow_warren: thick rock in its own footprint and envelope (3.245561ms)
+✔ basin_burrow_warren: shell and rock agree (7876.165694ms)
+✔ basin_burrow_warren: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (83.962427ms)
+✔ basin_burrow_warren: every route sweeps its profile, pose to pose, in the composed world (2.758814ms)
+✔ basin_burrow_warren: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (20.784775ms)
+✔ basin_burrow_warren: coarse LOD never closes an opening or bridges a passage (12.909052ms)
+✔ basin_burrow_warren: the collar meets the heightfield at the footprint edge (31.521741ms)
+ℹ corner 776, -672: 2.24 m (bound 4.91 m)
+ℹ corner 812, -702: 0.88 m (bound 6.95 m)
+ℹ corner 812, -672: 2.25 m (bound 7.73 m)
+✔ basin_burrow_warren: rooms touch exactly where the portals say (14.950703ms)
+✔ basin_burrow_warren: size classes from the generated water (0.099702ms)
+✔ basin_burrow_warren: lamp off, a diver anywhere on the routes swims the daylight glow out (205.632159ms)
+ℹ 28 starts, 43 hops, longest swim 16.2 m, exits {"basin_burrow_warren.mouth":28}
+✔ basin_burrow_warren: contents sit in their room's water (0.116881ms)
+✔ basin_burrow_warren: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (1.721869ms)
+✔ basin_burrow_warren.handoff: the back entrance stops sealed at its biome face, with room to turn (0.812694ms)
+✔ basin_buried_hut: thick rock in its own footprint and envelope (1.336764ms)
+✔ basin_buried_hut: shell and rock agree (171.564062ms)
+✔ basin_buried_hut: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (44.648186ms)
+✔ basin_buried_hut: every route sweeps its profile, pose to pose, in the composed world (0.511845ms)
+✔ basin_buried_hut: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (1.143749ms)
+✔ basin_buried_hut: coarse LOD never closes an opening or bridges a passage (2.993279ms)
+✔ basin_buried_hut: the collar meets the heightfield at the footprint edge (7.083566ms)
+✔ basin_buried_hut: rooms touch exactly where the portals say (0.593515ms)
+✔ basin_buried_hut: size classes from the generated water (0.090828ms)
+✔ basin_buried_hut: lamp off, a diver anywhere on the routes swims the daylight glow out (34.524794ms)
+ℹ 15 starts, 24 hops, longest swim 10.4 m, exits {"basin_buried_hut.mouth.slot":15}
+✔ basin_buried_hut: contents sit in their room's water (0.110521ms)
+✔ basin_buried_hut: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (0.852287ms)
+✔ basin_fracture_pocket: thick rock in its own footprint and envelope (4.172666ms)
+✔ basin_fracture_pocket: shell and rock agree (749.699371ms)
+✔ basin_fracture_pocket: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (40.159597ms)
+✔ basin_fracture_pocket: every route sweeps its profile, pose to pose, in the composed world (0.486105ms)
+✔ basin_fracture_pocket: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (2.515413ms)
+✔ basin_fracture_pocket: coarse LOD never closes an opening or bridges a passage (1.648989ms)
+✔ basin_fracture_pocket: the collar meets the heightfield at the footprint edge (11.56924ms)
+ℹ corner 322, -352: 0.82 m (bound 1.41 m)
+ℹ corner 346, -352: 1.01 m (bound 2.45 m)
+✔ basin_fracture_pocket: rooms touch exactly where the portals say (0.745456ms)
+✔ basin_fracture_pocket: size classes from the generated water (0.101865ms)
+✔ basin_fracture_pocket: lamp off, a diver anywhere on the routes swims the daylight glow out (49.351472ms)
+ℹ 16 starts, 24 hops, longest swim 12.9 m, exits {"basin_fracture_pocket.mouth":16}
+✔ basin_fracture_pocket: contents sit in their room's water (0.106819ms)
+✔ basin_fracture_pocket: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (0.760036ms)
+✔ basin_west_rim: thick rock in its own footprint and envelope (11.540864ms)
+✔ basin_west_rim: shell and rock agree (12126.740344ms)
+✔ basin_west_rim: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (290.405123ms)
+✔ basin_west_rim: every route sweeps its profile, pose to pose, in the composed world (13.596629ms)
+✔ basin_west_rim: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (56.712699ms)
+✔ basin_west_rim: coarse LOD never closes an opening or bridges a passage (39.56129ms)
+✔ basin_west_rim: the collar meets the heightfield at the footprint edge (76.618386ms)
+ℹ corner 286, -798: 0.88 m (bound 2.74 m)
+✔ basin_west_rim: rooms touch exactly where the portals say (15.964425ms)
+✔ basin_west_rim: size classes from the generated water (0.18644ms)
+✔ basin_west_rim_cut: a real loop in the voxels, swept through its closing passage; the hall takes small (10.823794ms)
+✔ basin_west_rim: lamp off, a diver anywhere on the routes swims the daylight glow out (1628.891585ms)
+ℹ 196 starts, 673 hops, longest swim 51.5 m, exits {"basin_west_rim_cut.mouth.rim":99,"basin_west_rim_cut.mouth.rift":56,"basin_rim_pipes.mouth":41}
+✔ basin_west_rim: contents sit in their room's water (0.223984ms)
+✔ basin_west_rim: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (19.408466ms)
+✔ basin_dish_lee_vault: thick rock in its own footprint and envelope (5.30184ms)
+✔ basin_dish_lee_vault: shell and rock agree (46603.754028ms)
+✔ basin_dish_lee_vault: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (520.697985ms)
+✔ basin_dish_lee_vault: every route sweeps its profile, pose to pose, in the composed world (17.699316ms)
+✔ basin_dish_lee_vault: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (167.968975ms)
+✔ basin_dish_lee_vault: coarse LOD never closes an opening or bridges a passage (10.732805ms)
+✔ basin_dish_lee_vault: the collar meets the heightfield at the footprint edge (75.561167ms)
+ℹ corner 524, -629: 2.62 m (bound 6.67 m)
+ℹ corner 574, -682: 1.58 m (bound 7.68 m)
+ℹ corner 574, -629: 1.63 m (bound 2.69 m)
+✔ basin_dish_lee_vault: rooms touch exactly where the portals say (9.343982ms)
+✔ basin_dish_lee_vault: size classes from the generated water (0.075815ms)
+✔ basin_dish_lee_vault: a real loop in the voxels, swept through its closing passage; the hall takes medium (9.724081ms)
+✔ basin_dish_lee_vault: lamp off, a diver anywhere on the routes swims the daylight glow out (776.643767ms)
+ℹ 88 starts, 193 hops, longest swim 27.7 m, exits {"basin_dish_lee_vault.mouth.cliff":29,"basin_dish_lee_vault.mouth.slope":59}
+✔ basin_dish_lee_vault: negative control: with every opening plugged the same retreat fails (8529.342481ms)
+✔ basin_dish_lee_vault: contents sit in their room's water (0.504606ms)
+✔ basin_dish_lee_vault: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (45.997469ms)
+✔ adverse: from every Basin vault room, lamp off at 20% air, a swept way out shorter than the air allows (178.143206ms)
+ℹ deepest room by water distance: basin_west_rim_cut.pipe_gallery, 47.0 m out at {"x":220.25,"y":-280.95,"z":-834.75}; air at 20% 36 s
+✔ adverse: the farthest by water Basin vault room (basin_west_rim_cut.pipe_gallery), lamp off at 20% air: the glowing wake leads out in time (1284.783699ms)
+ℹ dwell 10 s: 7 wake hops (39.7 m), out in 13.3 s of game step, 12.6% air left
+ℹ dwell 20 s: 7 wake hops (39.7 m), out in 13.3 s of game step, 12.6% air left
+✔ adverse: the deepest below the surface Basin vault room (basin_buried_hut.room), lamp off at 20% air: the glowing wake leads out in time (84.941789ms)
+ℹ dwell 10 s: 2 wake hops (9.7 m), out in 3.9 s of game step, 17.9% air left
+ℹ dwell 20 s: 2 wake hops (9.7 m), out in 3.9 s of game step, 17.9% air left
+✔ negative controls: the wrong reading of the wake, and a faded wake, do not lead out (33640.817519ms)
+ℹ tests 81
+ℹ suites 0
+ℹ pass 81
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 118635.803723
+
+--- caves-reef-isles-retreat.heavy.test.js
+  1497 starts, 3890 hops; exits used: reef_archlet.mouth.north 31, reef_archlet.mouth.south 11, reef_archlet.skylight.sinkhole 46, reef_bellhole.mouth.shelf 86, reef_wrackhollow.mouth.current 53, reef_fan_crawl.mouth.apron 55, reef_fan_crawl.mouth.edge 49, reef_shelf_lip.mouth.overhang 45, isles_cove_undercut.mouth.cove 17, isles_cove_crawl.mouth.slope 44, isles_headland_root.mouth.slope 48, reef_pumphouse_undercut.mouth.slab 23, reef_pumphouse_undercut.mouth.pipe 8, reef_gully_window.mouth.gully 27, reef_gully_window.mouth.window 22, reef_lantern_grotto.mouth.shelf 40, reef_lantern_grotto.mouth.slope 100, reef_drop_cathedral.mouth.arch 127, reef_drop_cathedral.mouth.gully 73, reef_drop_cathedral.skylight.vent 83, isles_scar_crawl.mouth.scar 23, isles_scar_crawl.mouth.upper 16, isles_surf_cave.mouth.surf 17, isles_east_ledge_cave.mouth.ledge 19, air:isles_blowhole.ledge 5, air:isles_blowhole.chimney 13, isles_blowhole.mouth.surge 27, isles_storm_arch.mouth.cliff 103, air:isles_storm_arch.crack 80, isles_storm_arch.mouth.east 91, isles_storm_arch.skylight.crack 10, isles_headland_west.mouth.waterline 8, air:isles_headland_west.waterline_hall 58, isles_headland_west.mouth.beach 11, air:isles_headland_west.beach_mouth 28
+✔ adverse: lamp off, every Reef and Isles cave has a recognisable exit from every route and room (19694.544775ms)
+✔ negative control: with every opening plugged the same retreat fails (16211.453125ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 36304.225164
+
+--- renewal-render.heavy.test.js
+BJS - [21:36:01]: Babylon.js v9.31.0 - Null engine
+✔ living sheds that regrow while their region is retained draw authoritative stock on return, replacement and Continue (1468.834893ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2005.782215
+
+--- caves-canopy.heavy.test.js
+✔ canopy_knot_hollow: thick rock in its own footprint and envelope (11.90743ms)
+✔ canopy_knot_hollow: shell and rock agree (458.552218ms)
+✔ canopy_knot_hollow: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (375.169185ms)
+✔ canopy_knot_hollow: every route sweeps its profile, pose to pose, in the composed world (1.706997ms)
+✔ canopy_knot_hollow: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (10.26419ms)
+✔ canopy_knot_hollow: coarse LOD never closes an opening or bridges a passage (7.343595ms)
+✔ canopy_knot_hollow: the collar meets the heightfield at the footprint edge (12.510079ms)
+ℹ corner 708, -110: 1.19 m (bound 2.70 m)
+ℹ corner 732, -110: 1.59 m (bound 2.62 m)
+✔ canopy_knot_hollow: rooms touch exactly where the portals say (5.167259ms)
+✔ canopy_knot_hollow: size classes from the generated water (0.408904ms)
+✔ canopy_knot_hollow: lamp off, a diver anywhere on the routes swims the daylight glow out (90.404819ms)
+ℹ 16 starts, 25 hops, longest swim 11.6 m, exits {"canopy_knot_hollow.mouth":16}
+✔ canopy_knot_hollow: negative control: with every opening plugged the same retreat fails (171.823872ms)
+✔ canopy_knot_hollow: contents sit in their room's water (0.337504ms)
+✔ canopy_knot_hollow: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (2.643963ms)
+✔ canopy_eastcrown: thick rock in its own footprint and envelope (7.839911ms)
+✔ canopy_eastcrown: shell and rock agree (3564.412604ms)
+✔ canopy_eastcrown: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (154.266548ms)
+✔ canopy_eastcrown: every route sweeps its profile, pose to pose, in the composed world (6.679353ms)
+✔ canopy_eastcrown: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (29.388401ms)
+✔ canopy_eastcrown: coarse LOD never closes an opening or bridges a passage (30.741688ms)
+✔ canopy_eastcrown: the collar meets the heightfield at the footprint edge (30.450772ms)
+ℹ corner 748, -44: 0.90 m (bound 1.92 m)
+ℹ corner 813, -44: 0.95 m (bound 1.79 m)
+✔ canopy_eastcrown: rooms touch exactly where the portals say (7.435674ms)
+✔ canopy_eastcrown: size classes from the generated water (0.134308ms)
+✔ canopy_eastcrown: lamp off, a diver anywhere on the routes swims the daylight glow out (406.432829ms)
+ℹ 107 starts, 259 hops, longest swim 27.7 m, exits {"canopy_quiet_crawl.mouth.slope":61,"canopy_bladder_pocket.mouth.rim":46}
+✔ canopy_eastcrown: contents sit in their room's water (0.136674ms)
+✔ canopy_eastcrown: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (24.099437ms)
+✔ canopy_lee_hollow: thick rock in its own footprint and envelope (4.759517ms)
+✔ canopy_lee_hollow: shell and rock agree (239.125655ms)
+✔ canopy_lee_hollow: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (161.330664ms)
+✔ canopy_lee_hollow: every route sweeps its profile, pose to pose, in the composed world (0.477581ms)
+✔ canopy_lee_hollow: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (4.407817ms)
+✔ canopy_lee_hollow: coarse LOD never closes an opening or bridges a passage (1.866498ms)
+✔ canopy_lee_hollow: the collar meets the heightfield at the footprint edge (8.664492ms)
+ℹ corner 678, -243: 1.41 m (bound 2.44 m)
+ℹ corner 702, -243: 0.97 m (bound 2.23 m)
+✔ canopy_lee_hollow: rooms touch exactly where the portals say (1.855116ms)
+✔ canopy_lee_hollow: size classes from the generated water (0.184006ms)
+✔ canopy_lee_hollow: lamp off, a diver anywhere on the routes swims the daylight glow out (42.906519ms)
+ℹ 18 starts, 31 hops, longest swim 14.9 m, exits {"canopy_lee_hollow.mouth":18}
+✔ canopy_lee_hollow: contents sit in their room's water (0.09356ms)
+✔ canopy_lee_hollow: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (0.938124ms)
+✔ canopy_fin_cleft: thick rock in its own footprint and envelope (3.218041ms)
+✔ canopy_fin_cleft: shell and rock agree (473.668781ms)
+✔ canopy_fin_cleft: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (170.278455ms)
+✔ canopy_fin_cleft: every route sweeps its profile, pose to pose, in the composed world (0.57377ms)
+✔ canopy_fin_cleft: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (1.673494ms)
+✔ canopy_fin_cleft: coarse LOD never closes an opening or bridges a passage (4.675378ms)
+✔ canopy_fin_cleft: the collar meets the heightfield at the footprint edge (8.965906ms)
+ℹ corner 614, -118: 1.39 m (bound 2.55 m)
+ℹ corner 638, -118: 1.25 m (bound 2.91 m)
+✔ canopy_fin_cleft: rooms touch exactly where the portals say (0.840202ms)
+✔ canopy_fin_cleft: size classes from the generated water (0.086541ms)
+✔ canopy_fin_cleft: lamp off, a diver anywhere on the routes swims the daylight glow out (74.838182ms)
+ℹ 18 starts, 19 hops, longest swim 7.8 m, exits {"canopy_fin_cleft.mouth.north":10,"canopy_fin_cleft.mouth.south":8}
+✔ canopy_fin_cleft: contents sit in their room's water (0.145401ms)
+✔ canopy_fin_cleft: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (4.527208ms)
+✔ canopy_root_arch: thick rock in its own footprint and envelope (28.604789ms)
+✔ canopy_root_arch: shell and rock agree (39785.99186ms)
+✔ canopy_root_arch: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (608.301893ms)
+✔ canopy_root_arch: every route sweeps its profile, pose to pose, in the composed world (34.744896ms)
+✔ canopy_root_arch: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (139.795671ms)
+✔ canopy_root_arch: coarse LOD never closes an opening or bridges a passage (30.32309ms)
+✔ canopy_root_arch: the collar meets the heightfield at the footprint edge (81.496198ms)
+ℹ corner 1236, -260: 2.05 m (bound 4.70 m)
+ℹ corner 1310, -298: 1.42 m (bound 3.95 m)
+✔ canopy_root_arch: rooms touch exactly where the portals say (13.214715ms)
+✔ canopy_root_arch: size classes from the generated water (0.176591ms)
+✔ canopy_escarp_gallery: a real loop in the voxels, swept through its closing passage; the hall takes small (8.286685ms)
+✔ canopy_root_arch: lamp off, a diver anywhere on the routes swims the daylight glow out (1347.457775ms)
+ℹ 160 starts, 441 hops, longest swim 42.1 m, exits {"canopy_escarp_gallery.mouth.lip":46,"canopy_escarp_gallery.mouth.arch":62,"canopy_arch_hollows.mouth.arch_foot":17,"canopy_arch_hollows.mouth.window":35}
+✔ canopy_root_arch: contents sit in their room's water (0.544424ms)
+✔ canopy_root_arch: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (11.812011ms)
+✔ canopy_lantern_hall: thick rock in its own footprint and envelope (14.640586ms)
+✔ canopy_lantern_hall: shell and rock agree (5457.442447ms)
+✔ canopy_lantern_hall: every opening keeps its clear size in rock and both shells; diver-only mouths stop a hull (258.349772ms)
+✔ canopy_lantern_hall: every route sweeps its profile, pose to pose, in the composed world (208.930383ms)
+✔ canopy_lantern_hall: roof support: solid, 2 m thick, carries a diver, drawn in both shells, no holes (64.806341ms)
+✔ canopy_lantern_hall: coarse LOD never closes an opening or bridges a passage (30.781879ms)
+✔ canopy_lantern_hall: the collar meets the heightfield at the footprint edge (71.852213ms)
+ℹ corner 470, -204: 1.56 m (bound 2.67 m)
+ℹ corner 538, -260: 0.84 m (bound 6.75 m)
+ℹ corner 538, -204: 1.39 m (bound 2.85 m)
+✔ canopy_lantern_hall: rooms touch exactly where the portals say (5.295779ms)
+✔ canopy_lantern_hall: size classes from the generated water (0.096071ms)
+✔ canopy_lantern_hall: a real loop in the voxels, swept through its closing passage; the hall takes small (4.918679ms)
+✔ canopy_lantern_hall: lamp off, a diver anywhere on the routes swims the daylight glow out (394.274069ms)
+ℹ 123 starts, 378 hops, longest swim 33.2 m, exits {"canopy_lantern_hall.mouth.mooring":82,"canopy_lantern_hall.mouth.terrace":41}
+✔ canopy_lantern_hall: negative control: with every opening plugged the same retreat fails (1479.332171ms)
+✔ canopy_lantern_hall: contents sit in their room's water (0.229941ms)
+✔ canopy_lantern_hall: every pocket and find is targetable from a reachable diver pose (production host, aim and line of sight) (3.650341ms)
+ℹ tests 76
+ℹ suites 0
+ℹ pass 76
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 57156.20042
+
+--- caves-deep-dark.heavy.test.js
+✔ rift_north_shoulder: lamp off, a diver anywhere inside swims the glow out through an authored opening (990.543881ms)
+✔ rift_tube_mites: lamp off, a diver anywhere inside swims the glow out through an authored opening (215.357843ms)
+✔ rift_stub_hollow: lamp off, a diver anywhere inside swims the glow out through an authored opening (212.290228ms)
+✔ rift_west_blister: lamp off, a diver anywhere inside swims the glow out through an authored opening (361.275039ms)
+✔ rift_west_tube: lamp off, a diver anywhere inside swims the glow out through an authored opening (787.645105ms)
+✔ rift_kiln_tube: lamp off, a diver anywhere inside swims the glow out through an authored opening (3174.778765ms)
+✔ divide_mirror_pocket: lamp off, a diver anywhere inside swims the glow out through an authored opening (378.527574ms)
+✔ divide_crest_hollow: lamp off, a diver anywhere inside swims the glow out through an authored opening (454.186625ms)
+✔ divide_east_pocket: lamp off, a diver anywhere inside swims the glow out through an authored opening (461.232124ms)
+✔ divide_lee_burrow: lamp off, a diver anywhere inside swims the glow out through an authored opening (187.67656ms)
+✔ divide_fissure_window: lamp off, a diver anywhere inside swims the glow out through an authored opening (345.98956ms)
+✔ divide_lintel_galleries: lamp off, a diver anywhere inside swims the glow out through an authored opening (4421.003621ms)
+✔ divide_brine_cistern: lamp off, a diver anywhere inside swims the glow out through an authored opening (4940.680467ms)
+✔ meridian_footing_void: lamp off, a diver anywhere inside swims the glow out through an authored opening (170.766148ms)
+✔ meridian_culvert_north: lamp off, a diver anywhere inside swims the glow out through an authored opening (360.913951ms)
+✔ meridian_spire_footing: lamp off, a diver anywhere inside swims the glow out through an authored opening (196.65557ms)
+✔ meridian_escarp_pocket: lamp off, a diver anywhere inside swims the glow out through an authored opening (263.955372ms)
+✔ meridian_terrace_crack: lamp off, a diver anywhere inside swims the glow out through an authored opening (222.544046ms)
+✔ meridian_window_gallery: lamp off, a diver anywhere inside swims the glow out through an authored opening (2483.476967ms)
+✔ meridian_escarp_culvert: lamp off, a diver anywhere inside swims the glow out through an authored opening (1164.881245ms)
+✔ negative control: with every kiln-tube opening plugged, the same retreat fails (1538.985647ms)
+✔ rift_tube_mites: hazard-aware escape from every start and phase, within suit tolerance and 20% air (577.724173ms)
+✔ rift_west_blister: hazard-aware escape from every start and phase, within suit tolerance and 20% air (56.14157ms)
+✔ rift_kiln_tube: hazard-aware escape from every start and phase, within suit tolerance and 20% air (28521.076436ms)
+✔ divide_mirror_pocket: hazard-aware escape from every start and phase, within suit tolerance and 20% air (70.959836ms)
+✔ divide_crest_hollow: hazard-aware escape from every start and phase, within suit tolerance and 20% air (24.920979ms)
+✔ divide_east_pocket: hazard-aware escape from every start and phase, within suit tolerance and 20% air (43.964614ms)
+✔ divide_lintel_galleries: hazard-aware escape from every start and phase, within suit tolerance and 20% air (2960.843684ms)
+✔ divide_brine_cistern: hazard-aware escape from every start and phase, within suit tolerance and 20% air (1301.36242ms)
+✔ never heat-only: in every warm Rift cave much of the water stays cool at the breath's peak, and the warmest pose has a cool way out (713.391566ms)
+✔ adverse: 20% air, heat at 90 and the lamp off at the deepest point of each Rift tube network, every breath phase: out to cool open water inside both budgets (1042.054231ms)
+ℹ rift_kiln_tube from {"x":157.3,"y":-289.9,"z":-836.9}: exit kiln.mouth.plateau, 3 hops, worst 5.9 s of 36 s air, peak heat load 90.0
+ℹ rift_north_shoulder from {"x":-88,"y":-313.4,"z":-795.5}: exit rift_north.mouth.shoulder, 2 hops, worst 3.0 s of 36 s air, peak heat load 90.0
+ℹ rift_tube_mites from {"x":-117.3,"y":-307.3,"z":-1127.3}: exit rift_mites.mouth.shoulder, 2 hops, worst 2.8 s of 36 s air, peak heat load 90.0
+ℹ tests 31
+ℹ suites 0
+ℹ pass 31
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 59096.158088
+
+--- caves-deep-hazard-step.heavy.test.js
+✔ rift_tube_mites: the real survival load rises in the hazard and not on the way out (396.214841ms)
+ℹ rift_tube_mites.heat.bulge: heat load 15.0 after 3 s still at the peak
+✔ rift_kiln_tube: the real survival load rises in the hazard and not on the way out (1272.668945ms)
+ℹ rift_kiln_tube.heat.vent_east: heat load 18.0 after 3 s still at the peak
+ℹ rift_kiln_tube.heat.end_vent: heat load 39.0 after 3 s still at the peak
+✔ divide_mirror_pocket: the real survival load rises in the hazard and not on the way out (264.363961ms)
+ℹ divide_mirror_pocket.brine.pool: brine load 42.0 after 3 s still at the peak
+ℹ divide_mirror_pocket.brine.crack: brine load 42.0 after 3 s still at the peak
+✔ divide_crest_hollow: the real survival load rises in the hazard and not on the way out (451.50495ms)
+ℹ divide_crest_hollow.brine.film: brine load 42.0 after 3 s still at the peak
+✔ divide_east_pocket: the real survival load rises in the hazard and not on the way out (286.367405ms)
+ℹ divide_east_pocket.brine.lower: brine load 42.0 after 3 s still at the peak
+ℹ divide_east_pocket.brine.upper: brine load 42.0 after 3 s still at the peak
+✔ divide_lintel_galleries: the real survival load rises in the hazard and not on the way out (148.519251ms)
+ℹ divide_lintel_galleries.brine.sump: brine load 42.0 after 3 s still at the peak
+✔ divide_brine_cistern: the real survival load rises in the hazard and not on the way out (879.838206ms)
+ℹ divide_brine_cistern.brine.lake: brine load 42.0 after 3 s still at the peak
+✔ negative control: with every cave field zeroed, the warm end and the pools load nothing (199.066909ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4339.169643
+
+--- caves-deep.heavy.test.js
+✔ rift_north_shoulder: thick rock, an envelope that holds the floor, and shell and rock that agree (166.594686ms)
+✔ rift_north_shoulder: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (221.514492ms)
+✔ rift_north_shoulder: the roof carries a diver over every probe column, with no roof holes (9.755468ms)
+✔ rift_north_shoulder: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (63.908622ms)
+✔ rift_tube_mites: thick rock, an envelope that holds the floor, and shell and rock that agree (43.591439ms)
+✔ rift_tube_mites: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (113.057044ms)
+✔ rift_tube_mites: the roof carries a diver over every probe column, with no roof holes (2.88045ms)
+✔ rift_tube_mites: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (18.242902ms)
+✔ rift_stub_hollow: thick rock, an envelope that holds the floor, and shell and rock that agree (34.136079ms)
+✔ rift_stub_hollow: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (91.520852ms)
+✔ rift_stub_hollow: the roof carries a diver over every probe column, with no roof holes (2.108876ms)
+✔ rift_stub_hollow: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (15.304149ms)
+✔ rift_west_blister: thick rock, an envelope that holds the floor, and shell and rock that agree (54.294344ms)
+✔ rift_west_blister: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (142.480435ms)
+✔ rift_west_blister: the roof carries a diver over every probe column, with no roof holes (1.168057ms)
+✔ rift_west_blister: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (28.47889ms)
+✔ rift_west_tube: thick rock, an envelope that holds the floor, and shell and rock that agree (191.920464ms)
+✔ rift_west_tube: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (265.156537ms)
+✔ rift_west_tube: the roof carries a diver over every probe column, with no roof holes (10.670289ms)
+✔ rift_west_tube: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (149.607282ms)
+✔ rift_west_tube: the chambers form a real loop in the generated water, and no room is sealed (17.157326ms)
+✔ rift_kiln_tube: thick rock, an envelope that holds the floor, and shell and rock that agree (435.243557ms)
+✔ rift_kiln_tube: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (579.44697ms)
+✔ rift_kiln_tube: the roof carries a diver over every probe column, with no roof holes (22.712912ms)
+✔ rift_kiln_tube: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (211.415586ms)
+✔ rift_kiln_tube: the chambers form a real loop in the generated water, and no room is sealed (12.449875ms)
+✔ divide_mirror_pocket: thick rock, an envelope that holds the floor, and shell and rock that agree (58.068899ms)
+✔ divide_mirror_pocket: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (119.368967ms)
+✔ divide_mirror_pocket: the roof carries a diver over every probe column, with no roof holes (2.177456ms)
+✔ divide_mirror_pocket: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (18.503673ms)
+✔ divide_crest_hollow: thick rock, an envelope that holds the floor, and shell and rock that agree (44.423376ms)
+✔ divide_crest_hollow: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (322.174062ms)
+✔ divide_crest_hollow: the roof carries a diver over every probe column, with no roof holes (1.264125ms)
+✔ divide_crest_hollow: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (17.132377ms)
+✔ divide_east_pocket: thick rock, an envelope that holds the floor, and shell and rock that agree (89.94156ms)
+✔ divide_east_pocket: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (131.299468ms)
+✔ divide_east_pocket: the roof carries a diver over every probe column, with no roof holes (3.074377ms)
+✔ divide_east_pocket: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (26.198647ms)
+✔ divide_lee_burrow: thick rock, an envelope that holds the floor, and shell and rock that agree (37.619858ms)
+✔ divide_lee_burrow: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (101.25233ms)
+✔ divide_lee_burrow: the roof carries a diver over every probe column, with no roof holes (0.853181ms)
+✔ divide_lee_burrow: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (15.324794ms)
+✔ divide_fissure_window: thick rock, an envelope that holds the floor, and shell and rock that agree (52.743262ms)
+✔ divide_fissure_window: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (100.891597ms)
+✔ divide_fissure_window: the roof carries a diver over every probe column, with no roof holes (2.416923ms)
+✔ divide_fissure_window: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (18.760772ms)
+✔ divide_lintel_galleries: thick rock, an envelope that holds the floor, and shell and rock that agree (451.6844ms)
+✔ divide_lintel_galleries: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (193.139503ms)
+✔ divide_lintel_galleries: the roof carries a diver over every probe column, with no roof holes (16.987801ms)
+✔ divide_lintel_galleries: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (342.245073ms)
+✔ divide_lintel_galleries: the chambers form a real loop in the generated water, and no room is sealed (21.380687ms)
+✔ divide_brine_cistern: thick rock, an envelope that holds the floor, and shell and rock that agree (535.89144ms)
+✔ divide_brine_cistern: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (266.787121ms)
+✔ divide_brine_cistern: the roof carries a diver over every probe column, with no roof holes (20.833401ms)
+✔ divide_brine_cistern: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (125.303629ms)
+✔ divide_brine_cistern: the chambers form a real loop in the generated water, and no room is sealed (15.265733ms)
+✔ meridian_footing_void: thick rock, an envelope that holds the floor, and shell and rock that agree (32.091419ms)
+✔ meridian_footing_void: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (120.47992ms)
+✔ meridian_footing_void: the roof carries a diver over every probe column, with no roof holes (1.018252ms)
+✔ meridian_footing_void: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (13.30603ms)
+✔ meridian_culvert_north: thick rock, an envelope that holds the floor, and shell and rock that agree (98.020935ms)
+✔ meridian_culvert_north: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (92.124403ms)
+✔ meridian_culvert_north: the roof carries a diver over every probe column, with no roof holes (2.015025ms)
+✔ meridian_culvert_north: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (28.009498ms)
+✔ meridian_spire_footing: thick rock, an envelope that holds the floor, and shell and rock that agree (41.01734ms)
+✔ meridian_spire_footing: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (92.412737ms)
+✔ meridian_spire_footing: the roof carries a diver over every probe column, with no roof holes (0.731823ms)
+✔ meridian_spire_footing: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (12.487138ms)
+✔ meridian_escarp_pocket: thick rock, an envelope that holds the floor, and shell and rock that agree (47.276615ms)
+✔ meridian_escarp_pocket: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (80.983911ms)
+✔ meridian_escarp_pocket: the roof carries a diver over every probe column, with no roof holes (3.225178ms)
+✔ meridian_escarp_pocket: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (14.30257ms)
+✔ meridian_terrace_crack: thick rock, an envelope that holds the floor, and shell and rock that agree (110.309144ms)
+✔ meridian_terrace_crack: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (108.031888ms)
+✔ meridian_terrace_crack: the roof carries a diver over every probe column, with no roof holes (2.334456ms)
+✔ meridian_terrace_crack: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (27.816958ms)
+✔ meridian_window_gallery: thick rock, an envelope that holds the floor, and shell and rock that agree (284.370244ms)
+✔ meridian_window_gallery: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (242.871806ms)
+✔ meridian_window_gallery: the roof carries a diver over every probe column, with no roof holes (6.172013ms)
+✔ meridian_window_gallery: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (185.076664ms)
+✔ meridian_window_gallery: the chambers form a real loop in the generated water, and no room is sealed (15.544841ms)
+✔ meridian_escarp_culvert: thick rock, an envelope that holds the floor, and shell and rock that agree (209.127142ms)
+✔ meridian_escarp_culvert: every opening keeps its clear size in rock and both shells; every route sweeps its own profile (250.079719ms)
+✔ meridian_escarp_culvert: the roof carries a diver over every probe column, with no roof holes (4.378004ms)
+✔ meridian_escarp_culvert: coarse LOD keeps every opening and route; the collar meets the floor; craft park outside (115.885525ms)
+✔ meridian_escarp_culvert: the chambers form a real loop in the generated water, and no room is sealed (5.155505ms)
+✔ rift_north_shoulder: every content point is open water, and every targeted item is seen and aimed from reachable water (9.664388ms)
+✔ rift_tube_mites: every content point is open water, and every targeted item is seen and aimed from reachable water (0.943551ms)
+✔ rift_stub_hollow: every content point is open water, and every targeted item is seen and aimed from reachable water (1.672974ms)
+✔ rift_west_blister: every content point is open water, and every targeted item is seen and aimed from reachable water (2.049032ms)
+✔ rift_west_tube: every content point is open water, and every targeted item is seen and aimed from reachable water (3.886476ms)
+✔ rift_kiln_tube: every content point is open water, and every targeted item is seen and aimed from reachable water (20.16425ms)
+✔ divide_mirror_pocket: every content point is open water, and every targeted item is seen and aimed from reachable water (2.194199ms)
+✔ divide_crest_hollow: every content point is open water, and every targeted item is seen and aimed from reachable water (0.549829ms)
+✔ divide_east_pocket: every content point is open water, and every targeted item is seen and aimed from reachable water (1.066252ms)
+✔ divide_lee_burrow: every content point is open water, and every targeted item is seen and aimed from reachable water (0.284031ms)
+✔ divide_fissure_window: every content point is open water, and every targeted item is seen and aimed from reachable water (1.278625ms)
+✔ divide_lintel_galleries: every content point is open water, and every targeted item is seen and aimed from reachable water (23.819281ms)
+✔ divide_brine_cistern: every content point is open water, and every targeted item is seen and aimed from reachable water (25.903603ms)
+✔ meridian_footing_void: every content point is open water, and every targeted item is seen and aimed from reachable water (0.555484ms)
+✔ meridian_culvert_north: every content point is open water, and every targeted item is seen and aimed from reachable water (1.110307ms)
+✔ meridian_spire_footing: every content point is open water, and every targeted item is seen and aimed from reachable water (0.589454ms)
+✔ meridian_escarp_pocket: every content point is open water, and every targeted item is seen and aimed from reachable water (1.108678ms)
+✔ meridian_terrace_crack: every content point is open water, and every targeted item is seen and aimed from reachable water (0.557896ms)
+✔ meridian_window_gallery: every content point is open water, and every targeted item is seen and aimed from reachable water (13.870197ms)
+✔ meridian_escarp_culvert: every content point is open water, and every targeted item is seen and aimed from reachable water (6.96935ms)
+✔ negative control: a resource datum pushed 2 m into the kiln gallery wall is caught (19.580417ms)
+✔ every bible cave's carved water fits its size class (GAME-DIRECTION: small 10-25 m, medium 30-80 m) (0.616501ms)
+✔ negative control: a 2 m block in the kiln tube's plateau mouth stops its own craft loop (184.59067ms)
+✔ composition: with these caves registered, every craft and diver route near them sweeps exactly as before (11.975424ms)
+✔ composition: the deep caves alone build one world without a legacy-guard or overlap throw (0.608586ms)
+ℹ tests 111
+ℹ suites 0
+ℹ pass 111
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9123.853598
+
+--- caves-reef-isles-adverse.heavy.test.js
+  fanvault: deepest room floor -44 m; 36 s of air at 3.4 m/s = 122 m
+  fanvault.north_passage           8.9 m   2.6 s  via fanvault.mouth.north
+  fanvault.vault                  10.2 m   3.0 s  via fanvault.skylight
+  fanvault.skylight                3.3 m   1.0 s  via fanvault.skylight
+  fanvault.south_passage          10.2 m   3.0 s  via fanvault.mouth.south
+  fanvault.pocket                 19.0 m   5.6 s  via fanvault.skylight
+  reef_fan_crawl.crawl             9.7 m   2.9 s  via reef_fan_crawl.mouth.apron
+  reef_fan_crawl.squeeze          12.0 m   3.5 s  via reef_fan_crawl.mouth.edge
+  reef_fan_crawl.edge              5.6 m   1.6 s  via reef_fan_crawl.mouth.edge
+  reef_fan_crawl.lip_crawl        10.5 m   3.1 s  via reef_fan_crawl.mouth.edge
+  reef_shelf_lip.room              9.7 m   2.8 s  via reef_shelf_lip.mouth.overhang
+  reef_shelf_lip.overhang          4.0 m   1.2 s  via reef_shelf_lip.mouth.overhang
+  reef_shelf_lip.crawl            18.3 m   5.4 s  via reef_shelf_lip.mouth.overhang
+  slowest way out of any small-cave room: 7.1 s (budget 36 s)
+✔ adverse: the deepest small-cave network, lamp off with 20% air: every room has a swept way out in time (14968.480617ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15446.775253
+
+--- caves-reef-isles-shell.heavy.test.js
+  reef_archlet: shell within 0.200 m of rock (collar 0.57 m, step 0.52 m), 21 of 48086 points face rock
+  reef_bellhole: shell within 0.200 m of rock (collar 1.01 m, step 0.95 m), 3 of 41603 points face rock
+  reef_wrackhollow: shell within 0.200 m of rock (collar 0.46 m, step 0.42 m), 0 of 34398 points face rock
+  reef_pumphouse_undercut: shell within 0.200 m of rock (collar 0.28 m, step 0.27 m), 0 of 16575 points face rock
+  reef_fan_crawl: shell within 0.200 m of rock (collar 0.81 m, step 0.71 m), 10 of 33785 points face rock
+  reef_shelf_lip: shell within 0.200 m of rock (collar 0.83 m, step 0.74 m), 10 of 44782 points face rock
+  reef_gully_window: shell within 0.200 m of rock (collar 1.32 m, step 1.16 m), 6 of 36520 points face rock
+  reef_lantern_grotto: shell within 0.200 m of rock (collar 0.72 m, step 0.65 m), 1 of 160351 points face rock
+  reef_drop_cathedral: shell within 0.200 m of rock (collar 1.15 m, step 1.08 m), 38 of 228349 points face rock
+  isles_scar_crawl: shell within 0.200 m of rock (collar 0.58 m, step 0.63 m), 14 of 28506 points face rock
+  isles_surf_cave: shell within 0.200 m of rock (collar 0.85 m, step 0.97 m), 0 of 21894 points face rock
+  isles_cove_undercut: shell within 0.200 m of rock (collar 0.88 m, step 0.80 m), 7 of 25728 points face rock
+  isles_cove_crawl: shell within 0.200 m of rock (collar 0.30 m, step 0.48 m), 10 of 24782 points face rock
+  isles_headland_root: shell within 0.200 m of rock (collar 1.46 m, step 1.30 m), 45 of 28683 points face rock
+  isles_east_ledge_cave: shell within 0.200 m of rock (collar 0.54 m, step 0.67 m), 0 of 26076 points face rock
+  isles_blowhole: shell within 0.200 m of rock (collar 1.56 m, step 0.58 m), 2 of 30053 points face rock
+  isles_storm_arch: shell within 0.200 m of rock (collar 0.74 m, step 0.81 m), 1 of 153282 points face rock
+  isles_headland_west: shell within 0.200 m of rock (collar 0.99 m, step 1.00 m), 2 of 44347 points face rock
+✔ the shell and the rock agree at every shell point of every Reef and Isles cave (9413.049605ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9879.675339
+
+--- col1-oracle.heavy.test.js
+{"scene":"dishes","clearance":{"tried":36000,"agree":35418,"oldClearNewBlocked":0,"artInsideOldCover":0,"newClearOldBlocked":582,"standOffMax":0.52587890625,"standOffMean":0.12760416666666666,"spurious":0},"moves":{"tried":18000,"agree":16660,"freed":267,"freedMax":5.043531540428151,"oldThroughArt":2,"spurious":0,"bothHitSlideDiffers":1071,"slideDiffMax":5.219125739592415,"endIllegal":0,"endIllegalAsOld":0},"support":{"tried":3555,"agree":2750,"oldHigher":805,"newHigher":0,"floatMax":11.365978991337926,"floatMean":0.5394518387755132,"newHigherMax":0},"sight":{"tried":4000,"agree":3885,"oldOnlyBlocked":115,"newOnlyBlocked":0,"newOnlyBlockedOutsideArt":0},"protected":{"paths":4,"poses":14,"newlyBlocked":0,"newlyCleared":0}}
+{"scene":"a1","clearance":{"tried":36000,"agree":35840,"oldClearNewBlocked":0,"artInsideOldCover":0,"newClearOldBlocked":160,"standOffMax":0.08984375,"standOffMean":0.0298583984375,"spurious":0},"moves":{"tried":18000,"agree":17091,"freed":127,"freedMax":4.921342576081543,"oldThroughArt":3,"spurious":0,"bothHitSlideDiffers":779,"slideDiffMax":5.2467847663032385,"endIllegal":0,"endIllegalAsOld":0},"support":{"tried":4057,"agree":3560,"oldHigher":497,"newHigher":0,"floatMax":13.355551884793158,"floatMean":0.29756670419024145,"newHigherMax":0},"sight":{"tried":4000,"agree":3940,"oldOnlyBlocked":60,"newOnlyBlocked":0,"newOnlyBlockedOutsideArt":0},"protected":{"paths":5,"poses":10,"newlyBlocked":0,"newlyCleared":0}}
+{"scene":"colonnade.columns","clearance":{"tried":16000,"agree":16000,"oldClearNewBlocked":0,"artInsideOldCover":0,"newClearOldBlocked":0,"standOffMax":0,"standOffMean":0,"spurious":0},"moves":{"tried":8000,"agree":7704,"freed":0,"freedMax":0,"oldThroughArt":2,"spurious":5,"bothHitSlideDiffers":289,"slideDiffMax":3.6646500322936673,"endIllegal":0,"endIllegalAsOld":0},"support":{"tried":2778,"agree":2778,"oldHigher":0,"newHigher":0,"floatMax":0,"floatMean":0,"newHigherMax":0},"sight":{"tried":4000,"agree":3999,"oldOnlyBlocked":1,"newOnlyBlocked":0,"newOnlyBlockedOutsideArt":0},"protected":{"paths":8,"poses":2,"newlyBlocked":0,"newlyCleared":0}}
+{"scene":"colonnade.heightfield","clearance":{"tried":16000,"agree":15996,"oldClearNewBlocked":0,"artInsideOldCover":0,"newClearOldBlocked":4,"standOffMax":0.10693359375,"standOffMean":0.0439453125,"spurious":0},"moves":{"tried":8000,"agree":7623,"freed":7,"freedMax":0.32955901014237554,"oldThroughArt":3,"spurious":5,"bothHitSlideDiffers":362,"slideDiffMax":3.6646500322936673,"endIllegal":0,"endIllegalAsOld":0},"support":{"tried":2778,"agree":2778,"oldHigher":0,"newHigher":0,"floatMax":0,"floatMean":0,"newHigherMax":0},"sight":{"tried":4000,"agree":3998,"oldOnlyBlocked":2,"newOnlyBlocked":0,"newOnlyBlockedOutsideArt":0},"protected":{"paths":8,"poses":2,"newlyBlocked":0,"newlyCleared":0}}
+{"scene":"colonnade.shell","clearance":{"tried":16000,"agree":15804,"oldClearNewBlocked":123,"artInsideOldCover":123,"newClearOldBlocked":73,"standOffMax":0.16845703125,"standOffMean":0.05310894691780822,"spurious":0},"moves":{"tried":8000,"agree":6803,"freed":83,"freedMax":1.4076302290854557,"oldThroughArt":27,"spurious":0,"bothHitSlideDiffers":1087,"slideDiffMax":3.8348077632624973,"endIllegal":0,"endIllegalAsOld":1},"support":{"tried":2675,"agree":818,"oldHigher":856,"newHigher":1001,"floatMax":1.910679010666989,"floatMean":0.17688727313077926,"newHigherMax":1.1370040376861823},"sight":{"tried":4000,"agree":3952,"oldOnlyBlocked":36,"newOnlyBlocked":12,"newOnlyBlockedOutsideArt":0},"protected":{"paths":8,"poses":2,"newlyBlocked":0,"newlyCleared":0}}
+{"scene":"canopy","clearance":{"tried":16000,"agree":16000,"oldClearNewBlocked":0,"artInsideOldCover":0,"newClearOldBlocked":0,"standOffMax":0,"standOffMean":0,"spurious":0},"moves":{"tried":8000,"agree":7834,"freed":0,"freedMax":0,"oldThroughArt":0,"spurious":0,"bothHitSlideDiffers":166,"slideDiffMax":2.3613948071919326,"endIllegal":0,"endIllegalAsOld":45},"support":{"tried":2614,"agree":2614,"oldHigher":0,"newHigher":0,"floatMax":0,"floatMean":0,"newHigherMax":0},"sight":{"tried":4000,"agree":4000,"oldOnlyBlocked":0,"newOnlyBlocked":0,"newOnlyBlockedOutsideArt":0},"protected":{"paths":2,"poses":0,"newlyBlocked":0,"newlyCleared":0}} {"lcBytes":19963171,"compactBytes":8901766,"shared":2474508,"chunks":90}
+{"canopyEndIllegalAsLC":45,"of":8000,"examples":[{"kind":"ends illegal as today's world does","shape":"diver","at":{"x":832.7931107626908,"y":-165.44117724458758,"z":-209.61678354568056},"detail":"d {\"x\":-0.6079479539248915,\"y\":0.3316050550921285,\"z\":-5.684653236239352} end {\"x\":832.1851628087655,\"y\":-165.1095721894953,\"z\":-215.30143678192002}"},{"kind":"ends illegal as today's world does","shape":"diver","at":{"x":845.1427096873522,"y":-119.603484980762,"z":-135.28342774510384},"detail":"d {\"x\":0.46418775346747976,\"y\":-2.282004053804622,\"z\":-2.420827128546966} end {\"x\":845.60689744082,\"y\":-121.88548903456663,\"z\":-137.70425487365077}"},{"kind":"ends illegal as today's world does","shape":"diver","at":{"x":768.5830007742472,"y":-153.4917623549395,"z":-176.6934762967517},"detail":"d {\"x\":5.174059487359925,\"y\":-1.71930499934524,\"z\":1.6409483545162826} end {\"x\":773.7570602616067,\"y\":-155.21106735428486,\"z\":-175.05252794223546}"}]}
+{"sweeps":20000,"hits":7286,"ties":18,"movesDiffering":166}
+✔ structures (dishScene): the art blocks only where the art is, and no route, tether or pose is newly blocked (3904.298426ms)
+✔ structures (vistaScene): the art blocks only where the art is, and no route, tether or pose is newly blocked (10589.056085ms)
+✔ caves (CA-1 colonnade): the heightfield collar never blocks what the columns allowed; the shell's differences are reported (14450.802391ms)
+✔ cave biome (LC Canopy): the compact format answers as LC's chunk colliders; first contacts are LC's exactly (34465.9692ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 63806.688628
+
+--- col1-art.heavy.test.js
+{"kitShells":87,"components":90,"sampled":35132,"contrary":14,"isolatedContrary":["hub_apron_hollow c0: 2 of 414","hub_step_arch c0: 1 of 402","hub_glimmer_crack c0: 2 of 402","rift_north_shoulder c0: 1 of 404","meridian_terrace_crack c0: 2 of 408","rift_north_shoulder c0: 1 of 403","divide_fissure_window c0: 1 of 409","divide_lintel_galleries c0: 1 of 401","divide_brine_cistern c0: 1 of 401","meridian_window_gallery c0: 2 of 401"],"failures":[]}
+{"sets":30,"failures":[]}
+{"chunks":90,"art":55,"components":74,"failures":[]}
+heightfield {"clearance":{"tried":6000,"agree":5997,"oldClearNewBlocked":0,"artInsideOldCover":0,"newClearOldBlocked":3,"standOffMax":0.0498046875,"standOffMean":0.028483072916666668,"spurious":0},"moves":{"tried":2000,"agree":1803,"freed":7,"freedMax":0.7041102022634504,"oldThroughArt":10,"spurious":1,"bothHitSlideDiffers":179,"slideDiffMax":6.152477749805128,"endIllegal":0,"endIllegalAsOld":0},"protected":{"paths":2,"poses":4,"newlyBlocked":[],"newlyCleared":[]}}
+shell {"clearance":{"tried":6000,"agree":5943,"oldClearNewBlocked":30,"artInsideOldCover":30,"newClearOldBlocked":27,"standOffMax":0.14404296875,"standOffMean":0.05090784143518518,"spurious":0},"moves":{"tried":2000,"agree":1510,"freed":35,"freedMax":1.031493493072981,"oldThroughArt":20,"spurious":0,"bothHitSlideDiffers":435,"slideDiffMax":6.152477749805128,"endIllegal":0,"endIllegalAsOld":3},"protected":{"paths":2,"poses":4,"newlyBlocked":[],"newlyCleared":[]}}
+✔ every kit cave's fine shell, in all three registries, bakes by provenance, has no fold or flip, meets the floor (and so does its coarse shell), has embedded seam faces and walls that agree with occupancy; the cross-check agrees per component (56638.967268ms)
+✔ R5-1: the three shells the probe vote refused bake, with the hub controls (1797.479776ms)
+✔ every vista, POI and dish set bakes: closed pieces closed and coherent (86.945925ms)
+✔ every Canopy chunk bakes by LC's provenance; the field cross-checks each art component (3097.795704ms)
+✔ P3-C: the Apron hollow's whole oracle scene builds (shell, validated collar) and, through LC's composer, blocks nothing the columns allow (6320.046505ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 68328.090584
+
+--- cr-1-creatures.heavy.test.js
+BJS - [21:38:31]: Babylon.js v9.31.0 - Null engine
+BJS - [21:38:31]: Babylon.js v9.31.0 - Null engine
+✔ glare_stalker: engaged when its window opens, it breaks off; nothing strikes in the window; the full ladder applies after (122.486909ms)
+✔ layer_skate: engaged when its window opens, it breaks off; nothing strikes in the window; the full ladder applies after (142.531308ms)
+✔ hollow_choir: engaged when its window opens, it breaks off; nothing strikes in the window; the full ladder applies after (35.445406ms)
+✔ glare_stalker: timed to its window, a loud lit diver crosses and is never struck (60.503075ms)
+✔ layer_skate: timed to its window, a loud lit diver crosses and is never struck (33.561259ms)
+✔ hollow_choir: timed to its window, a loud lit diver crosses and is never struck (22.467684ms)
+✔ in the composed world each animal reaches its feeding or resting place inside its window (72.603283ms)
+✔ the skates' laying visit: they leave the mirror for the lee shelf, are seen laying there, and the egg cases stay protected (30.213818ms)
+✔ the sound hunter's feeding round: no warning or bite all round, it feeds east, and the full ladder resumes after (1432.762449ms)
+✔ a hunter in pursuit when its round begins breaks off with a caption and never bites during the round (63.237784ms)
+✔ first sight of a window names it once and starts its journal timing (86.940552ms)
+✔ bait: one fish released ahead sinks; a stalker feeds on it instead of striking; no fish, no change (41.553733ms)
+✔ bait turns a resident sound hunter, but not one already away feeding (3.934917ms)
+✔ grounds sit on the composed floor outside every cave; carcass falls stand off routes (2.698909ms)
+✔ the hunter's authored round is open water: its hull swept along every leg it can take and the whole feeding circle (335.132184ms)
+✔ the round's path never moves farther in a step than the hunter can follow it, over every phase of round and circle (56.266364ms)
+✔ a hunter breaking off as its round begins swims onto the round: never a step longer than its fastest swim, and on it until the round ends (112.155018ms)
+✔ rejoining its round, the hunter is swept: rock across the way stops it rather than being crossed (105.693614ms)
+✔ laying stand-ins: their real transforms never jump while watched, across the end of a visit and into the next (202.269601ms)
+✔ creature cues show and hide with their animal: none by the pod, a resting skate's outline on the mirror, gone when culled (197.384883ms)
+ℹ tests 20
+ℹ suites 0
+ℹ pass 20
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3726.220695
+
+--- currents.heavy.test.js
+✔ adverse: from anywhere inside every lab current a powerless diver reaches still water within 25 s (3605.40308ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3966.758636
+
+--- cw1-cave-light-upload.heavy.test.js
+✔ activating an untouched field binds nothing that frame and writes no more than the frame budget; it binds once complete (1.941424ms)
+✔ activating a part-filled field continues it under the budget, never the rest at once (R2-1's 1,179,648-byte case) (0.241387ms)
+✔ a field evicted from the four-field cache refills under the budget when it is activated again (0.331023ms)
+✔ a context restore during a fill starts that fill over; a completed field keeps its whole data for the restore (0.275739ms)
+✔ R3-2: a cold active field binds while a different first prefetch wish keeps its progress, through a heading change; no frame over budget (0.344915ms)
+✔ R3-2: through the real cave view, a camera in hub_step_arch binds its cave while the streamer's first wish is another cave (3.033642ms)
+✔ R3-2: the byte cap holds; a plane larger than the whole budget is written alone as a frame's first write (0.251605ms)
+✔ R3-3: a jump from a cached, bound cave to an uncached one reads pending for the new pose in the same update (0.489578ms)
+✔ R3-3: settling ends only with this pose's cave lit; at the bound an unlit cave stays dark and reports failure (65.348674ms)
+ℹ tests 9
+ℹ suites 0
+ℹ pass 9
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 512.118158
+
+--- cw1-scene-lights.heavy.test.js
+BJS - [21:38:36]: Babylon.js v9.31.0 - Null engine
+BJS - [21:38:36]: Babylon.js v9.31.0 - Null engine
+BJS - [21:38:36]: Babylon.js v9.31.0 - Null engine
+✔ R2-3: the same tied meshes announced forward, reversed or shuffled send the same lights in the same order (131.260186ms)
+BJS - [21:38:36]: Babylon.js v9.31.0 - Null engine
+BJS - [21:38:36]: Babylon.js v9.31.0 - Null engine
+BJS - [21:38:36]: Babylon.js v9.31.0 - Null engine
+✔ R2-3: eviction and reconstruction, and two histories ending at the same settled pose, send the same lights (112.846006ms)
+BJS - [21:38:36]: Babylon.js v9.31.0 - Null engine
+✔ R2-5: the scanned-cluster cache is owned by live meshes: repeated geometry replacement leaves nothing behind, and dispose clears it (105.616276ms)
+BJS - [21:38:37]: Babylon.js v9.31.0 - Null engine
+✔ CW-1: moving meshes share one frame budget for their lights: a frame moves at most 2,048 plus 32 per moving mesh, and every light is still sent (46.18409ms)
+BJS - [21:38:37]: Babylon.js v9.31.0 - Null engine
+✔ CW-1: moving lights refresh nearest first: a moving mesh beside the eye never lags and what is sent is current; far meshes absorb the lag (42.981402ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 888.878704
+
+--- dishes-envelope.heavy.test.js
+dish envelope: 2158470 samples over 4855 solids
+✔ dish collision hugs its art: nothing drawn outside it, the frame's within 0.35 m, the bowl's within its stand-off (1766.028481ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2118.438893
+
+--- dishes.heavy.test.js
+✔ dish collision leaves every passage, rescue tether, first access and carrier lane clear (3562.424472ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3872.344557
+
+--- ecology-composed.heavy.test.js
+✔ COMPOSED: the split-chimney vent warns before harm; the fitted heat shroud holds; the mapper sounds it (929.964637ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1367.986554
+
+--- ecology-hazards.heavy.test.js
+✔ hazard harm always follows an observable warning by at least five seconds: every field, phase, protection and resumed load (4449.17335ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4485.377452
+
+--- ecology-render.heavy.test.js
+BJS - [21:38:49]: Babylon.js v9.31.0 - Null engine
+creature layer update: 0.03 ms/frame, 204 meshes
+✔ creature layer: bounded build/dispose, read-only updates, and distinct warning displays (739.616719ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1262.488264
+
+--- enc-1-readable-threats.heavy.test.js
+✔ disengaging is always possible: quiet and dark, quiet alone, or a retreat ends the pursuit (6783.211266ms)
+✔ the hunter is seen before it harms: a silhouette pass in view, then a pursuit that starts in view (2240.417686ms)
+✔ cue events: approach teaching, warn and pursue calls, the investigation caption and each bite's origin (1260.834794ms)
+✔ R1 ENC-1-01: the warning bump's push never turns into collision damage beside real rock (1376.566615ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12108.82309
+
+--- encounter-art.heavy.test.js
+BJS - [21:39:03]: Babylon.js v9.31.0 - Null engine
+✔ hunter warning colors follow simulation state without moving geometry, leaking buffers or owning shared materials (1822.553917ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2360.543626
+
+--- col1-r6-floor.heavy.test.js
+✔ R6: all 12 group caves' shells are the same whatever the build order, at both LODs (39562.555583ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 39602.332451
+
+--- field-kit.heavy.test.js
+BJS - [21:39:06]: Babylon.js v9.31.0 - Null engine
+✔ field kit: outposts and their modules build near the camera, rebuild on change only; tools show while out; dispose clean (184.416391ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 791.319517
+
+--- expedition.heavy.test.js
+✔ saved operation phase cuts and attachment offsets resume a fully swept tow with immediately valid saves (2700.228747ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3167.418089
+
+--- heavy-tier.heavy.test.js
+✔ cgroup: a child over the file's budget fails that file only; a file under it passes and is measured with its child (731.133877ms)
+✔ cgroup: a child left holding the file's stdout and stderr is removed when the file exits; a sibling's child is untouched (2144.280691ms)
+✔ process group: a child over the file's budget fails that file only; a file under it passes and is measured with its child (827.607908ms)
+✔ process group: a child left holding the file's stdout and stderr is removed when the file exits; a sibling's child is untouched (2136.745109ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5856.406117
+
+--- large-cave-vault.heavy.test.js
+✔ LC sampling: skipping bricks no primitive reaches changes no vertex (2533.427002ms)
+✔ LC mouth: a craft straddling the collar edge never buries a corner in either owner (2054.900993ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 5966.125623
+
+--- hub-caves.heavy.test.js
+✔ hub caves: the shell never sits more than 0.35 m from its rock, and no cave water is inside rock (14678.694778ms)
+✔ hub caves: roofs are sound and the collar meets the heightfield at every footprint edge (896.668014ms)
+✔ ADVERSE: lamp off, a diver anywhere on a hub cave's routes swims the glow out through a mouth (4074.724754ms)
+✔ negative control: with the crown shaft's mouths plugged the same retreat fails (5851.029734ms)
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 25886.491086
+
+--- m2-hunter-reconciliation.heavy.test.js
+✔ parked-Dart pursuit resumes contact approaches throughout the retained 1800-step stall (1502.029102ms)
+✔ level fallback preserves safe contact and damage rates at nearby parked-Dart orientations and heights (3050.637888ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4963.371495
+
+--- m2-route-recovery.heavy.test.js
+✔ all new patch/site loss endpoints tow through every guide and turn with save/reload and exact cargo/module/frame retention (1472.748112ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1900.435033
+
+--- placed-hosts.heavy.test.js
+BJS - [21:39:41]: Babylon.js v9.31.0 - Null engine
+✔ placed hosts: build only near the camera, release far away, hide spent stock, open the inner hall with the gate, dispose clean (40.424551ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 572.115718
+
+--- poi.heavy.test.js
+✔ the dish bands wrap the drawn rim (1320.125334ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1678.157194
+
+--- large-cave.heavy.test.js
+BJS - [21:39:49]: Babylon.js v9.31.0 - Null engine
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+BJS - [21:39:49]: Setting vertex data kind 'position' with an empty array
+✔ Canopy craft routes: real sweeps take each admitted hull through, never into rock (128.703582ms)
+✔ Canopy coarse LOD never crosses any route's profile box (146.32272ms)
+✔ Canopy agreement: 40,000 independent probes round every route agree with collision (308.01336ms)
+✔ Canopy bake: every decoded collider equals the live one; collision never depends on art (1239.107019ms)
+✔ LC-03: every buffer a loaded cave keeps is in its accounted fixed bytes (independent enumeration) (901.407227ms)
+✔ LC-02 with the Canopy's real chunk costs and fixed bytes: under sustained pressure the craft goes in and backs out; below fixed + safety it waits outside (1408.170447ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 34086.645602
+
+--- regions-bake-decode.heavy.test.js
+✔ decoded baked recipes equal the live recipe within the codec's quantization (6051.054596ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 6569.50143
+
+--- regions-art.heavy.test.js
+✔ every chunk references registered S2 factories; full-legacy chunks carry no S2 art (1.167054ms)
+✔ recipes are deterministic, well formed, on the floor and outside today's terrain mesh (13995.499449ms)
+✔ factories yield whenever due() is true (2250.923541ms)
+✔ structure art stays within its colliders (plus small trim) (13.890583ms)
+✔ terrain triangle interiors follow the shared floor within the LOD bound (6889.893933ms)
+✔ the visible ground under the island walk lines is the walking surface (1682.069554ms)
+✔ neighbouring chunks emit identical edges at every LOD pairing (3573.786091ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 28981.234334
+
+--- regions-stream.heavy.test.js
+BJS - [21:39:59]: Babylon.js v9.31.0 - Null engine
+✔ WORLD_ART composes S2 with legacy terrain over exactly the shared skip extent (182.353995ms)
+✔ S2 regions stream through the real renderer within budget, then settle (14482.526314ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 15282.109713
+
+--- render-lifecycle.heavy.test.js
+BJS - [21:40:14]: Babylon.js v9.31.0 - Null engine
+BJS - [21:40:15]: Babylon.js v9.31.0 - Null engine
+✔ production expedition art reconciles cache ownership, contents and replacement without disposing shared materials (517.828471ms)
+✔ target brackets retain one fogged depth-tested mesh through thousands of targets and dispose once (8.3578ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1059.665713
+
+--- resource-surface.heavy.test.js
+BJS - [21:40:21]: Babylon.js v9.31.0 - Null engine
+✔ bounded render refinement tracks the physical field and joins without cracks or hidden deck overlap (3142.690893ms)
+✔ floor-contact eyes, near-plane corners and down-look rays stay above the submitted reef, Canopy and Basin terrain (2476.527004ms)
+✔ actual source and persistent-host triangles stay supported, visible and stock-driven through replacement (3813.188684ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 9923.394765
+
+--- rib-surface-sweep.heavy.test.js
+✔ reduced deterministic surface grid covers both arches from swimmer-clear and full hull-clear starts (3997.714015ms)
+ℹ {"divers":288,"hulls":140,"excludedInvalidHullSeeds":0}
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4413.512491
+
+--- rib-surface-trap.heavy.test.js
+✔ all 72 directional/look replays of the actual export preserve every rib gap after caller corrections (1491.169177ms)
+✔ baseline-generated shallow Dart traps escape and every final hull correction is non-deepening (2833.310665ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4773.603496
+
+--- s3-fleet-art.heavy.test.js
+BJS - [21:40:35]: Babylon.js v9.31.0 - Null engine
+BJS - [21:40:35]: Babylon.js v9.31.0 - Null engine
+BJS - [21:40:36]: Babylon.js v9.31.0 - Null engine
+BJS - [21:40:36]: Babylon.js v9.31.0 - Null engine
+BJS - [21:40:36]: Babylon.js v9.31.0 - Null engine
+BJS - [21:40:36]: Babylon.js v9.31.0 - Null engine
+dart art: half width 2.450, y -0.000..1.982, z -3.600..2.700
+✔ visible geometry matches the piloting proxy, berth envelope and contact parts for every hull state (519.327483ms)
+✔ Hearthline interior: nothing visible stands in walking space without a solid, and every fixture is drawn (181.386046ms)
+✔ Adverse: a protruding part and a mis-staged hull are reported by mesh name (141.243508ms)
+✔ fleet art rebuilds without leaking, replays from the geometry cache and never mutates state (176.459624ms)
+✔ Hearthline socket occupants survive ordinary frame updates unless occupancy is passed explicitly (37.298477ms)
+✔ S3-02 option B: the Dart's trimmed expedition art fills its 2.45 m envelope half width and no more (118.129987ms)
+ℹ tests 6
+ℹ suites 0
+ℹ pass 6
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1736.613715
+
+--- regions-world.heavy.test.js
+✔ ADVERSE: first-access deposits are reachable without the protection they unlock (1263.747736ms)
+✔ ADVERSE control: a sealed deposit fails both first access and rescue (4245.686192ms)
+✔ ADVERSE: every deep loss-capable site has a proved rescue from starter gear (4178.691758ms)
+✔ ADVERSE controls: a wrong mooring and a missing stage are both refused (15777.569173ms)
+✔ REGRESSION: solid checks are continuous sweeps; the old ceramic-lip tow is refused (3280.713419ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 29132.612995
+
+--- save-library-build.heavy.test.js
+✔ saves-build-at builds exactly the commit's source, marked with it, and its export refuses another label (5820.535299ms)
+✔ import from a worktree build decodes with a fresh build of the commit before publishing; a bad save leaves nothing public (20075.904029ms)
+✔ an export from before the R1 fixes imports and verifies through that commit's own verifyCommitDir (17582.272341ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 43934.794086
+
+--- terrain-boundaries.heavy.test.js
+✔ submitted terrain fixes both signs of the rescue, Basin and smooth Canopy floor regressions (2714.403752ms)
+✔ closed bench/pad tops, all exterior sides and corners follow the correct one-sided physical heights (34.349264ms)
+✔ physical discontinuities have opaque vertical joins covering both limits, including the bench cut into higher ground (22.400895ms)
+✔ smooth route terrain and complete lane widths meet .1 m in submitted float32 geometry (482.883171ms)
+✔ supported regression floor contacts retain physical clearance and clear eyes and all near-plane corners (12.857293ms)
+ℹ tests 5
+ℹ suites 0
+ℹ pass 5
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3701.222245
+
+--- terrain-borders.heavy.test.js
+✔ every chunk a cave or the legacy extent cuts shares identical terrain edges with all four neighbours, every LOD pair (44445.349558ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 44950.802321
+
+--- terrain-chunks.heavy.test.js
+✔ every chunk of today's terrain is exactly the whole surface's triangles in that cell, with normals and colours (7300.917549ms)
+✔ neighbouring chunks meet on shared vertices: every chunk-border edge is matched across the border (4025.41394ms)
+✔ a configured extent keeps exactly the whole surface's triangles inside it: no double draw, no gap (5626.296612ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 17333.069276
+
+--- ux1-carrier-corridor.heavy.test.js
+corridor sweep: 1920 poses, 713 obstructed, 425 turn and 288 rise hints verified clear; remedies {"rise":288,"turn":425}; slowest remedy search 22.6 ms
+✔ at every mooring and heading, corridor advice matches the launch refusal and a named turn or rise clears it completely (18052.318792ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 18479.648033
+
+--- vistas-envelope.heavy.test.js
+✔ vista collision hugs its art: no art outside it, no part of it more than 0.35 m off the art (13887.454082ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 14298.570493
+
+--- vistas.heavy.test.js
+✔ vista solids stay out of the keep-outs and pass the authoritative access checks (4355.352425ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4771.290176
+
+--- world-journey.heavy.test.js
+creel journey: out 2960 m in 625 s; office 165 s, serviced from 57.1% (reserve uses 2); home 2621 m in 550 s, charge 56.5%, hull 100.0
+diver journey: Basin → station 907 m in 172 s (4% O2 left); station → Divide 722 m in 136 s (25% O2 left)
+✔ JOURNEY: a piloted Creel crosses Basin → Rift → Divide → Meridian works, services at the staging office and returns (20236.093748ms)
+✔ JOURNEY: a diver swims Basin → Rift, restores and breathes at the materials station, then swims on to the Divide (4491.143143ms)
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 25212.286438
+
+--- world-kit-render.heavy.test.js
+BJS - [21:42:45]: Babylon.js v9.31.0 - Null engine
+BJS - [21:42:45]: Babylon.js v9.31.0 - Null engine
+BJS - [21:42:45]: Babylon.js v9.31.0 - Null engine
+BJS - [21:42:45]: Babylon.js v9.31.0 - Null engine
+BJS - [21:42:45]: Babylon.js v9.31.0 - Null engine
+BJS - [21:42:45]: Babylon.js v9.31.0 - Null engine
+✔ factories are deterministic and coarse scatter is a subset of fine (19.521763ms)
+✔ kit batches own geometry over shared template arrays and dispose back to the baseline (25.185996ms)
+✔ ADVERSE (real kit): fast traversal with pending construction leaves no stray meshes (165.26074ms)
+✔ REVIEW S1-01 (real kit): an over-budget fine chunk is shown coarse and never exceeds the budget (20.959644ms)
+✔ REVIEW S1-01 (real kit): a coarse chunk that cannot fit is refused, reported, and not ready (13.275178ms)
+✔ REVIEW S1-04 (real kit): approaching coarse terrain under 256 KiB never leaves the chunk undrawn (13.267439ms)
+✔ REVIEW S1-05 (real kit): terrain that fits the share left by external owners is measured and drawn (11.614598ms)
+ℹ tests 7
+ℹ suites 0
+ℹ pass 7
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 1095.136113
+
+--- world-queries.heavy.test.js
+✔ indexed movement, clearance, support and sight equal the full roster scan (3246.08235ms)
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 3694.916494
+
+--- timeline-model.heavy.test.js
+unchanged: 0 scripts [], 0/24 fast seeds
+    first: not caught
+load_mutates: 60 scripts [a protected read writes nothing; hostile version 1; deep version 1; head counter 0.233; head counter 0.244; head counter 0.324; head counter 0.335; head counter 0.403; wrong field 0; wrong field 0.31; wrong field 0.47; wrong field 0.62; wrong field 0.9; wrong summary field 0.025; wrong summary field 0.625; wrong summary field 0.775; wrong summary field 0.825; wrong summary field 0.875; wrong summary field 0.925; wrong summary field 0.975; shallow summary folding 1; shallow summary folding 4; quota with damage beyond the first fold; quota with a damaged previous; failed repair at write 0; failed repair at write 1; failed repair at write 2; failed repair at write 3; repair staging avoids a missing named number (seed 66769815); a successful repair is durable; get fault at 0; get fault at 0 onward; get fault at 1; get fault at 1 onward; get fault at 3; get fault at 3 onward; set fault at 0; set fault at 0 onward; set fault at 1; set fault at 1 onward; set fault at 3; set fault at 3 onward; remove fault at 0; remove fault at 0 onward; remove fault at 1; remove fault at 1 onward; remove fault at 3; remove fault at 3 onward; length fault at 0; length fault at 0 onward; length fault at 1; length fault at 1 onward; length fault at 3; length fault at 3 onward; key fault at 0; key fault at 0 onward; key fault at 1; key fault at 1 onward; key fault at 3; key fault at 3 onward], 17/24 fast seeds
+    first: a protected read writes nothing: step 2: a fresh load of A wrote to storage
+load_rewrites_same_bytes: 58 scripts [a protected read writes nothing; head counter 0.233; head counter 0.244; head counter 0.324; head counter 0.335; head counter 0.403; wrong field 0; wrong field 0.31; wrong field 0.47; wrong field 0.62; wrong field 0.9; wrong summary field 0.025; wrong summary field 0.625; wrong summary field 0.775; wrong summary field 0.825; wrong summary field 0.875; wrong summary field 0.925; wrong summary field 0.975; shallow summary folding 1; shallow summary folding 4; quota with damage beyond the first fold; quota with a damaged previous; failed repair at write 0; failed repair at write 1; failed repair at write 2; failed repair at write 3; repair staging avoids a missing named number (seed 66769815); a successful repair is durable; get fault at 0; get fault at 0 onward; get fault at 1; get fault at 1 onward; get fault at 3; get fault at 3 onward; set fault at 0; set fault at 0 onward; set fault at 1; set fault at 1 onward; set fault at 3; set fault at 3 onward; remove fault at 0; remove fault at 0 onward; remove fault at 1; remove fault at 1 onward; remove fault at 3; remove fault at 3 onward; length fault at 0; length fault at 0 onward; length fault at 1; length fault at 1 onward; length fault at 3; length fault at 3 onward; key fault at 0; key fault at 0 onward; key fault at 1; key fault at 1 onward; key fault at 3; key fault at 3 onward], 10/24 fast seeds
+    first: a protected read writes nothing: step 2: a fresh load of A wrote to storage
+F1: 4 scripts [failed repair at write 0; failed repair at write 1; failed repair at write 2; failed repair at write 3], 0/24 fast seeds
+    first: failed repair at write 0: step 6: remove siltwake.timeline.v2|A|0 before any journal write: a damaged record
+F2_version: 3 scripts [hostile version 1; deep version 1; wrong summary field 0.925], 5/24 fast seeds
+    first: hostile version 1: step -1: a load of A threw: TypeError: Cannot convert object to primitive value
+F2_counters: 5 scripts [head counter 0.233; head counter 0.244; head counter 0.324; head counter 0.335; head counter 0.403], 0/24 fast seeds
+    first: head counter 0.233: step 3: A loads (loaded) over the damaged siltwake.timeline.v2.journal
+F3_summary: 2 scripts [shallow summary folding 1; shallow summary folding 4], 0/24 fast seeds
+    first: shallow summary folding 1: step 5: a commit folded the damaged siltwake.timeline.v2|A|0
+F3_events: 2 scripts [shallow summary folding 1; shallow summary folding 4], 0/24 fast seeds
+    first: shallow summary folding 1: step 5: a commit folded the damaged siltwake.timeline.v2|A|0
+F4: 1 scripts [quota with a damaged previous], 0/24 fast seeds
+    first: quota with a damaged previous: step 9: a protected commit changed storage
+seed66769815: 1 scripts [repair staging avoids a missing named number (seed 66769815)], 0/24 fast seeds
+    first: repair staging avoids a missing named number (seed 66769815): step 6: set siltwake.timeline.v2|A|1 before any journal write: a damaged record
+oracle_saved_protected: 36 scripts [failed repair at write 0; failed repair at write 1; failed repair at write 2; failed repair at write 3; repair staging avoids a missing named number (seed 66769815); a successful repair is durable; get fault at 0; get fault at 0 onward; get fault at 1; get fault at 1 onward; get fault at 3; get fault at 3 onward; set fault at 0; set fault at 0 onward; set fault at 1; set fault at 1 onward; set fault at 3; set fault at 3 onward; remove fault at 0; remove fault at 0 onward; remove fault at 1; remove fault at 1 onward; remove fault at 3; remove fault at 3 onward; length fault at 0; length fault at 0 onward; length fault at 1; length fault at 1 onward; length fault at 3; length fault at 3 onward; key fault at 0; key fault at 0 onward; key fault at 1; key fault at 1 onward; key fault at 3; key fault at 3 onward], 13/24 fast seeds
+    first: failed repair at write 0: step 6: v1Superseded is false, the model true
+R2_resume_long_chunk: 1 scripts [reload of a full open chunk], 0/24 fast seeds
+    first: reload of a full open chunk: step 7: A protected with nothing damaged (a stored timeline chunk is malformed)
+R2_F1_fields: 4 scripts [wrong field 0.31; wrong summary field 0.775; wrong summary field 0.825; wrong summary field 0.875], 0/24 fast seeds
+    first: wrong field 0.31: step 3: A loads (loaded) over the damaged siltwake.timeline.v2|A|0
+✔ the timeline journal keeps its invariants over 2000 seeded fault sequences (276104.375862ms)
+✔ the fast tier's regression scripts and seeds catch every known defect, and pass the unchanged sources (115659.454465ms)
+ℹ unchanged: 0 scripts [], 0/24 fast seeds
+    first: not caught
+load_mutates: 60 scripts [a protected read writes nothing; hostile version 1; deep version 1; head counter 0.233; head counter 0.244; head counter 0.324; head counter 0.335; head counter 0.403; wrong field 0; wrong field 0.31; wrong field 0.47; wrong field 0.62; wrong field 0.9; wrong summary field 0.025; wrong summary field 0.625; wrong summary field 0.775; wrong summary field 0.825; wrong summary field 0.875; wrong summary field 0.925; wrong summary field 0.975; shallow summary folding 1; shallow summary folding 4; quota with damage beyond the first fold; quota with a damaged previous; failed repair at write 0; failed repair at write 1; failed repair at write 2; failed repair at write 3; repair staging avoids a missing named number (seed 66769815); a successful repair is durable; get fault at 0; get fault at 0 onward; get fault at 1; get fault at 1 onward; get fault at 3; get fault at 3 onward; set fault at 0; set fault at 0 onward; set fault at 1; set fault at 1 onward; set fault at 3; set fault at 3 onward; remove fault at 0; remove fault at 0 onward; remove fault at 1; remove fault at 1 onward; remove fault at 3; remove fault at 3 onward; length fault at 0; length fault at 0 onward; length fault at 1; length fault at 1 onward; length fault at 3; length fault at 3 onward; key fault at 0; key fault at 0 onward; key fault at 1; key fault at 1 onward; key fault at 3; key fault at 3 onward], 17/24 fast seeds
+    first: a protected read writes nothing: step 2: a fresh load of A wrote to storage
+load_rewrites_same_bytes: 58 scripts [a protected read writes nothing; head counter 0.233; head counter 0.244; head counter 0.324; head counter 0.335; head counter 0.403; wrong field 0; wrong field 0.31; wrong field 0.47; wrong field 0.62; wrong field 0.9; wrong summary field 0.025; wrong summary field 0.625; wrong summary field 0.775; wrong summary field 0.825; wrong summary field 0.875; wrong summary field 0.925; wrong summary field 0.975; shallow summary folding 1; shallow summary folding 4; quota with damage beyond the first fold; quota with a damaged previous; failed repair at write 0; failed repair at write 1; failed repair at write 2; failed repair at write 3; repair staging avoids a missing named number (seed 66769815); a successful repair is durable; get fault at 0; get fault at 0 onward; get fault at 1; get fault at 1 onward; get fault at 3; get fault at 3 onward; set fault at 0; set fault at 0 onward; set fault at 1; set fault at 1 onward; set fault at 3; set fault at 3 onward; remove fault at 0; remove fault at 0 onward; remove fault at 1; remove fault at 1 onward; remove fault at 3; remove fault at 3 onward; length fault at 0; length fault at 0 onward; length fault at 1; length fault at 1 onward; length fault at 3; length fault at 3 onward; key fault at 0; key fault at 0 onward; key fault at 1; key fault at 1 onward; key fault at 3; key fault at 3 onward], 10/24 fast seeds
+    first: a protected read writes nothing: step 2: a fresh load of A wrote to storage
+F1: 4 scripts [failed repair at write 0; failed repair at write 1; failed repair at write 2; failed repair at write 3], 0/24 fast seeds
+    first: failed repair at write 0: step 6: remove siltwake.timeline.v2|A|0 before any journal write: a damaged record
+F2_version: 3 scripts [hostile version 1; deep version 1; wrong summary field 0.925], 5/24 fast seeds
+    first: hostile version 1: step -1: a load of A threw: TypeError: Cannot convert object to primitive value
+F2_counters: 5 scripts [head counter 0.233; head counter 0.244; head counter 0.324; head counter 0.335; head counter 0.403], 0/24 fast seeds
+    first: head counter 0.233: step 3: A loads (loaded) over the damaged siltwake.timeline.v2.journal
+F3_summary: 2 scripts [shallow summary folding 1; shallow summary folding 4], 0/24 fast seeds
+    first: shallow summary folding 1: step 5: a commit folded the damaged siltwake.timeline.v2|A|0
+F3_events: 2 scripts [shallow summary folding 1; shallow summary folding 4], 0/24 fast seeds
+    first: shallow summary folding 1: step 5: a commit folded the damaged siltwake.timeline.v2|A|0
+F4: 1 scripts [quota with a damaged previous], 0/24 fast seeds
+    first: quota with a damaged previous: step 9: a protected commit changed storage
+seed66769815: 1 scripts [repair staging avoids a missing named number (seed 66769815)], 0/24 fast seeds
+    first: repair staging avoids a missing named number (seed 66769815): step 6: set siltwake.timeline.v2|A|1 before any journal write: a damaged record
+oracle_saved_protected: 36 scripts [failed repair at write 0; failed repair at write 1; failed repair at write 2; failed repair at write 3; repair staging avoids a missing named number (seed 66769815); a successful repair is durable; get fault at 0; get fault at 0 onward; get fault at 1; get fault at 1 onward; get fault at 3; get fault at 3 onward; set fault at 0; set fault at 0 onward; set fault at 1; set fault at 1 onward; set fault at 3; set fault at 3 onward; remove fault at 0; remove fault at 0 onward; remove fault at 1; remove fault at 1 onward; remove fault at 3; remove fault at 3 onward; length fault at 0; length fault at 0 onward; length fault at 1; length fault at 1 onward; length fault at 3; length fault at 3 onward; key fault at 0; key fault at 0 onward; key fault at 1; key fault at 1 onward; key fault at 3; key fault at 3 onward], 13/24 fast seeds
+    first: failed repair at write 0: step 6: v1Superseded is false, the model true
+R2_resume_long_chunk: 1 scripts [reload of a full open chunk], 0/24 fast seeds
+    first: reload of a full open chunk: step 7: A protected with nothing damaged (a stored timeline chunk is malformed)
+R2_F1_fields: 4 scripts [wrong field 0.31; wrong summary field 0.775; wrong summary field 0.825; wrong summary field 0.875], 0/24 fast seeds
+    first: wrong field 0.31: step 3: A loads (loaded) over the damaged siltwake.timeline.v2|A|0
+ℹ tests 2
+ℹ suites 0
+ℹ pass 2
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 392408.580478
+
+--- caves-canopy-basin.heavy.test.js
+✔ the composed world holds every cave, clear of the legacy guards (15.081365ms)
+ℹ 55 caves (12 CA-2 sources + the rest), composed in 14 ms
+✔ route corridors near a cave sweep exactly as far in the composed world as over the plain heightfield (5.257548ms)
+✔ craft parking: clear for every listed profile (703.128497ms)
+✔ per-step cost: a diver step (move plus support) inside every cave, every cave loaded, on the 8 m cave index (3733.025092ms)
+ℹ canopy_knot_hollow: 479 rock boxes, 20.4 µs/step over 16 poses
+ℹ canopy_eastcrown: 1858 rock boxes, 42.4 µs/step over 107 poses
+ℹ canopy_lee_hollow: 334 rock boxes, 9.4 µs/step over 18 poses
+ℹ canopy_fin_cleft: 364 rock boxes, 8.9 µs/step over 18 poses
+ℹ canopy_root_arch: 5064 rock boxes, 127.1 µs/step over 160 poses
+ℹ canopy_lantern_hall: 2141 rock boxes, 37.4 µs/step over 123 poses
+ℹ basin_culvert_north: 393 rock boxes, 12.7 µs/step over 16 poses
+ℹ basin_burrow_warren: 2918 rock boxes, 73.9 µs/step over 28 poses
+ℹ basin_buried_hut: 383 rock boxes, 4.8 µs/step over 15 poses
+ℹ basin_fracture_pocket: 455 rock boxes, 17.0 µs/step over 16 poses
+ℹ basin_west_rim: 3587 rock boxes, 36.3 µs/step over 196 poses
+ℹ basin_dish_lee_vault: 5447 rock boxes, 144.4 µs/step over 88 poses
+ℹ mean 44.6 µs/step inside caves, worst cave 144.4 µs; open water 5.1 µs; cave index cell 8 m
+ℹ tests 4
+ℹ suites 0
+ℹ pass 4
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 4850.282693
+
+--- caves-deep-perf.heavy.test.js
+✔ cost: build, rock boxes, collar columns and per-step diver queries with root's caves loaded (11793.165933ms)
+ℹ rift_north_shoulder: 1152 rock boxes, 0.53 M voxels, 291 ms
+ℹ rift_tube_mites: 299 rock boxes, 0.08 M voxels, 39 ms
+ℹ rift_stub_hollow: 359 rock boxes, 0.09 M voxels, 35 ms
+ℹ rift_west_blister: 569 rock boxes, 0.15 M voxels, 54 ms
+ℹ rift_west_tube: 1153 rock boxes, 0.39 M voxels, 178 ms
+ℹ rift_kiln_tube: 3097 rock boxes, 1.05 M voxels, 620 ms
+ℹ divide_mirror_pocket: 521 rock boxes, 0.15 M voxels, 44 ms
+ℹ divide_crest_hollow: 493 rock boxes, 0.12 M voxels, 23 ms
+ℹ divide_east_pocket: 509 rock boxes, 0.38 M voxels, 56 ms
+ℹ divide_lee_burrow: 260 rock boxes, 0.08 M voxels, 16 ms
+ℹ divide_fissure_window: 527 rock boxes, 0.25 M voxels, 36 ms
+ℹ divide_lintel_galleries: 2090 rock boxes, 1.57 M voxels, 439 ms
+ℹ divide_brine_cistern: 3805 rock boxes, 1.66 M voxels, 507 ms
+ℹ meridian_footing_void: 142 rock boxes, 0.08 M voxels, 24 ms
+ℹ meridian_culvert_north: 350 rock boxes, 0.37 M voxels, 59 ms
+ℹ meridian_spire_footing: 293 rock boxes, 0.09 M voxels, 22 ms
+ℹ meridian_escarp_pocket: 705 rock boxes, 0.21 M voxels, 30 ms
+ℹ meridian_terrace_crack: 341 rock boxes, 0.27 M voxels, 40 ms
+ℹ meridian_window_gallery: 1439 rock boxes, 1.25 M voxels, 292 ms
+ℹ meridian_escarp_culvert: 1524 rock boxes, 0.61 M voxels, 168 ms
+ℹ deep caves: 20, 19628 rock boxes + ~133760 collar columns, 9.4 M voxels, build 3.0 s
+ℹ root caves: 35, 56281 rock boxes + ~268960 collar columns
+ℹ diver step (move + support) inside the deep caves, composed world: 280.7 µs over 9075 steps
+ℹ same step inside root's authored caves (Fanvault, hub, Reef, Isles) and CA-2's, root world: 188.9 µs over 28600 steps
+ℹ tests 1
+ℹ suites 0
+ℹ pass 1
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 12376.738471
+
+--- caves-reef-isles-game.heavy.test.js
+  caves: 55 (18 CA-1; 55 in CAVE_SOURCES today)
+  boxes: cave rock 76762, collar columns 383372, exterior SOLIDS 11415, total 471549
+  build: every cave definition 0.4 s, the composed world 0.0 s
+  3 legs: 4.8 s without the cave; with it today: 4.8 s; with exterior support outside footprints: 4.8 s
+  42 diver routes swum, 504 s of game time in 11.2 s
+  3 standing waypoints: isles_blowhole.route.ledge 1069.5,0.01,131.5; isles_blowhole.route.ledge 1070.84,0.01,131.5; isles_blowhole.route.ledge 1070.9,-0.49,131.5
+  approach: 13.0 s; stands at 1069.97, 0.00, 131.52, walking
+  return: 9.5 s to 1072.00, -13.41, 144.22, swimming
+  from reef_shelf_lip.crawl: surfaced in 23.0 s with 7.9% air left (36 s budget)
+  diver step (move 0.25 m + support), median of 3 over 6968 steps: 33.0 us
+✔ C4 path: every authored cave composes into the game world, and the exterior is unchanged away from them (55.002687ms)
+✔ C4 path: no route, rescue tether, site, source or place sits in a CA-1 footprint or its collar band (1.461488ms)
+✔ C4 path: the headland crest walk, 7 m from the West sea cave, needs exterior support outside footprints (219.71368ms)
+✔ C4 path: a diver swims every diver route of every CA-1 cave through the game's step with ordinary controls (11177.479012ms)
+✔ C4 path: every route waypoint above the water is a standing pose on rock, clear for a walker (0.777992ms)
+✔ C4 path: Blowhole, by ordinary keys: in the mouth, up the chimney, onto the wading shelf, up onto the dry ledge, and back out (313.941613ms)
+✔ C4 path ADVERSE: from the deepest small-cave room, lamp off with 20% air, a diver swims out and surfaces through the step (261.059676ms)
+✔ C4 path: diver step cost with every authored cave in the game world (723.853105ms)
+ℹ tests 8
+ℹ suites 0
+ℹ pass 8
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 13796.08766
+
+--- large-cave-canopy.heavy.test.js
+✔ Canopy sampling: the hall's and the Crown hollow's chunks are identical with no brick skipped (861.484638ms)
+✔ Canopy LC-01: the R1 buried collar-straddling poses are refused through the production world (382.679819ms)
+✔ Canopy diver spurs: real sweeps thread the squeeze, the crawl, the tangle and the grotto (503.282131ms)
+ℹ tests 3
+ℹ suites 0
+ℹ pass 3
+ℹ fail 0
+ℹ cancelled 0
+ℹ skipped 0
+ℹ todo 0
+ℹ duration_ms 2162.727101
+
+test:heavy summary (peak: the file's whole process tree, cgroup containment)
+  m2-region-render.heavy.test.js          6.6 s  peak  1142 MiB / 2048 MiB  ok
+  regions-bake.heavy.test.js             59.4 s  peak  1385 MiB / 1920 MiB  ok
+  c3-save-integrity.heavy.test.js         4.0 s  peak    92 MiB / 1024 MiB  ok
+  c4-systems.heavy.test.js                1.4 s  peak   105 MiB / 1024 MiB  ok
+  c4-world.heavy.test.js                  4.4 s  peak   216 MiB / 1024 MiB  ok
+  c4b-fixes.heavy.test.js                 3.5 s  peak    85 MiB / 1024 MiB  ok
+  carrier-boundary-sweep.heavy.test.js   31.1 s  peak   160 MiB / 1024 MiB  ok
+  carrier-boundary.heavy.test.js          5.3 s  peak   152 MiB / 1024 MiB  ok
+  cave-light-retreat.heavy.test.js        4.6 s  peak   176 MiB / 1024 MiB  ok
+  cave-light.heavy.test.js                0.9 s  peak   149 MiB / 1024 MiB  ok
+  cw1-bake.heavy.test.js                108.5 s  peak  1124 MiB / 1536 MiB  ok
+  cw1-caves.heavy.test.js                10.6 s  peak   813 MiB / 1536 MiB  ok
+  render-cache.heavy.test.js              3.0 s  peak   809 MiB / 1536 MiB  ok
+  world-stream.heavy.test.js             16.4 s  peak  1001 MiB / 1536 MiB  ok
+  caves-basin.heavy.test.js             118.7 s  peak   351 MiB / 1024 MiB  ok
+  caves-reef-isles-retreat.heavy.test.js   36.4 s  peak   645 MiB / 1280 MiB  ok
+  renewal-render.heavy.test.js            2.1 s  peak   580 MiB / 1280 MiB  ok
+  caves-canopy.heavy.test.js             57.2 s  peak   283 MiB / 1024 MiB  ok
+  caves-deep-dark.heavy.test.js          59.2 s  peak   442 MiB / 1024 MiB  ok
+  caves-deep-hazard-step.heavy.test.js    4.4 s  peak   238 MiB / 1024 MiB  ok
+  caves-deep.heavy.test.js                9.2 s  peak   409 MiB / 1024 MiB  ok
+  caves-reef-isles-adverse.heavy.test.js   15.5 s  peak   443 MiB / 1024 MiB  ok
+  caves-reef-isles-shell.heavy.test.js   10.0 s  peak   477 MiB / 1024 MiB  ok
+  col1-oracle.heavy.test.js              63.9 s  peak   249 MiB / 1024 MiB  ok
+  col1-art.heavy.test.js                 68.4 s  peak   921 MiB / 1024 MiB  ok
+  cr-1-creatures.heavy.test.js            3.8 s  peak   193 MiB / 1024 MiB  ok
+  currents.heavy.test.js                  4.0 s  peak   114 MiB / 1024 MiB  ok
+  cw1-cave-light-upload.heavy.test.js     0.6 s  peak    90 MiB / 1024 MiB  ok
+  cw1-scene-lights.heavy.test.js          0.9 s  peak   105 MiB / 1024 MiB  ok
+  dishes-envelope.heavy.test.js           2.2 s  peak   103 MiB / 1024 MiB  ok
+  dishes.heavy.test.js                    3.9 s  peak    83 MiB / 1024 MiB  ok
+  ecology-composed.heavy.test.js          1.4 s  peak   100 MiB / 1024 MiB  ok
+  ecology-hazards.heavy.test.js           4.5 s  peak    56 MiB / 1024 MiB  ok
+  ecology-render.heavy.test.js            1.3 s  peak   282 MiB / 1024 MiB  ok
+  enc-1-readable-threats.heavy.test.js   12.2 s  peak   128 MiB / 1024 MiB  ok
+  encounter-art.heavy.test.js             2.5 s  peak   556 MiB / 1024 MiB  ok
+  col1-r6-floor.heavy.test.js            39.7 s  peak   318 MiB / 1024 MiB  ok
+  field-kit.heavy.test.js                 0.9 s  peak   120 MiB / 1024 MiB  ok
+  expedition.heavy.test.js                3.2 s  peak   104 MiB / 1024 MiB  ok
+  heavy-tier.heavy.test.js                5.9 s  peak   298 MiB / 1024 MiB  ok
+  large-cave-vault.heavy.test.js          6.0 s  peak   121 MiB / 1024 MiB  ok
+  hub-caves.heavy.test.js                25.9 s  peak   242 MiB / 1024 MiB  ok
+  m2-hunter-reconciliation.heavy.test.js    5.0 s  peak   114 MiB / 1024 MiB  ok
+  m2-route-recovery.heavy.test.js         2.0 s  peak   110 MiB / 1024 MiB  ok
+  placed-hosts.heavy.test.js              0.6 s  peak   110 MiB / 1024 MiB  ok
+  poi.heavy.test.js                       1.7 s  peak    72 MiB / 1024 MiB  ok
+  large-cave.heavy.test.js               34.2 s  peak   337 MiB / 1024 MiB  ok
+  regions-bake-decode.heavy.test.js       6.6 s  peak   164 MiB / 1024 MiB  ok
+  regions-art.heavy.test.js              29.0 s  peak   348 MiB / 1024 MiB  ok
+  regions-stream.heavy.test.js           15.4 s  peak   803 MiB / 1024 MiB  ok
+  render-lifecycle.heavy.test.js          1.1 s  peak   251 MiB / 1024 MiB  ok
+  resource-surface.heavy.test.js         10.0 s  peak   301 MiB / 1024 MiB  ok
+  rib-surface-sweep.heavy.test.js         4.5 s  peak   113 MiB / 1024 MiB  ok
+  rib-surface-trap.heavy.test.js          4.8 s  peak   124 MiB / 1024 MiB  ok
+  s3-fleet-art.heavy.test.js              1.8 s  peak   314 MiB / 1024 MiB  ok
+  regions-world.heavy.test.js            29.2 s  peak   107 MiB / 1024 MiB  ok
+  save-library-build.heavy.test.js       44.0 s  peak   692 MiB / 1024 MiB  ok
+  terrain-boundaries.heavy.test.js        3.8 s  peak   255 MiB / 1024 MiB  ok
+  terrain-borders.heavy.test.js          45.0 s  peak   811 MiB / 1024 MiB  ok
+  terrain-chunks.heavy.test.js           17.4 s  peak   412 MiB / 1024 MiB  ok
+  ux1-carrier-corridor.heavy.test.js     18.6 s  peak    91 MiB / 1024 MiB  ok
+  vistas-envelope.heavy.test.js          14.4 s  peak   132 MiB / 1024 MiB  ok
+  vistas.heavy.test.js                    4.8 s  peak    92 MiB / 1024 MiB  ok
+  world-journey.heavy.test.js            25.3 s  peak   130 MiB / 1024 MiB  ok
+  world-kit-render.heavy.test.js          1.2 s  peak   117 MiB / 1024 MiB  ok
+  world-queries.heavy.test.js             3.8 s  peak    85 MiB / 1024 MiB  ok
+  timeline-model.heavy.test.js          392.5 s  peak   762 MiB / 1024 MiB  ok
+  caves-canopy-basin.heavy.test.js        4.9 s  peak   285 MiB / 1024 MiB  ok
+  caves-deep-perf.heavy.test.js          12.5 s  peak   782 MiB / 1024 MiB  ok
+  caves-reef-isles-game.heavy.test.js    13.9 s  peak   610 MiB / 1024 MiB  ok
+  large-cave-canopy.heavy.test.js         2.2 s  peak   143 MiB / 1024 MiB  ok
+  total 1573.8 s of file time in 991.5 s (up to 3 files within 2560 MiB of budgets at once)
