@@ -1,0 +1,13 @@
+{
+ "what": "REC-1 R3b acceptance: the recorder's inclusive main-thread cost, software VP9 960x540 at 6 fps (the test machines' rung), recorder on minus paused in place, at a fixed pose, as a duet (both arms in one run, interleaved on/off/off/on)",
+ "budgetMs": 0.167,
+ "pairs": 108,
+ "windowS": 10,
+ "confidence": 0.95,
+ "save": "docs/build/streams/rec1/fixtures/hold-refuge-reef.json",
+ "exclusion": { "kind": "level", "overMs": 0.6 },
+ "verdict": "met if the paired 95% interval's upper end is under budgetMs; not met if its lower end is over it; otherwise inconclusive. Exactly the first 108 pairs are judged; the unexcluded interval is reported beside the verdict",
+ "power": "planned for a true cost of 0.10 ms/frame with a pair-difference sd of 0.20 ms (measured: 0.159-0.176 recorder off in both arms after the host's CPU isolation, run 261025-014714-dfd1; 0.184 and 0.205 on/off before it): 96 pairs give about 90% chance of 'met'; 108 leave room for about 10% of pairs excluded",
+ "exclusionReason": "slow windows (+0.6 to +1.8 ms for 10-25 s) recur with no recorder at all (261025-014714-dfd1: recorder off throughout, the VM otherwise quiet, about 280-290 s apart, matching the host's job-matcher bursts of about 4 min 45 s) and hit paused windows as often as recording ones (261024-231132-692c, 261024-203711-5c1c). A pair is dropped as a whole when either of its windows is more than 0.6 ms over the median of every judged window, both arms pooled, so both arms lose the same time",
+ "seat": "exclusive on the RTX 3090 (factory-worker), from a build made beforehand by another job (exclusive windows never compile); rehearsed first on the RTX 4070 Laptop (indicative)"
+}
