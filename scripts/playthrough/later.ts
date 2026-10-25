@@ -802,7 +802,8 @@ const meridian = (strategy: Strategy): Phase => ({
     if (strategy === "creel") topUp(d, "meridian.staging_shelf", DISTRICT_CHARGE);
     // PACE-1: the works follow from here; the Creel stays at the district and the Mantle
     // returns to the carrier at the shelf.
-    if (strategy === "carrier") mantleHome(d);
+    // R7: the Mantle charges at the shelf mooring before its berth (a berthed craft is not serviced).
+    if (strategy === "carrier") { topUp(d, "meridian.staging_shelf", 95); mantleHome(d); }
   },
 });
 
