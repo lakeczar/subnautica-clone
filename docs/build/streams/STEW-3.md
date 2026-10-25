@@ -86,6 +86,40 @@ Everything ran through the queue.
   - **`heavy-tier.heavy.test.ts`:** 12/12, including the new `SILTWAKE_HEAVY_BUDGETS` override test under both containments. The 3 OOM kills are again all nested inside it.
   - **The R0 run** at `f9dcfce` (a v1 record) now reads `NOT ELIGIBLE: a v1 record`, as intended.
 
+## R2 (Sol, `9b909ed7`): what changed
+Root merged again (`e7028cb`). The coordinator's rulings, as built:
+- **R2-1 (runtime identity):**
+  - **Recording:** every heavy file's processes now report what they loaded and read (`scripts/test-heavy-file.mjs`, carried to node descendants through `NODE_OPTIONS`). `fileFacts` accounts for each input:
+    - not inputs: `node_modules` (the lockfile), `/proc`/`/sys`/`/dev`, the build cache, and what the file's own processes created or wrote (a `mkdir` of an existing directory doesn't count);
+    - bound to the commit: files tracked there, or compiled into the build from one;
+    - hashed as the run found them: declared generated or external paths (`tests/heavy-inputs.json`).
+  - **Conservative default:** anything else (a computed import of a generated module, an ignored fixture, a read outside the repository, a descendant that never reported) leaves the row's provenance **incomplete**. Its numbers stay full gate evidence; only `control` refuses it.
+  - **Controls:** both arms must be complete, but their inputs aren't required to be equal. A control is also refused when another complete run of that commit's file, with the same closure, read different inputs (not reproducible).
+  - **The real cases:**
+    - `timeline-model` needs no declaration: its sources are tracked, and its tmp builds are its own `mkdtemp`;
+    - `regions-bake` declares `public/terrain/`, the terrain store, esbuild and its workers, with why.
+  - **Regressions:** the real runner's computed-import and generated-fixture probes, and the unit cases.
+- **R2-2 (workload settings):**
+  - **Recorded:** every `SILTWAKE_*` variable that isn't a queue grant or the harness's own plumbing, plus `NODE_OPTIONS` (minus the tier's own preload), `JOURNEY_TRACE` and `LC_VERBOSE`, goes in `settings`. The tier labels them, and they're a strict control condition.
+  - **The gate:** its heavy step is submitted with a canonical environment (`canonicalEnv`: no workload settings, no budget overrides), so nothing pins it to the 3090 either. Its check refuses a record that has settings.
+  - **Coverage:** the timeline selector, with a test that every variable a heavy test reads is classified, and `SILTWAKE_TIMELINE_SEQUENCES=0` through the real runner and through the gate.
+- **R2-3 (child cache):**
+  - Cache use is summed over every process of the file that has a store, keyed by the file's own stats prefix.
+  - A child or worker that never reports makes it `unknown`, and that refuses control reuse. Worker threads don't run `NODE_OPTIONS` preloads (checked), so they count as unobserved unless declared.
+  - A child without a store is fine: its work never depends on the cache.
+  - Regressions: a real child that fills and then hits, and a real child started without the preload.
+- **R2-4 (ingest race):** `publish` writes a temporary file unique to the process, then hard-links it into place. That fails if the target exists, which counts as "already stored". The gate catches any storage error too. Regressions: six concurrent ingests (one publishes, the rest see it stored, no leftovers), and the gate passing when a sweep stores its ticket first.
+- **R2-5 (fallback):**
+  - Records carry `attempt` (`local`, or `alickers:a<N>` from the lane's attempt directory). Eligibility requires the attempt the receipt reports on (`terminalAttempt`).
+  - The gate selects the last complete record from that attempt. Machine agreement is unchanged.
+  - Regression through the gate: alickers completes, its receipt is lost, the rerun here succeeds. It passes on the local record, and fails when only the abandoned attempt's record exists.
+- **Daily ingest (approved; built, not installed):**
+  - **Sweep:** `heavy-results.mjs sweep` is bounded: 200 jobs per run, logs over 64 MiB skipped, and a checkpoint of jobs already read (pruned with the queue). It leaves running jobs for later, publishes only complete records, atomically, and writes `sweep-last.json`.
+  - **Overdue signal:** `sweep-status` exits 1 when no sweep has succeeded in 36 h.
+  - **Installer:** `scripts/heavy-results-timer.sh install|uninstall|status` copies `heavy-results.mjs` read-only to `~/.local/share/siltwake-results/sweep/<hash>/`. It writes a `siltwake.slice` oneshot service, which runs `heavy-check run --class quick --review --machine 3090 --deadline 900 --queue-timeout 5400 -- node <copy> sweep --max 200`, and a daily `Persistent=true` timer.
+  - **Tested** with `--dry-run`. **The coordinator installs it after merge.**
+- **Records are v3.** v1 and v2 records stay readable as diagnostics and are never eligible.
+
 ## Files
 - **New:** `scripts/heavy-results.mjs` (record format, store, CLI); `scripts/test-heavy-file.mjs` (each heavy file's process reports its CPU, peak and cache use); `tests/heavy-results.test.ts`.
 - **Changed:**

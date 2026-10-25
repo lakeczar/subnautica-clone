@@ -400,7 +400,8 @@ test("workload settings: recorded and labelled; queue grants and the harness's p
   // Every variable a heavy test or its helpers reads is either a workload setting or the harness's own.
   const harness = new Set(["SILTWAKE_HEAVY_CGROUP"]);
   const read = new Set<string>();
-  for (const f of fs.readdirSync("tests").filter((n) => /(\.heavy\.test|-support|-heavy)\.ts$/.test(n)))
+  // (heavy-tier.heavy.test.ts tests the harness itself: its reads are the harness's own.)
+  for (const f of fs.readdirSync("tests").filter((n) => /(\.heavy\.test|-support|-heavy)\.ts$/.test(n) && n !== "heavy-tier.heavy.test.ts"))
     for (const m of fs.readFileSync(join("tests", f), "utf8").matchAll(/process\.env\.([A-Z_][A-Z0-9_]*)/g)) read.add(m[1]!);
   assert.ok(read.has("SILTWAKE_TIMELINE_SEQUENCES"), "the real timeline selector is read");
   for (const k of read) assert.ok(H.isWorkloadKey(k) || harness.has(k), `${k}: classify it (a workload setting, or the harness's own)`);
