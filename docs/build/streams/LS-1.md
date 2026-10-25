@@ -768,3 +768,25 @@ Code at **`cb2b00bf`**; this section is the docs-only commit after it. Every fin
 | Playthrough | `261025-042903-0acb` | 4070 | **9/9 complete**, every milestone reload matches, both decode-free runs end with nothing decoding or decoded, and the four judged routes' gaps are exactly the record, with the two exceptions named in the verdict |
 
 The timelines are in `/work/tmp/ls1-1b-r1-final/`. Focused LS-1 files: 22/22 before the last two commits (`261025-031031-8786`); the fast tier covers them at `cb2b00bf`.
+
+### Stage 1b R2 fixes (Sol, `review/ls-1-1b-r2` `b1642944`)
+
+Code at **`33007d84`**; this section is the docs-only commit after it. Sol confirmed F2 resolved, cache indexing outcome-equivalent (19,995 points), per-host power reuse sound, schema 8 intact, ownership clean, determinism (full timelines identical across three runs) and the procure rule (3,000 lists, no new starvation). The three P2s:
+
+| Finding | Fix | Proof |
+| --- | --- | --- |
+| **F1**: planting quoted the wrong power authority | The plant command seam passes the composed `hostPower` into `plant(…, power)`, which gives it to `growthRate`. The quoted time and the fixed step's growth now come from one authority, and the yield from `harvestQuantity`. `cultivation.ts` imports nothing from `systemsLink` (no cycle). | `ls1-rewards`, an enabled carrier with a grow bed through `executeCommand`: at 20% and 10% the quote is the base 6 min (the carrier keeps its reserve); at 25% it's 3 min. Across depletion from 20.001%, the step grows at the bed's rate until the reserve, then at the base rate, and Base says "needs host power". |
+| **F3**: the printed rows dropped exceptions | `rowsOf` keeps each row's `exception` (and owner), so applying a printed improvement keeps it. Every verdict on an excepted route names its exceptions: pass, improvement, regression and decode failure. Only the coordinator retires one. | `playthrough-pacing`, Sol's case: two excepted droughts, one improved by 0.1 min while still over its accepted ceiling. The improvement verdict names both; the printed rows, applied exactly as printed, keep both exceptions and owners; the next verdict passes and names both; a regression and a decode failure name both too. |
+| **F4**: the evidence | **The timing and heap figures are withdrawn** (coordinator ruling; no re-benchmark, no speed claim). The structure is proven by counting work per call instead. The cache index is `siteCacheIndex(points)`; the per-step power answers are `hostPowerAnswers(s, hosts, power)`. Both are the production code's own seams. | `ls1-rewards`: cache predicate checks per lookup with 1, 10 and 100 caches stay 1 at a cache, 0 at home and 1 near one, unchanged as caches are added. Host power queries per growth step with 1 and 20 bed crops on one host, and on three hosts, are 1, 1, 3 and 3: one per host, not per crop, with every crop growing at the bed's rate. |
+
+The C12 detail now uses Sol's raw figures (38.683 / 38.900 / 38.917 s), in the R1 table and in the row's `exception` text; its cause stays a hypothesis. The pacing rows' bounds are unchanged.
+
+**Checks at `33007d84`** (all `--machine any`, queued, no exclusive time):
+
+| Check | Ticket | Machine | Result |
+| --- | --- | --- | --- |
+| Focused: `ls1-rewards`, `save-bridge`, `playthrough-pacing`, `systems-cultivation` | `261025-050546-00a8` | factory-worker | 41/41 pass |
+| Fast tier | `261025-051741-2165` | factory-worker | 169 files pass |
+| The four judged routes | `261025-051742-78fa` | 4070 | 4/4 complete, every milestone reload matches, both decode-free runs end with nothing decoded, gaps exactly the record with no leg differences, and the excepted route's verdict names both exceptions. **The rows are unchanged:** all four timelines are byte-identical to the R1 final run's (`/work/tmp/ls1-1b-r1-final/`). |
+
+The timelines are in `/work/tmp/ls1-1b-r2-evidence/`. Heavy, economy and build weren't rerun: the R2 changes touch only the plant seam's power argument, the pacing verdict text and two extracted helpers, all covered by the fast tier.
