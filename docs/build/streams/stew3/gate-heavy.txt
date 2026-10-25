@@ -1,0 +1,12 @@
+heavy-check: 261025-034422-1861 queued, position 2 of 3, blocked by cpu, waited 3m25s
+heavy-check: 261025-034422-1861 queued, position 2 of 3, blocked by cpu, waited 3m26s
+heavy-check: 261025-034422-1861 queued, position 2 of 3, starting, waited 3m26s
+heavy-check: 261025-034422-1861 exit 0; queued 3m27s, ran 15m58s; peak 1692 of 3072 MiB, 1927.9 CPU-s; evidence for f9dcfcecb6; on RTX 3090 (factory-worker)
+gate: heavy results: stored 67 file rows (node scripts/heavy-results.mjs show --commit f9dcfcecb63b)
+
+gate at f9dcfcecb63b:
+  pass  heavy                 1165 s  [on RTX 3090 (factory-worker)]
+  not run: fast, bake, build, economy:campaign, economy:m1, economy:m2-a, economy:m2-b1, economy:progression, economy:upgrade, playthrough: this is a partial gate
+partial gate passed at f9dcfcecb63b
+after pushing the merge: export the shared save library at the merged commit (SAVE-1): scripts/saves-export.sh
+exit 0
