@@ -728,3 +728,43 @@ Code at **`17f4520a`** (branch `t3/ls-1-lost-sites`, on the accepted 1a; this se
 
 The timelines are in `/work/tmp/ls1-1b-evidence-final/`. Focused LS-1 files (`ls1-rewards`, `save-bridge`): 19/19 (`261024-231815-ea36`).
 
+
+### Stage 1b R1 fixes (Sol, `review/ls-1-1b-r1` `04e91b0f`)
+
+Code at **`cb2b00bf`**; this section is the docs-only commit after it. Every finding is fixed as written, with the coordinator's rulings on F3. **Read this first, PACE-1 and R2:** F3 changes the bot's shared `procure` in `scripts/playthrough/actions.ts`, route-wide (below).
+
+| Finding | Fix | Proof |
+| --- | --- | --- |
+| **F1 [P2]**: Base hid the new module upgrades | Base asks the shared offer authority (`hostUpgradeOffers`) for **every** occupied socket, so a locker extension and a heated grow bed are offered as live Fit commands, and a fitted upgrade is named for any module. `cropViews(sys, s, power)` gains the growth `rate`, `quantity` per harvest and the bed's effect (`active`, `unpowered`, `no-effect` for power crops), all from `growthRate` and `harvestQuantity`. `cropLine` renders the Base crop row: progress, minutes left at the current rate, the yield, and what the bed does. The journal's planter entries say the same, using SYS-1's `hostPower`. Planting feedback quotes the modified time and yield. | `ls1-rewards`, on the real Base markup (`PanelProbe`): both Fit commands, payable and pressed through `executeCommand`; both fitted names; a staple-cup row unpowered (6 min, yield 3, "needs host power"), then powered (3 min, "twice as fast"); a lumen bulb ("no effect on power crops"), the same in the journal, and both planting feedbacks. |
+| **F2 [P2]**: the keypad rendered stale state | `KeypadSeam.dispatch` returns the **committed** state with its feedback. `keypadOutcome(before, after, door)` gives a typed `opened`, `already-open` or `not-open`. An opened or already-open door closes and resets the keypad. Anything else (a wrong code, a refusal) keeps it open with the step's feedback and a live field. `key()` returns `{ handled, outcome }`, so CW-1 can wire a sound seam without reading stale state. | `ls1-rewards`, through the real step: a seam that runs `executeCommand` and replaces its state, as the app's transaction does. A wrong code keeps the keypad open with feedback and opens nothing; the right one opens the door in the committed state, closes and resets; a later attempt closes as already open. Cancel closes without a command. |
+| **F3 [P2]**: the carrier works ceiling was raised | **The cause:** at the start of the works stretch every source stock is identical in 1a and 1b, and the only difference is 2 membrane in the workshop locker (3 against 1). That traces to the racks trip lengthening the systems phase by 3.1 min, which lands later procurements on different partial bundles. The hall stock then needs 6 membrane, two 4-bundles take 8, and the surplus fills the hold before the crust fits, so the bot makes an extra stow trip. **The fix (coordinator-approved):** `procure` holds surplus back. When a kind's nearest take would overshoot its need **and** the hold could then no longer fit the rest of the list, that kind waits: whole takes up to the need, the remainder after the others or after the next stow. Nearest first throughout; it is never redirected to a farther source. Small lists behave exactly as before. It is general, with no route-specific case, and deterministic. | Full playthrough (below): 8 of the 10 gap rows are at or under their accepted 1a ceilings, and the carrier works gap falls 94.184 → **84.644 min**. Two earlier variants were rejected on measurement: preferring any non-overshooting source ran out of air in the Rift, and always deferring added 4 min to no-optional. |
+| **F4 [P2]**: content-proportional work in the fixed step | **Caches:** an index built once of the chart cells (`CHART_CELL`, exploration's spatial key) each cache's reach touches. The step looks up the diver's own cell only: one numeric-key lookup, a shared empty list (no allocation) when nothing is near, and found-checks only for the candidates, in `SITE_CACHE_IDS` order. **Crops:** growth reads one power answer per host per step, from the host views the drain already builds (`hostPowered` in the systems context), filled lazily only when a bed crop asks. Power is still read after the drain, as before (`powerInput` reads cells and battery live). | `ls1-rewards`: every point within reach of each cache, cell borders included, has it as a candidate, and home waters have none. Step by step through a cell draining to empty, each step grows 2/60 s while powered and 1/60 s after, and agrees with the view's `growthRate`. **Per-call cost** on SAVE-1 `carrier@works` (export `e136beb6`), 20,000 steps after warm-up, `stepSystems`, before (`0337c127`) → after: plain 9.25 → 7.60 µs and 469 → 173 heap bytes per call; with a grow bed forced on its planter 8.62 → 7.17 µs and 754 → 463 bytes; identical crop progress (`261025-030836-8599`). |
+
+**The coordinator's named exception (not a pass).** Two no-optional-carrier rows sit **over their accepted 1a ceilings**, recorded in `pacing-debt.ts` with an `exception` field, owned by **PACE-1 stage 1**. Every pacing verdict names them. Whichever of LS-1 1b and PACE-1 stage 1 merges second re-runs and ratchets both down from a fresh run, and they may never rise again (tested).
+
+| Row (no-optional-carrier) | Accepted 1a | Now | Cause |
+| --- | --- | --- | --- |
+| `craft: service_air_assembly → craft: pod_buffer` | 87.12 min | 87.631 min | The surplus rule reorders this route's first works trip (resin cove first, then the south ribbon catch) and adds a later Canopy dive. It's the same list as the carrier route, which gains 9.5 min. |
+| `discovery: C12 → blueprint: bp_service_air` | 29.756 min | 29.761 min (+0.3 s) | From plain 1b, not procure. The Mantle's return leg to the carrier after C12 takes 38.92 s against 38.68 s, from a starting pose shifted by the earlier route. It is deterministic: identical across both 1b runs at `17f4520a`, and again at `cb2b00bf` (below). |
+
+**Determinism.** The rows are deterministic, which the exact ratchet relies on. The measuring run (`261025-040148-9ce1`, factory-worker, `3aeac541`) and the final rerun (`261025-042903-0acb`, 4070, `cb2b00bf`, the same game code) give exactly the same rows on two machines, the excepted C12 +0.3 s included. The 1b runs at `17f4520a` matched each other exactly too.
+
+**Pacing after R1** (every gap and leg written from the analyzer on `261025-040148-9ce1`; gaps in play minutes).
+
+| Route | Longest gap: accepted 1a → now | Within the 1a ceilings |
+| --- | --- | --- |
+| Creel | 50.6 → 50.0 | yes |
+| Carrier | 94.2 → **84.6** (works), plus 50.8, 29.8 and 26.5 | yes, all four |
+| No-optional | 50.9 → 50.8 | yes |
+| No-optional carrier | 87.1 → 87.6 (works), plus 50.1, 29.8 and 24.1 | **no: two named exceptions** (above); the other two yes |
+
+**Checks at `cb2b00bf`** (all `--machine any`, queued):
+
+| Check | Ticket | Machine | Result |
+| --- | --- | --- | --- |
+| Fast tier | `261025-042902-8ec9` | factory-worker | 169 files pass |
+| Heavy tier | `261025-042904-20b0` | 4070 | 67 files pass |
+| Six economy steps and the production build | `261025-042905-1d38` | factory-worker | all pass |
+| Playthrough | `261025-042903-0acb` | 4070 | **9/9 complete**, every milestone reload matches, both decode-free runs end with nothing decoding or decoded, and the four judged routes' gaps are exactly the record, with the two exceptions named in the verdict |
+
+The timelines are in `/work/tmp/ls1-1b-r1-final/`. Focused LS-1 files: 22/22 before the last two commits (`261025-031031-8786`); the fast tier covers them at `cb2b00bf`.
