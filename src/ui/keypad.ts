@@ -59,14 +59,23 @@ export function renderKeypad(m: KeypadModel, st: KeypadState, feedback: string |
 }
 
 /** What the app gives the keypad (wired in `runtime/app.ts` after CW-1): send a command
- * through the step, close the panel (restoring a valid focus target without reviving
- * held input or recapturing), show the markup, and focus the code field. */
+ * through the step and hand back the **committed** state with its feedback (the step
+ * replaces the state, so the keypad never reads the one it was given before), close the
+ * panel (restoring a valid focus target without reviving held input or recapturing),
+ * show the markup, and focus the code field. */
 export interface KeypadSeam {
-  dispatch(command: GameCommand): { feedback: string | null };
+  dispatch(command: GameCommand): { state: GameState; feedback: string | null };
   close(): void;
   render(html: string): void;
   focusField(): void;
 }
+/** What one submitted code did to its door, read from the states either side of it. */
+export type KeypadOutcome = "opened" | "already-open" | "not-open";
+/** A key's result: unhandled once the keypad is closed (the key goes back to the game). */
+export type KeypadHandled = { handled: false } | { handled: true; outcome: KeypadOutcome | null };
+export const keypadOutcome = (before: GameState, after: GameState, door: DoorId): KeypadOutcome =>
+  !after.systems.opened.includes(door) ? "not-open" : before.systems.opened.includes(door) ? "already-open" : "opened";
+
 /** The keypad panel: one door, its typed text, and the last attempt's feedback. */
 export class KeypadPanel {
   private st: KeypadState | null = null;
@@ -79,17 +88,29 @@ export class KeypadPanel {
     this.seam.render(renderKeypad(keypadModel(s, door), this.st));
     this.seam.focusField();
   }
-  /** A key while the panel owns input; true when the keypad handled it (always, while open). */
-  key(s: GameState, key: string): boolean {
-    if (!this.st) return false;
+  /** A key while the panel owns input: handled always, while open (`outcome` only on a
+   * submit, for the app's sound seam). `s` is the current state. On a submit the panel reads the committed state the
+   * seam returns: an opened (or already open) door closes and resets the keypad; any
+   * other outcome (a wrong code, a refusal) keeps it open with the step's feedback. */
+  key(s: GameState, key: string): KeypadHandled {
+    if (!this.st) return { handled: false };
     const r = keypadKey(this.st, key);
     this.st = r.state;
-    if (r.action === "cancel") { this.st = null; this.seam.close(); return true; }
+    if (r.action === "cancel") { this.reset(); return { handled: true, outcome: null }; }
     if (r.action === "submit" && r.command) {
-      this.feedback = this.seam.dispatch(r.command).feedback;
-      this.st = { ...this.st, text: "" };
+      const door = this.st.door, done = this.seam.dispatch(r.command), outcome = keypadOutcome(s, done.state, door);
+      if (outcome !== "not-open") { this.reset(); return { handled: true, outcome }; }
+      this.feedback = done.feedback;
+      this.st = { door, text: "" };
+      this.seam.render(renderKeypad(keypadModel(done.state, door), this.st, this.feedback));
+      return { handled: true, outcome };
     }
-    if (r.action === "edit" || r.action === "submit") this.seam.render(renderKeypad(keypadModel(s, this.st.door), this.st, this.feedback));
-    return true;
+    if (r.action === "edit") this.seam.render(renderKeypad(keypadModel(s, this.st.door), this.st, this.feedback));
+    return { handled: true, outcome: null };
+  }
+  private reset(): void {
+    this.st = null;
+    this.feedback = null;
+    this.seam.close();
   }
 }

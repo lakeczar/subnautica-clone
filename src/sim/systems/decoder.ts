@@ -18,6 +18,8 @@ export interface DecoderContext {
   decoderSpeed?: (moduleId: string) => number;
   /** A relay outside the host (C4: a surfaced Spindle's radio mast nearby). */
   relayed?: (host: SocketHost) => boolean;
+  /** LS-1: this step's power answer per host ID (the fixed step's own host views). */
+  hostPowered?: (hostId: string) => boolean;
 }
 export const decodeSeconds = (id: DecodableId): number => DECODE_MINUTES[DECODABLES[id].size] * 60;
 

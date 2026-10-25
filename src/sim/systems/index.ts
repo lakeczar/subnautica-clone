@@ -11,7 +11,7 @@ export type { DeployPreview, Ground, OutpostRules, OutpostSiteQuery, PackPreview
 export { advanceDecodes, decodedReveals, decodeStatus, decodeViews, discoverSite, doorCodes, knownSites, markedSites, readableLog, recordReadable, startDecode } from "./decoder.js";
 export { noteHostPosition, noteReadable, readableNotes } from "./notes.js";
 export type { DecodeCompletion, DecoderContext, DecodeView } from "./decoder.js";
-export { advanceGrowth, cropViews, harvest, harvestPreview, plant } from "./cultivation.js";
+export { advanceGrowth, cropLine, cropViews, harvest, harvestPreview, plant } from "./cultivation.js";
 export { handheldPing, knownMaterials, stationSurvey, surveyQuery, surveyRange } from "./survey.js";
 export type { SurveyMark } from "./survey.js";
 export { beaconViews, chartView, collectBeacon, placeBeacon, renameBeacon, setBeaconOn, setCategoryOn, visitChart } from "./navigation.js";

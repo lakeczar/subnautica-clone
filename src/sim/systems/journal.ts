@@ -13,6 +13,7 @@ import { decodeViews, doorCodes, markedSites, readableLog } from "./decoder.js";
 import { readableNotes } from "./notes.js";
 import type { DecoderContext, DecodeStatus } from "./decoder.js";
 import { cropViews } from "./cultivation.js";
+import type { HostPower } from "./hosts.js";
 import { labelOf } from "../inventory.js";
 import type { SystemsState } from "./state.js";
 import { FIXED_SECONDS, formatDuration as minutes } from "../clock.js";
@@ -61,7 +62,7 @@ function knownRecipes(s: GameState): [string, AnyRecipe][] {
   return Object.entries(ALL_RECIPES).filter(([, r]) => bps.includes(r.bp));
 }
 
-function materialsTab(s: GameState, sys: SystemsState): JournalTab {
+function materialsTab(s: GameState, sys: SystemsState, power?: HostPower): JournalTab {
   const scanned = s.knowledge.scans.filter((id) => Object.hasOwn(SOURCES, id)) as (keyof typeof SOURCES)[];
   const held = new Set(s.inventory.items.map((i) => i.kind as string));
   const kinds = new Set<string>([...scanned.map((id) => SOURCES[id].item), ...[...held].filter((k) =>
@@ -86,9 +87,13 @@ function materialsTab(s: GameState, sys: SystemsState): JournalTab {
       status: uses.length || seed ? "known" : "unknown",
     };
   });
-  const crops = cropViews(sys).map((c): JournalEntry => ({
+  const crops = cropViews(sys, s, power).map((c): JournalEntry => ({
     id: `crop:${c.moduleId}`, title: `${c.label} crop`, subtitle: c.ready ? "Ready to harvest" : c.growing ? `${Math.floor(100 * c.progress / c.growSeconds)}% grown` : "Paused: planter not socketed",
-    lines: [`Yields ${labelOf(c.produce).toLowerCase()}`], tags: ["cultivation"], status: c.ready ? "done" : "active",
+    lines: [`Yields ${c.quantity} × ${labelOf(c.produce).toLowerCase()} per harvest`,
+      // LS-1: what the planter's heated grow bed does for this crop.
+      ...(c.bed === "active" ? ["Heated grow bed: growing twice as fast"] : c.bed === "unpowered" ? ["Heated grow bed: needs host power to speed growth"]
+        : c.bed === "no-effect" ? ["Heated grow bed: no effect on power crops"] : [])],
+    tags: ["cultivation"], status: c.ready ? "done" : "active",
   }));
   return {
     id: "materials", label: "Materials", count: entries.length,
@@ -217,7 +222,7 @@ export function buildJournal(s: GameState, sys: SystemsState, input: JournalInpu
   return {
     notebook,
     tabs: [
-      materialsTab(s, sys),
+      materialsTab(s, sys, input.decoder?.power),
       { id: "creatures", label: "Creatures", count: creatures.length, sections: creatures.length ? [{ id: "seen", title: "Seen", entries: creatures }] : [], empty: "Creatures you scan or tag are logged here." },
       techTab(s, sys),
       notebookTab(notebook, sys),

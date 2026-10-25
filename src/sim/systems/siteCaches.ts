@@ -10,6 +10,7 @@
 import { LOST_SITE_CACHES, siteCacheContainerId } from "../../content/systems/lostSites.js";
 import type { CacheItem, LostSiteCacheId } from "../../content/systems/lostSites.js";
 import { ITEMS } from "../../content/registry.js";
+import { CHART_CELL } from "../../content/systems/navigation.js";
 import type { ItemKind } from "../../content/registry.js";
 import type { ContainerState, GameState, ItemStack, Vec3 } from "../types.js";
 
@@ -24,17 +25,38 @@ const within = (p: Vec3, q: Vec3): boolean => Math.hypot(p.x - q.x, p.y - q.y, p
 export const siteCacheFound = (s: GameState, id: LostSiteCacheId): boolean =>
   s.inventory.containers.some((c) => c.id === siteCacheContainerId(id));
 
+/** The chart's cells (`CHART_CELL`, the spatial key exploration already uses) each
+ * cache's reach touches, built once: the fixed step looks up only the diver's own cell,
+ * so its work is one lookup however many caches are authored. Candidates keep
+ * `SITE_CACHE_IDS` order. */
+const cellKey = (i: number, k: number): number => (i + 1000) * 4096 + (k + 1000);
+const BY_CELL = new Map<number, LostSiteCacheId[]>();
+for (const id of SITE_CACHE_IDS) {
+  const { x, z } = LOST_SITE_CACHES[id].position;
+  for (let i = Math.floor((x - SITE_CACHE_REACH) / CHART_CELL); i <= Math.floor((x + SITE_CACHE_REACH) / CHART_CELL); i++)
+    for (let k = Math.floor((z - SITE_CACHE_REACH) / CHART_CELL); k <= Math.floor((z + SITE_CACHE_REACH) / CHART_CELL); k++) {
+      const key = cellKey(i, k), list = BY_CELL.get(key);
+      if (list) list.push(id); else BY_CELL.set(key, [id]);
+    }
+}
+const NONE: readonly LostSiteCacheId[] = [];
+/** The caches whose reach touches the chart cell at `p` (shared; never mutated). */
+export const siteCacheCandidates = (p: Vec3): readonly LostSiteCacheId[] =>
+  BY_CELL.get(cellKey(Math.floor(p.x / CHART_CELL), Math.floor(p.z / CHART_CELL))) ?? NONE;
+
 /** Finds every cache within reach of the diver that is not found yet: its container and
- * authored contents appear. Returns the caches found this step. */
-export function openSiteCaches(s: GameState): LostSiteCacheId[] {
-  const found: LostSiteCacheId[] = [];
-  for (const id of SITE_CACHE_IDS) {
-    if (siteCacheFound(s, id) || !within(s.player.pose.position, LOST_SITE_CACHES[id].position)) continue;
+ * authored contents appear. Returns the caches found this step (a shared empty list
+ * when none: no allocation on the ordinary step). */
+export function openSiteCaches(s: GameState): readonly LostSiteCacheId[] {
+  const p = s.player.pose.position, near = siteCacheCandidates(p);
+  let found: LostSiteCacheId[] | null = null;
+  for (const id of near) {
+    if (!within(p, LOST_SITE_CACHES[id].position) || siteCacheFound(s, id)) continue;
     s.inventory.containers.push(siteCacheContainer(id));
     s.inventory.items.push(...siteCacheItems(id));
-    found.push(id);
+    (found ??= []).push(id);
   }
-  return found;
+  return found ?? NONE;
 }
 /** Validation: a found cache holds only its authored kinds, never more than authored. */
 export function siteCacheContentsValid(s: GameState, id: LostSiteCacheId): boolean {

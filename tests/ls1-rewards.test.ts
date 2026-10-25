@@ -14,13 +14,15 @@ import { enterCode } from "../src/sim/systems/doors.js";
 import { installModule } from "../src/sim/systems/hosts.js";
 import { deployOutpost, packOutpost } from "../src/sim/systems/outposts.js";
 import { handheldPing } from "../src/sim/systems/survey.js";
-import { SITE_CACHE_IDS, siteCacheOf } from "../src/sim/systems/siteCaches.js";
+import { SITE_CACHE_IDS, siteCacheCandidates, siteCacheOf } from "../src/sim/systems/siteCaches.js";
 import { interactions } from "../src/sim/progression.js";
-import { stepSystems } from "../src/sim/systemsLink.js";
 import { createWorldQueries } from "../src/sim/world.js";
-import type { GameEvent, GameState } from "../src/sim/types.js";
+import type { GameCommand, GameEvent, GameState } from "../src/sim/types.js";
+import { PanelProbe } from "../src/ui/panelProbe.js";
+import { buildJournal } from "../src/sim/systems/journal.js";
+import { stepSystems, systemsContext } from "../src/sim/systemsLink.js";
 import { KeypadPanel, keypadKey, keypadModel, renderKeypad } from "../src/ui/keypad.js";
-import type { KeypadState } from "../src/ui/keypad.js";
+import type { KeypadSeam, KeypadState } from "../src/ui/keypad.js";
 import { give, opened, siteTable, SPOTS, swimTo } from "./systems-support.js";
 import { at, fund } from "./b1-support.js";
 import { kitId, LEDGE, run, systemsGame } from "./c4-systems-support.js";
@@ -104,6 +106,79 @@ test("heated grow bed: twice as fast and one more produce for food on a powered 
   const before = charge(), events: GameEvent[] = [];
   for (let n = 0; n < 600; n++) stepSystems(s, events);
   assert.ok(charge() < before, "the bed's heater drains the outpost's cell");
+});
+
+test("Base offers each new module upgrade through the shared authority, shows it fitted, and the crop row says what the bed does", () => {
+  const probe = new PanelProbe(world), run = (s: GameState, c: GameCommand) => {
+    const out = executeCommand(s, c, world);
+    assert.ok(!out.events.some((e) => e.type === "notice" && e.error), JSON.stringify(out.events));
+    return out.state;
+  };
+  // A planter: the grow bed's offer is a live Fit command, the fitted bed is named.
+  const o = outpost("cells"), id = o.id;
+  let s = o.s;
+  const planter = give(s, "mod_planter"), locker = give(s, "mod_locker");
+  assert.equal(installModule(s, s.systems, id, "s0", planter), null);
+  assert.equal(installModule(s, s.systems, id, "s1", locker), null);
+  plans(s, "bp_heated_grow_bed", "bp_locker_extension");
+  give(s, "thermal_core", 1); give(s, "silica_glass", 2); give(s, "conductive_crust", 2); give(s, "flex_membrane", 1);
+  give(s, "structural_alloy", 3); give(s, "buoyant_resin", 2);
+  const fits = probe.buttons("systems", s).filter((b) => b.command.type === "upgrade-host-module");
+  assert.deepEqual(fits.map((b) => [b.label, b.disabled, (b.command as { socket: string }).socket]),
+    [["Fit Heated grow bed", false, "s0"], ["Fit Locker extension", false, "s1"]], "both offers, payable, from the shared authority");
+  s = run(s, probe.press("systems", s, /^Fit Heated grow bed/));
+  s = run(s, probe.press("systems", s, /^Fit Locker extension/));
+  const text = probe.text("systems", s);
+  assert.ok(text.includes("Heated grow bed") && text.includes("Locker extension"), "the fitted upgrades are named");
+  assert.ok(!probe.buttons("systems", s).some((b) => b.command.type === "upgrade-host-module"), "nothing more to fit");
+  // The crop row and the planting feedback quote the bed's own answers.
+  give(s, "seed_staple_cup", 1);
+  s = run(s, { type: "plant", hostId: id, socket: "s0", seed: "seed_staple_cup" });
+  assert.match(s.feedback, /ready in about 6 min of play · 3 per harvest/, "no power yet: the base time, the bed's yield");
+  assert.match(probe.text("systems", s), /Staple cups · 0% · about 6 min left · 3 × [^·]+ per harvest · heated grow bed: needs host power to speed growth/);
+  give(s, "reserve_cell", 1, `${id}_locker`);
+  assert.match(probe.text("systems", s), /Staple cups · 0% · about 3 min left · 3 × [^·]+ per harvest · heated grow bed: twice as fast/);
+  // A power crop: the bed does nothing, and says so; the feedback quotes the base time.
+  s.systems.planters = [];
+  give(s, "seed_lumen_bulb", 1);
+  s = run(s, { type: "plant", hostId: id, socket: "s0", seed: "seed_lumen_bulb" });
+  assert.match(s.feedback, /ready in about 10 min of play · 1 per harvest/);
+  assert.match(probe.text("systems", s), /Lumen bulb · 0% · about 10 min left · 1 × [^·]+ per harvest · heated grow bed: no effect on power crops/);
+  const journal = buildJournal(s, s.systems, { decoder: systemsContext(s) });
+  assert.ok(JSON.stringify(journal).includes("Heated grow bed: no effect on power crops"), "the journal says the same");
+});
+
+test("fixed-step work stays bounded: cache discovery looks up the diver's chart cell only; growth asks one power answer per host, with the same outcomes", () => {
+  // Caches: candidates only where a cache's reach is; every point within reach (a cell
+  // border included) has it as a candidate.
+  assert.deepEqual(siteCacheCandidates({ x: 0, y: 0, z: 0 }), [], "home waters: no candidate");
+  for (const id of SITE_CACHE_IDS) {
+    const c = LOST_SITE_CACHES[id].position;
+    for (const [dx, dz] of [[0, 0], [3.9, 0], [-3.9, 0], [0, 3.9], [0, -3.9], [2.7, 2.7], [-2.7, -2.7]] as const)
+      assert.ok(siteCacheCandidates({ x: c.x + dx, y: c.y, z: c.z + dz }).includes(id), `${id} at ${dx},${dz}`);
+  }
+  // Growth: the step's per-host answer gives the same progress as the per-crop view, through a
+  // cell draining to empty (the bed's speed stops with the power).
+  const { s, id } = outpost("cells");
+  const planter = give(s, "mod_planter");
+  assert.equal(installModule(s, s.systems, id, "s0", planter), null);
+  s.systems.moduleUpgrades[planter] = "grow_bed_1";
+  give(s, "seed_staple_cup", 1);
+  assert.equal(plant(s, s.systems, id, "s0", "seed_staple_cup"), null);
+  const cell = give(s, "reserve_cell", 1, `${id}_locker`);
+  s.inventory.items.find((i) => i.id === cell)!.charge = 0.05;
+  // Each step's growth reads power after that step's drain, as the per-crop view did.
+  let fast = 0;
+  for (let n = 0; n < 240; n++) {
+    const before = s.systems.planters[0]!.progress;
+    stepSystems(s, []);
+    const powered = (s.inventory.items.find((i) => i.id === cell)!.charge ?? 0) > 0;
+    assert.ok(Math.abs(s.systems.planters[0]!.progress - before - (powered ? 2 : 1) / 60) < 1e-9, `step ${n}`);
+    assert.equal(growthRate(s, s.systems, s.systems.planters[0]!), powered ? 2 : 1, `the view agrees at step ${n}`);
+    if (powered) fast++;
+  }
+  assert.ok(fast > 0 && fast < 240, `twice as fast until the cell ran dry (${fast} steps)`);
+  assert.equal(s.inventory.items.find((i) => i.id === cell)!.charge, 0, "the heater drained it");
 });
 
 test("kiln tubers need warmth: refused in a plain planter on a cell outpost, grown in a grow bed or on a thermal outpost", () => {
@@ -224,18 +299,57 @@ test("keypad: typed digits edit, Enter submits, Escape closes; F5 and action key
     assert.ok(html.includes('aria-label="Door code, Ridge vault door"') && html.includes('<label for="keypad-code">'), "a labelled field");
     assert.ok(html.includes("2 0 · ·") && html.includes("9-3"), "the stencil and the journal's part");
     assert.ok(!html.includes("2093") && !html.includes("2-0-9-3"), "the full code is deduced, never shown");
-    const log: string[] = [], seam = { dispatch: () => { log.push("dispatch"); return { feedback: "The keypad blinks red." }; },
+    // Cancelling never dispatches: Escape closes the keypad only.
+    const log: string[] = [], seam = { dispatch: () => { log.push("dispatch"); return { state: s, feedback: null }; },
       close: () => log.push("close"), render: () => log.push("render"), focusField: () => log.push("focus") };
     const panel = new KeypadPanel(seam);
     panel.open(s, "basin.vault_door");
     assert.deepEqual(log, ["render", "focus"], "opening renders and focuses the code field");
-    for (const k of ["F5", "e", "1"]) assert.ok(panel.key(s, k), `${k} is the keypad's while it is open`);
-    panel.key(s, "Enter");
-    assert.ok(log.includes("dispatch"));
-    panel.key(s, "Escape");
-    assert.equal(log.at(-1), "close");
-    assert.equal(panel.key(s, "e"), false, "closed: keys go back to the game");
+    for (const k of ["F5", "e", "1"]) assert.ok(panel.key(s, k).handled, `${k} is the keypad's while it is open`);
+    assert.deepEqual(panel.key(s, "Escape"), { handled: true, outcome: null });
+    assert.ok(!log.includes("dispatch") && log.at(-1) === "close", "cancel closes without a command");
+    assert.deepEqual(panel.key(s, "e"), { handled: false }, "closed: keys go back to the game");
   } finally { vault.placed = false; }
+});
+
+test("keypad through the real step: a wrong code keeps it open with the step's feedback; the right one opens the door, closes and resets it", () => {
+  const hatch = CODED_DOORS["island.cold_store_hatch"];
+  hatch.placed = true; hatch.position = { x: -230, y: -10, z: 3 };
+  try {
+    let state = readyState();
+    swimTo(state, { x: -231, y: -10, z: 3 });
+    const html: string[] = [], log: string[] = [];
+    const seam: KeypadSeam = {
+      // The app's transaction: the step replaces the state; the keypad gets the committed one back.
+      dispatch: (c) => {
+        const out = executeCommand(state, c, world);
+        state = out.state;
+        const refused = out.events.find((e) => e.type === "notice" && e.error);
+        return { state, feedback: refused && "message" in refused ? refused.message : state.feedback };
+      },
+      close: () => log.push("close"), render: (h) => html.push(h), focusField: () => log.push("focus"),
+    };
+    const panel = new KeypadPanel(seam), type = (code: string) => { for (const k of code) panel.key(state, k); };
+    panel.open(state, "island.cold_store_hatch");
+    type("1234");
+    const before = state;
+    assert.deepEqual(panel.key(state, "Enter"), { handled: true, outcome: "not-open" });
+    assert.notEqual(state, before, "the step committed a new state");
+    assert.deepEqual(state.systems.opened, [], "a wrong code opens nothing");
+    assert.equal(panel.door, "island.cold_store_hatch", "it stays open");
+    assert.ok(html.at(-1)!.includes("keypad-feedback") && !html.at(-1)!.includes("disabled"), "the step's feedback, the field still live");
+    assert.ok(!log.includes("close"));
+    type("4417");
+    assert.deepEqual(panel.key(state, "Enter"), { handled: true, outcome: "opened" });
+    assert.deepEqual(state.systems.opened, ["island.cold_store_hatch"], "the committed state has the door open");
+    assert.equal(log.at(-1), "close", "an opened door closes the keypad");
+    assert.equal(panel.door, null, "and resets it");
+    // Opening it again at an open door: closes as already open, no change.
+    panel.open(state, "island.cold_store_hatch");
+    type("4417");
+    assert.deepEqual(panel.key(state, "Enter"), { handled: true, outcome: "already-open" });
+    assert.equal(panel.door, null);
+  } finally { hatch.placed = false; delete hatch.position; }
 });
 
 test("the bed's power-crop exception holds per hour too: a lumen bulb's output is the same with and without a bed", () => {

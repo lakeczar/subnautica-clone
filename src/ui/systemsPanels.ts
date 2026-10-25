@@ -25,7 +25,7 @@ import { fitTarget, vehicleProfile, upgradeInstallPreview, upgradeRemovePreview,
 import { slotCapacity, slotOf } from "../sim/upgrades/fitting.js";
 import { installModuleRefusal } from "../sim/modules.js";
 import {
-  beaconViews, buildJournal, chartView, cropViews, decodeViews, deployPreview, hostLocal, listHosts, packPreview, upgradePreview,
+  beaconViews, buildJournal, chartView, cropLine, cropViews, decodeViews, deployPreview, hostLocal, listHosts, packPreview, upgradePreview,
 } from "../sim/systems/index.js";
 import type { JournalSection, JournalTabId } from "../sim/systems/journal.js";
 import type { CreatureEntry, CycleEntry } from "../sim/systems/index.js";
@@ -70,16 +70,18 @@ export function basePanel(s: GameState, world: WorldQueries, button: CommandButt
           actions.push(button(`Decode ${DECODABLES[d].label}`, { type: "start-decode", hostId: host.id, socket: k.id, decodable: d }, !powered, reason ?? undefined));
       }
       if (occ.module === "planter" && occ.itemId) {
-        const crop = cropViews(sys).find((c) => c.moduleId === occ.itemId);
+        const crop = cropViews(sys, s, hostPower).find((c) => c.moduleId === occ.itemId);
         if (crop) {
-          actions.unshift(`<small>${esc(crop.label)} · ${crop.ready ? "ready" : `${Math.round(crop.progress / crop.growSeconds * 100)}%`}</small>`);
+          actions.unshift(`<small class="crop-line">${esc(cropLine(crop))}</small>`);
           if (crop.ready) actions.push(button("Harvest", { type: "harvest", hostId: host.id, socket: k.id }));
         } else for (const seed of carried.filter((i) => isSeed(i.kind)))
           actions.push(button(`Plant ${SEEDS[seed.kind as keyof typeof SEEDS].label}`, { type: "plant", hostId: host.id, socket: k.id, seed: seed.kind }));
       }
       if (occ.module === "survey") actions.push(button("Survey", { type: "survey", hostId: host.id }, !powered, reason ?? undefined));
-      // SIG-1: a decoder lattice or survey array fits in place; the offer is the command's own plan.
-      if ((occ.module === "decoder" || occ.module === "survey") && occ.itemId) {
+      // SIG-1 and LS-1: a module upgrade fits in place (a decoder lattice, a survey array, a
+      // locker extension, a heated grow bed); the shared offer authority decides which
+      // sockets take one, and the offer is the command's own plan.
+      if (occ.itemId) {
         const fitted = sys.moduleUpgrades[occ.itemId];
         if (fitted) actions.unshift(`<small>${esc(hostUpgrade(fitted).label)}</small>`);
         for (const offer of hostUpgradeOffers(s, host.id, k.id))

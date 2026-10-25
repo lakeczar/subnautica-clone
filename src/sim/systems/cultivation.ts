@@ -7,7 +7,7 @@ import { addItem, applySpend, containerAccepts, containerLabel, cuOf, freeCapaci
 import type { ItemKind } from "../../content/registry.js";
 import type { GameState } from "../types.js";
 import { accessible, hostById, hostLocal, locationPower, workContainers } from "./hosts.js";
-import type { HostPower, SocketHost } from "./hosts.js";
+import type { HostPower } from "./hosts.js";
 import { growBedFitted } from "../upgrades/hosts.js";
 import type { PlanterState, SystemsState } from "./state.js";
 
@@ -17,25 +17,56 @@ const bedHelps = (seed: SeedKind): boolean => SEEDS[seed].role !== "power";
 /** LS-1: produce per harvest; a grow bed adds one for food, medicine and material crops. */
 export const harvestQuantity = (sys: SystemsState, moduleId: string, seed: SeedKind): number =>
   SEEDS[seed].quantity + (growBedFitted(sys.moduleUpgrades, moduleId) && bedHelps(seed) ? 1 : 0);
-/** The host a planter module is socketed at, if any. */
-const hostOfModule = (s: GameState, sys: SystemsState, moduleId: string): SocketHost | null => {
-  const entry = sys.sockets.find((e) => e.itemId === moduleId);
-  return entry ? hostById(s, sys, entry.hostId) : null;
+/** Whether one host has power now, read from a freshly built host view: for views and
+ * commands. The fixed step passes its own per-host answer instead (`growthRateFor`). */
+export const hostPoweredNow = (s: GameState, sys: SystemsState, hostId: string, power: HostPower = locationPower): boolean => {
+  const host = hostById(s, sys, hostId);
+  return !!host && power(host, s);
 };
 /** LS-1: growth per second of play: twice as fast with a grow bed on a powered host, for
- * non-power crops; otherwise the base rate, never slower. */
-export function growthRate(s: GameState, sys: SystemsState, p: PlanterState, power: HostPower = locationPower): number {
+ * non-power crops; otherwise the base rate, never slower. `hostPowered` answers for the
+ * planter's host; only a bed crop asks. */
+export function growthRateFor(sys: SystemsState, p: PlanterState, hostPowered: (hostId: string) => boolean): number {
   if (!growBedFitted(sys.moduleUpgrades, p.moduleId) || !bedHelps(p.seed)) return 1;
-  const host = hostOfModule(s, sys, p.moduleId);
-  return host && power(host, s) ? 2 : 1;
+  const entry = sys.sockets.find((e) => e.itemId === p.moduleId);
+  return entry && hostPowered(entry.hostId) ? 2 : 1;
 }
-export interface CropView { moduleId: string; seed: SeedKind; label: string; produce: string; progress: number; growSeconds: number; ready: boolean; growing: boolean }
-export function cropViews(sys: SystemsState): CropView[] {
+/** The same rate, for views and tests (a host view built for the one crop). */
+export const growthRate = (s: GameState, sys: SystemsState, p: PlanterState, power: HostPower = locationPower): number =>
+  growthRateFor(sys, p, (hostId) => hostPoweredNow(s, sys, hostId, power));
+/** LS-1: what a heated grow bed is doing for a crop now: none fitted; speeding it on a
+ * powered host; waiting for power (speed only; the extra produce stays); or nothing,
+ * because power crops take no benefit. */
+export type BedEffect = "none" | "active" | "unpowered" | "no-effect";
+export interface CropView {
+  moduleId: string; seed: SeedKind; label: string; produce: string; progress: number; growSeconds: number; ready: boolean; growing: boolean;
+  /** Growth multiplier now (`growthRate`; 1 without a state to ask). */
+  rate: number;
+  /** Produce per harvest (`harvestQuantity`). */
+  quantity: number;
+  bed: BedEffect;
+}
+/** One view per crop. With the state, the bed's effect and the rate are the step's own
+ * answers (`growthRate`, `harvestQuantity`); without it, the base rate. */
+export function cropViews(sys: SystemsState, s?: GameState, power: HostPower = locationPower): CropView[] {
   return sys.planters.map((p) => {
-    const seed = SEEDS[p.seed];
+    const seed = SEEDS[p.seed], fitted = growBedFitted(sys.moduleUpgrades, p.moduleId);
+    const rate = s ? growthRate(s, sys, p, power) : 1;
+    const bed: BedEffect = !fitted ? "none" : !bedHelps(p.seed) ? "no-effect" : rate > 1 ? "active" : "unpowered";
     return { moduleId: p.moduleId, seed: p.seed, label: seed.label, produce: seed.produce, progress: p.progress,
-      growSeconds: seed.growSeconds, ready: cropReady(p), growing: !cropReady(p) && sys.sockets.some((e) => e.itemId === p.moduleId) };
+      growSeconds: seed.growSeconds, ready: cropReady(p), growing: !cropReady(p) && sys.sockets.some((e) => e.itemId === p.moduleId),
+      rate, quantity: harvestQuantity(sys, p.moduleId, p.seed), bed };
   });
+}
+/** The crop's line for the planter panel: progress, time left at the current rate, the
+ * yield, and what the bed is doing. */
+export function cropLine(c: CropView): string {
+  const left = Math.max(0, c.growSeconds - c.progress) / c.rate;
+  const state = c.ready ? "ready" : `${Math.round(c.progress / c.growSeconds * 100)}% · about ${Math.max(1, Math.round(left / 60))} min left${c.growing ? "" : " once socketed"}`;
+  const bed = c.bed === "active" ? " · heated grow bed: twice as fast"
+    : c.bed === "unpowered" ? " · heated grow bed: needs host power to speed growth"
+    : c.bed === "no-effect" ? " · heated grow bed: no effect on power crops" : "";
+  return `${c.label} · ${state} · ${c.quantity} × ${labelOf(c.produce)} per harvest${bed}`;
 }
 
 function planterAt(s: GameState, sys: SystemsState, hostId: string, socketId: string): { refusal: string } | { moduleId: string; containers: string[]; lockers: string[] } {
@@ -62,7 +93,10 @@ export function plant(s: GameState, sys: SystemsState, hostId: string, socketId:
   if (Object.keys(pay.missing).length) return `Carry a ${labelOf(seed).toLowerCase()} to plant it.`;
   applySpend(s, pay);
   sys.planters.push({ moduleId: at.moduleId, seed, progress: 0 });
-  s.feedback = `${SEEDS[seed].label} planted · ready in about ${Math.round(SEEDS[seed].growSeconds / 60)} min of play.`;
+  // LS-1: the quoted time and yield are the bed's modified ones, from the same authorities.
+  const planted = sys.planters.at(-1)!, rate = growthRate(s, sys, planted), quantity = harvestQuantity(sys, at.moduleId, seed);
+  s.feedback = `${SEEDS[seed].label} planted · ready in about ${Math.max(1, Math.round(SEEDS[seed].growSeconds / rate / 60))} min of play` +
+    `${rate > 1 ? " (heated grow bed, while the host has power)" : ""} · ${quantity} per harvest.`;
   return null;
 }
 

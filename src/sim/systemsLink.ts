@@ -286,7 +286,8 @@ export function stepSystems(s: GameState, events: GameEvent[]): void {
   }
   // Host drain: cell outposts draw their lockers' cells; the carrier its battery. Only
   // occupied hosts can have powered modules.
-  for (const host of listHosts(s, sys, { occupied: true })) {
+  const hosts = listHosts(s, sys, { occupied: true });
+  for (const host of hosts) {
     const input = powerInput(s, host);
     if (input.poweredModules <= 0) continue;
     const drain = hostDrainStep(input, 1 / 60);
@@ -298,7 +299,15 @@ export function stepSystems(s: GameState, events: GameEvent[]): void {
   }
   // Chart cells are state the chart redraws from; only decodes and crops are
   // events (notices, sound and the play timeline read them).
-  for (const e of advanceSystems(s, sys, systemsContext(s)))
+  // LS-1: growth asks for host power after the drain, as before, from these same host
+  // views: each host answered once per step, and only when a bed crop asks.
+  let answers: Map<string, boolean> | null = null;
+  const hostPowered = (hostId: string): boolean => {
+    let v = (answers ??= new Map()).get(hostId);
+    if (v === undefined) { const h = hosts.find((x) => x.id === hostId); v = !!h && hostPower(h, s); answers.set(hostId, v); }
+    return v;
+  };
+  for (const e of advanceSystems(s, sys, { ...systemsContext(s), hostPowered }))
     events.push(...systemsNotice(e), ...(e.type === "chart-explored" ? [] : [{ type: "systems" as const, event: e }]));
 }
 function systemsNotice(e: SystemsEvent): GameEvent[] {
