@@ -643,7 +643,7 @@ Each stage is one reviewable outcome with a one-page handoff: SHA, `npm run gate
 
 ## Stage 1 handoff (kit, model, validator and the air-room table)
 
-Code at **`STAGE1_SHA`** (branch `t3/env-1-interiors`, root `e136beb6` merged). Nothing in the world changes yet: no file CW-1 owns is touched, and no interior is composed. Spoiler-safe.
+Code at **`b125ace3`** (branch `t3/env-1-interiors`, root `e136beb6` merged). Nothing in the world changes yet: no file CW-1 owns is touched, and no interior is composed. Spoiler-safe.
 
 **What exists now:**
 - **The air-room table** (`content/airRooms.ts`): one row, the Canopy lab, always dry. `inCanopyAir` and both of the shader's lab terms (the optical air interval and the lit-room mask, `render/airRoomsGlsl.ts`) read it, so the sim and shader share one source. Activation by facility or the works' hall is typed and evaluated (`sim/airRooms.ts`), and `airRoomProblems` limits restoration rows to the bigger restored stops. **No restoration row exists:** they wait for the owner's rest-station decision.
@@ -663,7 +663,7 @@ Code at **`STAGE1_SHA`** (branch `t3/env-1-interiors`, root `e136beb6` merged). 
 | Check | Ticket | Result |
 | --- | --- | --- |
 | Fast tier at `2a09ebd4` | `261025-020939-2048` | 175 of 176 files pass. The one failure was the FORK register regex rejecting a digit in the fork id, fixed by renaming it `interior-swim-speed`. |
-| Fast tier at the final SHA | FAST_TICKET | FAST_RESULT |
+| Fast tier at `b125ace3` (the architecture guard and the full typecheck included) | `261025-023043-b449` | **176/176 files pass** |
 | Heavy: the air proof from real SAVE-1 saves (`interiors-scenarios.heavy.test.ts`) | `261025-020941-e94c` at `2a09ebd4` | **4/4 pass, 0 skipped.** Saves from the library at `e136beb6`: `creel@basin-survey` and `no-optional@basin-survey` (dormitory), `creel@opening` (station), `creel@isles` (store), `creel@reef` and `creel@systems` (pump house). |
 
 **Questions:**
