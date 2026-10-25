@@ -304,8 +304,17 @@ test("S10: the GPU lease holds only inside a GPU ticket's scope; the Chrome guar
   spawnSync("chmod", ["-R", "u+w", home]);
 });
 
+/** S11 and S20 open the real GPU device: only under the production GPU lease, so no one else's GPU job sees a stranger
+ * on the device (REC-1's ticket 261025-014714-dfd1 did, from S11 run in a standard job). SCHED_TEST_GPU_LEASE is that
+ * lease, kept by the suite's runner (a --class gpu queue job) when it clears the job's own variables. */
+const gpuLeased = (t) => {
+  if (!existsSync("/dev/nvidia0")) { t.skip("no NVIDIA device"); return false; }
+  if (!process.env.SCHED_TEST_GPU_LEASE) { t.skip("opens the real GPU device: run this suite in a --class gpu queue job, which sets SCHED_TEST_GPU_LEASE"); return false; }
+  return true;
+};
+
 test("S11: a GPU client outside the lease is reported by status and recorded on the GPU job it shared with", async (t) => {
-  if (!existsSync("/dev/nvidia0")) { t.skip("no NVIDIA device"); return; }
+  if (!gpuLeased(t)) return;
   const c = context("unleased", { config: fast });
   // Opening the device node is what a GPU client does; this one does nothing with it.
   const probe = spawn("sh", ["-c", "exec 7</dev/nvidia0; exec sleep 20", "sched2-acceptance-unleased-gpu-probe"], { stdio: "ignore" });
@@ -461,7 +470,8 @@ test("S19 (TST-16): private state without a named exclusive slice uses none", as
   noRuntimeState(c);
 });
 
-test("S20 (TST-16 R1-F5): a GPU client that starts after admission and outlives the job is caught by the final scan", async () => {
+test("S20 (TST-16 R1-F5): a GPU client that starts after admission and outlives the job is caught by the final scan", async (t) => {
+  if (!gpuLeased(t)) return;
   const c = context("gpu-late", { config: { ...fast, disturbed: { jobCpuSomePct: 100, jobMemSomePct: 100, jobMajorFaults: 1e9, jobSwapIns: 1e9, stealPct: 100 } } });
   await exclusiveSlice(c);
   const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sleep", "5");

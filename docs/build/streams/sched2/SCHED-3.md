@@ -45,6 +45,11 @@ Review `03764202` on `review/sched-3-r6`, by Sol on `f0d41605`: REQUEST CHANGES,
   - **Units:** the three spellings and `tools/../scripts/local-guard.mjs` expand the alias exactly as the canonical path does, and refuse `--machine 3090`, other commands and `--status`.
   - **`tests/heavy-portable-run.test.ts`:** a committed link to the guard is the guard, given the root.
   - **B45 (Sol's spellings, end to end):** `./` and `//` alias wrappers run their `:direct` body through the runner without the guard or npm. A `scripts/./` wrapper of another shape runs here as submitted.
+- **A fixture of mine on the real GPU, found by REC-1's ticket** `261025-014714-dfd1` ("GPU shared outside the lease with pid 91091 (`sleep 20`)"). That was SCHED-2's S11 probe (`exec 7</dev/nvidia0; exec sleep 20`), run inside my `--class standard` suite job, which holds no GPU lease, while REC-1's GPU job held it. The scan was right, and the probe was killed when the test ended, so there was no leak; but it shouldn't have run unleased.
+  - **S11 and S20**, the two tests that open `/dev/nvidia0`, now run only under the production GPU lease (`SCHED_TEST_GPU_LEASE`, kept by the suite runner from its `--class gpu` job). Without it they skip, with that reason, before touching the device.
+  - **The runner** fails on any skipped test, so the GPU coverage can't drop out silently.
+  - **The suites run as `--class gpu --machine 3090`**, so the probes are inside our own leased scope and no other GPU job shares the 3090 meanwhile.
+  - **S11** now prints whether its probe is alive, and the last `status`, if `status` never reports it. At `dc369039` it timed out once, with REC-1's GPU job running.
 - The work paused for the host's reboot (CPU pinning) at `f25d89d2` and resumed after it.
 
 ## R5 review responses (part 2: composed with STEW-2)
