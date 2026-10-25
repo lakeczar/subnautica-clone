@@ -214,14 +214,21 @@ export function poseGraph(world: WorldQueries, regions: readonly Aabb[], state: 
       if (!ok) continue;
       next.push(b);
     }
-    // A walker also jumps up onto, or drops down to, a floor in the next column.
+    // A walker also jumps up onto a floor in the next column, or walks off an
+    // edge and falls: across one or two lattice steps at its own height (the
+    // next column may hold no standing pose, as beside a rim), then straight
+    // down, joining the floor it lands on by a checked move.
     if (walking[a]) for (const [di, , dk] of steps) {
       if (di === 0 && dk === 0) continue;
-      const col = columns.get((i + di) + nx * (k + dk));
-      if (!col) continue;
-      const y = poses[a]!.y, up = col.filter((b) => poses[b]!.y > y + LATTICE && poses[b]!.y <= y + JUMP);
-      const below = col.filter((b) => poses[b]!.y < y - LATTICE).sort((p, q) => poses[q]!.y - poses[p]!.y).slice(0, 1);
-      for (const b of [...up, ...below]) if (stepAcross(world, poses[a]!, poses[b]!, WALK)) next.push(b);
+      const y = poses[a]!.y, col = columns.get((i + di) + nx * (k + dk)) ?? [];
+      for (const b of col) if (poses[b]!.y > y + LATTICE && poses[b]!.y <= y + JUMP && stepAcross(world, poses[a]!, poses[b]!, WALK)) next.push(b);
+      for (const reach of [1, 2]) {
+        const b = fall(world, poses[a]!, di * reach * LATTICE, dk * reach * LATTICE, (x, z, yy) => {
+          const ii = Math.round((x - box.min.x) / LATTICE), kk = Math.round((z - box.min.z) / LATTICE);
+          return (columns.get(ii + nx * kk) ?? []).filter((c) => Math.abs(poses[c]!.y - yy) < 0.3);
+        }, poses);
+        if (b >= 0 && poses[b]!.y < y - LATTICE) { next.push(b); break; }
+      }
     }
   }
   // Rows are filled in lattice order, the order poses were pushed in, so the CSR is in pose order.
@@ -241,6 +248,26 @@ function stepAcross(world: WorldQueries, a: Vec3, b: Vec3, shape: Capsule): bool
     // Settling ends on b's floor, so touching it there is the landing, not a block.
     at(world.moveCapsule(over, { x: 0, y: b.y - top, z: 0 }, shape), b);
 }
+
+/** Walk off from `a` by (dx, dz) at its own height, fall straight down, and
+ * join the walking pose the landing is nearest (by a checked move): its index, or -1. */
+function fall(world: WorldQueries, a: Vec3, dx: number, dz: number, standing: (x: number, z: number, y: number) => number[], poses: readonly Vec3[]): number {
+  // Walking off steps over the same threshold a doorway crossing does.
+  const lift = { x: a.x, y: a.y + STEP, z: a.z }, over = { x: a.x + dx, y: lift.y, z: a.z + dz };
+  const up = world.moveCapsule(a, { x: 0, y: STEP, z: 0 }, WALK);
+  if (up.hitSolid || Math.abs(up.position.y - lift.y) > 0.02) return -1;
+  const across = world.moveCapsule(lift, { x: dx, y: 0, z: dz }, WALK);
+  if (across.hitSolid || Math.hypot(across.position.x - over.x, across.position.z - over.z) > 0.02) return -1;
+  const land = world.moveCapsule(over, { x: 0, y: -FALL_LIMIT, z: 0 }, WALK).position;
+  if (land.y > a.y - LATTICE) return -1;
+  for (const c of standing(land.x, land.z, land.y)) {
+    const q = poses[c]!, m = world.moveCapsule({ ...land, y: land.y + 0.02 }, { x: q.x - land.x, y: 0, z: q.z - land.z }, WALK);
+    if (!m.hitSolid && Math.hypot(m.position.x - q.x, m.position.z - q.z) < 0.02) return c;
+  }
+  return -1;
+}
+/** The deepest fall the lattice follows, metres. */
+const FALL_LIMIT = 30;
 
 /** The world's own capsule move gets from a to b. */
 function reachable(world: WorldQueries, a: Vec3, b: Vec3, walk: boolean): boolean {
