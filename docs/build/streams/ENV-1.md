@@ -1,7 +1,5 @@
 # ENV-1: explorable interiors with environmental storytelling (design plan, stage 0, revision 2)
 
-> **Stage 1 resume note (paused for the host reboot, 2026-10-24).** Where: kit, data model, `AirRoom` table (lab row wired into `inCanopyAir` and the shader), validator and tests are written, uncommitted work saved here as WIP; the last targeted run (5 files, 2 s) had 3 failures. Next: (1) trap rule counts only poses inside the building (the hut control); (2) pump house: floor at the site's y (terrain −23.49..−23.20), cabinet turned to face the room with the logger host in front of it; (3) widen the kettle recipe to its 0.22 m; then the full fast tier, the typecheck and the heavy library test (`tests/interiors-scenarios.heavy.test.ts`, on factory-worker) and the handoff. Tickets to resubmit: none queued; rerun the typecheck (`261024-232939-e0aa` was rejected for a changed tree) and the targeted tests.
-
 Opus 5.5 high, design authority for the stream. Branch `t3/env-1-interiors`, with root `e136beb6` merged. **Docs only: no code stage starts until the coordinator approves this plan.** Spoiler-safe. The lore notes (hindsight meanings, canon ties, rulings and the player-text rules) are in `docs/spoilers/ENV-1-LORE.md`, for writers and integration agents only.
 
 This revision answers Sol's R1 (`review/env-1-r1`, `b2f5de12`), the coordinator's two owner points, and Sol's R2 (`review/env-1-r2`, `a77c186d`). The dispositions are in *Review responses* at the end.
@@ -642,3 +640,58 @@ Each stage is one reviewable outcome with a one-page handoff: SHA, `npm run gate
 | **R2-1 [P2]** the walk's step bound | **Fixed.** A two-level walk (1 m brick bits over the 0.125 m bit occupancy) with a derived bound, `walkBound = (⌈√3·R/B⌉ + 3) × (1 + 3·B/v)`, stored in the volume header. That is 1,475 in the interior worst case, so exhaustion can't occur, and a step-count test enforces it. Caves use the same routine as one level with their bound kept at 200 (above their derived ≈ 114), and visibility and reach are pinned. The GPU cost is an explicit stage-2 measurement; any cheaper evaluation is a filed compromise, never a shorter bound. Fixtures: clear 32 m axial and diagonal rays, and a wall near the ray's end, on the CPU and GPU. | §3.5; §3.8; stage 2 tests |
 | **R2-2 [P2]** doorway confinement | **Fixed.** A baked one-bit reach mask per static machine light (0.25 m, free-space sub-samples only, sampled half a texel off the surface with nearest filtering), multiplied in the existing local-light term through a mask slot on the light's entry. `selectLights` and the lighting authority are unchanged, and the room-ID texture is dropped. Sol's counterexample is fixture 3: the doorway receiver lit, the wall-occluded one dark. Budget: ≤ 192 KiB of masks per interior and one fetch plus a bit test per tagged light per fragment. | §3.5; §3.8; stage 2 tests |
 | Occupancy layout note | **Adopted.** The packed layout is carried through bake, codec, CPU lookup, GPU addressing, sliced uploads, restore retention and the ledger, behind one codec flag. Padding is counted in the budget. | §3.8 |
+
+## Stage 1 handoff (kit, model, validator and the air-room table)
+
+Code at **`STAGE1_SHA`** (branch `t3/env-1-interiors`, root `e136beb6` merged). Nothing in the world changes yet: no file CW-1 owns is touched, and no interior is composed. Spoiler-safe.
+
+**What exists now:**
+- **The air-room table** (`content/airRooms.ts`): one row, the Canopy lab, always dry. `inCanopyAir` and both of the shader's lab terms (the optical air interval and the lit-room mask, `render/airRoomsGlsl.ts`) read it, so the sim and shader share one source. Activation by facility or the works' hall is typed and evaluated (`sim/airRooms.ts`), and `airRoomProblems` limits restoration rows to the bigger restored stops. **No restoration row exists:** they wait for the owner's rest-station decision.
+- **The interior model** (`content/interiors/`): `types.ts` speaks the cave vocabulary (portal kinds extended, staging with heading and approach), plus the template catalogue (sizes and collision classes), quarter-turn geometry, and wall and slab helpers with openings.
+- **Four definitions:** the Basin dormitory (real terrain, S2's pad and parking), the field station and cold store (on OP-1's blockout anchors; OP-1 places them), and the pump house (on LS-1's site, the logger in front of its cabinet).
+- **The kit** (`render/interiors/`, Babylon-free, the one `RecipeBuilder`): shell recipes drawn exactly as they collide, 37 prop recipes inside their catalogue sizes, and the draw and byte accounting under the batching rule. Recipes are built on demand and not cached here; stage 2 hands them to `TemplateLibrary`.
+- **The validator** (`sim/interiors/validate.ts`, with `sim/interiors/world.ts` composing the interior over an exterior on COL-1 A's static collider):
+  - static checks;
+  - configuration space (directed capsule moves, the swim and walking capsules, jumps and drops between floors);
+  - the air proof per first visit: the route's one craft parked with its authored hull present, the save's suit and its active air rooms; coverage by the basic line at the reserve charge, an air room or open air, else a round trip within 75% of the suit;
+  - the craft's approach, exit and boarding, through the sim's own rules.
+
+**Deviation from the plan's file list:** the validator lives in `sim/interiors/`, not `content/interiors/validate.ts`. It calls the sim's air line, exit, boarding, suit and oxygen rules, and content may not depend on sim.
+
+**Checks** (factory-worker, the queue):
+
+| Check | Ticket | Result |
+| --- | --- | --- |
+| Fast tier at `2a09ebd4` | `261025-020939-2048` | 175 of 176 files pass. The one failure was the FORK register regex rejecting a digit in the fork id, fixed by renaming it `interior-swim-speed`. |
+| Fast tier at the final SHA | FAST_TICKET | FAST_RESULT |
+| Heavy: the air proof from real SAVE-1 saves (`interiors-scenarios.heavy.test.ts`) | `261025-020941-e94c` at `2a09ebd4` | **4/4 pass, 0 skipped.** Saves from the library at `e136beb6`: `creel@basin-survey` and `no-optional@basin-survey` (dormitory), `creel@opening` (station), `creel@isles` (store), `creel@reef` and `creel@systems` (pump house). |
+
+**Questions:**
+1. *Do the air-proof fixtures fail as specified, naming the scenario and pose, while the definitions pass?* Yes (`tests/interiors-air.test.ts`). Each failing fixture has a passing control:
+   - two parking places with one craft (a 300 m tunnel fails from either end, though two craft would cover it);
+   - an unrestored station (fails before, passes after restoration);
+   - walking headroom;
+   - a one-way drop into a 1.6 m pit;
+   - a parked hull across the only door;
+   - a missing craft;
+   - a too-shallow suit.
+
+   All four definitions pass, on stand-in states (`interiors-defs.test.ts`) and on the real saves (the heavy test).
+2. *Does the validator catch a blocked portal, a heaped belonging and a missing caption?* Yes (`tests/interiors.test.ts`), along with unknown templates, too many lights, a door that admits nobody, unknown hosts, a mis-declared first visit and three heap cases (loose bundles touching, a floating one, one off the edge).
+3. *Are the recipes deterministic, inside their sizes, and within budget?* Yes (`tests/interiors-kit.test.ts`): every vertex of the shell lies on its collision boxes; every prop is within its size and fills 95% of it; all four interiors are within 10 draws, 6 MiB fine and 0.4 MiB coarse. The dormitory instances its bunks, bundles and picture marks.
+
+**The sim and shader are unchanged:** `inCanopyAir` matches the old literal box on a boundary grid, and the generated GLSL equals the old source character for character.
+
+**Adverse case:** a 300 m tunnel with parking at both ends and one craft fails the air proof from each end. A union-of-parkings rule would have passed it.
+
+**Compromises (each with its root fix):**
+1. **`FORK(interior-swim-speed)`:** the step's swim speed (3.4 m/s) and jump height are constants in the validator, because `sim/step.ts` is CW-1's. A fast test measures the real step against both. Root fix: step exports its speeds; ENV-1 stage 2, after CW-1 merges. The row is in CORE-HELPERS.
+2. **The pump house's terrain rises up to 0.29 m above its floor:** the floor is laid on the lowest terrain so LS-1's logger point stays on it. A test pins this at 0.3 m or less. Root fix: in stage 2, interior footprints replace terrain in the bake, as cave footprints do. The alternative, raising the floor and moving LS-1's site point, is LS-1's call in its stage 3.
+3. **`box`-class props collide as their catalogue boxes**, a conservative cover over open frames such as bunks. Root fix: stage 2 bakes their shapes from the art (COL-1 B). The cover is checked to be no larger than the art's size.
+
+**Known limits:**
+- **The island interiors aren't proven on the island yet:** the field station and cold store are proved on flat stand-ins until OP-1 builds it.
+- **The cold store's keypad door is assumed open:** LS-1 1b's keypad isn't on root yet.
+- **The lattice is conservative:** it is 0.5 m with axis moves, so a gap needs about 1.2 m to be sure of a pose, and diagonal-only openings read as closed. The definitions keep doors at 1.2 m. Stairs and ramps get slope-aware edges when a definition first needs them.
+- **The kit is kit-agnostic, as directed:** no importer, no material system, no textures.
+- **No images:** this is a logic stage, per DIRECTION's tiers.

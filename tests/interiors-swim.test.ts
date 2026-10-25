@@ -1,6 +1,6 @@
 /** ENV-1: the validator's timed return uses the step's ordinary swim speed and
  * jump height, copied as constants until the step exports them (FORK
- * env1-swim-speed). These measure the real step, so the copies can't drift. */
+ * interior-swim-speed). These measure the real step, so the copies can't drift. */
 import test from "node:test";
 import assert from "node:assert/strict";
 import { JUMP, ORDINARY_SWIM_SPEED } from "../src/sim/interiors/validate.js";

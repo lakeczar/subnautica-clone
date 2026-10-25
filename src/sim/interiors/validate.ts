@@ -1,4 +1,4 @@
-// FORK(env1-swim-speed): sim/step.ts's ordinary swim speed (3.4 m/s) and jump (5.4 m/s under 13 m/s²) as constants
+// FORK(interior-swim-speed): sim/step.ts's ordinary swim speed (3.4 m/s) and jump (5.4 m/s under 13 m/s²) as constants
 // here; retire in ENV-1 stage 2 once step exports them (CW-1 owns step.ts until it merges). tests/interiors-swim.test.ts
 // measures the real step against both.
 /** ENV-1: the interior validator. It proves, from the sim's own rules, that a
