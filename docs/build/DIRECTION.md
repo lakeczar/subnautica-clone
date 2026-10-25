@@ -4,6 +4,8 @@ These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.m
 
 **Game design (owner, 2026-10-20):** [GAME-DIRECTION](GAME-DIRECTION.md) holds the owner-confirmed target, pacing rules, systems, fleet, caves and order of work. The length target is a **floor**: a skilled player on a first, blind, non-stop playthrough takes about 10 hours or more, organically and without padding. There is no ceiling, and playtests never trim good content.
 
+**Root branch:** root is **`feat/siltwake-first-expedition`**. Every stream branches from it and merges into it, and `npm run gate` runs on it. `main` is only the owner's initial skeleton; the owner controls `main` and the public deployment.
+
 ## Priorities
 1. **A rough, complete campaign from start to ending comes first.** Polish follows once the whole chain is playable. Stop re-polishing the opening.
 2. **Prove the world can scale before mass content.** Run one representative scale test first: more than four regions resident or evicted, dense instanced vegetation, three hulls and the carrier, with measured memory and frame budgets. Then author the regions through that pipeline.
