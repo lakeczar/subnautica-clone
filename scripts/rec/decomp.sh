@@ -7,21 +7,32 @@
 # Builds the game inside the job. The save comes from the SAVE-1 library (`saves.js pick`, default kind
 # tour-ready: the tour-fit Dart), or is a fixture in the repository (a path, e.g.
 # docs/build/streams/rec1/fixtures/hold-refuge-reef.json: CW-1's refuge-reef pose, steadier for holds);
-# what was used is recorded in OUT_DIR/save.json.
+# what was used is recorded in OUT_DIR/save.json. Env: VARIANTS (below), ALT (the alternation window, default 10 s),
+# DIST (a prebuilt dist directory, for exclusive runs).
 set -u
 out="${1:?usage: decomp.sh OUT_DIR [SECONDS] [SAVE_KIND]}"; secs="${2:-300}"; kind="${3:-tour-ready}"
 cd "$(dirname "$0")/../.."; mkdir -p "$out"
-npm run build > "$out/build.log" 2>&1 || { tail -5 "$out/build.log"; exit 1; }
-git rev-parse HEAD > dist/COMMIT
-npx tsc -p scripts/playthrough/tsconfig.json > "$out/saves-build.log" 2>&1 || { tail -5 "$out/saves-build.log"; exit 1; }
+# DIST (env): a build made beforehand by another job (DIRECTION convention 9: exclusive windows never compile).
+# It must be this commit's (its COMMIT file), and the save then must be a fixture (the library needs a compile).
+dist="${DIST:-}"
+if [ -n "$dist" ]; then
+  [ "$(cat "$dist/COMMIT" 2>/dev/null)" = "$(git rev-parse HEAD)" ] || { echo "DIST $dist is not this commit's build ($(cat "$dist/COMMIT" 2>/dev/null || echo none) against $(git rev-parse HEAD))"; exit 2; }
+  [ -f "$kind" ] || { echo "with DIST the save must be a fixture path (the library needs a compile)"; exit 2; }
+  echo "build: prebuilt $dist"
+else
+  dist=dist
+  npm run build > "$out/build.log" 2>&1 || { tail -5 "$out/build.log"; exit 1; }
+  git rev-parse HEAD > dist/COMMIT
+  [ -f "$kind" ] || { npx tsc -p scripts/playthrough/tsconfig.json > "$out/saves-build.log" 2>&1 || { tail -5 "$out/saves-build.log"; exit 1; }; }
+fi
 # A path in the repository (a fixture) is used as it is; anything else is a library kind.
 if [ -f "$kind" ]; then printf '{"path":"%s","commit":"fixture %s"}\n' "$PWD/$kind" "$(git log -1 --format=%h -- "$kind")" > "$out/save.json"
 else node .test-build/scripts/playthrough/saves.js pick "$kind" --json > "$out/save.json" || { echo "the save library refused $kind (see above)"; exit 3; }; fi
 save=$(node -e 'const p=require(require("path").resolve(process.argv[1]));console.log(p.path ?? p.file)' "$out/save.json")
 echo "save: $kind $(node -e 'const p=require(require("path").resolve(process.argv[1]));console.log(p.commit ?? "", p.path ?? p.file)' "$out/save.json")"
 run() { local name="$1"; shift
-  node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack \
-    --rec playtest --hold "$secs" --alternate 10 --out "$out/$name" "$@" 2>&1 | grep --line-buffered -E 'probe|window|Error|refused'
+  node scripts/rec/run.mjs --dist "$dist" --save "$save" --owner-browser --no-isolate --no-pack \
+    --rec playtest --hold "$secs" --alternate "${ALT:-10}" --out "$out/$name" "$@" 2>&1 | grep --line-buffered -E 'probe|window|Error|refused'
   echo "$name: $(node -e 'const r=require(require("path").resolve(process.argv[1])).probe.alternation;console.log(JSON.stringify({pairs:r.pairs,mean:r.mean,lo:r.lo,hi:r.hi}))' "$out/$name/run.json" 2>/dev/null || echo failed)"
 }
 # VARIANTS (env): which to run, space-separated; default all of the first decomposition.
@@ -46,7 +57,7 @@ for v in ${VARIANTS:-telemetry capture-bitmap capture-frame vp9-bitmap vp8-bitma
     telemetry-notiming-profile) run "$v" --video off --no-timing --profile-windows ;;
     playtest) run "$v" ;;
     vp9-profile) run "$v" --codec vp9 --profile-windows ;;
-    bench-sample) node scripts/rec/run.mjs --dist dist --save "$save" --owner-browser --no-isolate --no-pack --rec playtest --video off --hold 5 --bench-sample --out "$out/$v" 2>&1 | grep --line-buffered -E 'bench-sample|Error' ;;
+    bench-sample) node scripts/rec/run.mjs --dist "$dist" --save "$save" --owner-browser --no-isolate --no-pack --rec playtest --video off --hold 5 --bench-sample --out "$out/$v" 2>&1 | grep --line-buffered -E 'bench-sample|Error' ;;
     *) echo "unknown variant $v" ;;
   esac
 done
