@@ -15,8 +15,8 @@ import type { TimelineAnalysis, TimelineExport } from "../../src/sim/timeline/re
 import type { GameCommand, GameEvent } from "../../src/sim/types.js";
 import type { Driver, DriverObserver } from "./driver.js";
 import type { RunRecord } from "./timeline.js";
-import { PACING_DEBT } from "./pacing-debt.js";
-import type { DebtRow, RouteDebt } from "./pacing-debt.js";
+import { PACING_DEBT, PACING_EXCEPTIONS } from "./pacing-debt.js";
+import type { DebtRow, PacingException, RouteDebt } from "./pacing-debt.js";
 
 const OPTIONS = { regionAt: regionAtPoint };
 /** Fixed, so two runs of the same build give the same timeline. */
@@ -122,36 +122,39 @@ function compare(kind: string, unit: string, measured: Record<string, number[]>,
  * are reported for judgement, never failed (owner, 2026-10-24): any difference from the
  * recorded legs is listed with the figures now. A route with no entry is judged
  * strictly on gaps. */
-export function judgePacing(scenario: string, a: TimelineAnalysis, debts: Readonly<Record<string, RouteDebt>> = PACING_DEBT): { ok: boolean; detail: string } {
+export function judgePacing(scenario: string, a: TimelineAnalysis, debts: Readonly<Record<string, RouteDebt>> = PACING_DEBT,
+  exceptions: Readonly<Record<string, Readonly<Record<string, PacingException>>>> = PACING_EXCEPTIONS): { ok: boolean; detail: string } {
   const v = pacingAcceptance(a);
   const longest = a.travel.emptyStretches[0]?.seconds ?? 0;
   const figures = `longest gap ${v.longestGapMinutes.toFixed(1)} min, ${v.decodeWaitSpans} decode waits; reported: ${v.emptyStretches} empty legs over 90 s (longest ${longest.toFixed(0)} s)`;
-  const debt = debts[scenario];
+  const debt = debts[scenario], m = measuredDebt(a);
   // A coordinator's named exception is never described as within its accepted ceiling:
   // every verdict on its route names it (pass, improvement, regression, decode failure),
-  // until the coordinator retires it from pacing-debt.ts.
-  const named = debt ? exceptionsNamed(debt.gaps) : "";
+  // and says when its gap is no longer flagged, until the coordinator deletes its entry.
+  const named = exceptionsNamed(exceptions[scenario] ?? {}, m.gaps);
   if (v.decodeWaitSpans > 0) return { ok: false, detail: `decode waits are never debt: ${v.failures.join("; ")} (${figures})${named}` };
-  const m = measuredDebt(a);
-  if (!debt) return v.ok ? { ok: true, detail: figures } : { ok: false, detail: `${v.failures.join("; ")} (${figures}); measured: ${debtFigures(a)}` };
+  if (!debt) return v.ok ? { ok: true, detail: `${figures}${named}` } : { ok: false, detail: `${v.failures.join("; ")} (${figures}); measured: ${debtFigures(a)}${named}` };
   const g = compare("gap", "min", m.gaps, debt.gaps), l = compare("leg", "s", m.legs, debt.legs);
   const legs = [...l.worse, ...l.better].length
     ? `; legs differ from the record, for judgement (${[...l.worse, ...l.better].join("; ")}): legs now ${JSON.stringify(rowsOf(m.legs, debt.legs))}` : "";
   if (g.worse.length) return { ok: false, detail: `worse than the recorded pacing debt: ${g.worse.join("; ")} (${figures})${legs}${named}` };
   if (g.better.length)
-    return { ok: false, detail: `better than the recorded pacing debt (${g.better.join("; ")}): lower pacing-debt.ts["${scenario}"].gaps to ${JSON.stringify(rowsOf(m.gaps, debt.gaps))} (${figures})${legs}${named}` };
+    return { ok: false, detail: `better than the recorded pacing debt (${g.better.join("; ")}): lower pacing-debt.ts["${scenario}"].gaps to ${JSON.stringify(rowsOf(m.gaps, debt.gaps))}` +
+      `${named ? ` and keep PACING_EXCEPTIONS["${scenario}"] as it is (only the coordinator retires an entry)` : ""} (${figures})${legs}${named}` };
   return { ok: true, detail: `gaps exactly the recorded pacing debt (pacing-debt.ts): ${figures}${legs}${named}` };
 }
-/** The named exceptions of a route's gap rows, for every verdict. */
-function exceptionsNamed(rows: Readonly<Record<string, DebtRow>>): string {
-  const excepted = Object.entries(rows).filter(([, r]) => r.exception).map(([id, r]) => `${id} (${r.exception})`);
-  return excepted.length ? `; named exceptions over the accepted ceiling: ${excepted.join("; ")}` : "";
+/** A route's named exceptions, for every verdict: each with its owner and cause while its
+ * gap is flagged, and as waiting for the coordinator once it is not. */
+function exceptionsNamed(entries: Readonly<Record<string, PacingException>>, gaps: Record<string, number[]>): string {
+  const lines = Object.entries(entries).map(([id, e]) => gaps[id]
+    ? `exception ${id} (${e.owner}): ${e.cause}`
+    : `exception ${id} (${e.owner}): gap no longer flagged, awaiting coordinator retirement`);
+  return lines.length ? `; named exceptions over the accepted ceiling: ${lines.join("; ")}` : "";
 }
-/** Measured values as debt rows, keeping each recorded owner and named exception (a new
- * identity has neither yet): lowering a row never drops its exception, which only the
- * coordinator retires. */
+/** Measured values as debt rows, keeping each recorded owner (a new identity has none
+ * yet). An identity that is no longer flagged keeps no bound, so an improved route never
+ * fails for it; its named exception, if any, stays in PACING_EXCEPTIONS. */
 const rowsOf = (measured: Record<string, number[]>, rows: Readonly<Record<string, DebtRow>>) =>
-  Object.fromEntries(Object.entries(measured).map(([id, bounds]) => [id, {
-    bounds, owner: rows[id]?.owner ?? "unassigned", ...(rows[id]?.exception ? { exception: rows[id]!.exception } : {}) }]));
+  Object.fromEntries(Object.entries(measured).map(([id, bounds]) => [id, { bounds, owner: rows[id]?.owner ?? "unassigned" }]));
 /** The figures a route would record as debt, for a first entry. */
 export const debtFigures = (a: TimelineAnalysis): string => JSON.stringify(measuredDebt(a));

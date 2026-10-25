@@ -11,6 +11,7 @@ import { LOST_SITE_CACHES, siteCacheContainerId } from "../../content/systems/lo
 import type { CacheItem, LostSiteCacheId } from "../../content/systems/lostSites.js";
 import { ITEMS } from "../../content/registry.js";
 import { CHART_CELL } from "../../content/systems/navigation.js";
+import { workCounts } from "../workCounts.js";
 import type { ItemKind } from "../../content/registry.js";
 import type { ContainerState, GameState, ItemStack, Vec3 } from "../types.js";
 
@@ -44,15 +45,27 @@ export function siteCacheIndex<Id extends string>(points: readonly (readonly [Id
 /** The caches whose reach touches the chart cell at `p`: the only ones the step checks. */
 export const siteCacheCandidates = siteCacheIndex(SITE_CACHE_IDS.map((id) => [id, LOST_SITE_CACHES[id].position] as const));
 const NONE: readonly LostSiteCacheId[] = [];
+/** The discovery seam: candidates per cell and each cache's point. Production uses the
+ * authored table; a bounded-work test swaps in a scaled table (`useSiteCacheTable`). */
+interface CacheFinder { candidates: (p: Vec3) => readonly string[]; point: (id: string) => Vec3 }
+const AUTHORED: CacheFinder = { candidates: siteCacheCandidates, point: (id) => LOST_SITE_CACHES[id as LostSiteCacheId].position };
+let finder: CacheFinder = AUTHORED;
+/** Tests only: discover from `points` instead of the authored caches (null restores them).
+ * Keep the diver out of reach of these points; finding builds authored contents. */
+export function useSiteCacheTable(points: Readonly<Record<string, Vec3>> | null): void {
+  finder = points ? { candidates: siteCacheIndex(Object.entries(points)), point: (id) => points[id]! } : AUTHORED;
+}
 
 /** Finds every cache within reach of the diver that is not found yet: its container and
  * authored contents appear. Returns the caches found this step (a shared empty list
  * when none: no allocation on the ordinary step). */
 export function openSiteCaches(s: GameState): readonly LostSiteCacheId[] {
-  const p = s.player.pose.position, near = siteCacheCandidates(p);
+  const p = s.player.pose.position, near = finder.candidates(p), counts = workCounts;
   let found: LostSiteCacheId[] | null = null;
-  for (const id of near) {
-    if (!within(p, LOST_SITE_CACHES[id].position) || siteCacheFound(s, id)) continue;
+  for (let i = 0; i < near.length; i++) {
+    const id = near[i]! as LostSiteCacheId;
+    if (counts) counts.cacheDistanceChecks++;
+    if (!within(p, finder.point(id)) || siteCacheFound(s, id)) continue;
     s.inventory.containers.push(siteCacheContainer(id));
     s.inventory.items.push(...siteCacheItems(id));
     (found ??= []).push(id);

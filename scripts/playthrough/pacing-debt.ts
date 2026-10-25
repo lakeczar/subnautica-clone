@@ -11,14 +11,7 @@
  *   progression and journey length, so a leg is never failed; any difference from this
  *   record is reported with the figures now.
  * A decode wait is never debt. */
-export interface DebtRow {
-  readonly bounds: readonly number[];
-  readonly owner: string;
-  /** A coordinator's named exception: the row sits above its accepted ceiling, with the
-   * cause. It is not a pass. Whichever stream merges second re-runs and ratchets it down
-   * from a fresh run; it may never rise again. */
-  readonly exception?: string;
-}
+export interface DebtRow { readonly bounds: readonly number[]; readonly owner: string }
 export interface RouteDebt { readonly gaps: Readonly<Record<string, DebtRow>>; readonly legs: Readonly<Record<string, DebtRow>> }
 
 /** Late-game logistics: the works phase's hauls and the carrier's Hearthline → Divide stretch. */
@@ -31,7 +24,7 @@ export const PACE_1_STAGE_1 = "PACE-1 stage 1 (works logistics, later.ts/stock.t
 
 export const PACING_DEBT: Readonly<Record<string, RouteDebt>> = {
   // Measured at LS-1 stage 1b R1 (code 3aeac541; playthrough ticket 261025-040148-9ce1), after procure's
-  // surplus rule (actions.ts). Two no-optional-carrier rows are a coordinator's named exception, not a pass.
+  // surplus rule (actions.ts). Two no-optional-carrier rows are over their accepted 1a ceiling: PACING_EXCEPTIONS.
   "creel": {
     gaps: {
       "craft: service_air_assembly → craft: pod_buffer": { bounds: [49.985], owner: PACE_1 },
@@ -86,9 +79,9 @@ export const PACING_DEBT: Readonly<Record<string, RouteDebt>> = {
   "no-optional-carrier": {
     gaps: {
       "hull: hearthline → region: brine_divide": { bounds: [50.061], owner: PACE_1 },
-      "discovery: C12 → blueprint: bp_service_air": { bounds: [29.761], owner: PACE_1_STAGE_1, exception: "over the accepted 1a ceiling (29.756): the first Mantle travel after C12 is 38.683 s at 1a, 38.900 s in plain 1b, 38.917 s now (deterministic; a shifted start is a hypothesis)" },
+      "discovery: C12 → blueprint: bp_service_air": { bounds: [29.761], owner: PACE_1_STAGE_1 },
       "discovery: district_controller → craft: service_power_assembly": { bounds: [24.133], owner: PACE_1 },
-      "craft: service_air_assembly → craft: pod_buffer": { bounds: [87.631], owner: PACE_1_STAGE_1, exception: "over the accepted 1a ceiling (87.12): procure's surplus rule reorders this route's first works trip and adds a later Canopy dive" },
+      "craft: service_air_assembly → craft: pod_buffer": { bounds: [87.631], owner: PACE_1_STAGE_1 },
     },
     legs: {
       "hearthline in deep_district": { bounds: [753.35, 753.35, 753.35], owner: REC_2 },
@@ -102,5 +95,19 @@ export const PACING_DEBT: Readonly<Record<string, RouteDebt>> = {
       "dart in suspended_garden": { bounds: [148.333, 102.45], owner: REC_2 },
       "dart in silt_basin": { bounds: [93.533], owner: REC_2 },
     },
+  },
+};
+
+/** A coordinator's named exception (LS-1 1b R1, 2026-10-25): a gap identity allowed over its
+ * accepted ceiling, with its cause and owner. It is not a pass. It lives apart from the
+ * bound rows, so lowering, replacing or dropping a row never drops it: every verdict on
+ * its route names it, and once its gap is no longer flagged the verdict says so and waits.
+ * Only the coordinator retires one, by deleting its entry. Whichever stream merges second
+ * re-runs and ratchets the bound rows down; an excepted gap may never rise again. */
+export interface PacingException { readonly cause: string; readonly owner: string }
+export const PACING_EXCEPTIONS: Readonly<Record<string, Readonly<Record<string, PacingException>>>> = {
+  "no-optional-carrier": {
+    "discovery: C12 → blueprint: bp_service_air": { owner: PACE_1_STAGE_1, cause: "over the accepted 1a ceiling (29.756): the first Mantle travel after C12 is 38.683 s at 1a, 38.900 s in plain 1b, 38.917 s now (deterministic; a shifted start is a hypothesis)" },
+    "craft: service_air_assembly → craft: pod_buffer": { owner: PACE_1_STAGE_1, cause: "over the accepted 1a ceiling (87.12): procure's surplus rule reorders this route's first works trip and adds a later Canopy dive" },
   },
 };

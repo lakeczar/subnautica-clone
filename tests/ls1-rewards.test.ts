@@ -15,16 +15,14 @@ import { carrierHostId, installModule } from "../src/sim/systems/hosts.js";
 import { fixtureGame } from "../src/sim/carrier.js";
 import { deployOutpost, packOutpost } from "../src/sim/systems/outposts.js";
 import { handheldPing } from "../src/sim/systems/survey.js";
-import { SITE_CACHE_IDS, siteCacheCandidates, siteCacheIndex, siteCacheOf } from "../src/sim/systems/siteCaches.js";
-import { listHosts } from "../src/sim/systems/hosts.js";
-import type { HostPower } from "../src/sim/systems/hosts.js";
-import { advanceSystems } from "../src/sim/systems/step.js";
+import { SITE_CACHE_IDS, siteCacheCandidates, siteCacheOf, useSiteCacheTable } from "../src/sim/systems/siteCaches.js";
+import { countWork } from "../src/sim/workCounts.js";
 import { interactions } from "../src/sim/progression.js";
 import { createWorldQueries } from "../src/sim/world.js";
-import type { GameCommand, GameEvent, GameState } from "../src/sim/types.js";
+import type { GameCommand, GameEvent, GameState, Vec3 } from "../src/sim/types.js";
 import { PanelProbe } from "../src/ui/panelProbe.js";
 import { buildJournal } from "../src/sim/systems/journal.js";
-import { hostPowerAnswers, stepSystems, systemsContext } from "../src/sim/systemsLink.js";
+import { stepSystems, systemsContext } from "../src/sim/systemsLink.js";
 import { KeypadPanel, keypadKey, keypadModel, renderKeypad } from "../src/ui/keypad.js";
 import type { KeypadSeam, KeypadState } from "../src/ui/keypad.js";
 import { give, opened, siteTable, SPOTS, swimTo } from "./systems-support.js";
@@ -221,22 +219,39 @@ test("R2: planting on a carrier quotes the composed host power: the reserve, abo
   assert.match(probe.text("systems", s), /heated grow bed: needs host power to speed growth/);
 });
 
-test("R2 F4: the step's work per call stays constant as content grows: cache checks per diver cell, power queries per host", () => {
-  // Cache predicate checks per step are the candidates of the diver's one cell. With 1, 10
-  // and 100 caches laid 100 m apart, a diver at one cache checks one, a diver at home none.
-  const checks: number[][] = [];
-  for (const n of [1, 10, 100]) {
-    const points = Array.from({ length: n }, (_, i) => [`c${i}`, { x: 100 * (i % 10) + 25, y: -20, z: 100 * Math.floor(i / 10) + 25 }] as const);
-    const look = siteCacheIndex(points);
-    checks.push([look({ x: 25, y: -20, z: 25 }).length, look({ x: -500, y: 0, z: -500 }).length, look({ x: 27, y: -20, z: 23 }).length]);
-  }
-  assert.deepEqual(checks, [[1, 0, 1], [1, 0, 1], [1, 0, 1]], "constant in the number of caches");
-  // Host power queries per step: one per host that holds a bed crop, however many crops.
-  const queries = (crops: number, hosts: number): number => {
+test("R3 F4: through stepSystems, the work actually done stays constant as caches and crops grow", () => {
+  // Caches: 1, 10 and 100 laid 100 m apart, each point counting every read of its
+  // coordinates, so a linear lookup or a full scan shows even when it returns the same
+  // candidates. The counted operations are the per-cache distance test and the reads.
+  type Work = [checks: number, reads: number];
+  const cacheWork = (n: number, at: Vec3): Work => {
+    let reads = 0;
+    const points: Record<string, Vec3> = {};
+    for (let i = 0; i < n; i++) {
+      const x = 100 * (i % 10) + 25, y = -20, z = 100 * Math.floor(i / 10) + 25;
+      points[`c${i}`] = { get x() { reads++; return x; }, get y() { reads++; return y; }, get z() { reads++; return z; } };
+    }
+    useSiteCacheTable(points);
+    try {
+      const s = readyState();
+      swimTo(s, at);
+      reads = 0;
+      const counts = countWork(true)!;
+      stepSystems(s, []);
+      assert.ok(!s.inventory.containers.some((c) => siteCacheOf(c.id) || c.id.startsWith("site_cache_c")), "out of reach: nothing found");
+      return [counts.cacheDistanceChecks, reads];
+    } finally { countWork(false); useSiteCacheTable(null); }
+  };
+  const near = { x: 30, y: -20, z: 25 }, away = { x: -500, y: -20, z: -500 };
+  assert.deepEqual([1, 10, 100].map((n) => cacheWork(n, near)), [[1, 3], [1, 3], [1, 3]], "5 m from one cache: one distance test, one point read, at any count");
+  assert.deepEqual([1, 10, 100].map((n) => cacheWork(n, away)), [[0, 0], [0, 0], [0, 0]], "far from every cache: none");
+  // Crops: 1 and 20 grow-bed crops on one thermal host, and on three hosts. The counted
+  // operation is SYS-1's host power evaluation, reached through the step's growth.
+  const powerWork = (crops: number, hosts: number): number => {
     const s = readyState(), sys = s.systems;
-    const ids = Array.from({ length: hosts }, (_, k) => `outpost_h${k}`);
-    for (const [k, hostId] of ids.entries()) {
-      sys.outposts.push({ id: hostId, tier: "basic", name: `H${k}`, position: { x: 10 * k, y: -8, z: 0 }, region: null, power: "cells" });
+    for (let k = 0; k < hosts; k++) {
+      const hostId = `outpost_h${k}`;
+      sys.outposts.push({ id: hostId, tier: "basic", name: `H${k}`, position: { x: 10 * k, y: -8, z: 0 }, region: null, power: "thermal" });
       for (let c = 0; c < crops; c++) {
         const itemId = `${hostId}_planter_${c}`;
         sys.sockets.push({ hostId, socket: `s${c}`, kind: "mod_planter", itemId });
@@ -244,16 +259,15 @@ test("R2 F4: the step's work per call stays constant as content grows: cache che
         sys.planters.push({ moduleId: itemId, seed: "seed_staple_cup", progress: 0 });
       }
     }
-    let n = 0;
-    const counting: HostPower = () => { n++; return true; };
-    const answers = hostPowerAnswers(s, listHosts(s, sys, { occupied: true }), counting);
-    advanceSystems(s, sys, { hostPowered: answers });
-    assert.ok(sys.planters.every((p) => Math.abs(p.progress - 2 / 60) < 1e-9), "every bed crop grew at the bed's rate");
-    return n;
+    try {
+      const counts = countWork(true)!;
+      stepSystems(s, []);
+      assert.ok(sys.planters.every((p) => Math.abs(p.progress - 2 / 60) < 1e-9), "every bed crop grew at the bed's rate");
+      return counts.hostPowerEvaluations;
+    } finally { countWork(false); }
   };
-  assert.deepEqual([queries(1, 1), queries(20, 1), queries(1, 3), queries(20, 3)], [1, 1, 3, 3], "constant in the number of crops");
+  assert.deepEqual([powerWork(1, 1), powerWork(20, 1), powerWork(1, 3), powerWork(20, 3)], [1, 1, 3, 3], "one evaluation per host, not per crop");
 });
-
 test("kiln tubers need warmth: refused in a plain planter on a cell outpost, grown in a grow bed or on a thermal outpost", () => {
   const cells = outpost("cells");
   const p = give(cells.s, "mod_planter");

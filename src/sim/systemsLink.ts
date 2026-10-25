@@ -15,6 +15,7 @@ import { enterCode } from "./systems/doors.js";
 import { DECODABLES, decodeLog, DECODER_LOCAL_RANGE, LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import type { DecodableId } from "../content/systems/decodes.js";
 import { LOST_SITE_CACHES } from "../content/systems/lostSites.js";
+import { workCounts } from "./workCounts.js";
 import { isSeed } from "../content/systems/cultivation.js";
 import { FIXED_HOSTS, MODULES, OUTPOST_SITING } from "../content/systems/hosts.js";
 import { BEACON_CATEGORIES } from "../content/systems/navigation.js";
@@ -58,7 +59,10 @@ function powerInput(s: GameState, host: SocketHost): HostPowerInput {
   };
 }
 /** SYS-1's answer to SYS-2's "is this host powered now". */
-export const hostPower: HostPower = (host, s) => hostPowerState(powerInput(s, host)).powered;
+export const hostPower: HostPower = (host, s) => {
+  if (workCounts) workCounts.hostPowerEvaluations++;
+  return hostPowerState(powerInput(s, host)).powered;
+};
 export const hostPowerReason = (s: GameState, host: SocketHost): string | null => hostPowerState(powerInput(s, host)).reason;
 
 /** A surfaced Spindle with a radio mast within `reach` metres of a point. */
