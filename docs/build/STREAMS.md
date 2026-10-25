@@ -1290,3 +1290,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **3090 OOM:** an end-of-run clone spike, now sliced (`6d9c2d19`).
   - **Adjacent gap:** `flowHere` `inside()` for parked craft during an in-flight pack.
   - **Review:** Sol R6 (the affected review for provisional integration) running (`siltwake-cw1-review-r6-sol-811f086`).
+- **CW-1 `flowHere`: withdrawn by the author.**
+  - **Why:** `flowHere` samples only the controlled craft and the diver, and admission covers both. Probe: `/work/tmp/cw1/flowhere/`.
+  - **Ruling (b):** no entry wait, since it would add decode-only waits, which are a hard pacing gate.
+  - **Residual:** a long-reach, non-player query meeting an unbuilt cluster while the pack is pending, recorded as a counted theoretical open item. It trips the gate as a `query` unsliced build. Owner: BIO-1, whose long-reach queries must go through `withoutQueryBuilds` or admission.
+  - **R6** was steered to verify this independently.
