@@ -1382,3 +1382,7 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Checks:** fast 1,688, heavy, economy, and playthrough 9/9 with pacing matching the new rows.
   - **Results:** play time is down by about a quarter (Creel 203.7 → 151.5 bot-min), and the longest gap on Creel is down from 50.6 to 26.2 min. Carrier gaps of 30–63 min remain, owned by stage 2.
   - **Review:** Sol R1 dispatched (`siltwake-pace1-stage1-review-r1-sol-155a176`).
+- **LS-1 1b R2 fixes done at `3823f51e`** (code `33007d84`):
+  - **Fixes:** F1 `hostPower` quote; F3 exceptions persist on every verdict; F4 numbers withdrawn and a work-counting test added; C12 raw figures recorded.
+  - **Checks:** focused 41/41, fast 169 files, four routes with unchanged rows.
+  - **Review:** Sol R3 (affected) dispatched (`siltwake-ls1-1b-review-r3-sol-3823f51`).
