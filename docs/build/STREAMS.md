@@ -1250,3 +1250,10 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Passed:** persistence, power billing and packing; found-on-reach caches; the OOM kills are intentional probes.
   - **Four P2s:** Base omits the new module upgrades and crop disclosure; the keypad never gets the post-command outcome or closes; the carrier ceiling was raised by 32.85 s (not allowed; remove the haul-order cost instead); content-proportional fixed-step work (bounded cache candidates; reuse the per-host power answer).
 - **SCHED-3 R6 fix done at `8063bec4`** (code `dc369039`): `isGuard` normalises spellings plus root-relative symlinks; guard steps are the exact alias, `--require`, or local with a reason. B45. S11/S20 GPU fixtures run only under the suite job's own lease. All suites pass through a GPU-leased queue job. Sol R7 (install decision) running (`siltwake-sched3-review-r7-sol-8063bec`).
+- **CW-1 checks:** 4070 sweep, fast and heavy (real budgets) pass; the 3090 sweep `363b` was OOM-killed at the gpu class's 3,072 MiB after 14m39s (segment 5). Rerun with a larger `--mem` sized from the observed peak, plus a check on whether the memory growth is expected.
+- **ENV-1 stage 1 done at `18df71f3`** (code `b125ace3`):
+  - **Delivered:** the air-room table (Canopy lab only; sim and shader identical); the interior model, a 37-recipe procedural kit and four definitions; the validator (connectivity for swim and walk capsules, per-route air proofs from real saves, rejection fixtures with controls).
+  - **Fork:** `FORK(interior-swim-speed)` until stage 2.
+  - **Compromises:** the pump-house terrain gap (≤0.3 m, root fix stage-2 masking); island interiors on flat stand-ins until OP-1.
+  - **Checks:** fast 176/176; heavy library-save 4/4.
+  - **Review:** Sol R1 running (`siltwake-env1-stage1-review-r1-sol-18df71f`).
