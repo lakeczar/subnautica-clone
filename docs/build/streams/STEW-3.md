@@ -30,7 +30,7 @@ Opus 5.5 high. Branch `t3/stew-3-heavy-gate`, from root `60f02dbb` (`origin/feat
     - **OOM kills, at the file's own budget and in nested cgroups below it, counted separately** (`null` where they can't be counted, never 0);
     - build-cache hits, misses, fills and fill CPU;
     - for timing files, the CPU wait;
-    - a `matchKey`: machine, containment, budget, cache state and Node.
+    - its compiled import closure (`closure`: a hash of the file and its relative imports, named relative to the build so it's the same in any checkout) and its own cache use (`cacheUse`: hit, fill, mixed or none). The run also records the lockfile's and the harness's hashes (R1-2).
   - **The store:**
     - The queue keeps every job's output on factory-worker, alickers' runs included. `node scripts/heavy-results.mjs ingest` copies the records, with the job's receipt (exit, machine, evidence binding, DISTURBED), into `/work/tmp/siltwake-results/heavy/runs/<ticket>.json`. That store outlives the queue's 7-day job logs.
     - Read it with `show [--commit] [--machine] [--file] [--json]` and `near [--pct 85]`.
@@ -41,6 +41,35 @@ Opus 5.5 high. Branch `t3/stew-3-heavy-gate`, from root `60f02dbb` (`origin/feat
   - **Each row** carries wall time, CPU, peak against its budget, cache use and any OOM kills.
   - **The fast tier's summary and `fast-timing.json`** carry the same context (`{ context, files }`): commit, machine, the 1 GiB V8 heap per file, job limit, concurrency and cache state.
   - **`pipefail`:** the shell scripts already set `set -euo pipefail`. The gate spawns no shell pipelines, and a test keeps the gate's commands and the package scripts it runs free of pipes.
+
+## R1 (Sol, `1b5d99d7`): what changed
+Root is merged (SCHED-3 included; no conflicts), at `0338044`.
+- **R1-1 (P1), alternate budgets passed the real-budget gate:**
+  - **The tier:** **either** variable is now an override: `SILTWAKE_HEAVY_BUDGET_MIB`, or `SILTWAKE_HEAVY_BUDGETS` naming any budgets file but `tests/heavy-budgets.json`. The tier labels it `NOT BUDGET EVIDENCE` (naming the variable) and stores `override: { budgetMiB, budgetsFile }` with `budgetEvidence: false`.
+  - **The gate also stops trusting the record's word.** Its full-tier check reads the canonical facts at its own commit (`canonicalAt`: every `tests/*.heavy.test.ts` from `git ls-tree`, and each file's budget from `tests/heavy-budgets.json` via `git show`). It requires the record's files to be exactly those, each at its canonical budget.
+  - **Regressions:**
+    - the heavy-tier test runs the tier with `SILTWAKE_HEAVY_BUDGETS` raising budgets to 1,536 MiB;
+    - the gate test refuses a budgets-file override, a record claiming real budgets at a raised one, and a missing file.
+- **R1-2 (P2), `matchKey` couldn't establish a control:** replaced by two separate things.
+  - **Identity** (`identityOf`): commit, file, the file's closure hash, the lockfile hash and the harness hash (the four tier scripts). The two arms of an A/B differ here by design.
+  - **Conditions** (`conditionsOf`): machine, containment, the job's memory limit, pool, concurrency, CPU grant, the file's budget, phase, Node, and the file's own cache use. Cache use comes from that file's counters, so a store that is warm overall no longer makes a fill look like a hit; Sol's warm-but-miss case is a regression.
+  - **`controlProblems(candidate, control, intendedSha)`:**
+    - the control is eligible, at exactly the intended clean commit (the CLI requires the full 40-hex SHA);
+    - it's for the same file, with the same harness and a recorded closure;
+    - every condition is equal, and the cache use isn't mixed.
+  - **CLI:** `heavy-results.mjs control --commit SHA --file NAME --like TICKET` lists the qualifying rows and why the others fail.
+- **R1-3 (P2), eligibility ignored the receipt:** one check, `eligibility(stored, run, row)`. It requires:
+  - a v2 record;
+  - a receipt for the same ticket that the record names;
+  - a job that ended on its own work, with an exit-1 file failure allowed as the files' own verdict;
+  - no stop reason, and not DISTURBED;
+  - evidence bound to the record's commit;
+  - the receipt's machine equal to the record's;
+  - a clean tree, canonical budgets, and a passing file.
+
+  `fullTierProblems`, `near` and `control` use it. `show` marks other rows `NOT ELIGIBLE` with the reasons, and `show --eligible` filters to eligible rows. Sol's mismatched-receipt probe is a regression, through `ingest` and the CLI as well.
+- **The pipe tripwire** also rejects `;` and `||` in the scripts the gate runs, since those could hide a failing stage. Sol noted the old regex let `false || true` through. It's still a tripwire, not proof that every exit code propagates.
+- **The 7-day retention gap:** unchanged and disclosed above. Sol and I agree a daily lightweight `ingest` is worth scheduling; that's the coordinator's call.
 
 ## Files
 - **New:** `scripts/heavy-results.mjs` (record format, store, CLI); `scripts/test-heavy-file.mjs` (each heavy file's process reports its CPU, peak and cache use); `tests/heavy-results.test.ts`.
@@ -67,7 +96,7 @@ Everything ran through the queue; nothing CPU-heavy ran locally.
   - **New in `tests/heavy-results.test.ts`:**
     - record parsing;
     - the cache state;
-    - `matchKey`;
+    - identity, conditions, eligibility and control selection (R1);
     - the full-tier rules (missing record, override, subset, other commit, dirty tree);
     - near-budget, ignoring override runs;
     - `ingest`, `show` and `near` against private queue and results roots;
@@ -101,7 +130,7 @@ Everything ran through the queue; nothing CPU-heavy ran locally.
 - **Next, from the recommendation:**
   - affected-only selection (item 6) changes only the gate step's `run`;
   - a nightly full run can call `heavy-results.mjs ingest` and `near` for its 85% alert;
-  - A/Bs can read a root row by `matchKey` instead of re-running the control arm.
+  - A/Bs can read a root row through `heavy-results.mjs control` instead of re-running the control arm.
 
 ## Compromises
 - **Records reach the store through the queue's job logs,** which are pruned after 7 days. A run on another machine or outside the queue stays only in its own `<build>/heavy-results.json` until someone ingests it. The gate ingests its own step at once; other runs need `heavy-results.mjs ingest` within the week. *Root fix:* the nightly run (item 4's next step) ingests. *Cost:* until then, branch runs not ingested within 7 days are lost from the store.
