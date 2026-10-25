@@ -1,0 +1,143 @@
+import test from "node:test";
+import assert from "node:assert/strict";
+import { digest, same } from "./render-assert.js";
+import { NullEngine } from "@babylonjs/core/Engines/nullEngine.js";
+import { Scene } from "@babylonjs/core/scene.js";
+import type { Mesh } from "@babylonjs/core/Meshes/mesh.js";
+import { createExpeditionArt } from "../src/render/expedition.js";
+import { createCelMaterial, createGlassMaterial } from "../src/render/materials.js";
+import { createGame } from "../src/sim/state.js";
+import { completeOpening } from "../src/sim/progression.js";
+import { Vector3 } from "@babylonjs/core/Maths/math.vector.js";
+import { HUNTER_GEOMETRY as H, HUNTER_PART_ENVELOPES } from "../src/content/encounterGeometry.js";
+import { hunterPose } from "../src/sim/hunter.js";
+
+test("hunter warning colors follow simulation state without moving geometry, leaking buffers or owning shared materials", () => {
+  // Only the label canvas is stubbed; production meshes/materials run on NullEngine.
+  const previous = Object.getOwnPropertyDescriptor(globalThis, "OffscreenCanvas");
+  class TextCanvas {
+    width = 512;
+    height = 128;
+    getContext() {
+      return { fillStyle: "", font: "", textAlign: "", textBaseline: "",
+        clearRect() {}, fillRect() {}, fillText() {},
+        measureText(text: string) { return { width: text.length * 24 }; } };
+    }
+  }
+  Object.defineProperty(globalThis, "OffscreenCanvas", { configurable: true, value: TextCanvas });
+  const engine = new NullEngine();
+  let expectedCounts: number[] | undefined;
+  try {
+    for (let rebuild = 0; rebuild < 4; rebuild++) {
+      const scene = new Scene(engine);
+      try {
+        scene.useRightHandedSystem = true;
+        const cel = createCelMaterial(scene), glass = createGlassMaterial(scene);
+        let celDisposed = false;
+        cel.onDisposeObservable.add(() => { celDisposed = true; });
+        const art = createExpeditionArt(scene, cel, glass);
+        const state = createGame(); completeOpening(state);
+        state.tick = 9600;
+        art.update(state);
+        const hunter = scene.getMeshByName("ecology.sound-hunter")! as Mesh;
+        const fins = [-1, 1].map(side => scene.getMeshByName(`ecology.hunter-warning-fin.${side}`)! as Mesh);
+        const owned = [hunter, ...fins];
+        const colors = (): number[][] => owned.map(m => Array.from(m.getVerticesData("color")!));
+        const resting = colors();
+        const buffers = owned.map(m => m.getVertexBuffer("color")!.getBuffer());
+        const shape = (m: Mesh): string[] => [digest(m.getVerticesData("position")), digest(m.getVerticesData("normal")), digest(m.getIndices())];
+        const geometry = owned.map(shape);
+        const otherColors = scene.meshes.filter(m => !owned.includes(m as Mesh)).map(m => [m, digest(m.getVerticesData("color"))] as const);
+        const counts = (): number[] => [scene.meshes.length, scene.materials.length, scene.geometries.length, scene.textures.length];
+        expectedCounts ??= counts();
+        assert.deepEqual(counts(), expectedCounts, "rebuild starts with bounded scene resources");
+
+        state.world.threat.mode = "warn";
+        const input = structuredClone(state);
+        art.update(state);
+        assert.deepEqual(state, input, "rendering cannot change encounter/save state");
+        const warning = colors();
+        for (let mesh = 0; mesh < owned.length; mesh++) {
+          assert.notDeepEqual(warning[mesh], resting[mesh]);
+          let changed = 0, unchanged = 0;
+          for (let i = 0; i < warning[mesh]!.length; i += 4) {
+            if (warning[mesh]![i] !== resting[mesh]![i]) {
+              changed++;
+              assert.equal(warning[mesh]![i + 3], -1, "selected colors use the existing emission convention");
+              for (let c = 0; c < 3; c++) {
+                assert.ok(warning[mesh]![i + c]! >= resting[mesh]![i + c]!);
+                assert.ok(warning[mesh]![i + c]! < resting[mesh]![i + c]! * 1.5);
+              }
+            } else unchanged++;
+          }
+          assert.ok(changed > 0 && unchanged > 0, "body and inner fin retain ordinary cel colors");
+        }
+        for (const mode of ["investigate", "pursue"] as const) {
+          state.world.threat.mode = mode; art.update(state);
+          assert.deepEqual(colors(), warning, "alert modes share a continuous simulation-time display");
+        }
+        for (let frame = 0; frame < 20; frame++) art.update(structuredClone(state));
+        assert.deepEqual(colors(), warning, "paused repeated presentations cannot advance the pulse");
+        state.tick += 20; art.update(state);
+        assert.notDeepEqual(colors(), warning, "advancing simulation time changes brightness");
+        assert.deepEqual(owned.map(m => m.getVertexBuffer("color")!.getBuffer()), buffers);
+        for (const replacement of ["disengage", "idle", null] as const) {
+          state.world.threat.mode = "warn"; art.update(state);
+          if (replacement) { state.world.threat.mode = replacement; art.update(state); }
+          else art.update(null);
+          assert.deepEqual(colors(), resting, "release/null restores exact authored colors and alpha");
+        }
+        assert.equal(hunter.isEnabled(), false);
+        art.update(input);
+        assert.deepEqual(colors(), warning, "replacing state/tick restores its deterministic display");
+        for (let update = 0; update < 2000; update++) {
+          state.tick = 10000 + update; state.world.threat.mode = update % 2 ? "pursue" : "warn";
+          state.world.threat.modeSeconds = update / 60;
+          art.update(state);
+          if (update % 20 === 0) {
+            const matrix = hunter.computeWorldMatrix(true), inverse = matrix.clone().invert();
+            const mouth = Vector3.TransformCoordinates(new Vector3(...H.mouth), matrix), numeric = hunterPose(state).mouth;
+            assert.ok(Vector3.Distance(mouth, new Vector3(numeric.x, numeric.y, numeric.z)) < 2e-5);
+            for (const mesh of owned) {
+              const world = mesh.computeWorldMatrix(true), vertices = mesh.getVerticesData("position")!, points: number[][] = [];
+              for (let i = 0; i < vertices.length; i += 3) {
+                const p = Vector3.TransformCoordinates(new Vector3(vertices[i]!, vertices[i + 1]!, vertices[i + 2]!), world);
+                const origin = state.world.threat.position;
+                assert.ok(Math.hypot(p.x - origin.x, p.z - origin.z) <= H.worldEnvelope.radius);
+                assert.ok(p.y - origin.y >= H.worldEnvelope.bottom && p.y - origin.y <= H.worldEnvelope.height);
+                points.push(Vector3.TransformCoordinates(p, inverse).asArray());
+              }
+              const indices = mesh.getIndices()!;
+              for (let i = 0; i < indices.length; i += 3) {
+                const triangle = [points[indices[i]!]!, points[indices[i + 1]!]!, points[indices[i + 2]!]!];
+                assert.ok(HUNTER_PART_ENVELOPES.some(b => triangle.every(p => p.every((v, j) => Math.abs(v - b.center[j]!) <= b.size[j]! / 2 + 2e-5))), "whole animated triangle fits an actor-separation piece");
+              }
+            }
+          }
+        }
+        assert.deepEqual(counts(), expectedCounts);
+        owned.forEach((mesh, i) => {
+          same(mesh.material, cel);
+          same(mesh.getVertexBuffer("color")!.getBuffer(), buffers[i], `${mesh.name} keeps its color buffer`);
+          assert.deepEqual(shape(mesh), geometry[i], `${mesh.name} geometry`);
+          assert.ok([...mesh.position.asArray(), ...mesh.rotation.asArray(), ...mesh.scaling.asArray(), ...mesh.getVerticesData("color")!].every(Number.isFinite));
+        });
+        for (const [mesh, original] of otherColors)
+          assert.equal(digest(mesh.getVerticesData("color")), original, `${mesh.name}: other art never brightens`);
+        assert.ok(fins.every(m => m.parent === hunter));
+        hunter.dispose(); // Includes authored child fins, never the shared material.
+        assert.ok(owned.every(m => m.isDisposed()));
+        assert.equal(celDisposed, false);
+        assert.ok(scene.materials.includes(cel));
+        art.update(null); art.update(input); // Disposed display buffers are no longer updated.
+        assert.equal(celDisposed, false);
+      } finally { scene.dispose(); }
+      assert.equal(engine.scenes.length, 0);
+      assert.deepEqual([scene.meshes.length, scene.materials.length, scene.geometries.length, scene.textures.length], [0, 0, 0, 0]);
+    }
+  } finally {
+    engine.dispose();
+    if (previous) Object.defineProperty(globalThis, "OffscreenCanvas", previous);
+    else Reflect.deleteProperty(globalThis, "OffscreenCanvas");
+  }
+});

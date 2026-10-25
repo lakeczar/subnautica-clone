@@ -1,0 +1,42 @@
+# M1 physical validation — two bounded owners
+
+This splits the remaining P4/P5 recovery and F0–F3 carrier evidence into two Sol 6.1 max assignments. Root alone dispatches, reconciles defects and integrates. The source baseline combines completed CORE, VISUAL and PRESENTATION with its focus correction; TASKS records its exact commit. M1 remains provisional. These are validation authors, not the independent acceptance pair.
+
+Read AGENTS, STATUS, PLAN, CONTRACTS, revised input, EXPEDITION_INTEGRATION, FLEET_AND_SURVIVAL, DELIVERY_AND_ACCEPTANCE, M1-PARALLEL, M1-A0/M1-CORE/M1-VISUAL evidence, and the Combined evidence checkpoints in M1-COORDINATION-ASTRA. Production source, tests, configuration, other evidence and coordinator records are **read-only**. Temporary scripts/artifacts belong in task-specific `/tmp` directories. Each worker owns only its named evidence file below. No fixes without a precise root assignment; report a reproducible defect and continue independent cases. No children, peer polling, pushes, PRs, parent edits or branch assembly.
+
+Render changes are concurrent in a separate worktree and preserve all physical, input, save and command contracts. Do not copy moving render code. Existing opaque windows, bright deep surface and absent Dart cockpit are known render work; record their effect on a test without absorbing them. Final combined-source checks remain root's responsibility after assembly.
+
+## M1-RECOVERY — gameplay loss and local rescue
+
+Exclusive repository path: `docs/build/evidence/M1-RECOVERY.md`. Port **5193**, if free. Own task artifacts `/tmp/siltwake-m1-recovery/`.
+
+Use an unmodified earned CORE save such as `/tmp/siltwake-m1-core/normal-return-saved.json` or an appropriate earlier earned checkpoint. Hash and retain the exact original, source `6b4f229`, session and actual import; copying it into an isolated task journal is a replay, not a new earned preparation run. Do not use cancelled/exploratory or seeded diagnostic files. Choose a nearby loss site within the implemented M1 rescue topology, not an unimplemented deep campaign route.
+
+1. Through ordinary controls, take the earned Dart and useful ordinary cargo into danger, incur gameplay incapacity/disablement, and observe refuge fallback. Retain discoveries/blueprints, essential fitted tools and investment; identify the same disabled hull, hold, module list, charge and dropped ordinary-cargo cache. Record warnings, cause, positions and exact identities before/after. Do not inject damage or call simulation functions as proof of gameplay failure.
+2. Establish the viable food/recovery restart, approach the shallow kit/staging point with existing equipment, locate the loss and execute actual local tow/repair or salvage/rebuild. Verify physical reachability and containment along the entire implemented recovery path, resource provenance and absence of a duplicate advanced ship requirement. Explain where the reusable kit and ordinary stock come from.
+3. Cause one further gameplay failure during a rescue or follow-up rescue attempt, then demonstrate continued recoverability without deleting the first cache/critical investment or exhausting the only recovery path. Record any real blocker and the smallest reproducible sequence instead of bypassing it with an edited save.
+4. Save immediately after relevant paused panel commands and after recovery; actual page reload/Continue must preserve player mode/pose, knowledge, sources/facilities, items/containers, hull/cargo/power/health, caches/loss/tow state. Compare entire state or explicit invariants while accounting for ordinary elapsed ticks. Capture event/action counts and bounded input logs to disk **before navigation**, addressing CORE's lost in-page trace.
+5. Exercise food access from an empty carried hold through ordinary inputs. Check depleted power and recovery if practical; draining a healthy full battery by hours of idle waiting is unnecessary. A seeded accelerated zero-power case is a labelled diagnostic and must leave ordinary-depletion evidence explicitly open. Existing CORE detached diagnostic is available and need not be repeated unchanged.
+
+This is P4 and recovery-specific P5, not the carrier matrix or a full New→Canopy repeat. Full all-advanced-hull/deep Bobbin topology remains M2. Return exact verified coverage, failures and unexecuted items separately.
+
+## M1-CARRIER — seeded physical feasibility
+
+Exclusive repository path: `docs/build/evidence/M1-CARRIER.md`. Port **5194**, if free. Own task artifacts `/tmp/siltwake-m1-carrier/`.
+
+Start through the supported carrier feasibility fixture and retain its initial save. Keep it in separate storage from earned expeditions. All F0–F3 evidence is **seeded feasibility**, never campaign acquisition or an earned recovery run. Use ordinary controls after the labelled setup; retain exact source and transaction IDs.
+
+1. **F0:** stop/engage station keeping, leave helm, traverse actual bridge/passage/vestibule, return to helm, exercise waterline/large-hull collision and valid exits. Confirm sealed rooms cannot be walked into; inspect the final aft vestibule closeup omitted by VISUAL. Capture ordinary command-then-save with no forced simulation tick.
+2. **F1:** two compact dry berths; submerged Spindle stays safe while Dart launches. A blocked exit must refuse without changing craft identity/cargo/charge/damage/ownership. Check surface-only Spindle deployment and full transfer-path clearance, not merely endpoints or art dimensions.
+3. **F2:** clear both compact slots through actual supported controls, reach a supported dock, configure one medium berth, then capture and launch the available medium fixture craft. Check physical approach, whole-volume clearance and independent vessel state. If the fixture cannot support the path, report exact missing mechanism rather than inventing a campaign hull or teleporting to claim a pass.
+4. **F3:** save/reload through prepared and lock states, deliberate pause/focus interruption, obstruction after preparation, exactly-once detachment and carrier incapacity/unsafe-refuge fallback. Use ordinary actions where possible; label any fixture alteration or precisely seeded transition diagnostic. Preserve the existing unit loops for exact tick cuts; do not claim a seeded tick is naturally timed gameplay. Check immediate save invariants, no duplication, no stranded interior player and no accidental exposure of the other dry berth.
+
+No underway interior feature, new carrier model, campaign acquisition or six-hull expansion. If a blocking physical defect prevents later transitions, preserve its failing state/input trace and complete unrelated cases. Root will assign the necessary production correction separately.
+
+## Evidence and browser discipline for both workers
+
+Before any browser, preview, screenshot or test read `/work/repos/fleet/BROWSER_RULES.md` when available and `docs/BROWSER_RULES.md`. Verify the browser belongs to factory-worker or another isolated Linux host; never automate the owner's Windows desktop. Prefer T3 preview_status then preview_open; use one task-owned incognito storage context and the assigned free port. Preserve historical tab14, human/shared tabs and all peer resources. No killing processes by name. Close only owned tabs/server/recordings via normal lifecycle tools. Keep inputs/recordings short enough to finish before tool timeouts; do not leave a timed-out control script running.
+
+Build the committed production source and record the JS/CSS hashes and host/renderer/quality. Root already runs the combined check; avoid repeating all unchanged matrices. Focused existing tests/pure diagnostics can explain a concrete observed defect but never replace the physical run. Inspect console/loading errors. SwiftShader and muted audio establish neither dedicated-GPU performance nor audible quality.
+
+Return a coherent evidence-only commit, exact source/bundle, original save hashes, reproducible ordinary steps and action counts, retained before/after/reload saves, actual-camera screenshots and short clips, and a portable hash-indexed archive. Distinguish author observations, pure diagnostics and unexecuted criteria. Preserve prior artifacts. Stop after the bounded handoff; completion wakes root. No acceptance claim: both related batches and integrated M1 still require fresh non-author Astra xhigh and Sol 6.1 max reviews plus coordinator inspection.

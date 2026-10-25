@@ -1,0 +1,766 @@
+import { BERTH_ENVELOPES, HULL_COLLIDERS, HULL_HOLD_CU, HULLS } from "../content/registry.js";
+import type { Capsule, CarrierState, ContainerState, GameState, Vec3, VehicleState, WorldQueries } from "./types.js";
+import { CARRIER_COMPARTMENTS, compartmentId, distance } from "./inventory.js";
+import { HEARTHLINE_SOCKETS, hearthlineInteriorSolids } from "../content/fleet/hearthlineInterior.js";
+import { createGame, makeVehicle } from "./state.js";
+import { completeOpening } from "./progression.js";
+import { createWorldQueries, sweptHullClearance, withinWorldBounds, WORLD_BOUNDS, type HorizontalBounds, type Solid } from "./world.js";
+import { YARD_BUILD } from "../content/yard.js";
+import { BERTH_SLOT_SIZES } from "./upgrades/fitting.js";
+import { craftProfile } from "./upgrades/effects.js";
+import { fittedUpgradeKinds } from "./fleet.js";
+import { SITES } from "../content/regions/sites.js";
+import { siteDatum } from "../content/regions/access.js";
+import { worldFloor } from "../content/regions/worldFloor.js";
+export const BERTH_LOCAL: readonly Vec3[] = [
+  { x: -3, y: 4, z: 1 },
+  // C3 (P1): the compact rooms' inboard walls stand at -0.55 and 0.75 (each Dart
+  // envelope meets its wall), so the bow-to-stern walkway is 1.14 m, not 0.84 m.
+  { x: 3.2, y: 4, z: 1 },
+];
+export const LAUNCH_LOCAL = { x: 0, y: -3, z: -17 };
+export const CARRIER_SUPPORT = { x: 65, y: -0.9, z: 12 };
+/** Metres, carrier-local, keel reference. These bounds own art and physical transfer.
+ * Dry rooms have independent floor hatches. One opens to the lower lock; the other
+ * remains sealed. Rail transfer is atomic, with the complete route swept beforehand. */
+export const CARRIER_LAYOUT = {
+  wall: 0.08,
+  deck: { min: { x: -6.3, y: 3.8, z: -12 }, max: { x: 6.3, y: 4, z: 12 } },
+  compact: [
+    { id: "carrier.berth.port", min: { x: -6, y: 4, z: -2.8 }, max: { x: -0.55, y: 8.4, z: 4.8 } },
+    { id: "carrier.berth.starboard", min: { x: 0.75, y: 4, z: -2.8 }, max: { x: 6, y: 8.4, z: 4.8 } },
+  ],
+  medium: { id: "carrier.berth.medium", min: { x: -6, y: 4, z: -3.7 }, max: { x: 0.1, y: 8.4, z: 5.7 } },
+  lock: { id: "carrier.lock", min: { x: -6, y: HULL_COLLIDERS.hearthline.bottom, z: -3.7 }, max: { x: 6, y: 3.8, z: 5.7 } },
+  lockKeelY: -0.3,
+  // Side shields/gate stop at the hull underside. The descending transfer route
+  // continues through open water below them; it does not add a submerged skirt.
+  throat: { id: "carrier.throat", min: { x: -3.1, y: HULL_COLLIDERS.hearthline.bottom, z: -12 }, max: { x: 3.1, y: 3.8, z: -3.8 } },
+  gateZ: -11.5,
+  railTurn: { x: 0, y: -0.3, z: -9 },
+  helm: { x: 0, y: 4, z: -6 },
+  vestibule: { x: 4, y: 4, z: 9 },
+  exteriorVestibule: { x: 10, y: 3, z: 9 },
+  interior: { minX: -4.7, maxX: 4.7, minZ: -11, maxZ: 10, y: 4 },
+} as const;
+
+/** SIG-1: with the berth extension the starboard compact room stands 0.25 m further
+ * outboard beside the medium room, so the bow-to-stern walkway stays 0.74 m clear
+ * between their walls (the diver is 0.68 m wide). Its berth datum moves with it. */
+export const MIXED_COMPACT_ROOM = { id: "carrier.berth.starboard", min: { x: 1, y: 4, z: -2.8 }, max: { x: 6, y: 8.4, z: 4.8 } } as const;
+export const MIXED_COMPACT_BERTH: Vec3 = { x: 3.5, y: 4, z: 1 };
+export function carrierRooms(configuration: CarrierState["configuration"]): readonly Solid[] {
+  return configuration === "compact" ? CARRIER_LAYOUT.compact : configuration === "medium" ? [CARRIER_LAYOUT.medium]
+    : [CARRIER_LAYOUT.medium, MIXED_COMPACT_ROOM];
+}
+/** A slot's berth datum (carrier-local keel) in a layout. */
+export const berthLocal = (configuration: CarrierState["configuration"], slot: 0 | 1): Vec3 =>
+  configuration === "mixed" && slot === 1 ? MIXED_COMPACT_BERTH : BERTH_LOCAL[slot]!;
+/** The berth size a slot takes in a layout, or null where the layout has no such slot. */
+export const slotSize = (configuration: CarrierState["configuration"], slot: number): "compact" | "medium" | null =>
+  BERTH_SLOT_SIZES[configuration][slot] ?? null;
+/** The free berth this craft fits now, or null. */
+export function freeBerth(s: Readonly<GameState>, h: Readonly<VehicleState>, v: Readonly<VehicleState>): 0 | 1 | null {
+  const dock = s.fleet.docking;
+  if (!dock) return null;
+  return ([0, 1] as const).find((n) => slotSize(dock.configuration, n) === HULLS[v.hull].berth &&
+    !s.fleet.vehicles.some((a) => a.berth?.carrierId === h.id && a.berth.slot === n)) ?? null;
+}
+/** The layout a berth refit moves to: compact → medium (→ mixed, with the extension) → compact. */
+export function nextBerthLayout(s: Readonly<GameState>, h: Readonly<VehicleState>): CarrierState["configuration"] {
+  const current = s.fleet.docking?.configuration ?? "compact";
+  const mixed = craftProfile(h.hull, h.rating, fittedUpgradeKinds(s, h)).mixedBerths;
+  return current === "compact" ? "medium" : current === "medium" && mixed ? "mixed" : "compact";
+}
+
+/** Solid shell with only the selected floor hatch and outer gate opened for transfer. */
+export function carrierStructure(configuration: CarrierState["configuration"], transferSlot?: 0 | 1): Solid[] {
+  const rooms = carrierRooms(configuration), t = CARRIER_LAYOUT.wall, result: Solid[] = [];
+  for (const [slot, room] of rooms.entries()) {
+    const { min: a, max: b, id } = room;
+    result.push(
+      { id: `${id}.port`, min: { x: a.x - t, y: a.y, z: a.z - t }, max: { x: a.x, y: b.y, z: b.z + t } },
+      { id: `${id}.starboard`, min: { x: b.x, y: a.y, z: a.z - t }, max: { x: b.x + t, y: b.y, z: b.z + t } },
+      { id: `${id}.fore`, min: { x: a.x, y: a.y, z: a.z - t }, max: { x: b.x, y: b.y, z: a.z } },
+      { id: `${id}.aft`, min: { x: a.x, y: a.y, z: b.z }, max: { x: b.x, y: b.y, z: b.z + t } },
+      { id: `${id}.roof`, min: { x: a.x - t, y: b.y, z: a.z - t }, max: { x: b.x + t, y: b.y + t, z: b.z + t } },
+    );
+    if (slot !== transferSlot) result.push({ id: `${id}.floor`, min: { x: a.x, y: CARRIER_LAYOUT.deck.min.y, z: a.z }, max: { x: b.x, y: a.y, z: b.z } });
+  }
+  // Deck cells around the independently sealed floor hatches, including the passage.
+  const deck = CARRIER_LAYOUT.deck;
+  const xs = [...new Set([deck.min.x, deck.max.x, ...rooms.flatMap((r) => [r.min.x, r.max.x])])].sort((a, b) => a - b);
+  const zs = [...new Set([deck.min.z, deck.max.z, ...rooms.flatMap((r) => [r.min.z, r.max.z])])].sort((a, b) => a - b);
+  for (let i = 1; i < xs.length; i++) for (let j = 1; j < zs.length; j++) {
+    const x = (xs[i - 1]! + xs[i]!) / 2, z = (zs[j - 1]! + zs[j]!) / 2;
+    if (!rooms.some((r) => x > r.min.x && x < r.max.x && z > r.min.z && z < r.max.z))
+      result.push({ id: `carrier.deck.${i}.${j}`, min: { x: xs[i - 1]!, y: deck.min.y, z: zs[j - 1]! }, max: { x: xs[i]!, y: deck.max.y, z: zs[j]! } });
+  }
+  const lock = CARRIER_LAYOUT.lock, throat = CARRIER_LAYOUT.throat;
+  result.push({ id: "carrier.lock.floor", min: { ...lock.min }, max: { x: lock.max.x, y: CARRIER_LAYOUT.lockKeelY, z: lock.max.z } });
+  for (const [side, x] of [["port", throat.min.x - t], ["starboard", throat.max.x]] as const)
+    result.push({ id: `carrier.throat.${side}`, min: { x, y: throat.min.y, z: throat.min.z }, max: { x: x + t, y: throat.max.y, z: throat.max.z } });
+  if (transferSlot === undefined) result.push({ id: "carrier.lock.gate", min: { x: throat.min.x, y: throat.min.y, z: CARRIER_LAYOUT.gateZ - t }, max: { x: throat.max.x, y: throat.max.y, z: CARRIER_LAYOUT.gateZ } });
+  return result;
+}
+
+function transferEnvelope(v: VehicleState): Capsule {
+  return v.hull === "hearthline" ? HULL_COLLIDERS.hearthline : BERTH_ENVELOPES[v.hull];
+}
+function envelopeSolid(id: string, p: Vec3, shape: Capsule): Solid {
+  const x = shape.halfWidth ?? shape.radius, z = shape.halfLength ?? shape.radius;
+  return { id, min: { x: p.x - x, y: p.y + (shape.bottom ?? 0), z: p.z - z }, max: { x: p.x + x, y: p.y + shape.height, z: p.z + z } };
+}
+/** Supported carrier docks: the fixture's surface dock, the yard berth where the
+ * carrier is built, and every S2 mooring offering repair (S9: berths reconfigure
+ * only while moored where repair is available). */
+export const CARRIER_SUPPORTS: readonly Vec3[] = [
+  CARRIER_SUPPORT, YARD_BUILD.hearthline.pose,
+  ...SITES.filter((site) => site.role === "mooring" && site.services?.includes("repair")).map((site) => siteDatum(site, worldFloor)),
+];
+export function atCarrierSupport(h: VehicleState): boolean {
+  return CARRIER_SUPPORTS.some((p) => distance(h.pose.position, p) < 4) && Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) < 0.05;
+}
+/** A newly fitted-out campaign carrier: empty berths and sockets, its pantry and
+ * fabrication compartments, station keeping in the yard berth. */
+export function launchCarrier(s: GameState, h: VehicleState): void {
+  s.fleet.docking = {
+    vehicleId: h.id, configuration: "compact", stationKeeping: true, supportedDock: atCarrierSupport(h),
+    transaction: null, sequence: 0, completed: [], launchBlocked: false, sockets: emptySockets(),
+  };
+  s.inventory.containers.push(...carrierCompartmentContainers(h));
+}
+/** Every Hearthline socket empty: New Game's and a pre-socket save's value. */
+export const emptySockets = (): Record<string, string | null> =>
+  Object.fromEntries(HEARTHLINE_SOCKETS.map((socket) => [socket.id, null]));
+export const occupiedSockets = (d: Pick<CarrierState, "sockets">): string[] =>
+  HEARTHLINE_SOCKETS.filter((socket) => d.sockets[socket.id] != null).map((socket) => socket.id);
+/** The carrier's pantry and fabrication compartments beside its stores (the cargo container). */
+export const carrierCompartmentContainers = (h: VehicleState): ContainerState[] =>
+  CARRIER_COMPARTMENTS.map((c) => ({ id: compartmentId(h.id, c.suffix), kind: "locker" as const, capacity: c.capacity, ownerId: h.id }));
+export function carrierInteriorSolids(s: GameState): Solid[] {
+  const configuration = s.fleet.docking?.configuration ?? "compact";
+  return [...carrierStructure(configuration),
+    // The interior kit: fixtures plus the footprint of every occupied socket.
+    ...hearthlineInteriorSolids(s.fleet.docking ? occupiedSockets(s.fleet.docking) : []),
+    // Sealed compartments are not walking space, even when their craft is absent.
+    ...carrierRooms(configuration),
+    ...s.fleet.vehicles.filter((v) => v.berth).map((v) => envelopeSolid(`berth.${v.id}`, v.berth!.pose.position, transferEnvelope(v)))];
+}
+export function launchPoint(h: VehicleState, v: VehicleState): Vec3 {
+  const p = localToWorld(LAUNCH_LOCAL, h);
+  if (v.hull === "spindle") p.y = -0.4;
+  return p;
+}
+/** Full world-space keel route, including the independent capture approach.
+ * `h` defaults to the carrier as it is; a copy at another pose asks "what if". */
+export function carrierTransferPath(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture",
+  h: VehicleState = carrierHull(s)!): Vec3[] {
+  const berth = berthLocal(s.fleet.docking?.configuration ?? "compact", slot);
+  const path = [berth, { ...berth, y: CARRIER_LAYOUT.lockKeelY },
+    { x: 0, y: CARRIER_LAYOUT.lockKeelY, z: berth.z }, CARRIER_LAYOUT.railTurn].map((p) => localToWorld(p, h));
+  path.push(launchPoint(h, v));
+  return type === "capture" ? [{ ...v.pose.position }, ...path.reverse()] : path;
+}
+
+/** What blocks a transfer: the developer test obstruction, the carrier's own
+ * structure or berthed craft, the seabed and rock, or another craft in the water. */
+export type TransferBlock = "test" | "structure" | "terrain" | "craft";
+
+/** The craft's rail-aligned envelope as a world-axis box at the carrier's yaw. */
+function worldEnvelope(shape: Capsule, yaw: number): Capsule {
+  const cos = Math.abs(Math.cos(yaw)), sin = Math.abs(Math.sin(yaw));
+  const rx = shape.halfWidth ?? shape.radius, rz = shape.halfLength ?? shape.radius;
+  return { ...shape, halfWidth: rx * cos + rz * sin, halfLength: rx * sin + rz * cos };
+}
+/** The lock corridor runs forward and down out of the gate under the bow, to the
+ * launch point 17 m ahead of the keel datum and 3 m below it. */
+export function transferBlock(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture", world: WorldQueries,
+  h: VehicleState = carrierHull(s)!): TransferBlock | null {
+  const dock = s.fleet.docking!, shape = transferEnvelope(v);
+  if (dock.launchBlocked) return "test";
+  const path = carrierTransferPath(s, v, slot, type, h);
+  // The in-carrier keel route stays exactly carrier-local: at an oblique heading a
+  // world round trip lands the lock leg an ulp below the lock floor's top and grazes it.
+  const berth = berthLocal(dock.configuration, slot), lockY = CARRIER_LAYOUT.lockKeelY;
+  const inner = [berth, { ...berth, y: lockY }, { x: 0, y: lockY, z: berth.z }, CARRIER_LAYOUT.railTurn,
+    v.hull === "spindle" ? worldToLocal(launchPoint(h, v), h) : LAUNCH_LOCAL];
+  const local = type === "capture" ? [worldToLocal(v.pose.position, h), ...inner.reverse()] : inner;
+  // The independent approach is outside the carrier. At the mouth, guided rails
+  // align the hull; use its broader piloting envelope for that initial approach.
+  const structure = carrierStructure(dock.configuration, slot);
+  for (const a of s.fleet.vehicles)
+    if (a.id !== v.id && a.berth?.carrierId === h.id)
+      structure.push(envelopeSolid(`berth.${a.id}`, a.berth.pose.position, transferEnvelope(a)));
+  const localWorld = createWorldQueries(structure, () => -200);
+  const worldShape = worldEnvelope(shape, h.pose.yaw);
+  const obstacles = s.fleet.vehicles.filter((a) => a.id !== v.id && a.id !== h.id && !a.berth)
+    .map((a) => envelopeSolid(`craft.${a.id}`, a.pose.position, HULL_COLLIDERS[a.hull]));
+  // Other craft only, in world coordinates: no floor of its own (the composed world
+  // is checked separately), so a transfer below 200 m is not refused by a stand-in.
+  const otherWorld = createWorldQueries(obstacles, () => -1e4);
+  if (!sweptHullClearance(localWorld, local, shape)) return "structure";
+  if (!sweptHullClearance(world, path, worldShape)) return "terrain";
+  if (!sweptHullClearance(otherWorld, path, worldShape)) return "craft";
+  if (type === "capture") {
+    if (!sweptHullClearance(world, path.slice(0, 2), HULL_COLLIDERS[v.hull])) return "terrain";
+    if (!sweptHullClearance(localWorld, local.slice(0, 2), HULL_COLLIDERS[v.hull])) return "structure";
+    if (!sweptHullClearance(otherWorld, path.slice(0, 2), HULL_COLLIDERS[v.hull])) return "craft";
+  }
+  return null;
+}
+
+/** The smallest change of the carrier's pose that clears a launch corridor
+ * blocked by terrain here: a turn (radians; positive is to starboard, 5° steps
+ * up to 180°), else a rise (metres, 2 m steps toward the surface), else null. */
+export type CorridorRemedy = { turn: number } | { rise: number };
+export function corridorRemedy(s: GameState, v: VehicleState, world: WorldQueries): CorridorRemedy | null {
+  const search = corridorRemedySearch(s, v, world);
+  for (;;) { const step = search.next(); if (step.done) return step.value; }
+}
+/** corridorRemedy one candidate sweep at a time (it yields after each), so a
+ * presentation can spread a long search over frames. Same order, same answer. */
+export function* corridorRemedySearch(s: GameState, v: VehicleState, world: WorldQueries): Generator<void, CorridorRemedy | null> {
+  const h = carrierHull(s), slot = v.berth?.slot;
+  if (!h || slot === undefined) return null;
+  // Only the world leg depends on the pose: the carrier's own structure and
+  // other craft are separate refusals with their own advice.
+  const at = (yaw: number, y: number): boolean => {
+    const copy = { ...h, pose: { ...h.pose, yaw: ((yaw % TAU) + TAU) % TAU, position: { ...h.pose.position, y } } };
+    return sweptHullClearance(world, carrierTransferPath(s, v, slot, "launch", copy), worldEnvelope(transferEnvelope(v), copy.pose.yaw));
+  };
+  const step = Math.PI / 36;
+  for (let n = 1; n <= 36; n++)
+    for (const sign of [1, -1]) {
+      if (at(h.pose.yaw + sign * n * step, h.pose.position.y)) return { turn: sign * n * step };
+      yield;
+    }
+  for (let rise = 2; h.pose.position.y + rise <= -0.9; rise += 2) {
+    if (at(h.pose.yaw, h.pose.position.y + rise)) return { rise };
+    yield;
+  }
+  return null;
+}
+const TAU = Math.PI * 2;
+
+/** Player-facing copy for a blocked transfer, with what to do about it. */
+export function transferAdvice(s: GameState, v: VehicleState, block: TransferBlock, type: "launch" | "capture", world: WorldQueries): string {
+  const craft = HULLS[v.hull].label;
+  if (block === "test") return "The lock corridor is obstructed (developer test). Nothing changed.";
+  if (block === "structure") return `The ${craft}'s route out of its berth is obstructed. Nothing changed.`;
+  if (block === "craft") return type === "launch"
+    ? "Another craft obstructs the lock corridor under the bow. Move it clear, then launch."
+    : `Another craft obstructs the lock mouth under the bow. Move it clear, then recover the ${craft}.`;
+  if (type === "capture") return `The lock corridor under the bow is obstructed. Move the Hearthline to open water, then recover the ${craft}.`;
+  return launchTerrainAdvice(v, corridorRemedy(s, v, world));
+}
+/** The advice for a launch the terrain obstructs, given the remedy search's answer. */
+export function launchTerrainAdvice(v: VehicleState, remedy: CorridorRemedy | null): string {
+  const craft = HULLS[v.hull].label;
+  if (!remedy) return `The lock corridor under the bow is obstructed and no nearby heading clears it. Take the Hearthline into open water, then launch the ${craft}.`;
+  if ("rise" in remedy) return `The seabed obstructs the lock corridor under the bow. Rise about ${remedy.rise} m, then launch the ${craft}.`;
+  const degrees = Math.round(Math.abs(remedy.turn) * 180 / Math.PI);
+  return `The lock corridor under the bow is obstructed. Turn about ${degrees}° to ${remedy.turn > 0 ? "starboard" : "port"} for clear water, then launch the ${craft}.`;
+}
+
+/** Why a free craft cannot be drawn in yet, and how to bring it. */
+export function captureApproach(h: VehicleState, v: VehicleState): string {
+  const craft = HULLS[v.hull].label;
+  if (v.berth) return `The ${craft} is already in a berth.`;
+  if (v.disabled) return `The ${craft} is disabled. Restore it before the lock can draw it in.`;
+  const gap = distance(v.pose.position, launchPoint(h, v)), speed = Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z);
+  if (gap > 13) return `The ${craft} is ${Math.round(gap)} m from the lock mouth under the Hearthline's bow. Bring it within 13 m.`;
+  return `The ${craft} is still moving at ${speed.toFixed(1)} m/s. Let it settle at the lock mouth.`;
+}
+
+function transferRefusal(s: GameState, v: VehicleState, slot: 0 | 1, type: "launch" | "capture", world: WorldQueries): string | null {
+  const block = transferBlock(s, v, slot, type, world);
+  return block ? transferAdvice(s, v, block, type, world) : null;
+}
+export function localToWorld(local: Vec3, carrier: VehicleState): Vec3 {
+  const { position: p, yaw } = carrier.pose;
+  return {
+    x: p.x + Math.cos(yaw) * local.x - Math.sin(yaw) * local.z,
+    y: p.y + local.y,
+    z: p.z + Math.sin(yaw) * local.x + Math.cos(yaw) * local.z,
+  };
+}
+export function worldToLocal(world: Vec3, carrier: VehicleState): Vec3 {
+  const p = carrier.pose.position,
+    dx = world.x - p.x,
+    dz = world.z - p.z;
+  return {
+    x: Math.cos(carrier.pose.yaw) * dx + Math.sin(carrier.pose.yaw) * dz,
+    y: world.y - p.y,
+    z: -Math.sin(carrier.pose.yaw) * dx + Math.cos(carrier.pose.yaw) * dz,
+  };
+}
+/** The existing yaw-independent piloting proxy encloses the rooms, berth hulls,
+ * walking bounds and vestibules at every heading. Launch still needs its own sweep. */
+export function carrierTravelBounds(): HorizontalBounds {
+  const { radius } = HULL_COLLIDERS.hearthline;
+  return { minX: WORLD_BOUNDS.minX + radius, maxX: WORLD_BOUNDS.maxX - radius,
+    minZ: WORLD_BOUNDS.minZ + radius, maxZ: WORLD_BOUNDS.maxZ - radius };
+}
+
+/** Retained old poses may overhang the new travel envelope. Restrict their turn
+ * at the first attached-origin world contact, including extrema between ticks.
+ * This does not add rotating-hull solid collision or require propulsion power. */
+export function constrainCarrierYaw(s: GameState, desiredYaw: number): number {
+  const h = carrierHull(s);
+  if (!h) return desiredYaw;
+  const tau = Math.PI * 2, quarter = Math.PI / 2;
+  // Check precisely the representation we will save. Adding/subtracting tau
+  // after a contact search can round an origin through a strict world plane.
+  const wrap = (yaw: number): number => yaw < 0 ? yaw + tau : yaw >= tau ? yaw - tau : yaw;
+  const delta = ((desiredYaw - h.pose.yaw + Math.PI + tau) % tau) - Math.PI;
+  const points = s.fleet.vehicles.filter((v) => v.berth?.carrierId === h.id).map((v) => v.berth!.pose.position);
+  const fits = (fraction: number): boolean => {
+    const end = h.pose.yaw + delta * fraction;
+    // The requested endpoint can round differently from the recomputed arc end.
+    const endpoint = fraction === 1 ? desiredYaw : wrap(end);
+    for (const p of points) {
+      const phase = Math.atan2(p.z, p.x), angles = [h.pose.yaw, endpoint];
+      for (let n = Math.ceil((Math.min(h.pose.yaw, end) + phase) / quarter);
+        n <= Math.floor((Math.max(h.pose.yaw, end) + phase) / quarter); n++) angles.push(wrap(n * quarter - phase));
+      for (const yaw of angles)
+        if (!withinWorldBounds(localToWorld(p, { ...h, pose: { ...h.pose, yaw } }))) return false;
+    }
+    return true;
+  };
+  if (fits(1)) return desiredYaw;
+  let low = 0, high = 1;
+  for (let i = 0; i < 48; i++) {
+    const mid = (low + high) / 2;
+    if (fits(mid)) low = mid;
+    else high = mid;
+  }
+  return low === 0 ? h.pose.yaw : wrap(h.pose.yaw + delta * low);
+}
+
+/** Checked landing for explicit entry and legacy walking-pose migration in a
+ * validated carrier assembly. Returns a detached carrier-local point, preferring
+ * the authored destination. Only a world-edge overhang enables the dry-passage
+ * fallback; every candidate must clear local structure and the supplied world.
+ * Returns null if no supported landing clears. Does not mutate state/ownership. */
+export function carrierInteriorEntry(s: GameState, world: WorldQueries, preferred: Vec3): Vec3 | null {
+  const h = carrierHull(s)!, shape = { radius: 0.34, height: 1.75 };
+  const solids = carrierInteriorSolids(s), localWorld = createWorldQueries(solids, () => -200);
+  const clear = (p: Vec3): boolean => localWorld.clearance(p, shape) && world.clearance(localToWorld(p, h), shape);
+  if (clear(preferred)) return { ...preferred };
+  const target = localToWorld(preferred, h), r = shape.radius;
+  if (withinWorldBounds({ ...target, x: target.x - r, z: target.z - r }) &&
+    withinWorldBounds({ ...target, x: target.x + r, z: target.z + r })) return null;
+  const b = CARRIER_LAYOUT.interior;
+  // Partition by physical room/wall faces expanded by the walking capsule.
+  // Each clear cell is convex; clipping it against the world gives safe entry
+  // candidates without arbitrary sampled margins or moving any vessel.
+  const cuts = (axis: "x" | "z", min: number, max: number): number[] => [...new Set([
+    min, max, ...solids.filter((a) => a.min.y < b.y + shape.height && a.max.y > b.y)
+      .flatMap((a) => [a.min[axis] - r, a.max[axis] + r]).map((n) => Math.max(min, Math.min(max, n))),
+  ])].sort((a, c) => a - c);
+  const xs = cuts("x", b.minX, b.maxX), zs = cuts("z", b.minZ, b.maxZ);
+  let best: Vec3 | null = null;
+  for (let i = 1; i < xs.length; i++) for (let j = 1; j < zs.length; j++) {
+    const x0 = xs[i - 1]!, x1 = xs[i]!, z0 = zs[j - 1]!, z1 = zs[j]!;
+    if (!localWorld.clearance({ x: (x0 + x1) / 2, y: b.y, z: (z0 + z1) / 2 }, shape)) continue;
+    let polygon: Vec3[] = [{ x: x0, y: b.y, z: z0 }, { x: x1, y: b.y, z: z0 },
+      { x: x1, y: b.y, z: z1 }, { x: x0, y: b.y, z: z1 }];
+    for (const [axis, edge, sign] of [["x", WORLD_BOUNDS.minX + r, 1], ["x", WORLD_BOUNDS.maxX - r, -1],
+      ["z", WORLD_BOUNDS.minZ + r, 1], ["z", WORLD_BOUNDS.maxZ - r, -1]] as const) {
+      const clipped: Vec3[] = [];
+      for (let k = 0; k < polygon.length; k++) {
+        const a = polygon[k]!, c = polygon[(k + 1) % polygon.length]!;
+        const da = (localToWorld(a, h)[axis] - edge) * sign, dc = (localToWorld(c, h)[axis] - edge) * sign;
+        if (da >= 0) clipped.push(a);
+        if ((da >= 0) !== (dc >= 0)) {
+          const t = da / (da - dc);
+          clipped.push({ x: a.x + (c.x - a.x) * t, y: b.y, z: a.z + (c.z - a.z) * t });
+        }
+      }
+      polygon = clipped;
+    }
+    if (!polygon.length) continue;
+    const p = { x: polygon.reduce((sum, a) => sum + a.x, 0) / polygon.length, y: b.y,
+      z: polygon.reduce((sum, a) => sum + a.z, 0) / polygon.length };
+    if (clear(p) && (!best || distance(p, preferred) < distance(best, preferred))) best = p;
+  }
+  return best;
+}
+export const carrierHull = (s: GameState): VehicleState | undefined =>
+  s.fleet.vehicles.find((v) => v.id === s.fleet.docking?.vehicleId);
+export function fixtureGame(): GameState {
+  const s = createGame();
+  completeOpening(s);
+  s.scenario = "carrier-fixture";
+  s.feedback =
+    "CARRIER FEASIBILITY FIXTURE · seeded state, separate from earned expedition progression.";
+  const h = makeVehicle(
+    "fixture_hearthline",
+    "hearthline",
+    { x: 65, y: -24, z: 12 },
+    "fixture_carrier_hold",
+  );
+  const d = makeVehicle(
+    "fixture_dart",
+    "dart",
+    localToWorld(BERTH_LOCAL[0]!, h),
+    "fixture_dart_hold",
+  );
+  d.charge = 63;
+  d.health = 74;
+  const p = makeVehicle(
+    "fixture_spindle",
+    "spindle",
+    localToWorld(BERTH_LOCAL[1]!, h),
+    "fixture_spindle_hold",
+  );
+  p.charge = 82;
+  p.health = 91;
+  const c = makeVehicle(
+    "fixture_creel",
+    "creel",
+    { x: 81, y: -25, z: -12 },
+    "fixture_creel_hold",
+  );
+  d.berth = {
+    carrierId: h.id,
+    slot: 0,
+    pose: { frame: "carrier-local", position: { ...BERTH_LOCAL[0]! }, yaw: 0 },
+  };
+  p.berth = {
+    carrierId: h.id,
+    slot: 1,
+    pose: { frame: "carrier-local", position: { ...BERTH_LOCAL[1]! }, yaw: 0 },
+  };
+  s.fleet.vehicles = [h, d, p, c];
+  s.fleet.docking = {
+    vehicleId: h.id,
+    configuration: "compact",
+    stationKeeping: true,
+    supportedDock: false,
+    transaction: null,
+    sequence: 0,
+    completed: [],
+    launchBlocked: false,
+    // Two seeded occupants show the interior kit's socket occupancy.
+    sockets: { ...emptySockets(), "hl.socket.galley.planter": "galley_planter", "hl.socket.bridge.survey": "directional_survey" },
+  };
+  for (const v of s.fleet.vehicles)
+    s.inventory.containers.push({
+      id: v.cargoId,
+      kind: "vehicle",
+      capacity: HULL_HOLD_CU[v.hull],
+      ownerId: v.id,
+    });
+  s.inventory.containers.push(...carrierCompartmentContainers(h));
+  s.inventory.items.push({
+    id: "fixture_cargo",
+    kind: "silica_glass",
+    quantity: 3,
+    containerId: d.cargoId,
+    fitted: null,
+    charge: null,
+    provenance: "public",
+  });
+  s.player.mode = "interior";
+  s.player.interiorId = h.id;
+  s.player.interiorPose = {
+    frame: "carrier-local",
+    position: { ...CARRIER_LAYOUT.helm },
+  };
+  s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
+  return s;
+}
+/** The interface is the hull or its exterior vestibule (13.8 m aft of the keel,
+ * entered within 5 m): measuring only from the keel refused 39% of that zone. */
+export function carrierInReach(s: GameState, h: VehicleState): boolean {
+  return s.player.interiorId === h.id || s.player.controlledVehicleId === h.id ||
+    distance(s.player.pose.position, h.pose.position) <= 15 ||
+    distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) <= 5;
+}
+/** SIG-1 (F17): the typed outcome of a berth refit, read from the layout it left. */
+export function berthRefitOutcome(s: Readonly<GameState>): { message: string; event: { kind: "berths"; vehicleId: string;
+  configuration: CarrierState["configuration"]; slots: readonly ("compact" | "medium")[] } } | null {
+  const dock = s.fleet.docking;
+  if (!dock) return null;
+  const c = dock.configuration;
+  return {
+    message: c === "medium" ? "Berths refitted: one service berth for a medium craft."
+      : c === "mixed" ? "Berths refitted with the extension: the service berth beside a compact berth." : "Berths refitted: two compact berths.",
+    event: { kind: "berths", vehicleId: dock.vehicleId, configuration: c, slots: BERTH_SLOT_SIZES[c] },
+  };
+}
+export function carrierCommand(
+  s: GameState,
+  action: string,
+  vehicleId: string | undefined,
+  world: WorldQueries,
+): string | null {
+  const dock = s.fleet.docking,
+    h = carrierHull(s);
+  if (!dock || !h) return "No carrier interface is present in this expedition.";
+  if (!carrierInReach(s, h))
+    return "Board the Hearthline or come within reach of its vestibule to use its controls.";
+  if (action === "leave-interior") {
+    if (!dock.stationKeeping || !s.player.interiorPose)
+      return "Hold station before leaving through the vestibule.";
+    if (s.player.interiorPose.position.z < 7)
+      return "Walk aft to the yellow vestibule to leave the Hearthline.";
+    const exit = localToWorld(CARRIER_LAYOUT.exteriorVestibule, h);
+    if (!world.clearance(exit, { radius: 0.34, height: 0.95 }))
+      return "The vestibule hatch is blocked outside. Move the Hearthline clear first.";
+    s.player.interiorId = null;
+    s.player.interiorPose = null;
+    s.player.pose.position = exit;
+    s.player.mode = "swimming";
+    s.feedback = "Out through the vestibule. The Hearthline holds station behind you.";
+    return null;
+  }
+  if (action === "enter-interior") {
+    if (
+      !dock.stationKeeping ||
+      distance(s.player.pose.position, localToWorld(CARRIER_LAYOUT.exteriorVestibule, h)) >
+        5
+    )
+      return dock.stationKeeping ? "Swim to the yellow vestibule hatch on the starboard side to board."
+        : "The Hearthline is under way. Board it once it holds station.";
+    const entry = carrierInteriorEntry(s, world, CARRIER_LAYOUT.vestibule);
+    if (!entry) return "World edge or an obstruction blocks the dry interior. Turn or move inward before boarding.";
+    s.player.controlledVehicleId = null;
+    s.player.interiorId = h.id;
+    s.player.interiorPose = {
+      frame: "carrier-local",
+      position: entry,
+    };
+    s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
+    s.player.mode = "interior";
+    s.feedback = "Aboard the Hearthline. The bridge and helm are forward.";
+    if (distance(entry, CARRIER_LAYOUT.vestibule) > 0.001)
+      s.feedback = "World edge blocks the vestibule landing. Entered a clear dry passage; carrier position is unchanged.";
+    return null;
+  }
+  if (action === "station-keep") {
+    h.velocity = { x: 0, y: 0, z: 0 };
+    dock.stationKeeping = true;
+    dock.supportedDock = atCarrierSupport(h);
+    s.feedback = "Holding station. Berths, lock and the vestibule are ready.";
+    return null;
+  }
+  if (action === "helm") {
+    if (dock.transaction)
+      return "The lock is cycling. Wait for it to close before taking the helm.";
+    if (s.player.controlledVehicleId === h.id) {
+      // Already at the helm: throttle or rudder releases station keeping.
+      dock.stationKeeping = false;
+      s.feedback = "Station keeping released. The Hearthline answers the helm.";
+      return null;
+    }
+    // UX-1: the helm takes the carrier's own heading, level. The view no longer
+    // swings the hull to wherever the player happened to be facing.
+    s.player.pose.yaw = h.pose.yaw;
+    s.player.pose.pitch = 0;
+    s.player.mode = "piloting";
+    s.player.controlledVehicleId = h.id;
+    s.player.pose.position = { ...h.pose.position };
+    s.player.velocity = { ...h.velocity };
+    s.player.interiorId = null;
+    s.player.interiorPose = null;
+    dock.stationKeeping = false;
+    s.feedback = "At the Hearthline's helm. A/D turn, W/S ahead and astern; X holds station and leaves the helm.";
+    return null;
+  }
+  if (action === "leave-helm") {
+    if (
+      !dock.stationKeeping ||
+      Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) > 0.05
+    )
+      return "Hold station before leaving the helm.";
+    const entry = carrierInteriorEntry(s, world, CARRIER_LAYOUT.helm);
+    if (!entry) return "World edge or an obstruction blocks the dry interior. Turn or move inward before leaving the helm.";
+    s.player.controlledVehicleId = null;
+    s.player.interiorId = h.id;
+    s.player.interiorPose = {
+      frame: "carrier-local",
+      position: entry,
+    };
+    s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
+    s.player.mode = "interior";
+    s.player.velocity = { x: 0, y: 0, z: 0 };
+    s.feedback = "You leave the helm. The Hearthline holds station.";
+    if (distance(entry, CARRIER_LAYOUT.helm) > 0.001)
+      s.feedback = "World edge blocks the bridge landing. Entered a clear dry passage; carrier position is unchanged.";
+    return null;
+  }
+  if (
+    !dock.stationKeeping ||
+    Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) > 0.05
+  )
+    return "Hold station first. Nothing changed.";
+  if (action === "interrupt") {
+    dock.transaction = null;
+    s.feedback = "Lock cycle stopped. The craft and its cargo stay where they were.";
+    return null;
+  }
+  if (action === "block-exit" && s.scenario === "carrier-fixture") {
+    dock.launchBlocked = !dock.launchBlocked;
+    s.feedback = dock.launchBlocked
+      ? "Test obstruction placed in the lock corridor (developer)."
+      : "Test obstruction cleared (developer).";
+    return null;
+  }
+  if (dock.transaction) return "The lock is already cycling.";
+  if (action === "reconfigure") {
+    if (
+      !dock.supportedDock || !atCarrierSupport(h) ||
+      s.fleet.vehicles.some((v) => v.berth?.carrierId === h.id)
+    )
+      return "Refit the berths only with both empty, moored and holding station at a dock with repair services.";
+    const configuration = nextBerthLayout(s, h);
+    if (s.player.interiorPose && !createWorldQueries([
+      ...carrierStructure(configuration), ...carrierRooms(configuration),
+    ], () => -200).clearance(s.player.interiorPose.position, { radius: 0.34, height: 1.75 }))
+      return "Step into the passage clear of the berth rooms before refitting them. Nothing changed.";
+    dock.configuration = configuration;
+    return null;
+  }
+  const v = s.fleet.vehicles.find((v) => v.id === vehicleId);
+  if (!v || v.id === h.id) return "Choose a craft for the lock.";
+  if (action === "launch") {
+    if (v.berth?.carrierId !== h.id) return `The ${HULLS[v.hull].label} is already out of its berth.`;
+    if (v.hull === "spindle" && h.pose.position.y < -1)
+      return "The Spindle is a surface craft. Surface the Hearthline to launch it.";
+    const no = launchRefusal(s, v, world);
+    if (no) return no;
+    dock.transaction = {
+      id: `berth_${++dock.sequence}`,
+      type: "launch",
+      vehicleId: v.id,
+      slot: v.berth.slot,
+      phase: "prepared",
+      ticks: 0,
+    };
+  } else if (action === "capture") {
+    if (s.player.controlledVehicleId === v.id)
+      return "Leave the craft by the lock mouth, then recover it from aboard the Hearthline.";
+    if (
+      v.berth ||
+      v.disabled ||
+      distance(v.pose.position, launchPoint(h, v)) > 13 ||
+      Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) > 1
+    )
+      return captureApproach(h, v);
+    if (v.hull === "spindle" && h.pose.position.y < -1)
+      return "The Spindle is a surface craft. Surface the Hearthline to recover it.";
+    const slot = freeBerth(s, h, v);
+    if (slot === null)
+      return !BERTH_SLOT_SIZES[dock.configuration].includes(HULLS[v.hull].berth!)
+        ? `The ${HULLS[v.hull].label} needs ${HULLS[v.hull].berth === "medium" ? "the service berth; refit the berths at a repair dock" : "a compact berth; refit the berths at a repair dock"}.`
+        : `No free berth for the ${HULLS[v.hull].label}.`;
+    const no = transferRefusal(s, v, slot, "capture", world);
+    if (no) return no;
+    dock.transaction = {
+      id: `berth_${++dock.sequence}`,
+      type: "capture",
+      vehicleId: v.id,
+      slot,
+      phase: "prepared",
+      ticks: 0,
+    };
+  } else return "Unknown berth action.";
+  s.feedback = action === "launch" ? `Lock cycling: the ${HULLS[v.hull].label} moves down to the gate.`
+    : `Lock cycling: drawing the ${HULLS[v.hull].label} in under the bow.`;
+  return null;
+}
+export function launchRefusal(
+  s: GameState,
+  v: VehicleState,
+  world: WorldQueries,
+): string | null {
+  if (!v.berth || v.berth.carrierId !== carrierHull(s)?.id) return `The ${HULLS[v.hull].label} is already out of its berth.`;
+  if (v.hull === "spindle" && carrierHull(s)!.pose.position.y < -1) return "The Spindle is a surface craft. Surface the Hearthline to launch it.";
+  return transferRefusal(s, v, v.berth.slot, "launch", world);
+}
+export function updateBerth(s: GameState, world: WorldQueries): void {
+  const dock = s.fleet.docking,
+    h = carrierHull(s);
+  if (!dock || !h) return;
+  dock.supportedDock = atCarrierSupport(h);
+  for (const v of s.fleet.vehicles)
+    if (v.berth?.carrierId === h.id) {
+      v.pose.position = localToWorld(v.berth.pose.position, h);
+      v.pose.yaw = h.pose.yaw + v.berth.pose.yaw;
+      v.velocity = { x: 0, y: 0, z: 0 };
+    }
+  if (s.player.interiorId === h.id && s.player.interiorPose)
+    s.player.pose.position = localToWorld(s.player.interiorPose.position, h);
+  const t = dock.transaction;
+  if (!t) return;
+  if (!dock.stationKeeping || Math.hypot(h.velocity.x, h.velocity.y, h.velocity.z) > 0.05) {
+    dock.transaction = null;
+    s.feedback = "Lock cycle stopped: the Hearthline stopped holding station. Nothing moved.";
+    return;
+  }
+  t.ticks++;
+  if (t.phase === "prepared") {
+    t.phase = "lock";
+    return;
+  }
+  if (t.ticks < 30) return;
+  const v = s.fleet.vehicles.find((v) => v.id === t.vehicleId);
+  if (!v || dock.completed.includes(t.id)) {
+    dock.transaction = null;
+    return;
+  }
+  if (t.type === "launch") {
+    const no = launchRefusal(s, v, world);
+    if (no) {
+      dock.transaction = null;
+      s.feedback = no;
+      return;
+    }
+    if (!v.berth) {
+      dock.transaction = null;
+      return;
+    }
+    v.berth = null;
+    v.pose.position = launchPoint(h, v);
+    v.pose.yaw = h.pose.yaw;
+    v.pose.pitch = 0;
+  } else {
+    if (v.berth || v.disabled || s.player.controlledVehicleId === v.id ||
+      distance(v.pose.position, launchPoint(h, v)) > 13 ||
+      Math.hypot(v.velocity.x, v.velocity.y, v.velocity.z) > 1 ||
+      (v.hull === "spindle" && h.pose.position.y < -1) ||
+      s.fleet.vehicles.some((a) => a.berth?.carrierId === h.id && a.berth.slot === t.slot) ||
+      HULLS[v.hull].berth !== slotSize(dock.configuration, t.slot)) {
+      dock.transaction = null;
+      s.feedback = "The craft drifted out of the lock mouth before the clamps closed. Recover it again.";
+      return;
+    }
+    const no = transferRefusal(s, v, t.slot, "capture", world);
+    if (no) {
+      dock.transaction = null;
+      s.feedback = no;
+      return;
+    }
+    v.berth = {
+      carrierId: h.id,
+      slot: t.slot,
+      pose: {
+        frame: "carrier-local",
+        position: { ...berthLocal(dock.configuration, t.slot) },
+        yaw: 0,
+      },
+    };
+    v.pose.position = localToWorld(v.berth.pose.position, h);
+    v.pose.yaw = h.pose.yaw;
+    v.pose.pitch = 0;
+    v.velocity = { x: 0, y: 0, z: 0 };
+  }
+  dock.completed.push(t.id);
+  if (dock.completed.length > 64) dock.completed.shift();
+  dock.transaction = null;
+  s.feedback = t.type === "launch" ? `${HULLS[v.hull].label} launched under the bow. Board it from the water.`
+    : `${HULLS[v.hull].label} recovered. Clamps locked; the berth is dry.`;
+}

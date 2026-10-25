@@ -1,0 +1,33 @@
+# M2-A composed-route correctness corrections
+
+Sol6.1/max implementation leaf under root Astra xhigh. Start at the exact committed baseline named in dispatch, containing the report-only composition merge6b99da7. Verify clean parent, original runtime/model/effort and T3 worktree binding. No children, peer messages/waits, parent edits, push/PR/merge. Read STATUS/PLAN/CONTRACTS, revised input and relevant integration/save/experience contracts, M2-A-COMPOSE and its root inspection. Follow the already-applied diagnosing-bugs workflow; root has reproduced both failures and isolated the thrust cause.
+
+## Exclusive paths and contracts
+
+Production: **src/sim/world.ts, src/sim/step.ts, src/sim/types.ts, src/runtime/app.ts** only. Diagnostic: **scripts/check-m2-a-economy.mjs**. Tests: **tests/experience-signals.test.ts, tests/app.test.ts, tests/rib-surface-trap.test.ts**, and new **tests/m2-composed-corrections.test.ts**. Additive movement preservation cases in **tests/terrain-clearance.test.ts** are allowed if needed. Report: new **docs/build/evidence/M2-A-COMPOSE-CORRECTIONS.md**. Fresh artifacts `/tmp/siltwake-m2-a-compose-corrections/` only. Other files and all older evidence/saves are read-only.
+
+Root explicitly permits a transient numeric `supportLimited` field on `thrust-sample` and its producer/consumer, with the exact meaning below. A backward-compatible optional observation argument/private helper on `moveHull` is permitted to measure its actual terrain-floor refusal, while retaining existing callers, movement result shape, WorldQueries/Capsule and all saved-state signatures. Report exact signatures. Do not alter the movement algorithm, collider/terrain/camera, velocities, power/damage, placement/migration policy, observer thresholds/dwell/reset policy or product copy. No UI paragraphs. If another path/policy is needed, return a precise proposal and continue independent work.
+
+## 1. Earned grounded-Dart stall
+
+Unmodified save: `/tmp/siltwake-m2-a-compose/saves/earned-shallow-Dart-stall.json`, SHA256 `8165e44fc4a8b991e727a579c24903a95d4f21b4ff62960f4f8292193095c646`, tick9370. The original trace has215 stalled samples;60 held-W steps from this checkpoint reproducibly never show Blocked ahead. Copy the sealed author's `scripts/reproduce-earned-stall.mjs` before adapting/running. Root red command and logs are under `/tmp/siltwake-m2-compose-root/`; `stall-hypotheses.mjs/json` show the actual producer seam on the current compiled source.
+
+Ranked hypotheses were missing footprint-floor attribution, observer-only reset, and surface/boundary suppression. Root confirms the first: raw capsule movement is clear, `moveHull` refuses its proposed Y below the full-footprint floor +.05, final XZ stays unchanged, but `solidLimited` is0. There is no boundary and the pose is below the water cap. The observer therefore resets correctly for its current inputs. Do not fix this by reducing the .8 obstruction ratio, .5s dwell or .1 actual/requested threshold.
+
+Measure horizontal travel rejected specifically by that footprint-floor decision, separately from solid sweep/ceiling and surface limits. Emit nonnegative finite support limitation for the selected movement attempt only; discarded surface retries must not leak/double-count it. Combine support/solid limitation without counting the same refused travel twice. Preserve missing/invalid/actor-change/pause/no-power/reverse/side-only/free-motion/boundary reset behavior. A floor rejection must not become a Blocked above event. Existing sweep-only cue behavior remains.
+
+Write a meaningful red regression at the real full-step producer/consumer seam before fixing. Prove the original60-step sequence displays Blocked ahead at the unchanged dwell, retreat/rise clears it, and actual movement/save state remains identical to the old source. Include relevant boundary/surface/sliding/ceiling and partial-support cases. Reconcile named typed test fixtures only; no assertion weakening or blanket skipped views. Use a bounded differential against the retained main/recovery trace to show no gameplay-state changes, distinguishing transient events and presentation from stored state.
+
+Use the actual production browser for a short import of the byte-identical earned checkpoint, W stall → visible cue → ordinary escape → save/reload. Keep full input/export attribution and a short motion capture; this is an earned-save continuation, not a fresh full expedition. Preserve geometry and user controls.
+
+## 2. Completed earned-save economy checker
+
+Root independently reproduces exit1 using `node scripts/check-m2-a-economy.mjs --earned /tmp/siltwake-m2-a-compose/saves/earned-return-after-Continue.json --out <fresh-output>`: lines98–100 demand C06,C05 even though immutable C05,C06 records already exist. Decode succeeds and this is an assertion/harness error, not evidence that the completed route failed.
+
+Keep validating the byte-identical completed input, its original IDs/stock/knowledge, real recipes/transfers, module/frame investment and recovery. Isolate the two fresh clue-order diagnostics in explicitly staged clue-free state; also prove that rediscovery preserves already-known records in the actual retained-input branch. Do not modify the earned file, erase its knowledge to manufacture a pass, suppress the alternate-order assertion, skip completed saves, or relabel the pre-Basin pass as completed proof. Preserve no-earned fresh arithmetic and the earlier schema2 input path. Make the output distinguish retained evidence from deliberately staged diagnostic branches.
+
+## Verification and handoff
+
+Run clean check/build once and all three economies, with M2 completed earned input plus the same run's pre-Basin checkpoint and original schema2 input as justified compatibility cases. Retain original failures, meaningful regressions, source/build/save hashes and copy/verify evidence before derived scripts write. Don't rerun unrelated historical matrices. Return separate source/evidence commits, exact transient/helper contract, checks, images/motion and remaining limitations. No acceptance claim: root assembles with the independent visibility direction/fixes, then fresh complete-batch Astra/Sol review.
+
+Before browser actions read `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`; T3 preview_status then preview_open on verified isolated factory-worker Linux. Own one incognito/storage-isolated tab and free port5190. Preserve shared/human/peer hosts and tabs, no unattended Windows/desktop pointer lock. Close only owned tab through normal T3 lifecycle; stop only owned recordings/server. No polling/watchers or peer waiting.

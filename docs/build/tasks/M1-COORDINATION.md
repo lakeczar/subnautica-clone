@@ -8,7 +8,7 @@ The main builder has a provisional committed checkpoint at `5fd633879d7c8e059c7f
 
 Root sent an in-flight steering message to the existing implementation task, stable request `siltwake-m1-decompose-checkpoint-20261017`, successfully delivered as **steered**. It asks Sol to finish its current bounded check, commit coherent fixes, produce `/tmp/siltwake-m1-builder-handoff.md` plus assigned evidence as appropriate, identify remaining M1 work and clean owned resources before returning. Broad art/content polish should not expand further during this handoff. No cancellation or loss of current work is intended. The old owner retains its paths until its explicit handoff/termination; no mutating specialist may overlap it.
 
-A separate Astra xhigh technical lead is running (exact task ID in [TASKS](../TASKS.md#active-m1-coordination-advice)) to inspect the immutable checkpoint and propose practical module boundaries, remaining-work assignments, dependencies and integration checks. It is a bounded advisory role, not an additional dispatcher or acceptance reviewer. Root remains accountable for scope, shared contracts, task dispatch, integration and PRs. Advice and author-reported progress do not close M1 criteria.
+A separate Astra xhigh technical lead is running (exact task ID in [TASKS](../TASKS.md#completed-m1-coordination-advice)) to inspect the immutable checkpoint and propose practical module boundaries, remaining-work assignments, dependencies and integration checks. It is a bounded advisory role, not an additional dispatcher or acceptance reviewer. Root remains accountable for scope, shared contracts, task dispatch, integration and PRs. Advice and author-reported progress do not close M1 criteria.
 
 ## Intended team after the handoff
 
@@ -39,3 +39,13 @@ Before any delegated browser work, require reading `/work/repos/fleet/BROWSER_RU
 ## Handoff received
 
 The main Sol task completed on 2026-10-17 with unchanged source `5fd6338` and evidence-only commit `ff92868`; worktree clean. Its 97 passing tests/build/economy checks are author evidence. Full final-source ordinary expedition, gameplay/repeated recovery, browser carrier feasibility and final visual/audio/edge checks are still open. Handoff `/tmp/siltwake-m1-builder-handoff.md` and archive `/tmp/siltwake-m1-handoff-artifacts.tar.gz` preserve details. Specialist paths in that handoff are explicitly released; main Sol retains shared simulation/save/registry/world/runtime composition for its next bounded assignment. Owned browser/server closed, no children. Await the Astra advice before assigning exact mutating paths.
+
+
+## Audit reconciled; A0 next
+
+The Astra task completed; [full report](../evidence/M1-COORDINATION-ASTRA.md) is preserved. Root accepted its sequencing advice, not a game acceptance verdict: A0 fixes immediate command/save coherence and freezes physical/audio seams before A/B/C. Root independently reproduced both R1 failures and ran fresh checks on staged source (97 tests/build/economy pass). [M1-A0](M1-A0.md) is the concrete bounded next assignment. Existing interfaces support the split; no broad extraction is authorized. Source/history is preserved on `feat/siltwake-first-expedition`, outside accepted `game/siltwake`. The advisor created no children or browser resources.
+
+
+## A0 reconciled; concrete parallel work
+
+A0 source `558c28c`, evidence `aa53661`, is staged and root-checked (117 tests/build/economy and prior immediate-save repros pass). See [M1-PARALLEL](M1-PARALLEL.md) for exact task/path transfer and sequence. Core now has a bounded earned-route/persistence assignment, visual and presentation specialists own exclusive leaf files, and the remaining physical recovery/carrier matrix is reserved for a separately rotated task. Shared contracts and physical geometry are reconciled before dispatch. This is provisional assembly, not M1 acceptance.

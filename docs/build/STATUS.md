@@ -1,47 +1,39 @@
-# Siltwake build status
+# Build status
 
-Updated: 2026-10-17. State: both independent reviewers ACCEPT integrated M0 at `d415436`; coordinator accepts the milestone. Foundation PR #2 is merged, continuing draft PR #3 is open. M1 is being split into bounded coordinated work after the owner’s request. Sol returned a committed provisional handoff; a separate Astra xhigh technical-lead audit is running. Primary-source research for the newly requested late-stage game-design critique is also running.
+Updated 2026-10-20 by the Opus 5.5 coordinator. Direction and rules: [DIRECTION](DIRECTION.md). Streams and review log: [STREAMS](STREAMS.md). History: [archive/](archive/README.md).
 
-## Authority and checkpoint
+**Current**
+- **Milestone (2026-10-20): a rough complete game.** C3 is integrated at `a21e764`, and both fleet routes reach the ending in `npm run playthrough`, with all 5 scenarios complete and milestone reloads matching. Root checks: 1,071 fast tests pass, and the build is OK.
+- **Accepted:**
+  - B1, S1–S9, C1, C2, C3, A1 and P1;
+  - W1-pre (the cave kit);
+  - SYS-1 (upgrades and power);
+  - SYS-2 (bases and knowledge);
+  - CY (currents and cycles);
+  - CB (the content bible).
 
-- Owner invoked `.scratch/siltwake/BUILD_HANDOFF.md` and the revised prompt on 2026-10-17. Routine implementation, integration, fixes and PR work are authorized. Main merge/public deployment remain with the owner.
-- Specification: [revised input](../../prompts/BUILD_GAME_REVISED.md); planning source SHA `b3c3231b99ca5f1bd1159c5611216f2866e05a37`. Review acceptance for the underlying planning changes is at `6234042`; later planning evidence was bookkeeping.
-- Integration branch: `game/siltwake`. Implementation begins from the build-records commit immediately after the planning source. Use `git log -1` for the current checkout SHA; task candidates and acceptance SHAs are recorded explicitly below.
-- Current milestone: M1 first expedition; M0 accepted at `d415436`. [Plan](PLAN.md), [contracts](CONTRACTS.md), [playtest record](PLAYTEST.md), [content manifest](CONTENT_MANIFEST.md), [task ledger](TASKS.md).
+  W1-pre, SYS-1, SYS-2 and CY are **merged but not yet wired into the game**.
+- **Saves:** schema 5 / `expedition.6`.
+- **Owner actions:** `main` and the public deployment.
 
-## Active ownership
+**GPU:** the RTX 3090 is attached and verified. See [LIVE-RESULT](gpu-enablement/LIVE-RESULT.md); the procedure is archived in [archive](archive/STATUS-gpu-attach-2026-10-20.md). GPU browser work uses a task-owned Chrome with `--use-gl=angle --use-angle=gl-egl --ignore-gpu-blocklist`. The shared T3 preview stays software.
 
-Coordinator `/root`: `gpt-6-astra`, `xhigh`, as reported by T3 runtime. Owns direction, integration and build records. Main implementation model: `gpt-6.1-sol`, `max`. Live Codex catalog verified both requested models and efforts on 2026-10-17. Four concurrent slots including coordinator; only coordinator dispatches.
+**Active work** (5 of 5 Opus)
 
-All M0/component authors and reviewers completed with owned resources closed and no live children. Current branch is `game/siltwake`, integrated source `1bba23a`, tree-identical to feature tip `dbcebfc`. Component acceptance is at `50f5569`; integrated M0 acceptance at `d415436`; subsequent edits are bookkeeping. Main builder M1-01 completed from baseline `0f3b06bc9ad37ea271cdf78def01027d1f6b0982`, provider `codex`, model `gpt-6.1-sol`, effort `max`. Frozen provisional source is `5fd633879d7c8e059c7ff5cb6a6200895e1f7d93`; evidence-only tip `ff928689a9b758a68ad1068564d7a3c6a1e84fd2`, worktree clean. No M1 source is integrated or accepted. Author reports fresh install, 97 tests/typecheck/build and economy checks passing; final full-route, recovery, carrier and other playable evidence remain incomplete. Owned browser/server are closed; no children. Specialist paths are released for coordinator reassignment; shared simulation/save/registry/world/runtime paths remain reserved to the main builder. Three active agents including root: Astra coordination advisor and Astra design-research worker. [Main task](TASKS.md#completed-m1-01-provisional-handoff); [advisory task](TASKS.md#active-m1-coordination-advice); [design research](TASKS.md#active-design-research-and-late-critique). No acceptance reviewer is active. [Paired M0 verdicts and task IDs](reviews/M0-R1.md); [coordinator checks](evidence/M0-INTEGRATION.md).
+| Work | State |
+| --- | --- |
+| **C4:** compose W1 caves and CY currents (stage A), then SYS-1, SYS-2, CB recipes, UI and timeline (stage B) into the game | Building, with a Sol review per stage |
+| **M2 stage-exit experience audit** (fresh Opus, on `ffc9847`) | Playing |
+| **LC:** large-cave technology (Canopy root caves, 250 m) | Building |
+| **CA-1:** Reef and Isles small and medium caves | Building |
+| **CA-2:** Canopy and Basin small and medium caves | Building |
 
-## Acceptance and evidence
+**Next**
+1. C4 stage A → Sol → stage B → Sol → integrate.
+2. Apply the M2 audit's findings.
+3. Owner playtest once the timeline and feedback key are wired in (C4 stage B).
+4. Then: the remaining regions' caves; the cave biomes on LC; the hub (W2); the density pass, creatures and lost sites; then the atmosphere pass.
 
-- FND-01 author commit: `8d72dd2ac2822873e36fe339f8ed2db8c837084b`; clean worktree. [Author evidence](evidence/FND-01.md) records 18 passing tests, final production scene and ordinary-control movement, pause, save/reload and rejected-import checks. Builder closed its tab/server and preserved coordinator tab14.
-- Coordinator inspected source boundaries and actual rendered menu, pod, reef and island captures; directed corrections to pod access/hatch geometry, strict save-mode validation, paused rendering/readiness, context-loss resume gating, quality scaling and underwater atmosphere. Coordinator reran `npm run check` on `8d72dd2`: strict typecheck, 18/18 tests and production build passed. The large main-chunk warning remains; SwiftShader evidence does not qualify dedicated-GPU performance.
-- Corrected source at `417a7ec`: Vite 7.3.7; native writer exclusion; explicit exportable unsaved starts/imports; async session lifecycle/cancellation. Coordinator inspected code, matched source, viewed actual fallback/HUD artifacts and ran fresh install/check: 35/35 tests and build passed. Audit confirms no Vite/high/moderate/critical entry; one low esbuild Windows-server advisory remains. [Correction evidence](evidence/FND-01-R1-FIX.md); reconciled async exports in [CONTRACTS.md](CONTRACTS.md). Both corrections are now accepted at `50f5569`; see the round-three record.
-- Both round-two reviewers confirmed those three fixes but found delayed entry overriding interruption pause. Source `2c25b8b` now preserves entry intent and waits for engine reconstruction/scene readiness. Coordinator inspected source/tests and actual restored paused captures; `npm run check` passed 65/65 tests/build with matching `index-DLXkZ6jy.js`. [New evidence](evidence/FND-01-R2-FIX.md) records ordinary and diagnostic browser runs separately. Renderer callback and preparation-pause semantics are reconciled in CONTRACTS.md; both independent reviewers accepted the frozen `50f5569` candidate.
-- ECO-01 proposal committed at `cd1d303`: coordinator reran the Node checker successfully (39 recipes, 33 patches, eight strategy/starter/optional scenarios, six independent optional branches, five budgeted failures and 20 numeric disable/salvage/rebuild transactions per scenario, six rejection fixtures). Both non-author reviewers explicitly accepted its provisional arithmetic/design scope at `2eb0244`; it is not a runtime registry or validated route/playtime balance.
-- Existing cel art study `20711d1` is reference only. Its SwiftShader captures do not establish dedicated-GPU performance.
-- Every implementation batch remains provisional until coordinator inspection, applicable checks and separate non-author Astra xhigh plus Sol 6.1 max acceptance of one frozen revision. Records go under `reviews/` following [the gate](../DELIVERY_AND_ACCEPTANCE.md#independent-review-gate).
-- No fresh-player duration/enjoyment or representative GPU measurements exist.
+**Not in the world yet:** caves and the systems in GAME-DIRECTION. The cave kit, the large-cave technology and the systems are being built in new files, to be composed after C3.
 
-## Exact next action
-
-Follow [M1 coordination revision](tasks/M1-COORDINATION.md). The main builder's terminal result was read: source `5fd6338`, evidence `ff92868`, handoff `/tmp/siltwake-m1-builder-handoff.md`, 39-artifact archive `/tmp/siltwake-m1-handoff-artifacts.tar.gz`. Earlier complete Dart/C04/return/reload evidence predates final source and had a failed preparation reserve; final source has only a shorter island-first preparation run (94.30% minimum oxygen). Do not conflate them. Full final-source expedition, gameplay-triggered/repeated recovery, browser carrier feasibility, edge cases and final art/audio checks remain open.
-
-The read-only Astra xhigh technical lead is still running against immutable source `5fd6338`; await its result, reconcile with the final handoff, then stage preserved source on a provisional feature branch. Inspect/build and reconcile contracts before committing a shared baseline for exclusive Sol specialist assignments. Do not restart, duplicate or prematurely accept the build. Main Sol retains shared composition. Full M1 criteria and fresh non-author Astra/Sol batch and integrated milestone gates remain.
-
-The owner also requested a dedicated late-stage Astra xhigh game-design critic. [Brief](tasks/DESIGN-CRITIC.md) schedules it after the complete authored campaign (M3), early in M4 with corrections/re-review before release. Supporting research is active; the actual critique has not run and adds to the existing technical pair. Keep human enjoyment/duration and representative-GPU evidence explicit.
-
-[Foundation PR #2](https://github.com/lakeczar/subnautica-clone/pull/2) is confirmed MERGED into `game/siltwake`. [Continuing draft integration PR #3](https://github.com/lakeczar/subnautica-clone/pull/3) targets `docs/astra-game-build-brief`, explicitly dependent on [planning PR #1](https://github.com/lakeczar/subnautica-clone/pull/1). T3 confirms all three linked; none watched. Main is unchanged, no deployment.
-
-Fresh integrated `npm ci`, 65 tests/typecheck/build, economy arithmetic and ordinary production movement/pause/save/reload passed at `1bba23a`. A native-held write plus synthetic blur/focus stayed paused through New completion; explicit Resume worked. [Full evidence and limits](evidence/M0-INTEGRATION.md). Actual source and built artifact match the accepted component. Do not rerun unchanged component matrices without a specific unresolved concern; assess their evidence alongside the new integrated run. Functional/contract changes require new review.
-
-M0 acceptance is recorded. The dispatched [M1-01 assignment](tasks/M1-01.md) owns: pod/opening and early regional clues, habitat-specific gathering/crafting, first craft, survival/recovery, art/UI/audio, explicit save migration and simplified carrier/collision feasibility. [Plan](PLAN.md) and [playtest run sheet](PLAYTEST.md) retain full scope. ECO remains provisional arithmetic; runtime adoption must address its concrete module/container identities, persistent knowledge, protected recovery provenance and physical-route limits. No new owner decision is required. Main merge and public deployment remain owner actions.
-
-### Foundation PR evidence
-
-[PR #2](https://github.com/lakeczar/subnautica-clone/pull/2) has a verified description with 6/6 bounded FND criteria, paired exact-SHA reviews and two public actual screenshots on `pr-assets`. The island overview is author `8d72dd2` (art unchanged); the paused graphics recovery capture is independent review `50f5569`. Both URLs returned HTTP 200 image/png. The base has no runnable application, so no matching before image is claimed. No public game deployment occurred. PR #3 carries the current bounded status, evidence and one accepted integrated milestone and four remaining goals; update its full description as scope advances. Temporary original body: `/tmp/siltwake-foundation-pr/body.md`.
-
-After restart, inspect branch/HEAD/worktree and task ledger; check active task status before duplicating work. Preserve major story spoilers outside ordinary updates and PR descriptions.
+**Unverified:** human pacing and enjoyment, the audible mix, representative 1080p/60 performance, full-world memory and eviction.

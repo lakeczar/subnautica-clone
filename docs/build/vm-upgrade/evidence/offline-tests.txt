@@ -1,0 +1,174 @@
+Offline test evidence for docs/build/vm-upgrade, 2026-10-19T19:01:30Z
+vm-ram-upgrade.sh sha256 89cce673e35663fb73a68eb5217c92a7fd78545fc07474c8aada9dd74fd3d1d4
+bash 5.2.37(1)-release, bubblewrap 0.12.0, host Linux 6.12.111+deb13-amd64
+
+== full transcript of one run (bash tests/run.sh), check lines only
+# syntax
+ok   bash -n vm-ram-upgrade.sh
+ok   bash -n restore-tmp-links.sh
+ok   bash -n worker-check.sh
+ok   bash -n ask-command.sh
+# preflight (the default) is read-only
+ok   preflight: ok on today's VM
+ok   preflight: exit 0
+ok   preflight: plan full
+ok   preflight: changes nothing
+ok   preflight: wrong pins reported
+ok   preflight: wrong pins exit 1
+# the upgrade
+ok   full: upgraded
+ok   full: running with 16 GiB
+ok   full: ACPI shutdown only
+ok   full: memory-only virsh calls
+ok   full: setmem after setmaxmem
+ok   full: started
+ok   full: nothing forbidden (no destroy, define, ...)
+ok   full: other VMs never addressed
+ok   full: pins and topology kept
+ok   full: backup has the security info
+ok   full: run folder has no secrets
+ok   full: guest agent recorded
+ok   full: owner notified
+ok   full: state.json says finished
+ok   re-run: already-upgraded
+ok   re-run: does not stop the VM
+# re-entry from every in-between state
+ok   16 GiB defined, running 12: shutdown + start
+ok     ...no memory change needed
+ok     ...was shut down
+ok   off at 12 GiB: upgraded
+ok     ...no shutdown sent
+ok   off at 16 GiB: upgraded
+ok     ...start only
+ok   off, half-changed (max 16, current 12): upgraded
+ok     ...16 GiB both
+ok   paused: preflight-failed
+ok     ...nothing changed
+ok   unexpected memory (8 GiB): preflight-failed
+# fixed target
+ok   name points at another UUID: preflight-failed
+ok     ...not stopped or changed
+ok   autostart off: preflight-failed
+ok     ...not stopped or changed
+ok   topology differs (what vm resize would write): preflight-failed
+ok     ...not stopped or changed
+ok   8 vCPUs: preflight-failed
+ok     ...not stopped or changed
+ok   disks differ: preflight-failed
+ok     ...not stopped or changed
+ok   no ACPI: preflight-failed
+ok     ...not stopped or changed
+ok   a disk file is missing: preflight-failed
+# before the shutdown
+ok   host short of memory: preflight-failed
+ok     ...not stopped
+ok   CANCEL in the arm window: cancelled
+ok     ...no shutdown
+ok   another run holds the lock: locked
+ok     ...nothing changed
+# something else changes the VM during the arm window
+ok   VM shut off by someone else: still upgraded
+ok     ...without sending a shutdown
+ok   pins changed while armed: preflight-failed
+ok     ...not stopped
+ok   upgraded by someone else while armed: already-upgraded
+ok     ...not stopped
+ok   paused while armed: preflight-failed
+ok     ...not stopped
+# the shutdown
+ok   guest never powers off: shutdown-timeout
+ok     ...still running at 12 GiB
+ok     ...ACPI asked again, never forced
+ok     ...no memory change
+ok     ...nothing forbidden
+ok   something else starts it after shut off: restarted-elsewhere
+ok     ...memory untouched
+ok   definition changed while off: started-as-is
+ok     ...memory untouched
+ok     ...running again
+ok     ...their change kept
+# the change
+ok   setmaxmem fails: rolled-back-started-old
+ok     ...running at 12 GiB
+ok   setmem fails after setmaxmem: rolled-back-started-old
+ok     ...12 GiB maximum restored too
+ok   something else changed with the memory: rolled-back-started-old
+ok     ...memory back to 12 GiB
+ok     ...the other change is not clobbered
+ok     ...the difference is recorded
+ok     ...never redefined from the backup
+ok   fleet-admin lock busy: rolled-back-started-old
+ok     ...running at 12 GiB
+# the start
+ok   first start fails: retried, upgraded
+ok   16 GiB will not start: rolled-back-started-old
+ok     ...running at 12 GiB
+ok   no start at all: left-off
+ok     ...off, back at 12 GiB
+ok     ...owner alerted
+ok   host memory taken during shutdown: rolled-back-started-old
+ok     ...running at 12 GiB
+ok   too little left even for 12 GiB: left-off
+ok     ...not started
+ok   runs but pins differ live: started-unverified
+ok     ...not stopped again
+ok   no guest agent: still upgraded
+ok     ...recorded
+# killed mid-run, then re-run
+ok   TERM during the shutdown wait: aborted
+ok   re-run after the abort: upgraded
+ok     ...without a second shutdown
+# launch: the boundary between the caller and the run
+ok   rehearsal: launcher returned 0
+ok   rehearsal: launcher returned before the run finished
+ok   rehearsal: finishes on its own
+ok   rehearsal: rehearsal-ok
+ok   rehearsal: changed nothing
+ok   rehearsal: no backup written
+ok   rehearsal: launcher gone before the end
+ok   rehearsal: run in its own session (3987017, launcher 3962061)
+ok   rehearsal: runs its own verified copy
+ok   group kill: runner was timed out
+ok   group kill: run survives and finishes
+ok   group kill: upgraded
+ok   group kill: running with 16 GiB
+ok   tampered staged file: the approved command stops
+ok     ...no run started
+ok     ...nothing called
+ok   launch with the wrong hash: refused
+ok   launch without a hash: refused
+# worker-check: T3's agent slice formula
+ok   12 GiB guest gives today's limits
+ok   16 GiB guest
+# restore-tmp-links
+ok   dry run: would link 2, keeps 1
+ok   dry run: nothing extracted or linked
+ok   wrong archive hash: refuses
+ok   apply: links the missing names
+ok   apply: links point at the disk copy
+ok   apply: an existing /tmp entry is untouched
+ok   apply again: idempotent
+passed 131
+failed 0
+exit 0
+
+== five more consecutive runs
+run 1: exit 0 passed 131 failed 0
+run 2: exit 0 passed 131 failed 0
+run 3: exit 0 passed 131 failed 0
+run 4: exit 0 passed 131 failed 0
+run 5: exit 0 passed 131 failed 0
+
+== mutation checks: each line breaks vm-ram-upgrade.sh one way; the suite must fail
+shutdown-without-acpi-mode: suite exit 1, failed 4 (first: full: nothing forbidden (no destroy, define, ...))
+force-off-on-timeout: suite exit 1, failed 1 (first: ...nothing forbidden)
+rollback-by-redefining-backup: suite exit 1, failed 10 (first: setmem fails after setmaxmem: rolled-back-started-old)
+no-rollback: suite exit 1, failed 4 (first: setmaxmem fails: rolled-back-started-old)
+launch-without-setsid: suite exit 1, failed 2 (first: group kill: upgraded)
+sighup-not-ignored: suite exit 1, failed 2 (first: group kill: upgraded)
+identity-always-ok: suite exit 1, failed 20 (first: preflight: wrong pins reported)
+upgraded-vm-not-recognised: suite exit 1, failed 4 (first: re-run: already-upgraded)
+no-memory-only-diff: suite exit 1, failed 3 (first: something else changed with the memory: rolled-back-started-old)
+no-capacity-check: suite exit 1, failed 6 (first: host short of memory: preflight-failed)
+no-replan-after-arm: suite exit 1, failed 7 (first: ...without sending a shutdown)
+no-identity-after-arm: suite exit 1, failed 2 (first: pins changed while armed: preflight-failed)

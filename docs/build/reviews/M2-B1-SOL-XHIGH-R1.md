@@ -1,0 +1,46 @@
+# M2-B1 acceptance review
+
+**Overall: ACCEPT WITH NITS.** All seven groups pass for this bounded B1 feature. Three P3 presentation defects remain; no blocking defect found. Coordinator inspection remains the other part of acceptance.
+
+Fresh non-author reviewer: **GPT-6.1 Sol / xhigh**, 2026-10-20. Candidate `2cff2458c24e8e4e7642c6182961cf42db4feeae`, complete change from `7bd259c395542e2d58724417be66a1864c58c005`. Parent production equals accepted SPACE-1 `eb712f1`; its disposition records acceptance without source corrections. Review branch `review/m2-b1`; resumed from WIP `0ca619a`. No production changes.
+
+Applied the complete B1 brief and author assignment/report, relevant specifications, model policy and acceptance gate. The current brief and overriding lean DIRECTION were read from the coordinator checkout under `/home/worker/.t3/projects/subnautica-clone/docs/build/`; neither is in the frozen candidate. No payload inventory or deeper historical compatibility requirement was imposed.
+
+## Per-group verdicts
+
+| Group | Verdict | Basis |
+| --- | --- | --- |
+| 1. Earned acquisition | ACCEPT | Knowledge/source/fabrication gates and menu progression agree. C05 pays off with paid construction in a separate usable medium slip; occupied clearance refuses before spending. Creel-first is solvent without a Dart. Author ordinary play covers gathering, payment and construction from an imported earned campaign. |
+| 2. Useful workboat | ACCEPT | Distinct slower handling, bounded turning, louder signature, cockpit, arms and larger hold preserve the Dart's scouting role. Base 240 m and paid 350 m ratings remain separate from suit limits, with no circular ingredient gate. Author's useful loaded sortie returned with 30.6% power; its exposed diver leg reached a 96.8% oxygen minimum. Reviewer independently boarded, used the helm and walked the cabin. |
+| 3. Real loadout choices | ACCEPT, P3 nit | Rack 96 CU competes with cabin 40 CU plus 16 CU locker. Swaps preserve module identity and stow the replacement; over-capacity changes and stocked-cabin removal refuse atomically. Current validation rejects stale capacity and unpaid refits. The major-mount interface leaves a coherent service-head seam. Fitting summaries have the defect below. |
+| 4. Mobile home and safe fallback | ACCEPT, P3 nits | Dry walkable cabin, powered air/healing, cooking, persistent storage, deliberate registration and stationary helm transitions work. Safety checks cover disabled, unpowered, obstructed and threatened refuge fallback; emergency air actually depletes. Reviewer registration and real reload/Continue preserve the complete cabin state. Hatch/storage labels need correction. |
+| 5. Work worth returning for | ACCEPT, P3 nit | Finite tagged frames retain alloy value and investment. Author hauled 62 CU in seven arm actions and delivered 40 alloy with two home transfers. Runtime comparison shows 3 versus 12 transfers for rack-Creel versus Dart/buoy. Staged mooring restoration/service checks provide charging, repair, storage and fitting without replacing lab air. No arbitrary Creel/buoy carrier prerequisite was added. Mooring storage shares the label defect. |
+| 6. Finite solvency and geography | ACCEPT | Two matching finite membrane patches occupy clear Canopy margins; source hosts, registry quantities and outputs agree. Both purchase orders cover required progress, optional purchases and salvage/rebuild with zero renewal credited. SPACE-1 renewal stays bounded. Route, terrain/host and hull-clearance checks pass for the bounded extension. |
+| 7. Connected recovery | ACCEPT | Seven new loss-capable sites have complete shallow-staging Bobbin recovery coverage. Additional reviewer diagnostic recovers both disabled hulls sequentially while retaining modules, cabin cargo, frame investment, knowledge and both loss targets. Author closes the earned haul with return/store/reload; reviewer independently completes cabin reload/Continue. |
+
+Across these groups, schema 5 strictness and the schema 4 → 5 bridge pass. The frozen `src/save/expedition5/` validator imports its own frozen domain/types, without mutable runtime dependencies. Previous-domain validation precedes migration; old poses, clocks, stock, renewal, investments, cargo, damage, charge, knowledge and provenance are retained, while only new fields/sources initialize. Diagnostic fleets do not become earned campaigns. Successful paused commands remain saveable; tested refusals preserve the original state. Inherited older converters are outside this review's compatibility requirement.
+
+## Findings
+
+1. **B1-R1-01 — P3: interior hatch says “Enter cabin” when it exits.** `src/ui/hud.ts:589` matches the hatch suffix before the `cabin:hatch` mapping. Reproduce: enter the fitted cabin and aim at its aft hatch; the E prompt says “Enter cabin”. Browser-confirmed before and after Continue (`cabin-interior.png`, `continue-cabin.png`). Handle interior fixture IDs before the exterior suffix rule. Exit behavior itself remains correct.
+2. **B1-R1-02 — P3: new lockers are called “Visited cargo cache”.** `src/ui/panels.ts:26` duplicates an older container-label mapping and omits cabin/mooring lockers. Reproduce: enter the cabin, open Cargo and inspect its locker/transfer selectors; the meals appear under “Visited cargo cache”. Independently browser-confirmed for the cabin; `canopy_stop_locker` reaches the same fallback. Reuse the simulation inventory labels so destinations remain distinguishable.
+3. **B1-R1-03 — P3: Creel fitting produces Dart-trim action summaries.** `src/sim/step.ts:164` and `:169` hard-code Dart wording. Reproduce: at a supported slip, execute `install-module` and `remove-module` for a Creel cargo rack. Feedback correctly reports rack/Creel capacities, but notice summaries say “Dart acoustic trim fitted” and “Dart acoustic trim removed · Dart hold”. Independently reproduced with real commands (`module-summary-probe.json`); presentation uses these summaries. Derive the summary from the actual module/hull. No item/capacity corruption occurred.
+
+## Checks and evidence
+
+Reviewer evidence: `/home/worker/.local/share/siltwake-evidence/m2-b1-review/`. Author evidence remains separately attributed under `m2-b1-opus/` and [the author report](../evidence/M2-B1-OPUS.md).
+
+- Independent `npm ci`, then `/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh --deadline 1500 npm run check`: **587/587 tests**, typecheck and production build pass (`check.log`). The unchanged broad suite was not repeated after restart.
+- Independent `scripts/check-m2-b1-economy.mjs`: Creel-first and Dart-first pass with finite exposed stock and zero renewal, optional purchases and salvage/rebuild (`economy.log`, `economy.json`). Positions are staged; this is economy evidence.
+- Seven supplied saves decode/round-trip and match complete 120-step futures. Sampled 11–16 paused commands per save; successful commands stayed valid (`futures.json`; inline probe source not retained).
+- Extra dual-disabled-hull conservation/recovery diagnostic and successful fitting/removal probe (`recovery-probe.mjs`, `.json`, `.log`; `module-summary-probe.json`).
+- Ordinary reviewer menus, boarding, helm/cabin walking, storage and refuge registration from labelled imported states; actual production views inspected, including author construction, cockpit, cabin and loaded-recovery frames.
+- After restart: ordinary Import & save of the persisted reviewer cabin export → Save locally/export → actual `location.reload()` → ordinary Continue → export. **Every state field equals the input and pre-reload export at tick 84,245**, including hull-local pose, refuge registration, locker contents and both hulls (`continue-before.json`, `continue-after.json`, `continue-result.json`, `continue-browser.json`, `continue-cabin.png`). External fixed RAF timestamps prevent simulation advancement; no private game API or state mutation was used.
+
+## Limits
+
+Both browser sessions used one owned storage-isolated T3 tab on Linux `factory-worker`, port 5191, Chrome 154, 1280×800; WebGL was **ANGLE Vulkan SwiftShader (Subzero)**, including after restart. No GPU frame-rate claim. The reviewer did not independently replay the full earned acquisition/departure/haul/return route; that chain is author ordinary-control evidence. Reviewer movement transport failures before restart are not established game defects. Forward mooring service and alternate economy/recovery paths are staged diagnostics, not a continuous ordinary-control service voyage.
+
+Carry the accepted cold-entry/menu, memory/eviction and hardware limits. Author reports cold terrain generation grew 3.2 → 4.6 s, proposed first-playable ≤1.5 s / panel ≤50 ms budgets, and bounded SwiftShader observations; these do not establish new hardware budgets or close full-world scaling. Relevant automated lifecycle/region checks pass, but this review adds no ordinary eviction, context-loss/quality-switch or several-hull memory measurement. Human learning, feel, enjoyment, duration and audible mix remain unverified. Later craft, the full world and campaign completion remain outside B1 acceptance.
+
+Owned tab and server closed; port 5191 free; no owned check jobs remain. Persistent evidence is preserved. Report-only commits; no children, push, PR or merge.

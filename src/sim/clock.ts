@@ -1,6 +1,9 @@
 export const FIXED_SECONDS = 1 / 60;
 export const MAX_FRAME_SECONDS = 0.15;
 export const MAX_STEPS_PER_FRAME = 8;
+/** A duration for the player: whole seconds below 90 s, else whole minutes.
+ * The one formatter (ui/format.ts re-exports it; sim text such as the journal uses it here). */
+export const formatDuration = (seconds: number): string => seconds < 90 ? `${Math.round(seconds)} s` : `${Math.round(seconds / 60)} min`;
 
 /** Timestamp is monotonic milliseconds. An interruption resets accumulation;
  * at most eight updates happen per frame. Lost time is intentionally discarded. */

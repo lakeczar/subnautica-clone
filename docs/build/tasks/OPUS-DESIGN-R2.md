@@ -1,0 +1,91 @@
+# Opus second audit — controls, gameplay flow and polish
+
+The owner explicitly requested a new **Claude Opus 5.5 / high** audit after the M1 idle checkpoint. Their highest priorities are an intuitive, polished gameplay loop, motion, controls and overall experience; they want independent judgment about taste, menus and timing. This request resumes one advisory audit. Do not begin parallel implementation or expand into M2 during it.
+
+## Role and frozen scope
+
+- One fresh T3 child, `claudeAgent / claude-opus-5-5`, explicit `effort: high`, isolated worktree from the exact committed parent supplied at dispatch. Verify actual model and effort where runtime evidence allows; distinguish selected/requested settings from effective runtime proof.
+- Review accepted M1 production **a5821aa8f3d88045669190a720ccb5765c1acef2**, independently accepted at **1caa05f1e790a18edacbd3fce236763e48725c2f**. Parent handoff **68a50fab010449d10cfbb6194c0360fe6bf81b4d** adds records only. The new dispatch commit also adds records only. Confirm production identity before play.
+- Author/commit only `docs/build/reviews/OPUS-DESIGN-R2.md`; if necessary, a protected appendix at `docs/spoilers/reviews/OPUS-DESIGN-R2.md`. Temporary artifacts belong to `/tmp/siltwake-opus-design-r2/`. No code/tests/config/spec edits, fixes, parent mutation, push, PR, merge, external messages or children. Do not contact/wait for other agents.
+- Astra xhigh remains coordinator; Sol 6.1 max remains implementation builder. This audit informs direction, does not replace the independent Astra/Sol feature gate, and does not complete the later full-campaign Astra critic. Existing M1 technical acceptance is evidence, not proof that M1 feels polished.
+
+## Intended experience and evaluation order
+
+Siltwake is an original alien-ocean survival mystery: wonder first, tense depths, comforting refuges. Richer cel shading with vibrant color, atmospheric lighting, readable organic forms and precise mechanical assets is settled. Keep food without thirst, oxygen/depth/power/damage, evade/deter wildlife, recoverable loss and persistent knowledge. Regional leads should support finding and interpreting places. Vehicle-focused building and six complementary hulls including an inhabited carrier remain campaign scope. About ten hours means a future first-time main-story experience with optional exploration, never padded harvesting/travel.
+
+Read AGENTS and STATUS, PLAN/CONTRACTS, this brief, the revised input and applicable specification pointers before the audit. Begin the experience pass from the player-facing game before reading detailed solution traces or the prior Opus findings where feasible. Record exactly what you already knew; this is not a blind human test. Do not spend the audit reading the entire historical task ledger.
+
+Use `docs/research/04-game-design-review.md` and the practical criteria in `docs/build/tasks/DESIGN-CRITIC.md` as lenses. Existing primary-source research is enough: feedback, meaningful choices, clear affordances, coherent mental models, curiosity and tension/release are more useful here than an unbounded literature survey. Test the coordinator's assumptions; do not merely endorse the accepted source or repeat the owner's praise of this model.
+
+After initial observations, read `docs/build/tasks/OPUS-DESIGN-R1.md`, the full prior `docs/build/reviews/OPUS-DESIGN-R1.md` and its `OPUS-DESIGN-R1-DISPOSITION.md`. Check current implementation/evidence before carrying earlier criticisms forward. Read protected canon only if needed to assess a lore recommendation, after first-impression notes; keep reveal details out of the ordinary report and final response.
+
+## Priority questions
+
+### 1. Movement, camera and control feel — highest priority
+
+Judge whether the intended action maps consistently to what the player sees: walking/ramp/water transitions, swim acceleration and release, turning, vertical travel, quiet/normal/boost movement, Dart boarding/exit, piloting and returning to a service point. Examine motion through the cockpit, visibility of the route, near-obstacle clearance and whether collision or failed boarding feels understandable. Check whether camera direction, craft direction and actual movement are legible together. Compare short input/release/turn sequences, rather than judging motion from stills.
+
+Assess mouse-look/pointer-lock entry and release, keyboard fallback, key labels, focus/pause/resume and mode changes where the isolated browser supports them. Distinguish actual physical or synthetic mouse events from keyboard-only observation; inspect settings/sensitivity support without inventing tactile latency measurements. Identify reasons a new player might fight the controls, overshoot, misread a collision or accidentally leave a vehicle. Suggest concrete tuning or interaction changes with tradeoffs; do not assume more camera shake, inertia, animation or simulated weight means better feel. Comfort, accessibility and responsive intent matter.
+
+### 2. Menus and interaction flow — highest priority
+
+Trace a real preparation and return sequence: understand a goal, see requirements, gather, store, fabricate, fit an upgrade, depart, return, recharge/service, resume. Inspect selection/focus continuity, panel depth, scroll burden, repeated actions, information hierarchy, refusal explanations and back/close behavior. Check keyboard and pointer paths where available, especially transitions back to movement. Are context prompts and actionable objects clear from the normal camera? Is there a single understandable way to know what can be done here?
+
+Judge whether bulk storage/local ingredient access and the preparation/fitting UI actually reduce thoughtless administration while preserving useful preparation choices. Distinguish cell recharge, reserve-to-hull power and hull service; fabricate/store/install must communicate different states without forcing the player to learn internal container IDs. Menus should serve exploration, and the game should not depend on repeatedly reading a manual or a full-screen panel for routine actions. Recommend the fewest coherent interactions needed, not a large speculative UI rewrite.
+
+### 3. Feedback and timing
+
+Examine the chain intent → input → response → explanation → regained control. Are successful pickup/craft/transfer/fit actions unmistakable? Are stale notices or competing opening/objective/hazard prompts confusing? Are warnings early enough to understand and act on, and does recovery feedback clearly show what was spent/restored? Are transitions, cue duration, fades, dialog/panel pauses and confirmation steps purposeful? Review information overload during a threat and whether useful guidance disappears before it can be read.
+
+Where timing matters, record simulation ticks/seconds or event-relative timing and state the sampling method. Tool-call delay and SwiftShader frame rate are not player input latency. Inspect audible cues only if actually heard; otherwise judge visual equivalents and code timing, and mark the mix/listening question unverified. Do not prescribe precise new timings without an observed basis or label them as proposed trial values.
+
+### 4. Expedition rhythm and motivation
+
+Follow question → preparation → route choice → discovery → risk/retreat → useful return → changed next expedition. Which moments invite a decision, and which are only errands, empty movement, repetitive harvesting or bookkeeping? Is the opening's first safe action clear and its mystery intriguing without overexplaining? Can players infer resources from places and hosts, and navigate toward regional leads without a coordinate walkthrough? Does Dart ownership change the experience, and does the Canopy return/refit make the second outing meaningfully different?
+
+Judge danger readability, free evasion versus paid pulse, warning/release timing, refuge comfort and recovery as an invitation to try again. Treat clarity and mystery separately: preserve uncertainty about the world without obscuring basic controls or goals. Evaluate which current patterns would grow monotonous across the planned campaign, without calling unfinished scheduled M2–M4 content an unexpected M1 defect or inferring ten hours from content counts.
+
+### 5. Visual taste in actual use
+
+Inspect gameplay-scale pixels and motion: landmarks and routes, silhouette/value hierarchy, apparent speed/depth, cockpit framing, interaction visibility, UI contrast, fog/lighting, habitat identity, creature readability and warmth of safe places. Distinguish useful authored detail from visual clutter. Reassess the earlier production/reference gap on the current richer-cel build; do not judge old captures as current. Look beyond the known secondary `.explore-note` contrast issue, while keeping that existing finding visible. Preserve good mechanical precision and organic character; do not reopen voxel direction by default.
+
+## Required hands-on sampling and evidence
+
+This pass must attempt bounded live play of the current production build, not only inspect screenshots or repeat the earlier approximately 90-second opening audit. Use ordinary page-local controls, verified Linux browser isolation and immutable earned imports. A complete fresh expedition is not necessary; meaningful coverage of the following transitions is:
+
+1. Fresh New/opening → learn the next action → pod/deck/water → a nearby resource or landmark → notebook/preparation. Start without exact solution coordinates where practical; record where outside guidance became necessary. Observe a deliberate pause/resume and return from a menu.
+2. Import a byte-identical earned checkpoint through normal Import. Inspect Dart approach/boarding, a short low-speed start/stop/turn/depth sequence, ordinary cruise/quiet movement, cockpit framing and return/exit. Actual inputs and short clips should support movement judgments. Do not spend minutes waiting for depletion or repeat the carrier/collision QA matrix.
+3. From an appropriate earned state, walk through a representative storage/craft/fitting/recharge or service sequence using the real UI, and investigate one local refusal. Count interaction steps or loss-of-context moments only for the stated sequence, not as an inferred universal burden.
+4. Inspect the current ordinary warning/quiet-retreat and disable/tow/paid-patch recordings and relevant actual states. Use a short live earned continuation if needed for a material timing/clarity question; no full repeated-failure run is required. Review return/refit/second-outing evidence to judge the loop beyond the opening.
+
+Record coverage as **personally played / watched continuous motion / inspected stills or extracted frames / read code / inferred**. Extracted contact sheets are not continuous-motion inspection. If a browser/tool limitation prevents a category, report the gap, use available evidence and avoid declaring that category verified. No invented tactile feel, human enjoyment, surprise, duration, audible mix or dedicated-GPU performance claims.
+
+Keep own short clips and selected frames, input method, source/build identity, route/checkpoint provenance, relevant counts/timings and resource-cleanup receipt. Preserve original evidence unchanged; copy scripts before adaptation, and never run original output-writing analyzers in place. Do not use teleport/grants/time scaling to represent normal gameplay. Clearly label any diagnostic staging; it cannot establish ordinary route friction. Prefer a few purposeful current examples over a large screenshot archive or another general test sweep. Run the build needed for actual play; do not repeat 210 tests/economy/unchanged technical matrices without a specific audit concern.
+
+Useful current evidence:
+
+- `docs/build/evidence/M1-PLAY-PRESENTATION.md`, `M1-PLAY-INTEGRATION.md`; `/tmp/siltwake-m1-play-presentation/{README.md,save-index.json,media-index.json,action-counts.json}`. Production0aaf60e has the same simulation as accepted M1; final source84fb7e8 changes eleven pulse-hint CSS lines. Full New→C01–C04→Dart/Canopy→return→trim→second quiet outing→return/Continue. Its ordinary `saves/main-final-ui-export.json` and `saves/earned-no-charge-ui-export.json` are useful import candidates; verify filenames against the save index, not inference.
+- Current full route:18 collections,3 individual transfers,10 bulk moves/71 cumulative CU,9 recipes including the trim. These differ in recipe bill/content from historical25 collections/31 transfers/8 recipes, so they are not a matched burden benchmark. Earlier shelf collisions and missed boarding remain in the input ledger; assess their player-facing cause, not only the successful tail.
+- `docs/build/evidence/M1-FINAL-PLAY.md`, `M1-FINAL-INTEGRATION.md`; `/tmp/siltwake-m1-final-play/{README.md,scenario-index.json,save-index.json,media/recording-index.json,media/contrast-index.json}`. Source84fb7e8 A is actual healthy depletion/reserve; B is a fresh no-charge warning and quiet retreat; C is installed-trim hull disable/tow/paid patch, not player incapacity. Final media includes actual `b-fresh-warning-response.mp4`, `c-ordinary-disable.mp4`, `c-local-tow-paid-patch.mp4` and matched contrast images. No need to repeat the long depletion run.
+- `docs/build/evidence/M1-LOOK.md`, `M1-LOOK-INTEGRATION.md` and current route media cover richer-cel changes. Original selected reference remains art20711d1; `/tmp/siltwake-m1-batch-r1-astra/reference-{reef,scout}.webp` is a reference, not production.
+- `docs/build/reviews/M1-INTEGRATED-R1.md` and both independent reports preserve current acceptance, outstanding contrast polish and exact limits. The current bounded early branch ends atC01/C03; completed alternateC03→C02 is historical4d0a7f0. Seeded carrier feasibility is not campaign fleet acquisition/mobile-refuge play.
+
+## Prior advice and remaining objections
+
+Earlier Opus OD-01/02/03/05/08/10/11 prompted richer region optics, restrained signage, a more authored Canopy, cockpit/organic/refuge detail and opening/UI improvements. OD-04/06/07/09 prompted paid pulse/local recharge, local crafting access, bulk material storage, distinctive starter costs, an optional useful Dart trim and canon-aware early copy. OD-12 launch direction was already corrected. Read the original report and coordinator disposition for exact proposals, accepted/rejected details and protected narrative concerns. Do not assume these changes solved their experiential goals: reassess current behavior and retain, close or revise each material prior concern with evidence.
+
+The two final technical reviewers accepted M1 and left one shared nonblocking secondary-guidance contrast issue over the bright cockpit. The assigned pulse hint is fixed. Human route learning, enjoyment, motion comfort and duration, audible mix and representative-GPU performance remain unverified. Earlier process advice asks for purposeful design iteration instead of repeated unchanged technical matrices; retain the mandatory review pair while recommending a practical, bounded polish slice.
+
+## Browser rules and cleanup
+
+Before opening, driving or launching any browser/preview/screenshot/test, read `/work/repos/fleet/BROWSER_RULES.md` when available and `docs/BROWSER_RULES.md`. Use HTTP/APIs/retained artifacts when sufficient. For this live pass verify actual **factory-worker or other isolated Linux browser process ownership**; a remote thread can still use a Windows-rendered tab. Prefer T3 `preview_status` then task-owned incognito `preview_open`, isolated storage and **port5197**, checked free again before launch. Native T3 tools are preferred; inspect actionable errors and retry correctly. Two failures on the same step or an explicit unsupported/unavailable result permit a documented fallback; no automatic relaunch loop.
+
+Keep the owner's Windows desktop free of automation. Never move/confine/capture the physical desktop cursor or repeatedly steal focus. Real pointer-lock testing belongs only in the verified isolated environment. Page-local inputs only, short bounded holds released in finally; preserve historical tab14, all user/peer tabs/storage/processes and shared hosts. If ownership/isolation cannot be established, report that limit and continue from artifacts rather than silently using Windows. If cursor trapping/resource excess occurs, stop further browser actions, identify ownership and report evidence. Close only task-created tabs through normal app lifecycle, stop only own server normally, stop recordings and release keys/controllers/pointer lock. Never kill browser processes by name. Record renderer/quality/viewport/audio and cleanup; SwiftShader/muted output establishes no consumer-GPU or listening result.
+
+## Return and recommendation format
+
+Deliver a concise spoiler-free assessment, evidence/coverage table and strengths worth preserving. Rank concrete findings with stable `OD2-xx` IDs; for each give priority/confidence, exact scene/source/artifact, observation versus judgment/inference, player consequence, a specific proposed change and tradeoff, and a practical verification step. Do not manufacture a finding quota or a numeric fun score. Name untested ideas honestly. If you discover a real correctness defect, report a bounded reproduction without fixing it or cancelling accepted source by assertion.
+
+End with **the five highest-value improvements, or fewer if evidence supports fewer**, ordered for an implementation team: what the player does today → intended better interaction → dependencies/likely scope → how to check. Include one coherent small polish slice that can be built and compared, separating current M1 work from later campaign concerns. Group compatible changes rather than creating a new committee/gate for every tweak. Include a short fresh-human playtest protocol for controls/learning/flow, and only owner choices that would materially change direction; do not question the owner directly.
+
+Commit only the assigned report(s); return full SHA, evidence paths, model/effort evidence and explicit closure of owned resources. Stop after the bounded report. Root reconciles recommendations into the next implementation direction; no independent redesign or production changes in this audit.

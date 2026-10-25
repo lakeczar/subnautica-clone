@@ -1,0 +1,62 @@
+<!doctype html><html><head><meta charset="utf-8"><style>
+body{font-family:var(--font-sans);color:var(--foreground)}
+.wrap{position:relative;width:100%;max-width:728px}
+canvas,svg{position:absolute;left:0;top:0;width:100%;height:100%}
+.box{position:relative;width:100%;aspect-ratio:2048/1792;border-radius:var(--radius);overflow:hidden}
+.leg{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:12px;color:var(--muted-foreground);margin-top:8px}
+.leg i{display:inline-block;width:18px;height:3px;vertical-align:middle;margin-right:5px}
+.scale{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--muted-foreground);margin-top:6px}
+.scale div{height:8px;width:180px;border-radius:3px;background:linear-gradient(90deg,#9fe3dc,#3fa7c4,#1f5f9a,#15306a,#0b1438)}
+text{font-family:var(--font-sans)}
+</style></head><body><div class="wrap"><div class="box"><canvas id="c" width="256" height="224"></canvas>
+<svg viewBox="-576 -160 2048 1792" id="s"></svg></div>
+<div class="scale">0 m<div></div>790 m · floor depth from the macro grid (shading changes every 128 m node, smoothly)</div>
+<div class="leg"><span><i style="background:#ffffff99"></i>region border (axis-aligned boxes)</span><span><i style="background:#7fd1ff"></i>authored route</span><span><i style="background:#ff7a59;height:4px"></i>straight lane</span><span><i style="border-top:2px dashed #ffcf5a;background:none"></i>long haul (PACE-1)</span><span>■ charging mooring</span><span>★ big stop</span></div></div>
+<script>
+const M=[[25,20,16,14,12,14,40,34,26,30,40,38,30,30,40,70,110],[30,24,20,16,14,30,90,60,40,50,66,62,46,40,56,110,170],[45,36,30,26,40,130,150,110,95,100,108,104,96,92,120,220,300],[120,110,100,95,110,165,175,165,170,175,180,182,180,190,230,330,380],[165,160,160,165,175,190,200,215,225,230,228,226,228,245,330,440,470],[195,195,200,210,215,225,240,262,290,300,300,300,305,340,440,500,520],[230,235,240,245,245,245,262,300,345,360,355,345,350,400,500,540,560],[245,248,250,250,250,255,275,330,372,380,376,368,375,440,530,570,590],[248,250,252,252,252,258,290,340,375,382,378,375,400,480,560,600,620],[250,252,254,254,256,265,305,360,378,384,384,392,440,520,580,630,660],[252,254,256,256,262,285,340,385,392,393,395,410,480,540,610,660,700],[254,256,258,258,270,310,365,372,368,372,380,420,510,580,650,710,740],[256,258,260,262,285,360,480,560,600,600,580,560,580,640,700,750,770],[258,260,262,266,300,420,580,630,640,640,620,600,620,680,740,775,785],[260,262,264,270,320,440,600,640,650,650,630,610,640,700,760,780,790]];
+const n=(i,j)=>M[Math.max(0,Math.min(14,j))][Math.max(0,Math.min(16,i))];
+const cr=(a,b,c,d,t)=>b+.5*t*(c-a+t*(2*a-5*b+4*c-d+t*(3*(b-c)+d-a)));
+function depth(x,z){const gx=(x+576)/128,gz=(160-z)/128,i=Math.floor(gx),j=Math.floor(gz),tx=gx-i,tz=gz-j;const r=jj=>cr(n(i-1,jj),n(i,jj),n(i+1,jj),n(i+2,jj),tx);return cr(r(j-1),r(j),r(j+1),r(j+2),tz)}
+const stops=[[0,[159,227,220]],[120,[63,167,196]],[300,[31,95,154]],[550,[21,48,106]],[790,[11,20,56]]];
+function col(d){for(let k=1;k<stops.length;k++)if(d<=stops[k][0]){const[a,ca]=stops[k-1],[b,cb]=stops[k],t=(d-a)/(b-a);return ca.map((v,q)=>v+(cb[q]-v)*t)}return stops.at(-1)[1]}
+const cv=document.getElementById('c'),g=cv.getContext('2d'),im=g.createImageData(256,224);
+for(let py=0;py<224;py++)for(let px=0;px<256;px++){const x=-576+px*8+4,z=160-py*8-4;let d=depth(x,z);
+// Rift trench & Divide brine hint
+const c=col(Math.max(0,d)),o=(py*256+px)*4;im.data[o]=c[0];im.data[o+1]=c[1];im.data[o+2]=c[2];im.data[o+3]=255}
+g.putImageData(im,0,0);
+const s=document.getElementById('s'),NS='http://www.w3.org/2000/svg';
+function el(t,a,p=s){const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p.appendChild(e);return e}
+const P=pts=>pts.map(([x,z])=>`${x},${-z}`).join(' ');
+const regions={refuge_reef:[[-576,64,-230,160]],island_chain:[[-32,44,-100,-20],[300,640,-60,160],[880,1220,-80,160]],suspended_garden:[[64,1472,-352,160]],silt_basin:[[98,272,-352,-184],[64,1088,-1000,-352],[-576,64,-640,-230]],thermal_rift:[[-576,180,-1632,-640],[40,230,-640,-570]],brine_divide:[[180,960,-1632,-1000]],deep_district:[[960,1472,-1632,-1000],[1088,1472,-1000,-352]]};
+for(const id in regions)for(const[a,b,c,d]of regions[id])el('rect',{x:a,y:-d,width:b-a,height:d-c,fill:'none',stroke:'#ffffff70','stroke-width':3,'stroke-dasharray':'14 10'});
+// Rift axis and Divide ridge
+el('polyline',{points:P([[180,-590],[75,-750],[-45,-912],[-165,-1065],[-280,-1235],[-392,-1420],[-470,-1632]]),fill:'none',stroke:'#ff8a3d55','stroke-width':60,'stroke-linecap':'round'});
+el('polyline',{points:P([[-20,-1170],[190,-1205],[330,-1228],[460,-1250],[600,-1262],[740,-1254],[860,-1232],[975,-1205],[1147,-1164]]),fill:'none',stroke:'#d9e6ff88','stroke-width':14});
+el('rect',{x:180,y:1262,width:900,height:370,fill:'#b8c9ff22'});
+// Canopy ribs
+for(const z of [-70,-152,-238,-306])el('line',{x1:560,y1:-z,x2:1300,y2:-z,stroke:'#9dffb055','stroke-width':10});
+// Meridian terraces
+for(const r of [700,560,400,240])el('circle',{cx:1490,cy:1650,r,fill:'none',stroke:'#c9a8ff66','stroke-width':4});
+// land
+for(const[x,z,rx,rz]of[[-205,-5,100,90],[470,95,48,46],[1040,50,110,80],[6,-60,30,34]])el('ellipse',{cx:x,cy:-z,rx,ry:rz,fill:'#e8d9a8',stroke:'#7a6a40','stroke-width':3});
+// routes
+const R=[[[48,-66],[200,-40],[380,10],[449,30]],[[470,-6],[470,-50],[520,-110],[580,-160],[620,-200]],[[944,-22],[920,-90],[840,-150],[720,-190],[640,-200]],[[620,-200],[560,-290],[460,-380],[360,-430]],[[360,-430],[420,-490],[470,-560],[492,-600]],[[780,-444],[786,-530],[783,-612]],[[-14,-318],[40,-366],[80,-400],[133,-432],[186,-464],[330,-540]],[[336,-546],[370,-500],[430,-420],[520,-330],[590,-262],[620,-200]],[[216,-232],[260,-290],[300,-370],[360,-430]],[[360,-430],[250,-505],[205,-590],[140,-680],[91,-887]],[[91,-887],[118,-940],[95,-966],[42,-1022],[-7,-1090]],[[91,-887],[20,-830],[-60,-770],[-98,-748]],[[-98,-748],[-180,-650],[-232,-480],[-228,-330],[-240,-262],[-246,-172],[-236,-100]],[[-7,-1090],[60,-1130],[150,-1170],[230,-1195],[336,-1188]],[[360,-430],[250,-505],[228,-560],[262,-690],[400,-900],[560,-1120]],[[560,-1120],[749,-1191]],[[560,-1120],[336,-1188]],[[632,-1224],[600,-1285],[700,-1300],[980,-1260]],[[1080,-1160],[1150,-1240],[1170,-1300],[1240,-1360],[1400,-1550]]];
+for(const r of R)el('polyline',{points:P(r),fill:'none',stroke:'#7fd1ff','stroke-width':5,'stroke-linejoin':'round',opacity:.85});
+const S=[[[470,-40],[700,-50],[900,-45],[944,-22]],[[360,-430],[520,-440],[700,-446],[780,-444]],[[560,-1120],[760,-1128],[900,-1136],[980,-1150],[1080,-1160]],[[1300,-300],[1150,-270],[900,-232],[620,-200]],[[1350,-1000],[1350,-340]],[[1080,-1160],[1240,-1090],[1350,-1000]]];
+for(const r of S)el('polyline',{points:P(r),fill:'none',stroke:'#ff7a59','stroke-width':11,'stroke-linecap':'round'});
+// long hauls
+el('path',{d:`M-190,30 Q600,600 1396,1595`,fill:'none',stroke:'#ffcf5a','stroke-width':6,'stroke-dasharray':'22 14'});
+el('path',{d:`M470,6 Q900,500 1080,1160`,fill:'none',stroke:'#ffcf5a','stroke-width':6,'stroke-dasharray':'22 14'});
+const lab=(x,z,t,o={})=>{const e=el('text',{x,y:-z,fill:o.c||'#fff','font-size':o.f||34,'font-weight':o.w||600,'text-anchor':o.a||'middle','paint-order':'stroke',stroke:'#000a','stroke-width':6});e.textContent=t};
+lab(-330,90,'Hearth Reef 0–65');lab(-205,-130,'Lifted Reef isle',{f:26,w:500});lab(470,150,'Stack',{f:26,w:500});lab(1040,140,'Headland',{f:26,w:500});
+lab(1000,-110,'Lantern Canopy 55–220 · 4 parallel ribs',{f:30});lab(640,-760,'Pale Basin 150–380');lab(-290,-500,'Basin west lobe',{f:26,w:500});
+lab(-250,-1000,'Ember Rift',{});lab(-250,-1040,'250–540 · one diagonal trench',{f:24,w:500});lab(560,-1400,'Mirror Divide 360–650',{});lab(560,-1440,'brine south of one long ridge',{f:24,w:500});
+lab(1260,-1470,'Meridian 520–780',{});lab(1260,-1505,'concentric terraces',{f:24,w:500});lab(1400,-640,'escarpment',{f:24,w:500});
+lab(0,25,'pod',{f:24});lab(330,-610,'crown',{f:26});
+lab(780,-30,'1 straight surface run',{f:22,w:500,c:'#ffb59f'});lab(1000,-1110,'straight 520 m east',{f:22,w:500,c:'#ffb59f'});
+lab(650,780,'',{});lab(700,-930,'workshop ⇢ district: 3.1–3.5 km Creel hauls',{f:22,w:500,c:'#ffe08a'});
+const sq=(x,z)=>el('rect',{x:x-14,y:-z-14,width:28,height:28,fill:'#ffd34d',stroke:'#000',"stroke-width":3});
+for(const[x,z]of[[620,-200],[360,-430],[91,-887],[560,-1120],[1080,-1160]])sq(x,z);
+const star=(x,z)=>lab(x,z-12,'★',{f:54,c:'#ff5ea8'});
+for(const[x,z]of[[319,-547],[136,-920],[632,-1238],[1300,-1250]])star(x,z);
+</script></body></html>

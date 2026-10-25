@@ -1,6 +1,10 @@
 export const PALETTE = {
-  sand: '#b5ccb0', shore: '#e4d6a3', basalt: '#4b777b', stoneLight: '#628e8b', deep: '#386572',
-  porcelain: '#e5e8ce', crown: '#f2eacb', petrol: '#234d58', ink: '#173b49', metal: '#638e92',
-  ochre: '#d69a43', orange: '#bf7543', glass: '#17516a', reflection: '#76b7bd', warm: '#ffdda0',
-  jade: '#69b68e', lime: '#b8d786', coral: '#e69788', amber: '#e8bd72', violet: '#a4a5cd',
+  sand: '#b9d7b2', shore: '#eed6a0', basalt: '#376b73', stoneLight: '#65958e', deep: '#285562',
+  porcelain: '#f1f0dc', crown: '#fff1cb', petrol: '#193f4c', ink: '#102f3d', metal: '#527d86',
+  ochre: '#e6a139', orange: '#d57a35', glass: '#114957', reflection: '#88ccd0', warm: '#ffe5aa',
+  jade: '#47b58d', lime: '#c3df86', coral: '#e77868', amber: '#f2b94d', violet: '#9a89c0',
+  // Pressure equipment uses warm porcelain over blue recessed seams. Bright
+  // accents belong to grips, air thresholds and living edges, not every object.
+  shade: '#bacbc6', steelLight: '#9bbdb9', seam: '#193f4c', mint: '#c6edd3',
+  coralRim: '#ffc18b', shell: '#e9dfc2', plum: '#634b78',
 } as const;

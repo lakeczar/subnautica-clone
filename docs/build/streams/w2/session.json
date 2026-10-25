@@ -1,0 +1,29 @@
+{
+ "segments": [
+  {
+   "label": "Canopy edge: Creel toward the crown",
+   "frames": 482,
+   "fps": 59.9,
+   "p50": 16.7,
+   "p95": 16.7,
+   "worst": 33.3
+  },
+  {
+   "label": "Anchorage: Creel toward the cliff",
+   "frames": 363,
+   "fps": 60,
+   "p50": 16.7,
+   "p95": 16.8,
+   "worst": 16.8
+  },
+  {
+   "label": "Summit: Creel across the crown",
+   "frames": 360,
+   "fps": 59.7,
+   "p50": 16.7,
+   "p95": 16.8,
+   "worst": 33.3
+  }
+ ],
+ "renderer": "ANGLE GL-EGL, RTX 3090 (see session.log)"
+}

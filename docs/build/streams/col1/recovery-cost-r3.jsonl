@@ -1,0 +1,16 @@
+{"triangles":324,"centre":{"x":0,"y":0,"z":0},"medianMs":1.9336599999999997,"maxMs":3.7469459999999977,"perCall":{"tried":27,"sweeps":1},"distance":2.3592268764380138,"clear":true}
+{"triangles":324,"centre":{"x":0.1,"y":0.2,"z":0.3},"medianMs":0.7725459999999984,"maxMs":1.3375819999999976,"perCall":{"tried":27,"sweeps":1},"distance":2.0319880552692373,"clear":true}
+{"triangles":6240,"centre":{"x":0,"y":0,"z":0},"medianMs":4.20903899999999,"maxMs":7.422155999999994,"perCall":{"tried":27,"sweeps":1},"distance":2.3723680477590388,"clear":true}
+{"triangles":6240,"centre":{"x":0.1,"y":0.2,"z":0.3},"medianMs":2.082059000000001,"maxMs":2.094975000000005,"perCall":{"tried":40,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"triangles":25280,"centre":{"x":0,"y":0,"z":0},"medianMs":8.673415000000006,"maxMs":15.81080399999999,"perCall":{"tried":27,"sweeps":1},"distance":2.3590956821557545,"clear":true}
+{"triangles":25280,"centre":{"x":0.1,"y":0.2,"z":0.3},"medianMs":4.803442999999987,"maxMs":5.003439000000014,"perCall":{"tried":40,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"triangles":39600,"centre":{"x":0,"y":0,"z":0},"medianMs":9.882168000000036,"maxMs":11.082832000000053,"perCall":{"tried":27,"sweeps":1},"distance":2.3562218774433625,"clear":true}
+{"triangles":39600,"centre":{"x":0.1,"y":0.2,"z":0.3},"medianMs":6.259586000000013,"maxMs":6.273878000000025,"perCall":{"tried":40,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"parts":100,"layout":"one shape","triangles":1200,"medianMs":1.6734910000000127,"maxMs":1.7823210000000245,"perCall":{"tried":207,"sweeps":1},"distance":2.034000009536743,"clear":true}
+{"parts":100,"layout":"members","triangles":1200,"medianMs":2.233276999999987,"maxMs":3.5307710000000156,"perCall":{"tried":207,"sweeps":1},"distance":2.034000009536743,"clear":true}
+{"parts":500,"layout":"one shape","triangles":6000,"medianMs":4.65764999999999,"maxMs":4.723508000000038,"perCall":{"tried":226,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"parts":500,"layout":"members","triangles":6000,"medianMs":7.082357999999999,"maxMs":7.709145000000035,"perCall":{"tried":226,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"parts":1000,"layout":"one shape","triangles":12000,"medianMs":11.023542999999961,"maxMs":13.952741000000003,"perCall":{"tried":226,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"parts":1000,"layout":"members","triangles":12000,"medianMs":20.61786500000005,"maxMs":21.33022900000003,"perCall":{"tried":226,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"parts":2000,"layout":"one shape","triangles":24000,"medianMs":14.240857000000005,"maxMs":15.420505000000048,"perCall":{"tried":226,"sweeps":1},"distance":2.0489096641540523,"clear":true}
+{"parts":2000,"layout":"members","triangles":24000,"medianMs":27.94915000000003,"maxMs":30.737438999999995,"perCall":{"tried":226,"sweeps":1},"distance":2.0489096641540523,"clear":true}

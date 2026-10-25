@@ -1,6 +1,6 @@
 # Original graphics under one art direction
 
-The owner requested **GPT-6.1 Sol at maximum reasoning** to create graphics from scratch and subsequently selected it as the **main builder across production work**. Astra at `xhigh` sets direction and coordinates geography, progression, lore, engineering and acceptance. Sol 6.1 max implements gameplay and assets under those shared contracts. The independent Sol reviewer is a separate non-author agent.
+The owner now selects **Opus5.5/high** to build original graphics and gameplay, with room to improve design and taste within the richer cel direction. **Sol6.1/xhigh** independently reviews the result. Follow [MODEL_POLICY](build/MODEL_POLICY.md); the earlier Sol-authored art study remains historical evidence.
 
 ## Current study
 
@@ -10,7 +10,7 @@ Geometry and material source are original and deterministic. This establishes an
 
 ## Contract for the future build prompt
 
-- Discover the live model catalog, select `gpt-6.1-sol` and explicitly set `reasoningEffort: max`. Use native child-agent tools when they support that choice, otherwise T3 `delegate_task` with the chosen provider/model/options. Do not create ordinary top-level threads as a substitute for subagents. Record the model and effort used; disclose a missing capability rather than silently substituting.
+- Discover the live model catalog, select `claude-opus-5-5` and explicitly set `effort: high`. Use native child-agent tools when they support that choice, otherwise T3 `delegate_task` with the chosen provider/model/options. Do not create ordinary top-level threads as a substitute for subagents. Record the model and effort used; disclose a missing capability rather than silently substituting.
 - Batch artists within the actual concurrency limit. More agents are useful only when their work has clear ownership and can be integrated. Commit the shared baseline before creating worktrees.
 - Establish a single art bible: chosen visual style, palette, world-unit scale, hull/biology language, lighting, silhouettes, camera readability and target hardware. Shared shader/material changes belong to the coordinator or one explicit owner.
 - Develop the selected richer cel direction through playable scenes. At the first playable expedition and each new biome or vehicle milestone, review representative views for color, lighting, silhouette, density and interaction readability; revise where evidence shows a problem. Preserve the shared art direction while allowing individual designs to improve. Do not recreate both complete styles for each milestone or let decoration delay a working gameplay loop.
@@ -20,7 +20,7 @@ Geometry and material source are original and deterministic. This establishes an
 - Vehicles need distinct functional silhouettes, meaningful scale, visible access points and attachment locations that match their gameplay modules. The most capable craft must communicate inhabited space and utility. A beautiful exterior is not evidence of a traversable interior.
 - Review assets in the actual game camera and lighting, including darkness and visual clutter. Require a functional interaction or readable cue before spending effort on tiny surface decoration. Compare paired style studies with identical subjects, cameras, lighting and animation time.
 - Integrate a bounded first pass early. The coordinator inspects rendered results, gives specific corrections, and repeats only where a visible or functional problem warrants it. Do not accept disconnected asset folders as a finished art pass.
-- Before accepting an art batch or its integrated milestone, apply the [Independent review gate](DELIVERY_AND_ACCEPTANCE.md#independent-review-gate). The Sol artist cannot serve as that batch's independent Sol reviewer.
+- Before accepting an art batch or its integrated milestone, apply the [Independent review gate](DELIVERY_AND_ACCEPTANCE.md#independent-review-gate). The author cannot serve as that batch's independent reviewer.
 - Record source, screenshots, build/check results and limitations in the relevant PR. Follow repository browser isolation rules. Software-rendered evidence must not be presented as consumer-GPU performance.
 
 These requirements describe the intended production workflow. The current prototype remains disposable evidence for the art decision and is not an approved foundation for the ten-hour game.

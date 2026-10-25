@@ -1,0 +1,533 @@
+{
+ "stress": [
+  {
+   "case": "budget 32 MiB: below fixed + coarse safety",
+   "p": {
+    "x": 757.5,
+    "y": -61.99205325941489,
+    "z": -69
+   },
+   "held": true,
+   "admitted": false,
+   "outside": true,
+   "reason": "not admitted: the budget cannot reserve this cave's fixed bytes and coarse safety set",
+   "gated": 571,
+   "coverage": {
+    "frames": 0,
+    "failures": 0,
+    "unsafeMetres": 0,
+    "exposedStill": 0,
+    "coarseFrames": 0,
+    "first": ""
+   },
+   "shown": 57,
+   "cut": 0
+  },
+  {
+   "case": "budget 59 MiB: 16 MiB taken after entry and kept; reverse key, then back out",
+   "reachedWaypoint": 3,
+   "pressed": {
+    "p": {
+     "x": 755.1399799826976,
+     "y": -107.08646826784076,
+     "z": -88.36452469588299
+    },
+    "held": false,
+    "admitted": true,
+    "outside": false,
+    "reason": "",
+    "gated": 0,
+    "coverage": {
+     "frames": 324,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    },
+    "shown": 19,
+    "cut": 38
+   },
+   "keyMoved": 2.0287183579055452,
+   "retreatGated": 0,
+   "end": {
+    "p": {
+     "x": 757.9513931256914,
+     "y": -58.78926508201249,
+     "z": -62.81416724642625
+    },
+    "held": false,
+    "admitted": true,
+    "outside": true,
+    "reason": "",
+    "gated": 0,
+    "coverage": {
+     "frames": 707,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    },
+    "shown": 19,
+    "cut": 38
+   }
+  },
+  {
+   "case": "budget 48 MiB: every free byte taken after entry and kept",
+   "end": {
+    "p": {
+     "x": 791.7882787677105,
+     "y": -151.18696569223636,
+     "z": -205.78248951657605
+    },
+    "held": false,
+    "admitted": true,
+    "outside": false,
+    "reason": "",
+    "gated": 0,
+    "coverage": {
+     "frames": 960,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 960,
+     "first": ""
+    },
+    "shown": 0,
+    "cut": 68
+   },
+   "finished": true,
+   "report": {
+    "frames": 995,
+    "dt": {
+     "p50": 16.69999998807907,
+     "p95": 18,
+     "p99": 20.599999994039536,
+     "max": 26.69999998807907
+    },
+    "cpu": {
+     "p50": 0.5,
+     "p95": 2.300000011920929,
+     "max": 17.30000001192093
+    },
+    "gpuMs": 3.1209984,
+    "residencyMs": {
+     "p95": 0.4000000059604645,
+     "max": 8.099999994039536
+    },
+    "lampMs": {
+     "p95": 2.100000023841858,
+     "max": 13.099999994039536
+    },
+    "step": {
+     "calls": 1008,
+     "meanUs": 105.35714222443482,
+     "maxUs": 2699.999988079071
+    },
+    "coverage": {
+     "frames": 960,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 960,
+     "first": ""
+    },
+    "residency": {
+     "frame": 1002,
+     "desired": 68,
+     "withinBudget": 0,
+     "building": 0,
+     "prepared": 0,
+     "uploading": 0,
+     "shown": 0,
+     "hidden": 0,
+     "cpuBytes": 50331648,
+     "gpuBytes": 50331648,
+     "gpuAllocatedBytes": 0,
+     "shownGpuBytes": 0,
+     "hiddenGpuBytes": 0,
+     "overBudget": false,
+     "demoted": 0,
+     "held": 0,
+     "cut": 68,
+     "refused": [],
+     "deferred": 0,
+     "settled": true,
+     "buildMs": 0,
+     "buildSteps": 0,
+     "maxStepMs": 0,
+     "uploadMs": 0,
+     "uploads": 0,
+     "uploadedBytes": 0,
+     "uploadOverrunBytes": 0,
+     "pending": 0,
+     "totals": {
+      "built": 41,
+      "uploaded": 39,
+      "cancelled": 0,
+      "evicted": 39,
+      "discarded": 1,
+      "overBudgetDiscards": 1
+     }
+    },
+    "draws": 3
+   }
+  }
+ ],
+ "drive": {
+  "reachedWaypoints": 14,
+  "of": 14,
+  "seconds": 25.212,
+  "log": [
+   {
+    "label": "start",
+    "p": {
+     "x": 758,
+     "y": -56,
+     "z": -62
+    },
+    "held": false,
+    "cov": {
+     "frames": 0,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 1",
+    "p": {
+     "x": 757.0217020119402,
+     "y": -75.3105427322803,
+     "z": -71.68670278400648
+    },
+    "held": false,
+    "cov": {
+     "frames": 88,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 2",
+    "p": {
+     "x": 755.7600146207324,
+     "y": -97.61935800042272,
+     "z": -82.85018420223818
+    },
+    "held": false,
+    "cov": {
+     "frames": 262,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 3",
+    "p": {
+     "x": 754.5086687063499,
+     "y": -118.77534779976428,
+     "z": -93.90700251192422
+    },
+    "held": false,
+    "cov": {
+     "frames": 428,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 4",
+    "p": {
+     "x": 759.6686301893956,
+     "y": -128.10712822059074,
+     "z": -100.09654289592521
+    },
+    "held": false,
+    "cov": {
+     "frames": 512,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 5",
+    "p": {
+     "x": 765.2438943685578,
+     "y": -130.24801686347342,
+     "z": -103.24308205932242
+    },
+    "held": false,
+    "cov": {
+     "frames": 554,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 6",
+    "p": {
+     "x": 788.265731326943,
+     "y": -130.75802920227824,
+     "z": -111.53100239834687
+    },
+    "held": false,
+    "cov": {
+     "frames": 688,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 7",
+    "p": {
+     "x": 805.9908350727226,
+     "y": -135.90846198204855,
+     "z": -123.80916538063083
+    },
+    "held": false,
+    "cov": {
+     "frames": 814,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 8",
+    "p": {
+     "x": 814.6105209827919,
+     "y": -140.62126246332215,
+     "z": -132.4378804298465
+    },
+    "held": false,
+    "cov": {
+     "frames": 889,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 9",
+    "p": {
+     "x": 806.2783966165441,
+     "y": -147.57288061823772,
+     "z": -149.72333274835063
+    },
+    "held": false,
+    "cov": {
+     "frames": 1039,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 10",
+    "p": {
+     "x": 808.2679061978467,
+     "y": -148.525580710775,
+     "z": -158.03879224985354
+    },
+    "held": false,
+    "cov": {
+     "frames": 1102,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 11",
+    "p": {
+     "x": 806.4819452507488,
+     "y": -148.9919944223553,
+     "z": -167.97108222427264
+    },
+    "held": false,
+    "cov": {
+     "frames": 1198,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 12",
+    "p": {
+     "x": 797.0800442701798,
+     "y": -150.57648489273345,
+     "z": -179.46398365726424
+    },
+    "held": false,
+    "cov": {
+     "frames": 1282,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 13",
+    "p": {
+     "x": 792.9026737421134,
+     "y": -151.73743095144425,
+     "z": -189.95673347047514
+    },
+    "held": false,
+    "cov": {
+     "frames": 1345,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "waypoint 14",
+    "p": {
+     "x": 791.7784124862751,
+     "y": -151.8232115170471,
+     "z": -205.2032473199205
+    },
+    "held": false,
+    "cov": {
+     "frames": 1429,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   },
+   {
+    "label": "end",
+    "p": {
+     "x": 791.7784124862751,
+     "y": -151.8232115170471,
+     "z": -205.2032473199205
+    },
+    "held": false,
+    "cov": {
+     "frames": 1429,
+     "failures": 0,
+     "unsafeMetres": 0,
+     "exposedStill": 0,
+     "coarseFrames": 0,
+     "first": ""
+    }
+   }
+  ],
+  "report": {
+   "frames": 1529,
+   "dt": {
+    "p50": 16.69999998807907,
+    "p95": 16.899999976158142,
+    "p99": 17.299999982118607,
+    "max": 36
+   },
+   "cpu": {
+    "p50": 0.3999999761581421,
+    "p95": 0.7000000178813934,
+    "max": 19.799999982118607
+   },
+   "gpuMs": 2.630788129032258,
+   "residencyMs": {
+    "p95": 0.30000001192092896,
+    "max": 20.80000001192093
+   },
+   "lampMs": {
+    "p95": 1.600000023841858,
+    "max": 11.400000005960464
+   },
+   "step": {
+    "calls": 1531,
+    "meanUs": 66.9497064443136,
+    "maxUs": 1599.9999940395355
+   },
+   "coverage": {
+    "frames": 1433,
+    "failures": 0,
+    "unsafeMetres": 0,
+    "exposedStill": 0,
+    "coarseFrames": 0,
+    "first": ""
+   },
+   "residency": {
+    "frame": 1529,
+    "desired": 64,
+    "withinBudget": 64,
+    "building": 0,
+    "prepared": 0,
+    "uploading": 0,
+    "shown": 64,
+    "hidden": 2,
+    "cpuBytes": 54908771,
+    "gpuBytes": 19851344,
+    "gpuAllocatedBytes": 14016544,
+    "shownGpuBytes": 14016544,
+    "hiddenGpuBytes": 0,
+    "overBudget": false,
+    "demoted": 0,
+    "held": 0,
+    "cut": 0,
+    "refused": [],
+    "deferred": 0,
+    "settled": true,
+    "buildMs": 0,
+    "buildSteps": 0,
+    "maxStepMs": 0,
+    "uploadMs": 0,
+    "uploads": 0,
+    "uploadedBytes": 0,
+    "uploadOverrunBytes": 0,
+    "pending": 0,
+    "totals": {
+     "built": 66,
+     "uploaded": 66,
+     "cancelled": 0,
+     "evicted": 0,
+     "discarded": 0,
+     "overBudgetDiscards": 0
+    }
+   },
+   "draws": 3
+  }
+ },
+ "errors": []
+}

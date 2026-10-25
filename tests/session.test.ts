@@ -89,6 +89,7 @@ test('failed manual and automatic saves retain active exportable progress and di
     assert.equal(f.storage.writes, writes); assert.equal(f.storage.getItem(LOCAL_SAVE_KEY), before);
     f.storage.failWrite = false; f.session.manualSave(); await settled();
     assert.equal(f.session.autoSaveAllowed, true); assert.equal(f.repository.status.save?.state.tick, 3610);
+    assert.equal(f.notices.at(-1), 'Saved locally');
   }
 });
 

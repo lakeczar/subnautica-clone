@@ -1,0 +1,41 @@
+{
+  "schema": 1,
+  "contentVersion": "expedition.3",
+  "scope": "Explicit adopted M1 delta only. Runtime registry remains authoritative; unchanged future arithmetic is not newly validated.",
+  "historicalProposal": "docs/build/design/economy-candidate.json",
+  "historicalProposalSha256": "b606e72d173a86374a5c9e348a66e25d76e2389b9c02490f5b51f322f786865f",
+  "costOverrides": {
+    "essential_tools": {
+      "proposal": { "structural_alloy": 2, "silica_glass": 2, "flex_membrane": 2 },
+      "adopted": { "structural_alloy": 1, "silica_glass": 3, "flex_membrane": 1 },
+      "reason": "Glass instruments dominate the scanner/service tool."
+    },
+    "suit_150": {
+      "proposal": { "structural_alloy": 1, "silica_glass": 1, "flex_membrane": 2 },
+      "adopted": { "structural_alloy": 1, "flex_membrane": 3 },
+      "reason": "Membrane dominates personal pressure protection."
+    },
+    "restore_workshop": {
+      "proposal": { "structural_alloy": 2, "silica_glass": 1, "flex_membrane": 1 },
+      "adopted": { "structural_alloy": 3, "silica_glass": 1 },
+      "reason": "Alloy dominates workshop structure."
+    }
+  },
+  "existingSiteAdoptions": {
+    "restore_workshop": { "proposal": "field", "runtime": "island_workshop" }
+  },
+  "optionalReturn": {
+    "dart_acoustic_trim": { "cost": { "conductive_crust": 2, "buoyant_resin": 2 }, "firstObservedCargo": { "conductive_crust": 4, "buoyant_resin": 4 }, "itemCu": 2 }
+  },
+  "preCanopy": ["pod_repair", "essential_tools", "suit_150", "salvage_buoy", "reserve_cells", "bobbin_kit", "restore_workshop", "dart_base"],
+  "budget": {
+    "publicStarterSpend": { "structural_alloy": 16, "silica_glass": 11, "flex_membrane": 12 },
+    "publicStarterCu": 55,
+    "rescueOnlyKitSpend": { "structural_alloy": 2, "silica_glass": 1, "flex_membrane": 3 },
+    "optionalReturnSpend": { "conductive_crust": 2, "buoyant_resin": 2 },
+    "diverCu": 16,
+    "buoyCu": 24,
+    "dartCu": 32
+  },
+  "limits": "Arithmetic and staged production-rule transactions. No added stock, route/oxygen/power-margin, ordinary-input, balance, full-campaign or enjoyment acceptance. Prior crafted receipts retain their original expenditure without refunds or rebilling."
+}

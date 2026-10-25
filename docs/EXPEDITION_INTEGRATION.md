@@ -66,3 +66,20 @@ Species, source materials and human infrastructure explain each site's layout. S
 ## Required integration evidence
 
 The future build must demonstrate both fleet strategies, all six hull niches, the midcampaign carrier, dry carrier transport of Spindle with another craft's launch, safe blocked launches, save/load during docking, personal-suit exit limits, food access from no inventory, all-advanced-hulls-disabled recovery, and a main-story finish without all optional vessels or logs. The planning arithmetic alone proves none of those runtime behaviors. The first-time duration and enjoyment target require observed human playtests.
+
+## S9 campaign registry: adopted quantities and changes (2026-10-20)
+
+The registry now carries the whole campaign (`src/content/campaign/*`). The depth shelves above hold unchanged on S2's sites: ceramic at 258/266 m, core at 289/290 m and lattice at 366/375 m, two first-access deposits each, none needing heat or brine protection. Each sits under 90% of the preceding configuration's rating. `src/sim/campaignEconomy.ts` and `scripts/check-campaign-economy.mjs` check the quantity rules. They cover required progression, a credible optional spend and a failed rescue together, on finite stock with zero renewal, for both strategies. Recorded changes and their reasons:
+
+| Change | Reason |
+| --- | --- |
+| Hearthline is built in two stages at the stack-yard berth. The keel (Basin frame survey) costs 2 tagged frames, 16 alloy and 6 resin. The fit-out (workshop plans) costs 6 alloy, 8 glass, 8 membrane, 8 crust and 4 resin. | This makes the two complementary plans two separate expeditions. It holds frame demand at 6 of the 10 frames, so losing any one frame host still leaves the carrier buildable. Glass and membrane are the binding materials at zero renewal. |
+| The Hearthline 550 m refit costs 10 ceramic and 6 lattice. It uses no membrane. | Both materials are reachable from the 400 m hull with the 450 m suit. Dropping membrane keeps the membrane margin. |
+| The Mantle costs 8 ceramic, 4 core, 5 lattice, 8 alloy, 3 glass and 4 crust. It needs no frame and no Hearthline (S5 proposed `needs: hearthline_400`). | The Mantle's requirement is the three late materials. A Creel-route player may build one as an optional craft. The carrier route still builds it after the carrier. |
+| A third restored stop, the Ember Rift materials station, costs 4 alloy, 2 glass, 2 membrane and 2 crust. The Divide upper service dock costs 3 alloy, 3 glass, 3 crust and 2 lattice. | Each stop is paid in one diver load, because its locker is shut until it is restored. Both give air and charge on the Creel route between the Basin and the district. |
+| The Creel refits cost 6 ceramic, 2 core, 2 crust and 2 membrane for 450 m, and 8 ceramic, 5 lattice, 3 core and 2 glass for 800 m. The suit refits cost 4 ceramic, 2 membrane and 2 crust for 450 m, and 4 ceramic, 4 lattice, 1 core and 1 membrane for 800 m. | The 800 m Creel refit and the 800 m suit share the deep-service plans. That keeps the rule that the 800 m package includes personal exit protection. |
+| S4's protections and kits are registered at S4's costs. The heat shroud and lining use the cool-flank research plans. The brine seals use the deep-service plans. The trim vanes use the Canopy reinforcement plans. The lures and ink use the reef recovery plans. | One registry. Each protection's plan sits at or before its source tier. |
+| S2's 950 m deep Bobbin tether is a small shallow-stock recipe: 2 membrane, 2 alloy and 1 resin. | This follows "recovery kit from shallow materials". |
+| The ledger counts the plume-side core seam only with heat protection or a Mantle, although S2 says plume timing also works. | Conservative. |
+
+Not modelled: the Creel 800 m package's cargo-and-comfort trade-off (no hold penalty yet), and a Hush 450 m refit (the Hush stays at 220 m).

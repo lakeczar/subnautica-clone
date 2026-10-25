@@ -1,0 +1,25 @@
+# M2-A rendering activation correction
+
+Sol6.1/max implementation leaf under root Astra xhigh. Start from the clean committed assembly named in the dispatch, containing A2 `2d209a8` and A3 `222b805`. Read STATUS, PLAN, CONTRACTS, revised input, M2-A-CONTRACT, M2-A2, its author report and M2-A2-INTEGRATION. This is not a review or acceptance task. No children, peer waits/messages, parent-checkout mutations, push, PR or merge.
+
+## Exclusive ownership
+
+Only `src/render/{geometry,renderer,regions,ecology,expedition,landmarks,environment,materials}.ts`, optional new `src/render/geometryCache.ts`, `tests/{m2-region-render,render-lifecycle}.test.ts`, optional new `tests/render-cache.test.ts`, and new `docs/build/evidence/M2-A-RENDER-PERFORMANCE.md`. Artifact root `/tmp/siltwake-m2-a-render-performance/`. TerrainSurface and resource-surface tests belong to the parallel terrain worker; UI/app belong to the existing priority worker. Other paths are read-only. Return a concrete proposal for any additional path while completing independent work.
+
+## Required result
+
+Resolve ROOT-A2-PERF: reconstructing unchanged regional art should not regenerate thousands of temporary primitive meshes on every revisit. The inspected candidates are refuge ecology (~120 ms warm) and Canopy expedition (~144 ms warm). Choose the smallest local solution; a per-renderer cache of immutable baked vertex/index/color data with recreated live state handles is authorized. It must have explicit bounded ownership and disposal. Do not retain all regions' live meshes/materials/textures, cache a GameState, freeze resource stock, or suspend simulation. Keep two adjoining detailed region owners, coarse navigation and pinned occupied/transfer/recovery actors.
+
+An internal factory/cache parameter may be added in owned files with compatible defaults. Public GameRenderer/createRenderer/present/availability, geometry/camera/FOV/seat/physics/input/save/content, exact authored shapes/colors and shaders remain behaviorally frozen except the material-lifetime consolidation below. Preserve source IDs and visibility, animation poses, names/metadata needed by existing diagnostics, pane order, sign/gauge readability and authoritative threat position. Avoid a global cache or generic asset framework. Do not key dynamic hulls, poses or state-dependent geometry only by a human label. Avoid cache keys that collide between different regional/random generation paths. NullEngine and actual WebGL must exercise the same factories. A replacement state, quality switch or graphics reconstruction cannot reuse obsolete stateful handles.
+
+Also investigate ROOT-A2-MATERIAL: the pinned carrier fixture reaches27 materials versus provisional24. Consolidate repeated compatible display/sign material ownership if it can preserve exact appearance, optical properties and disposal. Do not drop required gauges/signs or simply raise the budget. Return exact remaining cause if not resolved by this bounded seam.
+
+## Evidence
+
+Retain baseline and final CPU samples in the same process conditions. Measure cold first-use and warm revisits separately, conventional median and nearest-rank p95/max, at least five return traversals. The warm activation trial remains50 ms. Include construction, cache memory bytes/count, active geometry/material/texture counts, stable updates and terminal disposal. No fake timing exclusion, hidden all-region residency, or replacement of the worst retained samples. Demonstrate before/after geometry identity and real state replacement/depletion/recovery pinning; retain both qualities, New/import/Continue, resize and graphics loss/restoration/deliberate resume. Use meaningful tests for lifecycle/regression behavior, not timing-flaky CI assertions.
+
+Run clean check/build and all three economies; read-only earned input `/tmp/siltwake-m2-a2/inputs/main-final-ui-export.json`. Existing ROOT-A2-FLOOR and ROOT-A3-01 remain named inherited limits, not this leaf's scope. Do not consume uncommitted peer code. Actual production visual comparison and bounded input smoke must accompany the optimization, with exact source/build/fixture hashes and CPU versus GPU attribution. SwiftShader is no dedicated-GPU pass; no fresh earned route/human feel claim.
+
+Before any browser operation read `/work/repos/fleet/BROWSER_RULES.md` and `docs/BROWSER_RULES.md`. Verify factory-worker/isolated Linux ownership before automation. Prefer T3 preview_status then preview_open; one owned incognito/isolated-storage tab and free port5191. Preserve human/peer tabs and shared hosts; never unattended Windows or desktop pointer lock. Close only your own tab through normal lifecycle; stop only your recordings/server. No polling/watchers or waiting on peers.
+
+Return separate source and evidence commits, source/build identities, exact measurements/checks, verified archive/manifest, known limits, clean worktree and released resources. Root integrates with terrain and priority fixes before ordinary composition and the fresh complete-batch Astra/Sol review.

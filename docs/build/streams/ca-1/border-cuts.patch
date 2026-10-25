@@ -1,0 +1,44 @@
+--- a/src/render/biomes/tessellate.ts	2026-10-22 01:02:31.564358862 -0500
++++ b/src/render/biomes/tessellate.ts	2026-10-22 01:02:31.572359077 -0500
+@@ -29,6 +29,11 @@
+   min: number;
+   hole?: Rect;
+   pits?: readonly Rect[];
++  /** Pits whose edge lines can meet a border line from either side: those
++   * touching this chunk or the one across the line. Their edges join that
++   * line's cuts, so both chunks emit the identical border (a pit's edge is a
++   * lattice line across its whole chunk, not just along the pit). */
++  borderPits?: (axis: "x" | "z", at: number) => readonly Rect[];
+   /** Called between units of work; return true to yield. */
+   due?: () => boolean;
+ }
+@@ -123,7 +128,8 @@
+   /** Border cuts on one line: the hole's, plus each pit reaching the line. */
+   const lineCuts = (axis: "x" | "z", at: number): number[] => [...(axis === "x" ? cutsX : cutsZ),
+     ...pits.filter(p => axis === "x" ? p.minZ <= at + EPS && p.maxZ >= at - EPS : p.minX <= at + EPS && p.maxX >= at - EPS)
+-      .flatMap(p => axis === "x" ? [p.minX, p.maxX] : [p.minZ, p.maxZ])];
++      .flatMap(p => axis === "x" ? [p.minX, p.maxX] : [p.minZ, p.maxZ]),
++    ...(o.borderPits?.(axis, at) ?? []).flatMap(p => axis === "x" ? [p.minX, p.maxX] : [p.minZ, p.maxZ])];
+   // Shared border sets, keyed by line.
+   // Shared border sets, keyed by line; refinement yields as it goes.
+   const border = new Map<string, number[]>();
+--- a/src/render/biomes/terrain.ts	2026-10-22 01:02:31.564358862 -0500
++++ b/src/render/biomes/terrain.ts	2026-10-22 01:02:31.572359077 -0500
+@@ -34,7 +34,16 @@
+   const o = lod === "fine" ? FINE : COARSE;
+   // Chunks cut by the legacy edge or a cave keep the border step as their base
+   // so the extra lines never split a cell off the shared border lattice.
+-  return { base: cut || pits.length ? BORDER_STEP : o.base, tolerance: o.tolerance, min: o.min,
++  // A border's cuts: every pit edge line meeting it from this chunk or the
++  // one across it (same size, so both sides compute the same union).
++  const w = rect.maxX - rect.minX, h = rect.maxZ - rect.minZ;
++  const borderPits = (axis: "x" | "z", at: number): Rect[] => {
++    const across = axis === "x"
++      ? { ...rect, minZ: at === rect.minZ ? at - h : at, maxZ: at === rect.minZ ? at : at + h }
++      : { ...rect, minX: at === rect.minX ? at - w : at, maxX: at === rect.minX ? at : at + w };
++    return [...pits, ...caveFootprintsTouching(across)];
++  };
++  return { base: cut || pits.length ? BORDER_STEP : o.base, tolerance: o.tolerance, min: o.min, borderPits,
+     ...(cut ? { hole: LEGACY } : {}), ...(pits.length ? { pits } : {}) };
+ }
+ /** Cave replacement footprints touching a closed rectangle. */

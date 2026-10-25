@@ -1,0 +1,196 @@
+/* Preparation panels have their own layout; HUD and menu styles stay in style.css. */
+.game-panel {
+  position: absolute;
+  inset: 0;
+  z-index: 3;
+  overflow: auto;
+  background: #102d3ef5;
+  backdrop-filter: blur(7px);
+}
+.panel-frame {
+  max-width: 1060px;
+  margin: 0 auto;
+  padding: 0 24px 16px;
+}
+.panel-chrome {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flow-root;
+  background: #102d3efa;
+}
+.panel-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 0 12px;
+  background: #102d3efa;
+  border-bottom: 1px solid #84b1a450;
+}
+.game-panel h2 { margin: 0 10px 0 0; font: 400 28px Georgia, serif; }
+.game-panel nav { display: flex; flex-wrap: wrap; gap: 4px; }
+.panel-header nav { order: 1; }
+.panel-header #panel-return { order: 3; }
+.panel-paused { order: 2; margin-left: auto; color: #d3dfc9; font-size: 13px; }
+.game-panel article, .panel-group {
+  margin: 10px 0;
+  padding: 12px 14px;
+  border: 1px solid #84b1a442;
+  border-radius: 4px;
+  background: #2048548a;
+}
+.game-panel h3 { margin: 0 0 8px; font-size: 15px; font-weight: 550; }
+.game-panel h4 { margin: 0 0 6px; font-size: 14px; font-weight: 550; }
+.game-panel p { margin: 6px 0; color: #d2dfd2; font-size: 14px; line-height: 1.6; }
+.game-panel small { color: #cadccf; font-size: 12px; line-height: 1.5; }
+.game-panel kbd { font-size: 12px; }
+.game-panel .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+.panel-action { display: inline-flex; flex-direction: column; align-items: flex-start; gap: 3px; min-width: 0; }
+.panel-action .action-reason { display: block; overflow-wrap: anywhere; }
+.game-panel button:disabled { opacity: 0.65; cursor: default; }
+.game-panel button.primary { background: #5b735a; border-color: #dfce95; color: #fff3d2; }
+.game-panel button {
+  margin: 2px;
+  padding: 8px 11px;
+  border: 1px solid #b8c7a35e;
+  background: #294f55;
+  font-size: 13px;
+  line-height: 1.4;
+}
+.game-panel nav button[aria-current="page"] { background: #49635a; border-color: #e2cb97; color: #fff0cf; }
+.game-panel article, .game-panel button { overflow-wrap: anywhere; }
+.game-panel .panel-status { margin: 10px 0 4px; color: #e2ead8; font-size: 13px; }
+#panel-feedback { margin: 8px 0; padding: 8px 12px; border-left: 3px solid #d3c28c; background: #163b48fa; font-size: 13px; line-height: 1.5; pointer-events: none; }
+#panel-feedback.error { border-color: #ffc789; color: #ffe3bb; }
+.panel-group > summary { cursor: pointer; color: #ecedda; font-size: 14px; line-height: 1.6; }
+/* Closed disclosures read as a compact list. */
+.game-panel details.panel-group:not([open]) { margin: 5px 0; padding-block: 7px; }
+.game-panel summary:focus-visible { outline: 2px solid #f3d59c; outline-offset: 4px; border-radius: 2px; }
+.panel-group > summary small { margin-left: 8px; }
+.panel-group[open] > summary { margin-bottom: 10px; }
+.panel-group > article { margin: 8px 0 0; }
+.container-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(260px, 100%), 1fr)); gap: 8px; }
+.container-grid > .panel-group { margin: 0; align-self: start; }
+.here-actions > h3 { margin: 12px 0 4px; color: #e9e3c6; }
+.here-actions > article { margin: 6px 0; padding: 8px 12px; }
+.here-row { display: flex; justify-content: space-between; align-items: center; gap: 8px 16px; font-size: 13px; }
+.item-row { display: flex; align-items: center; justify-content: space-between; gap: 4px 12px; padding: 3px 0; border-top: 1px solid #8bb5a440; }
+.item-row strong { font-size: 14px; font-weight: 500; }
+.item-row small { margin-left: 10px; }
+.item-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: end; gap: 4px; }
+.row-move { position: relative; }
+.row-move > summary { cursor: pointer; padding: 4px 8px; color: #ecedda; font-size: 12px; border: 1px solid #b8c7a35e; border-radius: 3px; }
+.row-move[open] { flex-basis: 100%; }
+.move-destinations { display: flex; flex-wrap: wrap; gap: 6px; padding-top: 6px; }
+.move-destinations > .panel-action { max-width: 220px; }
+.item-row button { padding: 6px 8px; font-size: 12px; }
+.service-actions { display: flex; flex-wrap: wrap; gap: 4px; margin-top: 6px; }
+.storage-operands { display: flex; align-items: center; gap: 8px; }
+.storage-operands > h3 { margin: 0 6px 0 0; white-space: nowrap; }
+.storage-operands label { display: flex; flex: 1; align-items: center; min-width: 0; gap: 6px; font-size: 12px; white-space: nowrap; }
+.storage-operands > span { align-self: center; }
+.storage-operands select { width: 100%; min-width: 0; padding: 5px 6px; border: 1px solid #b8c7a360; background: #183d48; color: #e4ead3; font-size: 13px; }
+.storage-operands button { max-width: 270px; text-align: left; }
+.storage-operands > .panel-action { flex: 0 1 210px; }
+.game-panel .storage-quantities, .game-panel .storage-context { font-size: 13px; }
+.game-panel .module-fitting p, .game-panel .power-preparation p { font-size: 13px; }
+.module-fitting > .panel-group { margin: 4px 0 0; padding: 0; border: 0; background: none; }
+.module-fitting > .panel-group > summary { font-size: 12px; }
+.vessel-service > .panel-group { margin: 4px 0 0; padding: 0; border: 0; background: none; }
+.vessel-service > .panel-group > summary { font-size: 12px; }
+.service-full { color: #c4f0cf; font-size: 13px; }
+/* Status and its actions share one line; recovery and detail follow beneath. */
+.vessel-line, .fitting-head { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 14px; }
+.vessel-line > h3, .fitting-head > h3, .bench-charge h3 { margin: 0; }
+.vessel-line > span { color: #d2dfd2; font-size: 13px; }
+.vessel-line > .service-actions { margin: 0 0 0 auto; }
+.fitting-choice > span { font-size: 13px; }
+/* A blocked change keeps its one reason on the same line as the action. */
+.here-row > .panel-action, .vessel-line .panel-action { flex-direction: row-reverse; align-items: center; gap: 4px 10px; max-width: 70%; }
+.here-row .action-reason, .vessel-line .action-reason { text-align: right; }
+.here-row .panel-action > button, .vessel-line .panel-action > button { flex-shrink: 0; white-space: nowrap; }
+.here-actions button, .vessel-line button, .dive-check button, .carried .service-actions button { padding: 5px 10px; }
+.fitting-choice { margin-top: 4px; }
+.bench-charge { margin-top: 8px; padding-top: 8px; border-top: 1px solid #b8c7a340; }
+.no-charge-options { display: block; margin-top: 8px; }
+.ingredient { display: inline-block; color: #d6e7d3; font-size: 13px; }
+.ingredient.missing, .recipe-status { color: #ffe0ad !important; }
+.recipe-ready { color: #c4f0cf !important; }
+/* Recipe rows: name and costs are the disclosure; one reason sits beside the action. */
+.game-panel .recipe { display: flex; align-items: flex-start; justify-content: space-between; gap: 4px 16px; margin: 4px 0; padding: 7px 12px; }
+.recipe > .panel-group { flex: 1; min-width: 0; margin: 0; padding: 0; border: 0; background: none; }
+.recipe > .panel-group > summary { display: flex; flex-wrap: wrap; align-items: baseline; gap: 2px 14px; line-height: 1.5; }
+.recipe > .panel-group > summary { list-style: none; }
+.recipe > .panel-group > summary::-webkit-details-marker { display: none; }
+.recipe > .panel-group > summary::before { content: "▸"; margin-right: -8px; color: #a9c2b9; font-size: 11px; }
+.recipe > .panel-group[open] > summary::before { content: "▾"; }
+.recipe-name { color: #ecedda; font-size: 14px; }
+.recipe-costs { display: inline-flex; flex-wrap: wrap; gap: 0 12px; }
+.recipe > .panel-action { flex: 0 1 auto; flex-direction: row-reverse; align-items: center; gap: 4px 10px; max-width: 48%; }
+.recipe > .panel-action > button { margin: 0; padding: 5px 12px; white-space: nowrap; }
+.recipe .action-reason { text-align: right; }
+.game-panel .recipe-more p { margin: 4px 0; font-size: 12px; line-height: 1.5; }
+.recipe-done { align-self: center; color: #c4f0cf; font-size: 12px; }
+.recipe-group { margin-top: 10px; }
+.recipe-group > h3 { margin-bottom: 4px; }
+/* A row of closed disclosures; an opened one takes the full width below. */
+.panel-folds { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0; }
+.game-panel .panel-folds > .panel-group { flex: 1 1 180px; margin: 0; padding: 8px 14px; }
+.panel-folds > .panel-group[open], .panel-folds > .panel-extension { flex-basis: 100%; order: 1; }
+.recipe-group > h3 { color: #e9e3c6; }
+.game-panel .dive-check p { font-size: 13px; }
+.game-panel .provenance { color: #d3dfc9; font-size: 12px; }
+.finding b { color: #f0d39a; font-size: 12px; text-transform: uppercase; letter-spacing: 0.07em; }
+.lead { border-left: 2px solid #e0ba7c; padding-left: 14px; }
+.fixture-label, .interpretation { border: 1px solid #e0ba7c88; padding: 12px; color: #ffe2a6 !important; }
+.recovery-choices { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 12px 0; }
+.recovery-choice { display: flex; flex-direction: column; padding: 12px; border: 1px solid #c2ccb95c; border-radius: 3px; background: #102f3c88; }
+.recovery-choice h4 { color: #f0e7c9; font: 400 22px Georgia, serif; }
+.game-panel .recovery-cost { font-size: 12px; color: #f2d8a4; }
+.game-panel .recovery-choice p { font-size: 13px; line-height: 1.55; }
+.game-panel .recovery-choice small { margin-bottom: 12px; }
+.game-panel .recovery-choice button { margin: auto 0 0; text-align: left; }
+.game-panel .recovery-choice > .panel-action { margin-top: auto; }
+.game-panel .recovery-kit { font-size: 12px; }
+@media (max-width: 680px) {
+  .panel-frame { padding: 0 16px 32px; }
+  .panel-header { flex-wrap: wrap; gap: 8px; }
+  .game-panel h2 { font-size: 26px; }
+  .panel-header nav { order: 2; width: 100%; }
+  .recovery-choices { grid-template-columns: 1fr; }
+  .game-panel .recipe { align-items: stretch; flex-direction: column; gap: 6px; }
+  .recipe > .panel-action { max-width: none; justify-content: flex-end; }
+  .here-row { flex-wrap: wrap; }
+  .here-row > .panel-action { max-width: 100%; }
+  .storage-operands { flex-wrap: wrap; }
+  .storage-operands button { max-width: none; }
+}
+
+/* S5 story notebook: questions with status chips, leads, readings and journals. */
+.story-question h3, .story-leads h3, .story-checklist h3 { margin-bottom: 4px; }
+.story-question .hypotheses { list-style: none; margin: 0; padding: 0; display: grid; gap: 4px; }
+.status-chip { display: inline-block; min-width: 76px; padding: 1px 6px; margin-right: 6px; border-radius: 3px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; text-align: center; background: #ffffff14; color: #c8d6d2; }
+[data-status="supported"] .status-chip { background: #2f6f5f; color: #e6fff6; }
+[data-status="doubtful"] .status-chip { background: #6b5a2f; color: #ffeec4; }
+[data-status="ruled_out"] .status-chip { background: #4a3a40; color: #e4cdd4; }
+[data-status="established"] .status-chip { background: #e0ba7c; color: #231a0c; }
+[data-status="ruled_out"] { opacity: .72; }
+.story-answer { border-left: 3px solid #e0ba7c; padding-left: 8px; color: #ffe2a6; }
+.story-hint { display: block; margin-top: 2px; color: #b9d8cf; }
+.finding .reread b { color: #9fe0c9; }
+.first-read { opacity: .66; font-style: italic; }
+.story-checklist ul { list-style: none; padding: 0; margin: 0; }
+.story-checklist [data-met="true"] { color: #9fe0c9; }
+.journal-context { opacity: .75; font-size: 13px; }
+/* UX-1: the Hearthline console. */
+.carrier-status { font-size: 14px; color: #f3ecd3; }
+.carrier-corridor { padding: 8px 10px; border-left: 2px solid #8af5d0; background: #0f3a3c80; }
+.carrier-corridor.blocked { border-color: #ffb44a; color: #ffe0ad !important; background: #3a2f1a66; }
+.carrier-heading { margin: 14px 0 4px; font-size: 12px; letter-spacing: .12em; text-transform: uppercase; opacity: .8; }
+.carrier-berth h4 { margin: 0; font-size: 14px; font-weight: 500; }
+.carrier-hint { opacity: .75; font-size: 13px; }
+.developer-tools { margin-top: 16px; opacity: .85; }
+
+/* UI-01: Cargo's kind filter. */
+.cargo-filter { display: flex; align-items: center; gap: 8px; margin: 4px 0 10px; }
+.filtered-out { font-size: 12px; opacity: 0.7; }
