@@ -1257,3 +1257,12 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Compromises:** the pump-house terrain gap (≤0.3 m, root fix stage-2 masking); island interiors on flat stand-ins until OP-1.
   - **Checks:** fast 176/176; heavy library-save 4/4.
   - **Review:** Sol R1 running (`siltwake-env1-stage1-review-r1-sol-18df71f`).
+- **Rest stations decided** (owner discussion; `docs/build/design/REST-AND-AIR-DECISIONS.md`, visual `rest-air-map-v2.html`; GAME-DIRECTION updated):
+  - **Air and rest:** no free air (the 4 m spheres retired at all stops); "power is air"; moorings and outposts give power only.
+  - **Big stops:** four (crown, Rift station, Divide dock, a district big stop), each earned through its own scenario and ending in a dry room, with restoration steps kept.
+  - **Rest and wake:** homes, the Canopy lab, restored dry rooms, and the Creel and carrier cabins (the last two are coordinator calls). The staging office loses rest.
+  - **Moorings:** sparse, at long-journey starts, never near a big stop (spots set in the owner's map-layout session).
+  - **Difficulty:** a pressure-not-grind ramp. Dry-room feel conditions adopted (floor-well entry, a sensory change, never unsafe).
+  - **District big stop:** confirmed at ENV-1's upper hall row (lore owner).
+  - **Routing:** ENV-1 (plan update: rows, air proof without moorings, restoration steps as staged facility facts, scenarios designed per place); the air and rest code (stops, bases, recovery, retiring the spheres) folds into ENV-1 stage 3a after CW-1; moorings, rescue tows and bot logistics go to PACE-1 stage 2 after the map session.
+  - **Owner sessions to schedule:** map layout (requested), creatures and danger (proposed).
