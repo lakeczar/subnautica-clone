@@ -1300,3 +1300,12 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - The 2 no-optional-carrier rows (+0.51 min works, +0.3 s at C12) are recorded as a named exception, not a pass. Ceilings are at their measured values with the causes, and PACE-1 owns the re-ratchet at the second merge.
   - Determinism check requested on the C12 +0.3 s.
   - Next: R2.
+- **CW-1 R6 (Sol, `e6cf1abe` on `review/cw-1-r6`): accept for provisional integration.**
+  - No new P1 or P2 findings; steady-60 withheld.
+  - The `flowHere` parked-craft claim is independently disproved. The residual long-reach query class is owned by BIO-1, with load-phase diagnostics owned by the harness successor; the tripwire covers travel only.
+  - **Follow-ups:**
+    - R6-1 (P3): surface the deferral and live-record counters;
+    - R6-2 (P3): memory evidence qualified;
+    - one commit-bound 3090 tour 5 export check at the default limit;
+    - the authored surf approach route.
+  - **Next:** CW-1 merges root into the candidate, resolving `bake-terrain` conflicts against STEW-2's guard, makes the docs-only handoff, and runs fast, bake-store and heavy. Then the coordinator gate, then the merge.
