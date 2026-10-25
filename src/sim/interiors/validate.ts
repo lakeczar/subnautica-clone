@@ -68,6 +68,8 @@ export const LINE_CHARGE = 25;
 export const SUIT_SECONDS = 100 / SUIT_OXYGEN_DRAIN_PER_SECOND;
 /** The longest out-and-back an uncovered pose may need, path metres. */
 export const RETURN_BUDGET_M = (1 - RESERVE) * SUIT_SECONDS * ORDINARY_SWIM_SPEED;
+/** The threshold a walker steps over when crossing a doorway, metres (a sill, a seam, terrain's conservative crease). */
+const STEP = 0.3;
 /** How far above a host's resting point it is sighted from, metres. */
 const HOST_SIGHT = 0.15;
 /** Within this of a portal's plane (along its normal), a pose is at the portal. */
@@ -325,8 +327,12 @@ function crossings(def: InteriorDef, world: WorldQueries, g: PoseGraph): Map<str
       const shape = g.walking[i] ? WALK : SWIM;
       // Past the plane: the datum clears an up-facing aperture; a side aperture by the capsule's radius.
       const go = ax === "y" ? -d + 0.05 : -d + shape.radius + 0.1;
-      const target = { x: p.x + n.x * go, y: p.y + n.y * go, z: p.z + n.z * go };
-      const m = world.moveCapsule(p, { x: target.x - p.x, y: target.y - p.y, z: target.z - p.z }, shape);
+      // A walker steps over a threshold as the step does: up to STEP first, then across.
+      const lift = g.walking[i] ? STEP : 0, from = { x: p.x, y: p.y + lift, z: p.z };
+      const target = { x: from.x + n.x * go, y: from.y + n.y * go, z: from.z + n.z * go };
+      const up = lift ? world.moveCapsule(p, { x: 0, y: lift, z: 0 }, shape) : { position: from, hitSolid: false };
+      if (up.hitSolid || Math.abs(up.position.y - from.y) > 0.02) return;
+      const m = world.moveCapsule(from, { x: target.x - from.x, y: target.y - from.y, z: target.z - from.z }, shape);
       if (!m.hitSolid && Math.hypot(m.position.x - target.x, m.position.y - target.y, m.position.z - target.z) < 0.02) hit.push(i);
     });
     out.set(portal.id, hit);
