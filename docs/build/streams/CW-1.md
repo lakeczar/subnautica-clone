@@ -1,7 +1,7 @@
 # CW-1: every authored cave in the game, streamed without pauses (handoff)
 
 
-Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Root merged again at `21a1652` (SIM-1a, TST-16, SIG-1 stage 0, STEW-1) and, after review R4, at **`9029963e`** (SIM-1b, COL-1 A, SIM-PERF-1; root `732fe59c`). Code after R4: the R4-2/R4-3 fixes `6ee7bff3`, R4-1 and the sampler worker `8ba62f09`, evidence tooling `fc5059ff`, the bake's worker blocks `f9525447`; the evidence commits and this handoff follow. Runs:
+Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Root merged again at `21a1652` (SIM-1a, TST-16, SIG-1 stage 0, STEW-1) and, after review R4, at **`9029963e`** (SIM-1b, COL-1 A, SIM-PERF-1; root `732fe59c`). Code after R4: the R4-2/R4-3 fixes `6ee7bff3`, R4-1 and the sampler worker `8ba62f09`, evidence tooling `fc5059ff`, the bake's worker blocks `f9525447`. After R5: GPU credit off, budgets reverted and the hazard reference restored `a68374e7`, the entry warm-up `1aaf66d7`, the regenerated diagnostics `c7fe6a56`, the sweep `9b5cee2c`; the evidence commits and this handoff follow. Runs:
 - the clean remeasure at `3779f59c` (r10);
 - the targeted remeasure of its failures at `6ca73311` (r12);
 - R3's single rerun at `64bf2565` (r13), with tour 1 at harness `da1c83b0` on the same build;
@@ -11,7 +11,8 @@ Reviews:
 - R1 `review/cw-1-r1` (`docs/build/reviews/CW-1-SOL-XHIGH-R1.md`);
 - R2 `review/cw-1-r2` (`docs/build/reviews/CW-1-SOL-XHIGH-R2.md`);
 - R3 `review/cw-1-r3` (`docs/build/reviews/CW-1-SOL-XHIGH-R3.md`);
-- R4 `review/cw-1-r4` (REQUEST CHANGES on `a431d253`; *R4 response*).
+- R4 `review/cw-1-r4` (REQUEST CHANGES on `a431d253`; *R4 response*);
+- R5 `review/cw-1-r5` (`docs/build/reviews/CW-1-SOL-XHIGH-R5.md`; REQUEST CHANGES on `42786dc4` with a path to provisional integration; *R5 response*).
 
 ## Outcome
 All **55** authored small and medium caves are in the real game: the Fanvault and W2's four hub caves, CA-1's 18 Reef and Isles caves, CA-2's 12 Canopy and Basin groups, and CA-3's 20 Rift, Divide and Meridian sources. The browser never generates a cave: collision and light are baked, streamed ahead by proximity and heading, built in time slices and evicted behind and far first. At 1920×1080 on the RTX 3090, the driving ran from earned library saves by ordinary keys: an 8-segment Dart tour from `tour-ready`, and the 800 m Creel from `canopy-over-geared`, with service calls and reserve cells.
@@ -37,7 +38,30 @@ All **55** authored small and medium caves are in the real game: the Fanvault an
 - **Tour 1: pass, nothing excused.** 12/12 caves, 0 streaming frames over 34 ms, all three re-entries revealed with the cave's own light bound (0.39–0.40 s cover, 0 pending frames behind it), 0 terrain or shell fallbacks; not DISTURBED. Region activation peaked at 1.0 ms: r13's 95.2 ms frame didn't recur, and stays open as possible game work (*R4 response*).
 - **Deep 2: fail on one frame.** 7/7 caves; one 49.9 ms streaming frame (`lightPlace` 52.2 ms by the page clock) has no provable credit: the renderer moved vCPU 5 → 1 inside it and part of its state is unobserved. Carried as a **failed/open measurement** (*Compromises*).
 
-**Proven per segment, the strict rule throughout:** 8 of the 9 judged segments pass (tours 0, 1, 3, 4, 5 and 7, hop 2, the surf hop); deep 2 fails. The other seven passes were measured on CW-1's own builds (r12, r13) before the root composition; on the composed build, tour 1 and deep 2 were run (the coordinator's one rerun). This handoff asks for **provisional integration** with deep 2 recorded as an explicit failed/open measurement, not acceptance or a performance waiver.
+**Proven per segment, the strict rule throughout:** 8 of the 9 measured segments pass, across versions (not 8 on the composed build) (tours 0, 1, 3, 4, 5 and 7, hop 2, the surf hop); deep 2 fails. The other seven passes were measured on CW-1's own builds (r12, r13) before the root composition; on the composed build, tour 1 and deep 2 were run (the coordinator's one rerun). This handoff asks for **provisional integration** with deep 2 recorded as an explicit failed/open measurement, not acceptance or a performance waiver. **Steady-60 acceptance is withheld:** deep 2, a 93 ms on-CPU render frame and tour 1's r13 region frame stay open with named owners, and composed timing for the seven other segments and cold-interior first-revealed pixels are missing (*Compromises*, *Missing evidence*). The seven segments' composed **functional** sweep is under *R5 response*.
+
+## R5 response
+Review R5 (Sol 6.1 xhigh on `42786dc4`): REQUEST CHANGES, with the conditions for provisional integration in its "Integration decision and conditions". Each is below. **The candidate is for provisional integration only; steady-60 acceptance is withheld** (*Compromises*).
+
+| Finding | Fix | Evidence |
+| --- | --- | --- |
+| **R5-1 (P2)** The entry warm-up ran before records and admission, so its discarded copy's queries built live cave collision (and, with the pack pending, generated records) on the shared world. | **Order:** `warm()` runs in `finishEntry`: once per entry, after records, admission and light readiness, behind the cover, before reveal or resume. SIM-PERF-1's warm-up and the real collision world are kept.<br>**Every query obeys readiness:** `kitCaves.withoutQueryBuilds(fn)`. Inside it, a query meeting an unbuilt cluster is answered by the exterior, and `inside()` for a cave with undecoded records answers false. Each is counted (`stats.deferredQueries`), and nothing builds or generates, whoever's query it is. The warm-up runs in it.<br>**Diagnostic:** `liveKitRecordsMade()` counts live-generated records. | `tests/cw1-entry-warmup.test.ts`, in its own process: (1) Sol's pose, Continue inside the Reef archlet cluster with the pack in flight: no cluster, no unsliced build, no live record for 2 s; the slow pack lands and admission builds it once from the pack's records, then it plays. This test **fails on the old order**. (2) An import beside the Canopy root arch with a 5 s pack: nothing built or generated while pending; afterwards only the admitted cluster exists. (3) A failed pack: the live fallback is admission's counted build, bounded (plays within frames). (4) The scope itself. |
+| **R5-2 (P2)** A renderer futex plus a runnable GPU thread on a stolen vCPU still names no dependency. | **GPU-vCPU subtraction is off.** What it would have credited is kept as `gpuCandidateMs`, a diagnostic. Renderer-runnable credit and the coverage rules stand. | Sol's control (an unrelated futex, the GPU runnable) is a test: ours, 0 excused, `gpuCandidateMs` 80. `frame-class.test.mjs` 23/23. **Retained evidence reclassified** (`rejudge.mjs`): no cause changes in r13 or r14; no r14 frame had any GPU candidate. |
+| **R5-3 (P2)** The budget changes and owner debts used 8,000 MiB-override peaks. | Budgets reverted to 1,024 (`a68374e7`); the comment is as before. The COL-1, SIM-1b and TT-1 memory debts and the 4070 bake-overrun claim are withdrawn. | Real-limit evidence: `261024-201821-e7d6` (every other file within budget) and Sol's `261024-234227-fc62` (`regions-bake` **1,646 / 1,920 MiB**, pass). *Checks (composed)*. |
+| **R5-4 (P3)** r14's saved state summaries came from before the coverage correction. | Regenerated from the retained raw states (`rejudge.mjs`), and the prose corrected. Raw inputs and run outcomes are unchanged. | At 364,500 ms: runnable 31.8, futex 1.4, 16.7 ms unobserved. At 662,355 ms: futex 2.8, 97.2 ms unobserved, no observed runnable time. Both match Sol's audit; the r14 tables regenerate byte-identically. |
+| **R5-5 (P3)** The composed hazard reference test had lost `74f51bc6`'s deep-cave extension. | Restored: byte-identical to Sol's R4 fixture. | Passes against the candidate (cave contributions over cave positions and cycle phases). |
+
+**Adjacent, found while fixing R5-1, for the coordinator to decide:**
+- **Where:** live play, not the warm-up. `flowHere` samples every unberthed vehicle's current through `kitCaves.inside()`, which reads the cave's records.
+- **The case:** an expedition entered in open water (no hold) while the pack is still downloading, with a craft parked inside a cave's footprint. Its step would generate that cave's records live, on the main thread, uncounted.
+- **Not changed:** making live `inside()` depend on streaming would break the world's contract that answers never depend on it.
+- **Candidate root fix:** entry waits for the collision pack to settle before reveal, bounded like admission. It costs nothing when the pack has landed, which is the case from the title.
+
+### Composed functional sweep
+PLACEHOLDER-SWEEP
+
+### Checks after R5
+PLACEHOLDER-CHECKS
 
 ## R4 response
 
