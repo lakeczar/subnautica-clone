@@ -114,7 +114,7 @@ So no flag is enabled, and none would be safe to ship.
 | Per-window CPU profiles: telemetry, telemetry without timing, VP9 (after the fixes) | `9b92d2ff` | 261024-203711-eb08 | +0.02, +0.05, +0.19 (15 pairs each) |
 | Capture paths: bitmap, VideoFrame, VP9 from VideoFrame | `81b6979d` | 261024-211638-b094 | +0.26, +0.28, +0.18 |
 | captureStream: capture only, VP9 | `3fcd3e3c` | 261024-215134-7c3f | +0.23, +0.25 |
-| Fast tier | `2a34d71f` | 261024-222630-d899 | 1,476 pass |
+| Fast tier | `a1659c1d` (the handoff head) | 261025-065428-32fb | 1,476 pass, 0 fail (also 1,476 at `2a34d71f`, 261024-222630-d899) |
 | `adverse.mjs` at 6 fps | `2a34d71f` | 261024-222630-5596 | every phase passes once the harness's pause rule reads the rate (re-judged at `eed2f2e8`) |
 
 Curated copies of these runs are in `docs/build/streams/rec1/r3b/`.
