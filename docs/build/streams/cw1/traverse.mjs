@@ -250,6 +250,8 @@ async function shot(name) {
 // Each vCPU's steal (jiffies, /proc/stat) and the CPU the thread last ran on:
 // a long frame inside a host pause of the VM is the host's, not the game's.
 const NCPU = (readFileSync("/proc/stat", "utf8").match(/^cpu\d+ /gm) ?? []).length;
+/** Per-frame entries pulled from the page per round trip at the run's end. */
+const PULL_SLICE = 4000;
 // Taken by sampler-worker.mjs on its own thread (CW-1 R4), handed over when the travel ends.
 const COLS = 10 + NCPU; // acquisition start, end, run, wait, minor, major, gpu run, gpu wait, renderer cpu, gpu cpu, steal per vCPU
 const STEAL = 10; // first steal column
@@ -438,10 +440,22 @@ try {
     result.gcTraceAligned = !!mark;
     result.gcTraceNames = [...traced.gcNames];
   }
-  const data = await page.evaluate(() => ({ origin: performance.timeOrigin, gaps: window.__gaps, perf: window.__siltwakePerf, stream: (document.querySelector("#ocean").siltwakeCaveStream?.() ?? {}),
+  // The per-frame arrays (tens of thousands of entries) come over in slices: one structured clone
+  // of all of them spiked the page's renderer process by about 1.5 GB at each run's end (R5 sweep).
+  const pull = async (name) => {
+    const out = [];
+    for (let i = 0; ; i += PULL_SLICE) {
+      const part = await page.evaluate(([n, a, b]) => window[n].slice(a, b), [name, i, i + PULL_SLICE]);
+      for (const e of part) out.push(e);
+      if (part.length < PULL_SLICE) return out;
+    }
+  };
+  const gapsPulled = await pull("__gaps"), perfPulled = await pull("__siltwakePerf");
+  const data = await page.evaluate(() => ({ origin: performance.timeOrigin, stream: (document.querySelector("#ocean").siltwakeCaveStream?.() ?? {}),
     cpu: Number(document.querySelector("#ocean").dataset.residentCpu ?? 0), gpu: Number(document.querySelector("#ocean").dataset.residentGpu ?? 0),
     regionBytes: Number(document.querySelector("#ocean").dataset.regionBytes ?? 0),
     heap: performance.memory ? { used: performance.memory.usedJSHeapSize, total: performance.memory.totalJSHeapSize } : null }));
+  data.gaps = gapsPulled; data.perf = perfPulled;
   const hostData = await new Promise((resolve) => { host.once("message", resolve); host.postMessage("stop"); });
   await host.terminate();
   const taken = await new Promise((resolve) => { sampler.once("message", resolve); sampler.postMessage("stop"); });
