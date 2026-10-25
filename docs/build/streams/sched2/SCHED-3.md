@@ -50,6 +50,16 @@ Review `03764202` on `review/sched-3-r6`, by Sol on `f0d41605`: REQUEST CHANGES,
   - **The runner** fails on any skipped test, so the GPU coverage can't drop out silently.
   - **The suites run as `--class gpu --machine 3090`**, so the probes are inside our own leased scope and no other GPU job shares the 3090 meanwhile.
   - **S11** now prints whether its probe is alive, and the last `status`, if `status` never reports it. At `dc369039` it timed out once, with REC-1's GPU job running.
+- **Checks**, all through the queue:
+  - **One `--class gpu --machine 3090 --review` job** (ticket `261025-021322-68bd`, at `8330c6a9`), with nothing skipped:
+    - units **57/57**;
+    - B28 and B34–B45 **13/13**;
+    - SCHED-1 **23/23**;
+    - SCHED-2 **27/27**, S11 and S20 under our GPU lease;
+    - SCHED-2b **45/45**.
+  - **Its own result notes** "GPU shared outside the lease with pid 222543, 222545". That's S11's inner private-state GPU job (`exec 7</dev/nvidia0; sleep 1`), which runs in a private test scope outside this job's. We held the lease, so it marks only our own record.
+  - **Fast tier** on the 4070 (ticket `261025-014645-055d`, at `dc369039`; the later commits change only acceptance tests and docs): exit 0, 172 files.
+  - **Slice limits after the reboot:** `status` showed `cpu.max ?, memory.max ?`, and the first admission set them to `700000 100000` and 8 GiB ("as wanted").
 - The work paused for the host's reboot (CPU pinning) at `f25d89d2` and resumed after it.
 
 ## R5 review responses (part 2: composed with STEW-2)
