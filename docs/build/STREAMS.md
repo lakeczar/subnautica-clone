@@ -1246,3 +1246,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Checks:** fast 169, heavy 67 (3 OOM-killed subprocesses inside passing files), economy, build, playthrough 9/9.
   - **Review:** Sol R1 running (`siltwake-ls1-1b-review-r1-sol-0337c12`).
   - **PACE-1's pod-buffer legacy row** goes in the next transition (8→9), not this bridge, since LS-1 1b merges first.
+- **LS-1 1b R1** (Sol on `0337c127`, report on `review/ls-1-1b-r1` `04e91b0f`): REQUEST CHANGES.
+  - **Passed:** persistence, power billing and packing; found-on-reach caches; the OOM kills are intentional probes.
+  - **Four P2s:** Base omits the new module upgrades and crop disclosure; the keypad never gets the post-command outcome or closes; the carrier ceiling was raised by 32.85 s (not allowed; remove the haul-order cost instead); content-proportional fixed-step work (bounded cache candidates; reuse the per-host power answer).
