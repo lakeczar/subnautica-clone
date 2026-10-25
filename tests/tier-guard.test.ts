@@ -118,10 +118,14 @@ burn(300);`);
     const out = spawnSync(process.execPath, ["scripts/test-tier.mjs", "fast", file], { cwd: root, encoding: "utf8", timeout: 120_000,
       env: { ...env, SILTWAKE_BUILD_CACHE_DIR: cache, SILTWAKE_FAST_TIMING_JSON: timing, SILTWAKE_FAST_FILE_WARN_S: "0", SILTWAKE_FAST_FILE_BUDGET_S: "0" } });
     assert.equal(out.status, 0, out.stdout + out.stderr);
-    const [row] = JSON.parse(readFileSync(timing, "utf8")) as { threadMs: number; fillMs: number }[];
-    return { fill: row!.fillMs, charged: row!.threadMs - row!.fillMs };
+    // STEW-3: the rows come with the context they were measured in.
+    const { context, files: [row] } = JSON.parse(readFileSync(timing, "utf8")) as
+      { context: { cache: { state: string }; heapMiBPerFile: number; commit: string | null }; files: { threadMs: number; fillMs: number }[] };
+    assert.equal(context.heapMiBPerFile, 1024);
+    return { fill: row!.fillMs, charged: row!.threadMs - row!.fillMs, cache: context.cache.state };
   };
   const cold = tier(), warm = tier();
+  assert.deepEqual([cold.cache, warm.cache], ["cold", "warm"], "each run records the cache state it found");
   assert.ok(cold.fill >= 280 && cold.fill < 1000, `cold fill counted ${cold.fill} ms of CPU: its own 300 ms, not its 1.3 s elapsed nor twice`);
   assert.equal(warm.fill, 0, "a warm run fills nothing");
   for (const [run, r] of [["cold", cold], ["warm", warm]] as const)
