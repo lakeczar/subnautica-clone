@@ -1226,3 +1226,11 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **Ready for the reboot (23:59Z):** all six builders paused and pushed (SCHED-3 `f25d89d2`, CW-1 `a68374e7`, ENV-1 `df7371c1`, PACE-1 `54631001`, REC-1 `f7d26fde`, LS-1 `bbd37bd3`); the queue is empty; root is clean.
   - **REC-1 finding added to the fleet request:** a 5-minute wall-clock host disturbance (hh:m1:55–m2:30, hh:m6:50–m7:30).
   - **Owner:** sends `/work/tmp/fleet-reboot-request.md` to fleet.
+- **Host reboot done (fleet, 01:16–01:19Z, 2026-10-25):**
+  - **Platform:** Unraid 7.3.4 (kernel 6.18.58); boot line `isolcpus=domain,managed_irq,4-11 rcu_nocbs=4-11 irqaffinity=0-3 nmi_watchdog=0`.
+  - **Pinning unchanged:** vCPUs 0–7 on host CPUs 4–11, the emulator on 0–3. 210 host threads (ZFS writes included) moved to 0–3; only per-CPU kthreads and worker vCPUs run on 4–11.
+  - **Idle steal:** p95 about 1% → 0.00%, max 8.3% → 1.0%; host work on 4–11 median 1.87% → 0.00%. Under-load steal still to be measured.
+  - **Checks:** the 3090 and driver 550.163.01 OK; T3 up; the three other 3090 VMs stayed off; the alickers tunnel reconnected.
+  - **Undo:** restore `syslinux.cfg` and `go` from `/boot/config/fleet/host-isolation-20261025T005940Z/`, then reboot.
+  - **Open:** Hermes `job-matcher` (about 87% of a CPU, bursting every ~4m45s, now on 0–3). It is the likely source of REC-1's 5-minute wall-clock slowdown, via shared cache and memory. Owner decision pending. The fleet reader request needs a thread on alickers (fleet can't reach Windows from the mac). Fleet PR #33 is for the owner's review.
+  - **Coordinator post-reboot check:** the GPU, queue and tunnel are OK; all six builder tasks completed cleanly at their pause SHAs.
