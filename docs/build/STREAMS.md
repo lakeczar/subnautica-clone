@@ -1351,3 +1351,9 @@ The owner prioritised the recorder, testing, scheduling and the save library.
     - per-attempt records;
     - a no-clobber publish.
   - **Daily ingest approved:** a user systemd timer on factory-worker, via `quick --review --machine 3090`, installed by the coordinator after the merge.
+- **REC-1 duet `e104`: no verdict.**
+  - **Cause:** the exclusive class's 30-min ceiling stopped it at 1,800 s (exit 124). The declared duet needed about 38 min.
+  - **Ruling:** split into two pre-declared 54-pair tickets, pooled into 108 pairs, same commit and build.
+    - If a ticket is incomplete or DISTURBED, rerun that ticket once; otherwise "no verdict".
+    - `e104`'s partial data is archived unread.
+    - `duet.sh` gains a ceiling preflight.
