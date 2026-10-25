@@ -113,6 +113,8 @@ const hostNow = (state = readState(cfg)) => hostFor(cfg, state);
 async function submit(opts, command, { quiet = false } = {}) {
   ensureDirs(cfg);
   pruneOldJobs();
+  const held = readState(cfg).maintenance;
+  if (held) say(maintenanceNotice(held));
   const mode = readMode(cfg), T = tokensFor(hostNow().nproc);
   const cls = opts.class ?? classifyCommand(command);
   const req = resolveRequest({ ...opts, class: cls }, { T, M: cfg.poolMiB, mode, minStallS: cfg.minStallS, ceilings: cfg.ceilings, stalls: cfg.stalls });
@@ -489,24 +491,45 @@ function recover() {
   transaction(cfg, (state) => ({ changed: reconcile(cfg, state) }));
 }
 
-/** The status line for a maintenance mark: a manual one (heavy-check maintenance) or an installer's. */
+/** Past this, status calls a maintenance window overdue (a warning; nothing expires it). */
+const MAINTENANCE_OVERDUE_MS = 15 * 60000;
+const proc = (x) => (x?.by?.pid ? ` (pid ${x.by.pid}${alive(x.by) ? ", still running" : ", ended"})` : "");
+const INSTALLER_RECOVERY = "rerun scripts/heavy/install.sh until it verifies (it clears its own mark then)";
+/** How to end a mark: a manual window's clear, or an installer's verified rerun. */
+const endMark = (m) => (m.manual && !m.under ? `heavy-check maintenance clear --op ${m.op} --by <who> --reason "<why>"` : INSTALLER_RECOVERY);
+/** Who holds a mark, for a one-line notice. */
+const holderOf = (m) => (m.manual ? `${m.setBy}: ${m.why ?? m.reason} (op ${m.op})` : `the installer${proc(m)}: ${m.reason}`);
+
+/** The status lines for a maintenance mark: a manual one (heavy-check maintenance) or an installer's. */
 function maintenanceLine(m, now = Date.now()) {
-  const proc = (x) => (x?.by?.pid ? ` (pid ${x.by.pid}${alive(x.by) ? ", still running" : ", ended"})` : "");
-  const head = m.manual ? `MAINTENANCE for ${dur(now - m.since)}: ${m.reason}, set by ${m.setBy} (op ${m.op})` : `MAINTENANCE for ${dur(now - (m.since ?? now))}: ${m.reason}${proc(m)}`;
-  const under = m.under ? `; under it, ${m.under.reason}${proc(m.under)}` : "";
-  return `${head}${under}; nothing is admitted on either machine, queued tickets wait, running ones continue. ${m.recover ?? "Recover: rerun scripts/heavy/install.sh"}`;
+  const age = now - (m.since ?? now);
+  const head = m.manual ? `MAINTENANCE for ${dur(age)}: ${m.reason}, set by ${m.setBy} (op ${m.op})` : `MAINTENANCE for ${dur(age)}: ${m.reason}${proc(m)}`;
+  const lines = [`${head}; nothing is admitted on either machine, queued tickets wait (their queue timeouts still run), running ones continue. ${m.recover ?? "Recover: rerun scripts/heavy/install.sh"}`];
+  if (m.under) lines.push(/incomplete/.test(m.under.reason)
+    ? `INSTALL INCOMPLETE under this window: ${m.under.reason}${proc(m.under)}. The window can't be cleared until ${INSTALLER_RECOVERY}.`
+    : `An install runs under this window: ${m.under.reason}${proc(m.under)}.`);
+  if (!m.manual && /incomplete/.test(m.reason)) lines.push(`INSTALL INCOMPLETE: ${INSTALLER_RECOVERY}.`);
+  if (age > MAINTENANCE_OVERDUE_MS) lines.push(`OVERDUE: held over ${MAINTENANCE_OVERDUE_MS / 60000} min. End it: ${endMark(m)}`);
+  return lines.join("\n");
 }
+
+/** One line for submit and run while a mark is held, from its first minute (a warning; it changes nothing). */
+const maintenanceNotice = (m, now = Date.now()) =>
+  `maintenance held for ${dur(now - (m.since ?? now))} by ${holderOf(m)}; this ticket waits until it ends (its queue timeout still runs)${m.under && /incomplete/.test(m.under.reason) ? "; an install under it is INCOMPLETE" : ""}`;
 
 /**
  * Manual maintenance (coordinator only, by convention and audit; SCHED-3
- * maintenance): `set` pauses admission on both machines with the same mark the
+ * maintenance). `set` pauses admission on both machines with the same mark the
  * installer uses (state.maintenance), owned by an operation (a nonce) and the
- * named person; running tickets continue. `clear` takes the operation's own
- * nonce, or the nonce of an installer's mark whose process is confirmed dead.
- * It refuses while an install runs under the mark, or one left it incomplete
- * (rerun install.sh first). Every set and clear is appended to
- * <state>/maintenance.jsonl: who, when, why, and for a clear how long it held.
- * install.sh runs under a manual mark without replacing or clearing it.
+ * named person; running tickets continue. `clear` takes that nonce, and only
+ * for a manual mark: an installer's mark ends only when a rerun of install.sh
+ * verifies (R1-F2). It takes the installer's lock first, without waiting, in
+ * the installer's order (install.lock, then the state lock), and refuses while
+ * any install holds it or runs or left an incomplete mark under the window
+ * (R1-F1). The audit, <state>/maintenance.jsonl, gets an intent row under the
+ * state lock before the change is committed (no row, no change), and an
+ * outcome row after it, both with the nonce: an intent with no outcome is an
+ * operation interrupted at the commit, and the state says which way (R1-F3).
  */
 function maintenanceCmd(args) {
   const action = args[0], opt = (f) => { const i = args.indexOf(f); return i > 0 ? String(args[i + 1] ?? "").trim() : ""; };
@@ -518,35 +541,48 @@ function maintenanceCmd(args) {
   const by = opt("--by"), reason = opt("--reason");
   if (!["set", "clear"].includes(action) || !by || !reason || (action === "clear" && !opt("--op")))
     fail('usage: heavy-check maintenance set --by WHO --reason "<why>" | clear --op OP --by WHO --reason "<why>" | status');
-  const audit = (row) => appendFileSync(join(cfg.dir, "maintenance.jsonl"), `${JSON.stringify({ at: new Date().toISOString(), user: process.env.USER ?? null, pid: process.pid, ...row })}\n`);
+  const auditPath = join(cfg.dir, "maintenance.jsonl");
+  const audit = (row) => appendFileSync(auditPath, `${JSON.stringify({ at: new Date().toISOString(), user: process.env.USER ?? null, pid: process.pid, ...row })}\n`);
+  /** The intent row, under the state lock; a failure refuses the change. */
+  const intent = (row) => { try { audit({ phase: "intent", ...row }); return null; } catch (e) { return `the audit log ${auditPath} can't be written (${e.code ?? e.message}), so nothing was changed`; } };
+  const outcome = (row) => { try { audit({ phase: "done", ...row }); } catch (e) { say(`warning: the change is made, but its outcome row couldn't be written to ${auditPath} (${e.code ?? e.message}); its intent row records it`); } };
   ensureDirs(cfg);
   if (action === "set") {
     const op = randomBytes(8).toString("hex"), since = Date.now();
     const r = transaction(cfg, (state) => {
       if (state.maintenance) return { result: { exists: state.maintenance } };
+      const bad = intent({ action: "set", op, by, reason });
+      if (bad) return { result: { refused: bad } };
       state.maintenance = { op, manual: true, setBy: by, why: reason, since, reason: `maintenance: ${reason}`,
         recover: `Resume: heavy-check maintenance clear --op ${op} --by <who> --reason "<why>"` };
       return { changed: true, result: { op } };
     });
-    if (r.exists) fail(`refused: maintenance is already set (${maintenanceLine(r.exists)})`, 3);
-    audit({ action: "set", op, by, reason });
+    if (r.exists) fail(`refused: maintenance is already set\n${maintenanceLine(r.exists)}`, 3);
+    if (r.refused) fail(`refused: ${r.refused}`, 3);
+    outcome({ action: "set", op, by });
     say(`maintenance set (op ${op}): nothing is admitted on either machine; running tickets continue. Resume: heavy-check maintenance clear --op ${op} --by <who> --reason "<why>"`);
     process.stdout.write(`${op}\n`);
     return 0;
   }
   const op = opt("--op");
-  const r = transaction(cfg, (state) => {
-    const m = state.maintenance;
-    if (!m) return { result: { refused: "no maintenance is set" } };
-    if (m.op !== op) return { result: { refused: `the mark is operation ${m.op}, not ${op}` } };
-    if (!m.manual && alive(m.by)) return { result: { refused: `its installer (pid ${m.by.pid}) is still running` } };
-    if (!m.manual && /incomplete/.test(m.reason)) return { result: { refused: `an install left it incomplete (${m.reason}); rerun scripts/heavy/install.sh, which clears it when it verifies` } };
-    if (m.under) return { result: { refused: `an install runs under it, or left it incomplete (${m.under.reason}); ${alive(m.under.by) ? "wait for it" : "rerun scripts/heavy/install.sh first"}` } };
-    delete state.maintenance;
-    return { changed: true, result: { cleared: m } };
-  });
-  if (r.refused) fail(`refused: ${r.refused}`, 3);
-  audit({ action: "clear", op, by, reason, heldS: Math.round((Date.now() - (r.cleared.since ?? Date.now())) / 1000), kind: r.cleared.manual ? "manual" : "installer" });
+  // The installer's lock, then the state lock (its order), held through the transaction.
+  const installLock = flockFd(join(cfg.dir, "install.lock"));
+  if (installLock == null) fail("refused: an install is running (it holds install.lock); clear the window once it has finished", 3);
+  try {
+    const r = transaction(cfg, (state) => {
+      const m = state.maintenance;
+      if (!m) return { result: { refused: "no maintenance is set" } };
+      if (m.op !== op) return { result: { refused: `the mark is operation ${m.op}, not ${op}` } };
+      if (!m.manual) return { result: { refused: `it's an installer's mark (${m.reason}${proc(m)}); ${INSTALLER_RECOVERY}` } };
+      if (m.under) return { result: { refused: `an install runs under it, or left it incomplete (${m.under.reason}${proc(m.under)}); ${alive(m.under.by) ? "wait for it" : INSTALLER_RECOVERY}` } };
+      const bad = intent({ action: "clear", op, by, reason });
+      if (bad) return { result: { refused: bad } };
+      delete state.maintenance;
+      return { changed: true, result: { cleared: m } };
+    });
+    if (r.refused) fail(`refused: ${r.refused}`, 3);
+    outcome({ action: "clear", op, by, heldS: Math.round((Date.now() - (r.cleared.since ?? Date.now())) / 1000) });
+  } finally { closeSync(installLock); }
   say(`maintenance cleared (op ${op}): admission resumes`);
   return 0;
 }

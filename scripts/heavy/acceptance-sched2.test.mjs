@@ -11,12 +11,12 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
-import { copyFileSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
+import { closeSync, copyFileSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { heavyJobGuard } from "./build-guard.mjs";
 import { sliceLimits } from "./policy.mjs";
-import { alive, loadConfig, machineCpus, scopePopulated, self, transaction } from "./state.mjs";
-import { V1_REPO, blockedBy, context, exclusiveSlice, hc, here, holderOf, killOwned, read, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
+import { alive, flockFd, loadConfig, machineCpus, scopePopulated, self, transaction } from "./state.mjs";
+import { CLI, V1_REPO, blockedBy, context, exclusiveSlice, hc, here, holderOf, killOwned, read, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
 
 const fast = { minStallS: 1, soakYieldS: 3 };
 const log = (c, id) => readFileSync(join(c.sched, "jobs", id, "output.log"), "utf8");
@@ -852,77 +852,209 @@ test("S27 (TST-16b): one installer lock covers the whole install, publication in
   }
 });
 
-test("S28 (SCHED-3 maintenance): set pauses admission (queued work waits, none fails) and refuses a second mark; clear takes its own op, or a dead installer's; install.sh refuses while a ticket runs, runs under a held mark without clearing it, and an incomplete install under it blocks the clear until rerun; every set and clear is audited", async () => {
-  const c = context("maint", { config: fast });
-  const home = join(c.dir, "home"), slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
-  const d = join(c.dir, "shim");
+/** The maintenance tests' harness: a private install, a reload shim (fail, or hold N s), and the CLI. */
+function maintHarness(name) {
+  const c = context(name, { config: fast });
+  const home = join(c.dir, "home"), d = join(c.dir, "shim");
   mkdirSync(d, { recursive: true });
-  writeFileSync(join(d, "systemctl"), `#!/bin/bash\nif [[ " $* " == *" daemon-reload "* && "$(cat "${d}/mode" 2>/dev/null)" == fail ]]; then echo "Failed to reload daemon: injected" >&2; exit 1; fi\nexec /usr/bin/systemctl "$@"\n`, { mode: 0o755 });
-  const install = (extra = {}) => spawnSync("bash", [join(here, "install.sh")], { env: { ...c.env, SILTWAKE_SCHED_HOME: home, ...extra }, encoding: "utf8", timeout: 120000 });
-  const mt = (...a) => hc(c, ["maintenance", ...a]);
-  const pool = (mib) => writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, poolMiB: mib }));
-  assert.equal(install().status, 0);
-  // Usage: --by and --reason are required, and clear needs --op.
-  for (const a of [["set"], ["set", "--by", "coordinator"], ["set", "--reason", "x"], ["clear", "--by", "coordinator", "--reason", "x"], ["frobnicate"]]) assert.equal(mt(...a).code, 2, a.join(" "));
-  assert.match(mt("status").out, /no maintenance/);
-  // Set: the mark, its status line; a second set is refused.
-  const s = mt("set", "--by", "coordinator", "--reason", "install window");
+  writeFileSync(join(d, "systemctl"), `#!/bin/bash
+m=$(cat "${d}/mode" 2>/dev/null)
+if [[ " $* " == *" daemon-reload "* ]]; then
+  case "$m" in
+    fail) echo "Failed to reload daemon: injected" >&2; exit 1 ;;
+    hold:*) : > "${d}/mode"; sleep "\${m#hold:}"; exec /usr/bin/systemctl "$@" ;;
+  esac
+fi
+exec /usr/bin/systemctl "$@"
+`, { mode: 0o755 });
+  const env = (extra = {}) => ({ ...c.env, SILTWAKE_SCHED_HOME: home, ...extra });
+  c.install = (extra = {}) => spawnSync("bash", [join(here, "install.sh")], { env: env(extra), encoding: "utf8", timeout: 120000 });
+  c.startInstall = (extra = {}) => { const p = spawn("bash", [join(here, "install.sh")], { env: env(extra), stdio: ["ignore", "pipe", "pipe"] }); p.out = ""; p.stderr.on("data", (x) => { p.out += x; }); p.done = new Promise((res) => p.on("exit", res)); return p; };
+  c.shim = d;
+  c.shimmed = { PATH: `${d}:${process.env.PATH}` };
+  c.mode = (m) => writeFileSync(join(d, "mode"), m);
+  c.mt = (...a) => hc(c, ["maintenance", ...a]);
+  c.pool = (mib) => writeFileSync(join(c.sched, "config.json"), JSON.stringify({ ...fast, poolMiB: mib }));
+  c.audit = () => { try { return readFileSync(join(c.sched, "maintenance.jsonl"), "utf8").trim().split("\n").filter(Boolean).map((l) => JSON.parse(l)); } catch { return []; } };
+  c.stopShims = () => { for (const pid of spawnSync("pgrep", ["-f", join(d, "systemctl")], { encoding: "utf8" }).stdout.split("\n").filter(Boolean)) { spawnSync("pkill", ["-KILL", "-P", pid]); spawnSync("kill", ["-KILL", pid]); } };
+  return c;
+}
+
+test("S28 (SCHED-3 maintenance): set pauses admission (queued work waits, none fails) and refuses a second mark; clear takes only its own manual op; install.sh refuses while a ticket runs and runs under a held mark without clearing it; an incomplete install under it blocks the clear until a verified rerun; every set and clear has an intent and an outcome row", async () => {
+  const c = maintHarness("maint");
+  const slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
+  assert.equal(c.install().status, 0);
+  for (const a of [["set"], ["set", "--by", "coordinator"], ["set", "--reason", "x"], ["clear", "--by", "coordinator", "--reason", "x"], ["frobnicate"]]) assert.equal(c.mt(...a).code, 2, a.join(" "));
+  assert.match(c.mt("status").out, /no maintenance/);
+  const s = c.mt("set", "--by", "coordinator", "--reason", "install window");
   assert.equal(s.code, 0, s.err);
   const op = s.out.trim();
   assert.match(op, /^[0-9a-f]{16}$/);
   assert.deepEqual([stateOf(c).maintenance.op, stateOf(c).maintenance.manual, stateOf(c).maintenance.setBy], [op, true, "coordinator"]);
   assert.match(hc(c, ["status"]).out, new RegExp(`MAINTENANCE for \\d+s: maintenance: install window, set by coordinator \\(op ${op}\\); nothing is admitted on either machine`));
-  assert.match(mt("status").out, /set by coordinator/);
-  const again = mt("set", "--by", "someone", "--reason", "another");
+  assert.match(c.mt("status").out, /set by coordinator/);
+  const again = c.mt("set", "--by", "someone", "--reason", "another");
   assert.equal(again.code, 3);
   assert.match(again.err, /refused: maintenance is already set/);
-  // Queued work waits; nothing fails.
   const q = submit(c, c.wt("q"), "--class", "quick", "--", "true");
   await sleep(3000);
   assert.equal(stateOf(c).tickets[q]?.state, "queued");
   assert.match(hc(c, ["status"]).out, new RegExp(`${q}.*maintenance`));
-  // Clear: only its own op.
-  assert.match(mt("clear", "--op", "0123456789abcdef", "--by", "coordinator", "--reason", "x").err, /refused: the mark is operation/);
-  assert.equal(mt("clear", "--op", op, "--by", "coordinator", "--reason", "window over").code, 0);
+  assert.match(c.mt("clear", "--op", "0123456789abcdef", "--by", "coordinator", "--reason", "x").err, /refused: the mark is operation/);
+  assert.equal(c.mt("clear", "--op", op, "--by", "coordinator", "--reason", "window over").code, 0);
   assert.equal(stateOf(c).maintenance, undefined);
   assert.equal(waitFor(c, q).code, 0, "the queued job ran once admission resumed");
   // install.sh under a held mark: refused while a ticket runs (mark untouched)...
   const busy = submit(c, c.wt("busy"), "--class", "quick", "--", "sleep", "5");
   await running(c, busy);
-  const op2 = mt("set", "--by", "coordinator", "--reason", "install window 2").out.trim();
-  pool(3072);
-  let r = install();
+  const op2 = c.mt("set", "--by", "coordinator", "--reason", "install window 2").out.trim();
+  c.pool(3072);
+  let r = c.install();
   assert.equal(r.status, 3, r.stderr);
   assert.deepEqual([stateOf(c).maintenance.op, stateOf(c).maintenance.under], [op2, undefined]);
   assert.equal(waitFor(c, busy).code, 0, "the running ticket continued under the mark");
-  // ...an incomplete install under it keeps its reason there, and blocks the clear until a rerun...
-  writeFileSync(join(d, "mode"), "fail");
-  r = install({ PATH: `${d}:${process.env.PATH}` });
+  // ...an incomplete install under it keeps its reason there, shown prominently, and blocks the clear...
+  c.mode("fail");
+  r = c.install(c.shimmed);
   assert.equal(r.status, 4, r.stderr);
   assert.match(stateOf(c).maintenance.under.reason, /^unit update incomplete: systemd's reload failed/);
   assert.equal(stateOf(c).maintenance.op, op2, "the caller's mark is never replaced");
-  assert.match(hc(c, ["status"]).out, /set by coordinator .*; under it, unit update incomplete/);
-  assert.match(mt("clear", "--op", op2, "--by", "coordinator", "--reason", "x").err, /refused: an install runs under it, or left it incomplete .*rerun scripts\/heavy\/install\.sh first/);
-  // ...and a rerun completes under it, clearing only its own mark.
-  writeFileSync(join(d, "mode"), "");
-  r = install();
+  assert.match(hc(c, ["status"]).out, /\nINSTALL INCOMPLETE under this window: unit update incomplete: .*rerun scripts\/heavy\/install\.sh until it verifies/);
+  assert.match(c.mt("clear", "--op", op2, "--by", "coordinator", "--reason", "x").err, /refused: an install runs under it, or left it incomplete .*rerun scripts\/heavy\/install\.sh until it verifies/);
+  // ...and a verified rerun completes under it, clearing only its own mark.
+  c.mode("");
+  r = c.install();
   assert.equal(r.status, 0, r.stderr);
   assert.deepEqual([stateOf(c).maintenance.op, stateOf(c).maintenance.under], [op2, undefined], "the caller's mark stays; the installer's is gone");
   assert.equal(sliceProp(slice, "MemoryMax"), String(sliceLimits(machineCpus(loadConfig(c.env)), loadConfig(c.env)).memoryMaxMiB * 1048576));
-  assert.equal(mt("clear", "--op", op2, "--by", "coordinator", "--reason", "installed").code, 0);
-  // An installer's mark: clearable only once its process is confirmed dead, and not if it says incomplete.
+  assert.equal(c.mt("clear", "--op", op2, "--by", "coordinator", "--reason", "installed").code, 0);
+  // An installer's mark is never cleared by clear (R1-F2): live, incomplete, or dead without verification.
   const cfg = loadConfig(c.env), mark = (m) => transaction(cfg, (st) => { st.maintenance = m; return { changed: true }; });
-  mark({ op: "aaaaaaaaaaaaaaaa", by: self(), since: Date.now(), reason: "exclusive unit update (write)" });
-  assert.match(mt("clear", "--op", "aaaaaaaaaaaaaaaa", "--by", "coordinator", "--reason", "x").err, /refused: its installer \(pid \d+\) is still running/);
-  mark({ op: "bbbbbbbbbbbbbbbb", by: { pid: 999999999, start: 0 }, since: Date.now(), reason: "unit update incomplete: x; rerun install.sh" });
-  assert.match(mt("clear", "--op", "bbbbbbbbbbbbbbbb", "--by", "coordinator", "--reason", "x").err, /an install left it incomplete/);
-  mark({ op: "cccccccccccccccc", by: { pid: 999999999, start: 0 }, since: Date.now() - 60000, reason: "exclusive unit update (write)" });
-  assert.equal(mt("clear", "--op", "cccccccccccccccc", "--by", "coordinator", "--reason", "dead installer").code, 0);
+  for (const m of [{ op: "aaaaaaaaaaaaaaaa", by: self(), reason: "exclusive unit update (write)" }, { op: "bbbbbbbbbbbbbbbb", by: { pid: 999999999, start: 0 }, reason: "unit update incomplete: x; rerun install.sh" },
+    { op: "cccccccccccccccc", by: { pid: 999999999, start: 0 }, reason: "exclusive unit update (write)" }]) {
+    mark({ ...m, since: Date.now() });
+    const x = c.mt("clear", "--op", m.op, "--by", "coordinator", "--reason", "x");
+    assert.equal(x.code, 3, m.op);
+    assert.match(x.err, /refused: it's an installer's mark .*rerun scripts\/heavy\/install\.sh until it verifies/, m.op);
+    assert.equal(stateOf(c).maintenance.op, m.op);
+  }
+  transaction(cfg, (st) => { delete st.maintenance; return { changed: true }; });
+  // The audit: an intent row before each change and an outcome row after it, with the nonce.
+  const rows = c.audit();
+  assert.deepEqual(rows.map((x) => [x.phase, x.action, x.op === op ? "op" : x.op === op2 ? "op2" : x.op]),
+    [["intent", "set", "op"], ["done", "set", "op"], ["intent", "clear", "op"], ["done", "clear", "op"], ["intent", "set", "op2"], ["done", "set", "op2"], ["intent", "clear", "op2"], ["done", "clear", "op2"]]);
+  assert.ok(rows.filter((x) => x.phase === "intent").every((x) => x.by === "coordinator" && x.reason && x.at && x.pid), JSON.stringify(rows));
+  assert.ok(rows.filter((x) => x.phase === "done" && x.action === "clear").every((x) => Number.isInteger(x.heldS)));
+});
+
+test("S29 (SCHED-3 maintenance R1-F1, F2): clear waits for the whole install: refused while install.lock is held, before the helper's mark and after its verification; an installer killed after its unit rename and before verification leaves a mark only a verified rerun clears", async () => {
+  const c = maintHarness("maint-install");
+  const slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE, unitDir = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user");
+  assert.equal(c.install().status, 0);
+  const op = c.mt("set", "--by", "coordinator", "--reason", "install window").out.trim();
+  // Held as install.sh holds it: before the helper writes its mark under the window...
+  const lock = flockFd(join(c.sched, "install.lock"));
+  assert.ok(lock != null);
+  let x = c.mt("clear", "--op", op, "--by", "coordinator", "--reason", "x");
+  assert.equal(x.code, 3);
+  assert.match(x.err, /refused: an install is running \(it holds install\.lock\)/);
+  // ...and after it verified and removed its own mark, while the parent still holds the lock.
+  c.pool(3072);
+  const helper = spawnSync(process.execPath, [join(here, "exclusive-unit.mjs"), "write", slice, unitDir],
+    { env: { ...c.env, SILTWAKE_INSTALL_LOCK_FD: "3" }, stdio: ["ignore", "pipe", "pipe", lock], encoding: "utf8", timeout: 120000 });
+  assert.equal(helper.status, 0, helper.stderr);
+  assert.deepEqual([stateOf(c).maintenance.op, stateOf(c).maintenance.under], [op, undefined], "the helper verified and removed only its own mark");
+  x = c.mt("clear", "--op", op, "--by", "coordinator", "--reason", "x");
+  assert.equal(x.code, 3, "the parent's lock still covers publication");
+  assert.match(x.err, /an install is running/);
+  closeSync(lock);
+  assert.equal(c.mt("clear", "--op", op, "--by", "coordinator", "--reason", "installed").code, 0);
+  // An installer killed after its unit rename, before verification: the mark stays; clear refuses; a verified rerun clears it.
+  c.pool(2048);
+  c.mode("hold:30");
+  const K = c.startInstall(c.shimmed);
+  await until("K paused the queue", () => stateOf(c).maintenance, 15000);
+  const k = stateOf(c).maintenance, unitFile = join(unitDir, slice);
+  await until("the unit file was renamed into place", () => /MemoryMax=\d+M/.test(readFileSync(unitFile, "utf8")) && readFileSync(unitFile, "utf8").includes(`MemoryMax=${sliceLimits(machineCpus(loadConfig(c.env)), loadConfig(c.env)).memoryMaxMiB}M`), 15000);
+  const stale = sliceProp(slice, "MemoryMax");
+  killOwned(k.by);
+  await K.done;
+  c.stopShims();
+  assert.equal(alive(k.by), false);
+  assert.equal(spawnSync("flock", ["-n", join(c.sched, "install.lock"), "true"]).status, 0, "its lock is free");
+  assert.equal(sliceProp(slice, "MemoryMax"), stale, "systemd never saw the new unit");
+  assert.doesNotMatch(stateOf(c).maintenance.reason, /incomplete/, "nothing marked it incomplete");
+  x = c.mt("clear", "--op", k.op, "--by", "coordinator", "--reason", "dead installer");
+  assert.equal(x.code, 3);
+  assert.match(x.err, /it's an installer's mark .*rerun scripts\/heavy\/install\.sh until it verifies/);
+  assert.equal(stateOf(c).maintenance.op, k.op);
+  const r = c.install();
+  assert.equal(r.status, 0, r.stderr);
+  assert.equal(stateOf(c).maintenance, undefined, "the verified rerun took it over and cleared it");
+  assert.equal(sliceProp(slice, "MemoryMax"), String(sliceLimits(machineCpus(loadConfig(c.env)), loadConfig(c.env)).memoryMaxMiB * 1048576));
+});
+
+test("S30 (SCHED-3 maintenance R1-F3): no audit row, no change; a crash at the commit leaves an intent row and the state that says which way it went", async () => {
+  const c = maintHarness("maint-audit");
+  const audit = join(c.sched, "maintenance.jsonl");
+  // The audit log unwritable (a directory there): set is refused and nothing is paused.
+  mkdirSync(audit, { recursive: true });
+  let x = c.mt("set", "--by", "coordinator", "--reason", "x");
+  assert.equal(x.code, 3);
+  assert.match(x.err, /refused: the audit log .* can't be written \(EISDIR\), so nothing was changed/);
   assert.equal(stateOf(c).maintenance, undefined);
-  // The audit log: every set and clear, who, why, and how long a clear's mark held.
-  const rows = readFileSync(join(c.sched, "maintenance.jsonl"), "utf8").trim().split("\n").map((l) => JSON.parse(l));
-  assert.deepEqual(rows.map((x) => [x.action, x.by, x.reason]), [["set", "coordinator", "install window"], ["clear", "coordinator", "window over"],
-    ["set", "coordinator", "install window 2"], ["clear", "coordinator", "installed"], ["clear", "coordinator", "dead installer"]]);
-  assert.ok(rows.filter((x) => x.action === "clear").every((x) => Number.isInteger(x.heldS) && x.at && x.op), JSON.stringify(rows));
-  assert.deepEqual(rows.map((x) => x.kind ?? null), [null, "manual", null, "manual", "installer"]);
+  rmSync(audit, { recursive: true });
+  const op = c.mt("set", "--by", "coordinator", "--reason", "x").out.trim();
+  rmSync(audit);
+  mkdirSync(audit);
+  x = c.mt("clear", "--op", op, "--by", "coordinator", "--reason", "x");
+  assert.equal(x.code, 3);
+  assert.match(x.err, /can't be written \(EISDIR\), so nothing was changed/);
+  assert.equal(stateOf(c).maintenance?.op, op, "nothing resumed");
+  rmSync(audit, { recursive: true });
+  assert.equal(c.mt("clear", "--op", op, "--by", "coordinator", "--reason", "x").code, 0);
+  // A crash just after the state's rename, at each commit: the intent row is there, its outcome isn't, and the state shows the change.
+  const hook = join(c.dir, "crash-after-state-rename.mjs");
+  writeFileSync(hook, `import fs from "node:fs"; import { syncBuiltinESMExports } from "node:module";
+const orig = fs.renameSync; fs.renameSync = (a, b) => { orig(a, b); if (String(b).endsWith("/state.json")) process.kill(process.pid, "SIGKILL"); }; syncBuiltinESMExports();\n`);
+  const crash = (...a) => spawnSync(process.execPath, ["--import", hook, CLI, "maintenance", ...a], { cwd: c.dir, env: c.env, encoding: "utf8", timeout: 30000 });
+  x = crash("set", "--by", "coordinator", "--reason", "crash at set");
+  assert.equal(x.signal, "SIGKILL");
+  const held = stateOf(c).maintenance;
+  assert.ok(held?.manual, "the set was committed");
+  assert.deepEqual(c.audit().filter((r) => r.op === held.op).map((r) => [r.phase, r.action]), [["intent", "set"]]);
+  x = crash("clear", "--op", held.op, "--by", "coordinator", "--reason", "crash at clear");
+  assert.equal(x.signal, "SIGKILL");
+  assert.equal(stateOf(c).maintenance, undefined, "the clear was committed");
+  assert.deepEqual(c.audit().filter((r) => r.op === held.op).map((r) => [r.phase, r.action]), [["intent", "set"], ["intent", "clear"]], "intent rows for both, no outcome rows");
+});
+
+test("S31 (SCHED-3 maintenance R1 warnings): submit and run say a window is held from its first minute; status calls one past 15 min overdue with the exact way to end it; an incomplete install under it is shown prominently; warnings change nothing", async () => {
+  const c = maintHarness("maint-warn");
+  assert.equal(c.install().status, 0);
+  const op = c.mt("set", "--by", "coordinator", "--reason", "install window").out.trim();
+  const sub = hc(c, ["submit", "--class", "quick", "--", "true"], { cwd: c.wt("a") });
+  assert.equal(sub.code, 0, sub.err);
+  assert.match(sub.err, new RegExp(`maintenance held for \\d+s by coordinator: install window \\(op ${op}\\); this ticket waits until it ends \\(its queue timeout still runs\\)`));
+  const run = hc(c, ["run", "--class", "quick", "--queue-timeout", "2", "--", "true"], { cwd: c.wt("b") });
+  assert.equal(run.code, 75, "its queue timeout still ran");
+  assert.match(run.err, /maintenance held for \d+s by coordinator: install window/);
+  assert.doesNotMatch(c.mt("status").out, /OVERDUE/, "a recent window isn't overdue");
+  // An old window: overdue, with the exact clear; still held.
+  const cfg = loadConfig(c.env);
+  transaction(cfg, (st) => { st.maintenance.since = Date.now() - 3 * 3600000; return { changed: true }; });
+  assert.match(hc(c, ["status"]).out, new RegExp(`\\nOVERDUE: held over 15 min\\. End it: heavy-check maintenance clear --op ${op} --by <who> --reason "<why>"`));
+  assert.match(hc(c, ["submit", "--class", "quick", "--", "true"], { cwd: c.wt("c") }).err, /maintenance held for 3h00m by coordinator/);
+  assert.equal(stateOf(c).maintenance.op, op, "warnings never end a window");
+  // An incomplete install under it: in status and in the notice.
+  c.mode("fail");
+  c.pool(3072);
+  assert.equal(c.install(c.shimmed).status, 4);
+  assert.match(hc(c, ["status"]).out, /\nINSTALL INCOMPLETE under this window: unit update incomplete/);
+  assert.match(hc(c, ["status"]).out, /\nOVERDUE: held over 15 min\. End it: rerun scripts\/heavy\/install\.sh until it verifies/);
+  assert.match(hc(c, ["submit", "--class", "quick", "--", "true"], { cwd: c.wt("d") }).err, /an install under it is INCOMPLETE/);
+  c.mode("");
+  assert.equal(c.install().status, 0);
+  assert.equal(c.mt("clear", "--op", op, "--by", "coordinator", "--reason", "done").code, 0);
+  for (const id of Object.keys(stateOf(c).tickets)) hc(c, ["cancel", id]);
 });

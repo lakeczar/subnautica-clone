@@ -35,6 +35,27 @@ Builder: Opus 5.5, branch `t3/sched-3-balance`, from root `7479e188`. Owner-appr
     - a local path, a `.test-build` read and `npm run build`: each is routed with its reason.
   - **B29:** private state without a remote: a default `standard` job is routed here, "the remote lane is off".
 
+## Maintenance command, R1 review responses
+
+Review `81198027` on `review/sched-3-maint-r1`, by Sol on `596a48d3`: REQUEST CHANGES, two P1s and one P2. No standards findings, and no expiry (warnings instead). The installed `baf9369c3418` honours a manual mark, already-started supervisors included, so the first window needs no natural drain.
+- **F1 (P1), clear raced the whole install:** clear checked the nested mark but not `install.lock`, which `install.sh` holds for its whole run, publication included. So after the helper verified and removed its mark, clear succeeded while the parent was still publishing. Clear now takes `install.lock` without waiting, before the state lock (the installer's order), and holds it through its transaction. It refuses (exit 3) while it is held.
+- **F2 (P1), dead installer:** a dead process isn't proof its unverified unit is safe; a helper killed after its rename and before verification never says "incomplete". The dead-installer shortcut is removed: clear takes only a manual window's own id, and an installer's mark ends only when a rerun of `install.sh` verifies.
+- **F3 (P2), audit after the commit:** each set and clear now appends an intent row under the state lock before it changes the state, and refuses the change if that append fails. An outcome row follows the commit; both carry the nonce. The convention, documented in `WORKER_RESOURCE_LIMITS.md`: an intent row without an outcome is an interrupted commit, and the state says which way it went.
+- **Warnings, as R1 recommends:**
+  - **submit and run:** every top-level one prints `maintenance held for <age> by <who>: <why> (op <id>)` from the first minute, noting that the ticket's queue timeout still runs.
+  - **status:** past 15 minutes it adds `OVERDUE: … End it: <the exact clear, or the installer's verified rerun>`, and an incomplete install under a window gets its own `INSTALL INCOMPLETE` line.
+  - Warnings never end a mark. The queue-timeout clocks are documented.
+- **The bootstrap procedure:** R1's first-window steps are in `WORKER_RESOURCE_LIMITS.md`: the accepted checkout's CLI directly, set, let running tickets finish, install at no running tickets, clear, and keep the checkout for after a rollback.
+- **Tests:**
+  - **S28:** now expects every installer mark, dead or alive, to be refused, and checks intent/outcome pairs.
+  - **S29 (F1, F2):**
+    - clear refused while `install.lock` is held, before the helper's mark and again after the real helper verified and removed its own mark, with the parent's lock still held; it succeeds once released;
+    - an installer killed after its unit rename and before verification (the unit file new, systemd unchanged, not marked incomplete, its lock free) leaves a mark clear refuses, and a verified rerun clears.
+  - **S30 (F3):**
+    - with the audit log a directory, set and clear each refuse with nothing changed;
+    - a SIGKILL right after the state's rename at each commit leaves the intent row, no outcome row, and the state showing the change.
+  - **S31 (warnings):** submit and run notices for a recent window, a three-hour window's OVERDUE line with the exact clear, the INSTALL INCOMPLETE line and notice, and the window untouched by any of it.
+
 ## Maintenance command (after R7, coordinator's ruling)
 
 The SCHED-3 install needs a true idle point, and a busy queue never offers one. Rather than drain once per install, the coordinator asked for a reviewed, coordinator-only pause, installed together with SCHED-3 (branch `t3/sched-3-maintenance`, from the accepted `8063bec4`).
