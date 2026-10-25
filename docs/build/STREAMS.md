@@ -1404,3 +1404,6 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Ruling (c):** after REC-1's second duet ticket ends, pause admission with the existing maintenance pause, let running work finish naturally (bounded at 45 min), install per R7, then resume.
   - Installing while remote work runs (option b) is refused, because that claim is unreviewed.
   - Canary step 3 waits for the next natural exclusive.
+- **SCHED-3 install, revised:** the maintenance pause can't be used outside `install.sh` without new code.
+  - **Ruling:** build a small `heavy-check maintenance set|clear|status` on `t3/sched-3-maintenance`, with a focused Sol review. Install it together with SCHED-3 in one coordinator-announced quiet period: builders hold submissions, and queued work drains naturally.
+  - **Timing:** after REC-1's duet and the CW-1 gate. Future installs use the command.
