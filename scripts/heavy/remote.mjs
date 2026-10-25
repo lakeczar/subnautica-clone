@@ -13,7 +13,7 @@ import { spawn, spawnSync } from "node:child_process";
 import { createHash } from "node:crypto";
 import { closeSync, existsSync, mkdirSync, readFileSync, statSync } from "node:fs";
 import { homedir } from "node:os";
-import { dirname, isAbsolute, join, relative, resolve } from "node:path";
+import { dirname, isAbsolute, join, normalize, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { flockFd, readJson, writeJsonAtomic } from "./state.mjs";
 
@@ -331,6 +331,34 @@ export function fetchStage(r, ticket, attempt, dest, { inactivityS = 60, ceiling
  * npm run build && …). */
 export function builtOutputs(argv) {
   return [...new Set(argv.flatMap((t) => [...String(t).matchAll(/(?:^|[\s=:'"(/])(\.test-build[^\s/'";)]*|dist)(?=\/|$|[\s'";)])/g)].map((m) => m[1])))];
+}
+
+// A command that only builds, and what it builds (SCHED-3 R1-F2).
+const BUILDS = [
+  [["npm", "run", "build"], "dist"], [["npx", "vite", "build"], "dist"], [["vite", "build"], "dist"],
+  [["npm", "run", "test:build"], ".test-build"], [["node", "scripts/test-build.mjs"], ".test-build"],
+];
+/**
+ * A command that only builds, run where its output doesn't come back: its
+ * output in this worktree is the point. Returns { command, output } when no
+ * --artifact covers the output, else null. A build followed by other work can
+ * go. Its output: with no options after the command, the table's (covered by
+ * that --artifact, or `.`); with options (`-- --outDir x`, a mode …), the
+ * caller's declared --artifact is the output contract, so any declared one
+ * will do, and `output` is null (R2-F2). One command line only: `sh -c` with a
+ * separator or a newline is more than a build.
+ */
+export function buildOnly(argv, artifacts = []) {
+  let words = argv.map(String);
+  if (/^(?:ba)?sh$/.test(words[0] ?? "") && words[1] === "-c" && words.length === 3) {
+    if (/[;&|\n`$(]/.test(words[2])) return null;
+    words = words[2].trim().split(/\s+/);
+  }
+  const hit = BUILDS.find(([cmd]) => cmd.every((w, i) => words[i] === w));
+  if (!hit) return null;
+  const [cmd, output] = hit, options = words.length > cmd.length;
+  const declared = options ? artifacts.length > 0 : artifacts.some((a) => !isAbsolute(a) && [".", output].includes(normalize(a).replace(/\/$/, "")));
+  return declared ? null : { command: cmd.join(" "), output: options ? null : output };
 }
 
 /**

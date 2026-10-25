@@ -91,11 +91,16 @@ if [[ $remove_excl == 1 ]]; then
   exit $?
 fi
 
-files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
+files=(policy.mjs state.mjs contention.mjs supervisor.mjs holder.mjs heavy-check.mjs portable-run.mjs scope-run.sh anchor.sh build-guard.mjs gpu-lease.mjs snapshot.mjs chrome-guard.sh
   remote.mjs remote-holder.mjs lane-run.sh)
 # The remote lane's transport (SCHED-2b) is scripts/alickers-job.sh; each
 # version carries its own copy, so a running remote ticket keeps its transport.
 transport="$src/../alickers-job.sh"
+# STEW-2's cgroup membership predicates (scripts/cgroup-scope.mjs), which the
+# queue's nested and GPU checks use (SCHED-3 R5). In the repository,
+# scripts/heavy/cgroup-scope.mjs re-exports it; an installed version and the
+# guard carry the file itself, under that name.
+cgscope="$src/../cgroup-scope.mjs"
 # The GPU lease checker has its own immutable install ($home/guard/<version>,
 # `guard/current`): the Chrome wrappers point there, never at the scheduler's
 # `current`, so installing an older scheduler (a rollback) or uninstalling it
@@ -104,11 +109,12 @@ transport="$src/../alickers-job.sh"
 guard_files=(gpu-lease.mjs state.mjs contention.mjs policy.mjs snapshot.mjs)
 install_guard() {
   local gv
-  gv=$(cd "$src" && cat "${guard_files[@]}" | sha256sum | cut -c1-12)
+  gv=$(cd "$src" && cat "${guard_files[@]}" "$cgscope" | sha256sum | cut -c1-12)
   if [[ ! -d "$home/guard/$gv" ]]; then
     [[ -d "$home/guard/$gv.tmp" ]] && chmod -R u+w "$home/guard/$gv.tmp" && rm -rf "$home/guard/$gv.tmp"
     mkdir -p "$home/guard/$gv.tmp"
     (cd "$src" && cp "${guard_files[@]}" "$home/guard/$gv.tmp/")
+    cp "$cgscope" "$home/guard/$gv.tmp/cgroup-scope.mjs"
     chmod -R a-w "$home/guard/$gv.tmp"
     mv -T "$home/guard/$gv.tmp" "$home/guard/$gv"
   fi
@@ -127,12 +133,13 @@ if [[ -n $excl ]]; then
   SILTWAKE_SCHED_DIR="$dir" node "$src/exclusive-unit.mjs" write "$excl" "$excl_dir" || exit $?
 fi
 
-version=$(cd "$src" && cat "${files[@]}" "$transport" | sha256sum | cut -c1-12)
+version=$(cd "$src" && cat "${files[@]}" "$transport" "$cgscope" | sha256sum | cut -c1-12)
 if [[ ! -d "$home/$version" ]]; then
   [[ -d "$home/$version.tmp" ]] && chmod -R u+w "$home/$version.tmp" && rm -rf "$home/$version.tmp"
   mkdir -p "$home/$version.tmp"
   (cd "$src" && cp "${files[@]}" "$home/$version.tmp/")
   cp "$transport" "$home/$version.tmp/alickers-job.sh"
+  cp "$cgscope" "$home/$version.tmp/cgroup-scope.mjs"
   chmod -R a-w "$home/$version.tmp"
   mv -T "$home/$version.tmp" "$home/$version"
 fi

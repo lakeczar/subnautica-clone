@@ -12,11 +12,10 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { copyFileSync, existsSync, mkdirSync, readFileSync, readlinkSync, rmSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { heavyJobGuard } from "./build-guard.mjs";
 import { sliceLimits } from "./policy.mjs";
-import { alive, loadConfig, scopePopulated } from "./state.mjs";
+import { alive, loadConfig, machineCpus, scopePopulated } from "./state.mjs";
 import { V1_REPO, blockedBy, context, exclusiveSlice, hc, here, holderOf, killOwned, read, result, running, sleep, submit, until } from "./acceptance-lib.mjs";
 
 const fast = { minStallS: 1, soakYieldS: 3 };
@@ -305,14 +304,25 @@ test("S10: the GPU lease holds only inside a GPU ticket's scope; the Chrome guar
   spawnSync("chmod", ["-R", "u+w", home]);
 });
 
+/** S11 and S20 open the real GPU device: only under the production GPU lease, so no one else's GPU job sees a stranger
+ * on the device (REC-1's ticket 261025-014714-dfd1 did, from S11 run in a standard job). SCHED_TEST_GPU_LEASE is that
+ * lease, kept by the suite's runner (a --class gpu queue job) when it clears the job's own variables. */
+const gpuLeased = (t) => {
+  if (!existsSync("/dev/nvidia0")) { t.skip("no NVIDIA device"); return false; }
+  if (!process.env.SCHED_TEST_GPU_LEASE) { t.skip("opens the real GPU device: run this suite in a --class gpu queue job, which sets SCHED_TEST_GPU_LEASE"); return false; }
+  return true;
+};
+
 test("S11: a GPU client outside the lease is reported by status and recorded on the GPU job it shared with", async (t) => {
-  if (!existsSync("/dev/nvidia0")) { t.skip("no NVIDIA device"); return; }
+  if (!gpuLeased(t)) return;
   const c = context("unleased", { config: fast });
   // Opening the device node is what a GPU client does; this one does nothing with it.
   const probe = spawn("sh", ["-c", "exec 7</dev/nvidia0; exec sleep 20", "sched2-acceptance-unleased-gpu-probe"], { stdio: "ignore" });
   try {
     const line = new RegExp(`GPU in use outside the lease: pid ${probe.pid} \\(sleep 20\\)`);
-    await until("status reports the probe", () => line.test(hc(c, ["status"]).out), 10000);
+    let last = "";
+    try { await until("status reports the probe", () => line.test(last = hc(c, ["status"]).out), 10000); }
+    catch (e) { assert.fail(`${e.message}; the probe ${probe.exitCode == null ? "is alive" : `exited ${probe.exitCode}`}; last status:\n${last}`); }
     const g = submit(c, c.wt("g"), "--class", "gpu", "--", "sh", "-c", "exec 7</dev/nvidia0; sleep 1");
     const w = waitFor(c, g);
     assert.equal(w.code, 0, w.err);
@@ -460,7 +470,8 @@ test("S19 (TST-16): private state without a named exclusive slice uses none", as
   noRuntimeState(c);
 });
 
-test("S20 (TST-16 R1-F5): a GPU client that starts after admission and outlives the job is caught by the final scan", async () => {
+test("S20 (TST-16 R1-F5): a GPU client that starts after admission and outlives the job is caught by the final scan", async (t) => {
+  if (!gpuLeased(t)) return;
   const c = context("gpu-late", { config: { ...fast, disturbed: { jobCpuSomePct: 100, jobMemSomePct: 100, jobMajorFaults: 1e9, jobSwapIns: 1e9, stealPct: 100 } } });
   await exclusiveSlice(c);
   const x = submit(c, c.wt("x"), "--class", "exclusive", "--", "sleep", "5");
@@ -707,7 +718,7 @@ exec /usr/bin/systemctl "$@"
   // 3. An equal file with a stale manager (the file written, never reloaded): the rerun verifies systemd, not the file.
   pool(3072);
   const stale = memMax();
-  const wantMiB = sliceLimits(availableParallelism(), loadConfig(c.env)).memoryMaxMiB;
+  const wantMiB = sliceLimits(machineCpus(loadConfig(c.env)), loadConfig(c.env)).memoryMaxMiB;
   writeFileSync(unitFile, readFileSync(unitFile, "utf8").replace(/MemoryMax=\d+M/, `MemoryMax=${wantMiB}M`));
   assert.equal(memMax(), stale, "systemd hasn't seen it");
   r = install();
@@ -829,7 +840,7 @@ test("S27 (TST-16b): one installer lock covers the whole install, publication in
     assert.equal(await A.done, 0, A.out);
     assert.equal(await B.done, 0, B.out);
     assert.ok(existsSync(join(home, "current", "heavy-check.mjs")));
-    assert.equal(spawnSync("bash", ["-c", `cd '${join(home, "current")}' && for f in *; do cmp -s "$f" '${here}/'"$f" || [[ $f == alickers-job.sh ]] || echo "$f"; done`], { encoding: "utf8" }).stdout, "", "a complete version");
+    assert.equal(spawnSync("bash", ["-c", `cd '${join(home, "current")}' && for f in *; do cmp -s "$f" '${here}/'"$f" || [[ $f == alickers-job.sh ]] || { [[ $f == cgroup-scope.mjs ]] && cmp -s "$f" '${here}/../cgroup-scope.mjs'; } || echo "$f"; done`], { encoding: "utf8" }).stdout, "", "a complete version (the real cgroup-scope.mjs, where the repository re-exports it)");
   } finally { writeFileSync(go, ""); await A.done; }
   // The unit helper outside install.sh (no lock fd, or a fd that isn't the lock): refused, nothing paused.
   const slice = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE, unitDir = join(process.env.XDG_RUNTIME_DIR ?? `/run/user/${process.getuid()}`, "systemd", "user");

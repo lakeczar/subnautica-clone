@@ -260,6 +260,8 @@ test("9: the supervisor exits after the handoff; if the holder is killed the job
   assert.equal(hc(c, ["wait", ok]).code, 5);
   const id = submit(c, wt, "--class", "standard", "--", "sh", "-c", "sleep 30; date > ended");
   const t = await holderOf(c, id);
+  // While the job runs: a holder killed before the command's start is "not started" (SCHED-3 R3-F3).
+  await until("the command started", () => existsSync(join(c.sched, "jobs", id, "started")));
   killOwned(t.holder);
   // Nothing else is queued: a fresh wait alone must reach a result.
   const w = hc(c, ["wait", id]);

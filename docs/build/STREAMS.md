@@ -1246,3 +1246,40 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Checks:** fast 169, heavy 67 (3 OOM-killed subprocesses inside passing files), economy, build, playthrough 9/9.
   - **Review:** Sol R1 running (`siltwake-ls1-1b-review-r1-sol-0337c12`).
   - **PACE-1's pod-buffer legacy row** goes in the next transition (8→9), not this bridge, since LS-1 1b merges first.
+- **LS-1 1b R1** (Sol on `0337c127`, report on `review/ls-1-1b-r1` `04e91b0f`): REQUEST CHANGES.
+  - **Passed:** persistence, power billing and packing; found-on-reach caches; the OOM kills are intentional probes.
+  - **Four P2s:** Base omits the new module upgrades and crop disclosure; the keypad never gets the post-command outcome or closes; the carrier ceiling was raised by 32.85 s (not allowed; remove the haul-order cost instead); content-proportional fixed-step work (bounded cache candidates; reuse the per-host power answer).
+- **SCHED-3 R6 fix done at `8063bec4`** (code `dc369039`): `isGuard` normalises spellings plus root-relative symlinks; guard steps are the exact alias, `--require`, or local with a reason. B45. S11/S20 GPU fixtures run only under the suite job's own lease. All suites pass through a GPU-leased queue job. Sol R7 (install decision) running (`siltwake-sched3-review-r7-sol-8063bec`).
+- **CW-1 checks:** 4070 sweep, fast and heavy (real budgets) pass; the 3090 sweep `363b` was OOM-killed at the gpu class's 3,072 MiB after 14m39s (segment 5). Rerun with a larger `--mem` sized from the observed peak, plus a check on whether the memory growth is expected.
+- **ENV-1 stage 1 done at `18df71f3`** (code `b125ace3`):
+  - **Delivered:** the air-room table (Canopy lab only; sim and shader identical); the interior model, a 37-recipe procedural kit and four definitions; the validator (connectivity for swim and walk capsules, per-route air proofs from real saves, rejection fixtures with controls).
+  - **Fork:** `FORK(interior-swim-speed)` until stage 2.
+  - **Compromises:** the pump-house terrain gap (≤0.3 m, root fix stage-2 masking); island interiors on flat stand-ins until OP-1.
+  - **Checks:** fast 176/176; heavy library-save 4/4.
+  - **Review:** Sol R1 running (`siltwake-env1-stage1-review-r1-sol-18df71f`).
+- **Rest stations decided** (owner discussion; `docs/build/design/REST-AND-AIR-DECISIONS.md`, visual `rest-air-map-v2.html`; GAME-DIRECTION updated):
+  - **Air and rest:** no free air (the 4 m spheres retired at all stops); "power is air"; moorings and outposts give power only.
+  - **Big stops:** four (crown, Rift station, Divide dock, a district big stop), each earned through its own scenario and ending in a dry room, with restoration steps kept.
+  - **Rest and wake:** homes, the Canopy lab, restored dry rooms, and the Creel and carrier cabins (the last two are coordinator calls). The staging office loses rest.
+  - **Moorings:** sparse, at long-journey starts, never near a big stop (spots set in the owner's map-layout session).
+  - **Difficulty:** a pressure-not-grind ramp. Dry-room feel conditions adopted (floor-well entry, a sensory change, never unsafe).
+  - **District big stop:** confirmed at ENV-1's upper hall row (lore owner).
+  - **Routing:** ENV-1 (plan update: rows, air proof without moorings, restoration steps as staged facility facts, scenarios designed per place); the air and rest code (stops, bases, recovery, retiring the spheres) folds into ENV-1 stage 3a after CW-1; moorings, rescue tows and bot logistics go to PACE-1 stage 2 after the map session.
+  - **Owner sessions to schedule:** map layout (requested), creatures and danger (proposed).
+- **SCHED-3 ACCEPTED** (R7, Sol `fc1e1149` on `review/sched-3-r7`): safe to install at an idle point with the R6/R7 canary. Merged locally at `81990507` (a DIRECTION wording conflict was resolved, keeping the owner's "60 fps on a GPU" line and SCHED-3's portability sentence). Root gate running. Next: push, then the SCHED builder installs at an idle point and runs canary steps 1–7, the coordinator checks the receipts, and rollback to `baf9369c3418` if any step fails.
+- **ENV-1 stage 1 R1** (Sol on `18df71f3`, report on `review/env-1-s1-r1` `dad0f28f`): REQUEST CHANGES, four validator P2s: outside the shell isn't an escape; the composed sweep drops exterior obstacles; exits need capsule-sized directed crossings; per-doorway seeding bypasses the round trip from the parked craft. Checks passed. Fixes adopted as written.
+- **LS-1 1b F3 decision:** the +0.55 min carrier regression is bundle-rounding overshoot in `actions.ts` `procure`, not removable haul order. Approved: a small, general, deterministic fix that avoids overshooting bundles when the remaining need is smaller; all rows regenerated; any worse row is reported, never raised. Whichever of LS-1 1b and PACE-1 stage 1 merges second rebases and regenerates the pacing rows.
+- **Map-layout grill session opened** (owner request): an interactive Opus thread `mcp:4bc3f1ba-5e6c-4440-a61d-c27d8948caa3`, "Map layout and biomes". Goal: an organic, non-uniform, never-straight "natural alien ocean"; biomes and transitions; the depth and pressure ramp; mooring placement; where caves, sites, interiors and big stops sit. Output: `/work/tmp/map-session/DECISIONS.md`, reported back here.
+- **SCHED-3 merged to root at `81990507`, pushed.** Every gate step passed at the merge commit (fast, bake, build, 6 economy, and playthrough 9/9 `c249` with 15 reloads matching). The gate printed "void" only because the coordinator committed docs (`ef177d46`, docs-only diff, verified) while the playthrough ran; slip recorded. Next: the SCHED builder installs at an idle point and runs the R6/R7 canary (rollback to `baf9369c3418` if any step fails).
+- **STEW-3 done at `1b5d99d7`** (code `f9dcfce`):
+  - **The gate's heavy step:** queued `--machine any`; passes only on a stored full real-budget result for the clean commit; machine shown per row.
+  - **Stored per-file heavy results:** `heavy-results.mjs` ingest, show and near, with `matchKey` for control-arm reuse, stored in `/work/tmp/siltwake-results/heavy/`. Gap: job logs are pruned after 7 days; there's no nightly ingest yet.
+  - **Override label** "NOT BUDGET EVIDENCE"; hygiene headers; a pipe-free test.
+  - **The 3 OOM kills** come from the deliberate over-budget probe.
+  - **Checks:** fast 1,689; a real gate `--only heavy` passed (67 files, about 16 min on the 3090); highest peak 78.4%.
+  - **Review:** Sol R1 running (`siltwake-stew3-review-r1-sol-1b5d99d`). The branch predates SCHED-3's merge and needs to compose with root.
+- **STEW-3 R1** (Sol on `1b5d99d7`, report on `review/stew-3-r1` `2a8420fe`): REQUEST CHANGES; 100 checks pass; it merges cleanly with root.
+  - **P1:** alternate budget sources bypass the real-budget gate.
+  - **P2:** `matchKey` can't establish an equivalent control (needs identity vs conditions, and per-file cache state).
+  - **P2:** stored-result eligibility ignores the receipt.
+  - **Decision:** fixes adopted as written.
