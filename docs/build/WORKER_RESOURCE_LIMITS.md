@@ -48,7 +48,7 @@ H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 - **If heavy-check can't be run,** a guarded command refuses (exit 75) with the reason; it never falls back to running locally.
 - **`node scripts/local-guard.mjs --status`** says what happens here.
 - **Not prevented, a convention only:** bare `npx tsc`, `npx vite build`, `vite dev`, `node --test <file>`, compiled runners started directly (`node .test-build/…`), the `:direct` package scripts' commands typed by hand, and SCHED's acceptance suites run directly. Use the npm scripts, or `$H` yourself.
-- **`npm run gate`** sends its local steps (fast, build, economy) as one `--machine any` job (the 3090 when your environment carries settings, as for a guarded command), and **`scripts/saves-export.sh`** compiles nothing outside the queue.
+- **`npm run gate`** sends its local steps (fast, build, economy) as one `--machine any` job (the 3090 when your environment carries settings, as for a guarded command), runs the full heavy tier as its own queued `--machine any` step (STEW-3: about 10 minutes, mostly on alickers; its per-file results are stored), and **`scripts/saves-export.sh`** compiles nothing outside the queue.
 
 **A job has a goal, not a time limit** (owner, 2026-10-23; SCHED-2). It runs until its command ends. The queue stops it only when:
 - it **stalls**: nothing written to its output, and no touch of `$SILTWAKE_JOB_HEARTBEAT`, for the stall window (exit **123**, `stalled: no output for N min`, with what its processes were doing). A job that is legitimately quiet for long stretches touches the heartbeat file or passes `--stall S`;
@@ -192,6 +192,13 @@ Light checks of the scheduler itself (no systemd) are in `tests/heavy-sched-poli
 - **Run both sides of a comparison together.** An A/B runs both arms in one job, interleaved, with a fixed run count, a margin declared in advance and an "inconclusive" outcome. Don't run two separate whole-tier jobs.
 - **Keep exit codes honest.** Use `set -o pipefail`, and never pipe into `grep` or `tail` in a way that hides a failure.
 - **Record the context with every number:** the memory limit, the cache state, the machine and the commit.
+- **Read stored heavy results first (STEW-3).** Every heavy-tier run records, per file:
+  - **numbers:** status, wall and CPU seconds, peak against its budget (and as a percentage), OOM kills (at its own budget, and in nested cgroups below it), and build-cache hits and fills;
+  - **context:** the commit, machine, job memory limit, cache state at the start, whether it ran the full tier, and whether an override was set.
+
+  `node scripts/heavy-results.mjs ingest` copies records from the queue's job logs into `/work/tmp/siltwake-results/heavy/` (the gate does this for its heavy step). Read them with `show --commit SHA [--file NAME]` and `near` (files at 85% or more of their budget).
+  - A root row can replace an A/B's control arm when its `matchKey` agrees: the same machine, containment, budget, cache state and Node.
+  - The tier prints `NOT BUDGET EVIDENCE` on an override run and stores it as such. `near` and the gate ignore such runs.
 
 ## Second worker: siltwake-alickers (best-effort, added 2026-10-23)
 

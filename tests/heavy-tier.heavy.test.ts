@@ -49,7 +49,7 @@ interface HeavyRecord { commit: string | null; machine: string; containment: str
   override: number | null; budgetEvidence: boolean; files: Row[] }
 /** The run's stored-results record (STEW-3), from its output. */
 function recordOf(stdout: string): HeavyRecord {
-  const line = stdout.split("\n").findLast((l) => l.startsWith("heavy-results: "));
+  const line = stdout.split("\n").filter((l) => l.startsWith("heavy-results: ")).at(-1);
   assert.ok(line, "the run printed its record");
   return JSON.parse(line.slice("heavy-results: ".length)) as HeavyRecord;
 }
