@@ -31,11 +31,13 @@ const allocating = (name: string, mib: number): string => write(name, `test("${n
 });`);
 
 /** The nested heavy runner over `files` with one adapter, as it ran; `budgets` replaces tests/heavy-budgets.json.
- * `budgetMiB` is applied through the override (not budget evidence) unless `real`, when it is the budgets file's default. */
+ * `budgetMiB` is applied through the override (not budget evidence); with `real` neither variable is
+ * set, so the canonical tests/heavy-budgets.json applies (a probe file gets its default). */
 function runTier(files: readonly string[], mode: (typeof modes)[number], budgetMiB: number, budgets?: object, real = false) {
   const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_HEAVY_BUDGET_MIB: String(budgetMiB) };
+  delete env.SILTWAKE_HEAVY_BUDGETS;
   if (real) delete env.SILTWAKE_HEAVY_BUDGET_MIB;
-  if (budgets || real) {
+  if (budgets && !real) {
     env.SILTWAKE_HEAVY_BUDGETS = join(probes, `budgets-${Math.random().toString(36).slice(2)}.json`);
     writeFileSync(env.SILTWAKE_HEAVY_BUDGETS, JSON.stringify({ defaultMiB: budgetMiB, ...budgets }));
   }
@@ -44,9 +46,9 @@ function runTier(files: readonly string[], mode: (typeof modes)[number], budgetM
   return spawnSync(process.execPath, ["scripts/test-tier.mjs", "heavy", ...files], { cwd: root, encoding: "utf8", env, timeout: 120_000 });
 }
 interface Row { file: string; status: string; cpuS: number | null; cpuScope: string | null; peakMiB: number; budgetMiB: number; budgetPct: number | null;
-  oomKillsOwn: number | null; oomKillsNested: number | null; cache: { hits: number; misses: number; fills: number } | null; matchKey: string }
+  oomKillsOwn: number | null; oomKillsNested: number | null; cache: { hits: number; misses: number; fills: number } | null; cacheUse: string | null; closure: string | null }
 interface HeavyRecord { commit: string | null; machine: string; containment: string; jobMemoryMiB: number | null; cache: { state: string }; selection: { kind: string };
-  override: number | null; budgetEvidence: boolean; files: Row[] }
+  override: { budgetMiB: number | null; budgetsFile: string | null } | null; budgetEvidence: boolean; lockHash: string; harnessHash: string; files: Row[] }
 /** The run's stored-results record (STEW-3), from its output. */
 function recordOf(stdout: string): HeavyRecord {
   const line = stdout.split("\n").filter((l) => l.startsWith("heavy-results: ")).at(-1);
@@ -75,7 +77,7 @@ for (const mode of modes) {
     assert.ok(peak >= 48, `the light file's peak (${peak} MiB) includes its child's 48 MiB`);
     // STEW-3: the stored record says what each number was measured under.
     const rec = recordOf(out.stdout);
-    assert.deepEqual([rec.override, rec.budgetEvidence, rec.containment, rec.selection.kind], [192, false, mode, "subset"]);
+    assert.deepEqual([rec.override, rec.budgetEvidence, rec.containment, rec.selection.kind], [{ budgetMiB: 192, budgetsFile: null }, false, mode, "subset"]);
     assert.match(out.stdout, /NOT BUDGET EVIDENCE: SILTWAKE_HEAVY_BUDGET_MIB=192 replaced every file's budget/);
     const h = rowOf(rec, name(hog)), l = rowOf(rec, name(light));
     assert.equal(l.peakMiB, peak);
@@ -90,17 +92,31 @@ for (const mode of modes) {
     } else assert.deepEqual([h.oomKillsOwn, l.oomKillsNested], [null, null], "a process group can't count OOM kills: null, never 0");
   });
 
+  test(`${mode}: a budgets file other than tests/heavy-budgets.json is an override: labelled, and not budget evidence (R1-1)`, () => {
+    const tag = mode.replace(" ", "-"), light = allocating(`alt-budgets-${tag}`, 32);
+    const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_HEAVY_BUDGETS: join(probes, `raised-${tag}.json`) };
+    delete env.SILTWAKE_HEAVY_BUDGET_MIB; delete env.NODE_TEST_CONTEXT;
+    if (mode === "process group") env.SILTWAKE_HEAVY_CGROUP = "";
+    writeFileSync(env.SILTWAKE_HEAVY_BUDGETS!, JSON.stringify({ defaultMiB: 1536 }));
+    const out = spawnSync(process.execPath, ["scripts/test-tier.mjs", "heavy", light], { cwd: root, encoding: "utf8", env, timeout: 120_000 });
+    assert.equal(out.status, 0, out.stdout + out.stderr);
+    assert.match(out.stdout, /NOT BUDGET EVIDENCE: SILTWAKE_HEAVY_BUDGETS=.*raised-.*\.json replaced tests\/heavy-budgets\.json/);
+    const rec = recordOf(out.stdout);
+    assert.deepEqual([rec.override, rec.budgetEvidence, rowOf(rec, `alt-budgets-${tag}`).budgetMiB], [{ budgetMiB: null, budgetsFile: env.SILTWAKE_HEAVY_BUDGETS }, false, 1536]);
+  });
+
   test(`${mode}: at real budgets a run is budget evidence, with its commit, machine and limits recorded`, () => {
     const tag = mode.replace(" ", "-"), light = allocating(`real-${tag}`, 32);
-    const out = runTier([light], mode, 512, undefined, true);
+    const out = runTier([light], mode, 1024, undefined, true);
     assert.equal(out.status, 0, out.stdout + out.stderr);
     assert.doesNotMatch(out.stdout, /NOT BUDGET EVIDENCE/);
     const rec = recordOf(out.stdout), r = rowOf(rec, `real-${tag}`);
     assert.deepEqual([rec.override, rec.budgetEvidence], [null, true]);
     assert.equal(rec.commit, spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim());
     assert.ok(rec.machine && ["cold", "warm", "off"].includes(rec.cache.state), JSON.stringify(rec));
-    assert.equal(r.budgetMiB, 512);
-    assert.match(r.matchKey, new RegExp(`\\|${mode}\\|512\\|${rec.cache.state}\\|`));
+    assert.equal(r.budgetMiB, 1024, "the canonical default");
+    assert.ok(/^[0-9a-f]{16}$/.test(r.closure ?? "") && /^[0-9a-f]{16}$/.test(rec.lockHash) && /^[0-9a-f]{16}$/.test(rec.harnessHash), "identity recorded");
+    assert.equal(r.cacheUse, "none", "the probe never touches the build cache");
     assert.match(out.stdout, new RegExp(`job memory limit (\\d+|none) MiB, pool \\d+ MiB.*build cache ${rec.cache.state} at the start`));
   });
 

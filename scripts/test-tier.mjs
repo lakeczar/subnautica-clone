@@ -41,8 +41,8 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { grantedMemoryMiB, heavyContainment } from "./heavy-containment.mjs";
 import { guardLocalRun } from "./local-guard.mjs";
-import { cacheRoot, pruneBuildCache } from "./test-build-cache.mjs";
-import { NEAR_PCT, cacheState, machineLabel, matchKey, recordLine, treeState } from "./heavy-results.mjs";
+import { cacheRoot, closureHash, pruneBuildCache } from "./test-build-cache.mjs";
+import { HARNESS, NEAR_PCT, RECORD_VERSION, cacheState, cacheUse, filesHash, machineLabel, recordLine, treeState } from "./heavy-results.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const build = join(root, process.env.SILTWAKE_TEST_BUILD || ".test-build"); // test-build.mjs checks the name
@@ -197,17 +197,22 @@ if (!process.env.SILTWAKE_HEAVY_LOCK_HELD) {
   console.error("test-tier: the heavy tier runs under the shared lock. Use `npm run test:heavy`, or wrap it in scripts/heavy-check.sh.");
   process.exit(2);
 }
-// SILTWAKE_HEAVY_BUDGETS names another budgets file (the tier's own tests classify probe files with it).
-const budgets = JSON.parse(readFileSync(process.env.SILTWAKE_HEAVY_BUDGETS || join(root, "tests", "heavy-budgets.json"), "utf8"));
-// SILTWAKE_HEAVY_BUDGET_MIB overrides every budget, e.g. to check that containment fires.
-// A run with it is not budget evidence (WORKER_RESOURCE_LIMITS.md, "Measurement
-// hygiene"): a raised limit lets V8 grow its heap, so peaks inflate, and a budget over
-// the pool runs every file alone. Its output and stored results say so.
-const override = Number(process.env.SILTWAKE_HEAVY_BUDGET_MIB) || null;
-const NOT_EVIDENCE = override ? `NOT BUDGET EVIDENCE: SILTWAKE_HEAVY_BUDGET_MIB=${override} replaced every file's budget, ` +
-  "so these peaks are inflated (V8 sizes its heap from the limit) and files may have run alone; measure at the real budgets." : null;
+// Budgets come from tests/heavy-budgets.json. Two variables replace them:
+// SILTWAKE_HEAVY_BUDGETS names another budgets file (the tier's own tests classify probe
+// files with it), and SILTWAKE_HEAVY_BUDGET_MIB overrides every budget (e.g. to check
+// that containment fires). Either one is an override, and a run with an override is not
+// budget evidence (WORKER_RESOURCE_LIMITS.md, "Measurement hygiene"; STEW-3 R1-1): a
+// raised limit lets V8 grow its heap, so peaks inflate, and a budget over the pool runs
+// every file alone. Its output and stored results say so.
+const budgetsFile = process.env.SILTWAKE_HEAVY_BUDGETS || null;
+const budgets = JSON.parse(readFileSync(budgetsFile || join(root, "tests", "heavy-budgets.json"), "utf8"));
+const overrideMiB = Number(process.env.SILTWAKE_HEAVY_BUDGET_MIB) || null;
+const override = overrideMiB || budgetsFile ? { budgetMiB: overrideMiB, budgetsFile } : null;
+const NOT_EVIDENCE = override ? `NOT BUDGET EVIDENCE: ${[overrideMiB && `SILTWAKE_HEAVY_BUDGET_MIB=${overrideMiB} replaced every file's budget`,
+  budgetsFile && `SILTWAKE_HEAVY_BUDGETS=${budgetsFile} replaced tests/heavy-budgets.json`].filter(Boolean).join(", and ")}, ` +
+  "so these peaks aren't measured at the real budgets (V8 sizes its heap from the limit, and files may have run alone); measure at the real budgets." : null;
 if (NOT_EVIDENCE) console.log(`test-tier: ${NOT_EVIDENCE}`);
-const budgetMiB = (file) => override || (budgets.files?.[basename(file).replace(/\.js$/, ".ts")] ?? budgets.defaultMiB);
+const budgetMiB = (file) => overrideMiB || (budgets.files?.[basename(file).replace(/\.js$/, ".ts")] ?? budgets.defaultMiB);
 // Files whose tests assert elapsed time (`exclusive` in heavy-budgets.json) run in a
 // phase of their own after every other file, one at a time (STEW-2). A heavy file
 // that reads a clock must say which kind it is, listed under `exclusive` or under
@@ -254,12 +259,16 @@ const fileStatsModule = pathToFileURL(join(root, "scripts", "test-heavy-file.mjs
 // The run's context, recorded with every number (STEW-3): the tree, the machine, the
 // limits and the build cache as this run found them.
 const heavyRun = {
-  v: 1, at: new Date().toISOString(), ...treeState(root), machine: machineLabel(), host: hostname(),
+  v: RECORD_VERSION, at: new Date().toISOString(), ...treeState(root), machine: machineLabel(), host: hostname(),
   ticket: process.env.SILTWAKE_JOB_TICKET || process.env.SILTWAKE_LANE_TICKET || null, node: process.version,
   containment: containment.kind, jobMemoryMiB: Number.isFinite(grantedMemoryMiB()) ? grantedMemoryMiB() : null, poolMiB, concurrency, jobCpus: jobCpus || null,
   cache: cacheState(cacheRoot), selection: requested.length ? { kind: "subset", files: files.length } : { kind: "full", files: files.length },
-  override, budgetEvidence: !override, budgets: process.env.SILTWAKE_HEAVY_BUDGETS ? "SILTWAKE_HEAVY_BUDGETS" : "tests/heavy-budgets.json",
+  override, budgetEvidence: !override,
+  // Identity beyond each file's own closure: the dependencies, and the harness that measures.
+  lockHash: filesHash(root, ["package-lock.json"]), harnessHash: filesHash(root, HARNESS),
 };
+/** The file's compiled import closure, named relative to the build (the same in any checkout), with the runtime. */
+const closureOf = (file) => { try { return closureHash([pathToFileURL(file).href], undefined, build); } catch { return null; } };
 let fileSeq = 0;
 const rows = [];
 let failed = false;
@@ -302,7 +311,8 @@ function runHeavy(file, phase = "pool") {
       let own = null;
       try { own = JSON.parse(readFileSync(`${statsFile}.${job.child.pid}`, "utf8")); } catch { /* the process died before its exit hook */ }
       rows.push({ file: basename(file), phase, status, seconds, cpuS: cpuS ?? (own ? own.cpuMs / 1000 : null), cpuScope: cpuS != null ? "tree" : own ? "process" : null,
-        peakMiB, budgetMiB: budget, budgetPct: budget ? Math.round((peakMiB / budget) * 1000) / 10 : null, oomKillsOwn, oomKillsNested, cache: own?.cache ?? null });
+        peakMiB, budgetMiB: budget, budgetPct: budget ? Math.round((peakMiB / budget) * 1000) / 10 : null, oomKillsOwn, oomKillsNested,
+        cache: own?.cache ?? null, cacheUse: cacheUse(own?.cache ?? null), closure: closureOf(file) });
       if (killed) console.error(`test-tier: ${basename(file)} went over its ${budget} MiB budget (whole process tree).`);
       done();
     });
@@ -355,7 +365,7 @@ console.log(`\ntest:heavy summary at ${String(heavyRun.commit).slice(0, 12)}${he
 if (NOT_EVIDENCE) console.log(`  ${NOT_EVIDENCE}`);
 for (const r of rows) {
   const oom = r.oomKillsOwn || r.oomKillsNested ? `  oom-killed ${r.oomKillsOwn ?? "?"} own + ${r.oomKillsNested ?? "?"} nested` : "";
-  const cache = r.cache ? `  cache ${r.cache.hits} hit/${r.cache.fills} fill` : "";
+  const cache = r.cache ? `  cache ${r.cache.hits} hit/${r.cache.fills} fill (${r.cacheUse})` : "";
   console.log(`  ${r.file.padEnd(36)} ${r.seconds.toFixed(1).padStart(6)} s  cpu ${fmt(r.cpuS).padStart(6)} s  peak ${String(r.peakMiB).padStart(5)} MiB / ${r.budgetMiB} MiB` +
     `${cache}${oom}  ${r.status}` + (r.wait ? `  [timing; CPU wait: job ${r.wait.job ?? "?"}%, host ${r.wait.host ?? "?"}%]` : ""));
 }
@@ -366,7 +376,7 @@ const near = heavyRun.budgetEvidence ? rows.filter((r) => r.budgetPct != null &&
 for (const r of near) console.warn(`test-tier: near budget: ${r.file} peaked at ${r.peakMiB} of its ${r.budgetMiB} MiB (${r.budgetPct}%, the alert line is ${NEAR_PCT}%)`);
 const nested = rows.filter((r) => r.oomKillsNested);
 if (nested.length) console.log(`test-tier: OOM kills inside nested cgroups (a file's own sub-limits, not its budget): ${nested.map((r) => `${r.file} ${r.oomKillsNested}`).join(", ")}`);
-const record = { ...heavyRun, files: rows.map((r) => ({ ...r, matchKey: matchKey(heavyRun, r) })) };
+const record = { ...heavyRun, files: rows };
 writeFileSync(join(build, "heavy-results.json"), JSON.stringify(record, null, 1));
 console.log(recordLine(record));
 process.exit(failed ? 1 : 0);

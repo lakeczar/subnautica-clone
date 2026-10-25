@@ -216,8 +216,9 @@ Light checks of the scheduler itself (no systemd) are in `tests/heavy-sched-poli
   - **context:** the commit, machine, job memory limit, cache state at the start, whether it ran the full tier, and whether an override was set.
 
   `node scripts/heavy-results.mjs ingest` copies records from the queue's job logs into `/work/tmp/siltwake-results/heavy/` (the gate does this for its heavy step). Read them with `show --commit SHA [--file NAME]` and `near` (files at 85% or more of their budget).
-  - A root row can replace an A/B's control arm when its `matchKey` agrees: the same machine, containment, budget, cache state and Node.
-  - The tier prints `NOT BUDGET EVIDENCE` on an override run and stores it as such. `near` and the gate ignore such runs.
+  - **A stored row counts only when it's eligible:** the record agrees with its job's receipt (the same ticket; a clean commit the receipt binds; the same machine; a job that ended on its own work), it ran at canonical budgets, and the file passed. `near` and the gate read eligible rows only; `show --eligible` filters to them, and `show` marks the rest `NOT ELIGIBLE` with the reasons.
+  - **A root row replaces an A/B's control arm** only through `heavy-results.mjs control --commit <full clean SHA> --file NAME --like <the candidate's ticket>`. It requires exactly that control commit, the same file and harness, and equal conditions: machine, containment, the job's memory limit, pool, concurrency, CPUs, budget, phase, Node, and the file's own cache use (`hit` or `fill`, never `mixed`). A store that is warm overall doesn't make a file's measurement warm.
+  - The tier prints `NOT BUDGET EVIDENCE` on an override run (`SILTWAKE_HEAVY_BUDGET_MIB`, or a budgets file other than `tests/heavy-budgets.json` via `SILTWAKE_HEAVY_BUDGETS`) and stores it as such. `near` and the gate ignore such runs.
 
 ## Second worker: siltwake-alickers (best-effort, added 2026-10-23)
 

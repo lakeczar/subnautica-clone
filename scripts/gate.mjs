@@ -29,7 +29,7 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { fullTierProblems, ingest, storedRun } from "./heavy-results.mjs";
+import { canonicalAt, fullTierProblems, ingest, storedRun } from "./heavy-results.mjs";
 import { admission, localFacts, machineFor } from "./local-guard.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -56,8 +56,8 @@ export const GATE = [
   ...ECONOMY.map(([id, file, why]) => ({ id: `economy:${id}`, what: why, run: ["node", `scripts/${file}`] })),
   // The whole heavy tier at its real budgets (STEW-3; the owner accepted about 10 minutes
   // per root merge), mostly on alickers. Its per-file results are stored with their
-  // context (scripts/heavy-results.mjs), and the step counts only with a record of the
-  // full tier for the gate's commit. Later: affected files only here, plus a nightly
+  // context (scripts/heavy-results.mjs), and the step counts only with an eligible record
+  // of every heavy file at the gate's commit, each at its canonical budget. Later: affected files only here, plus a nightly
   // full run that alerts at 85% of a budget; a selection would change `run` alone.
   { id: "heavy", what: "the full heavy tier at its real budgets, per-file results stored (queued, any machine)",
     queue: ["--class", "heavy-suite", "--machine", "any"], run: ["npm", "run", "test:heavy"], results: "heavy" },
@@ -232,7 +232,9 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       // Stored with the job's receipt (scripts/heavy-results.mjs), wherever it ran.
       const [ingested] = ingest([r.ticket]);
       console.log(`gate: ${step.id} results: ${ingested.stored ? `stored ${ingested.files} file rows` : ingested.why} (node scripts/heavy-results.mjs show --commit ${head.slice(0, 12)})`);
-      problems.push(...fullTierProblems(storedRun(r.ticket), head));
+      // Eligible (the record agrees with its receipt), the full tier, every file at its
+      // canonical budget at the gate's commit: never on the record's own word (R1-1, R1-3).
+      problems.push(...fullTierProblems(storedRun(r.ticket), head, canonicalAt(root, head)));
     }
     record(step.id, problems, Math.round((Date.now() - t0) / 1000), r.receipt?.machine);
   };

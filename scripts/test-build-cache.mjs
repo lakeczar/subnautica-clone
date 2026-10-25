@@ -18,7 +18,7 @@
 // so a stored heavy result says whether its numbers came from a warm or a cold cache.
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
-import { dirname, join, resolve } from "node:path";
+import { dirname, join, relative, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { deserialize, serialize } from "node:v8";
 
@@ -30,8 +30,10 @@ const IMPORT_RE = /(?:^|[\s;])(?:import|export)\s[^;]*?from\s*["']([^"']+)["']|(
 // entries are V8-serialized, and cached geometry uses engine math functions.
 const NAMESPACE = ["siltwake-build-cache/1", process.versions.node, process.versions.v8, process.platform, process.arch].join("\0");
 
-/** Hash of the runtime and of the compiled text of the relative-import closure of `modules` (file URLs). */
-export function closureHash(modules, runtime = NAMESPACE) {
+/** Hash of the runtime and of the compiled text of the relative-import closure of `modules` (file URLs).
+ * With `base`, files are named relative to it, so the hash is the same in any checkout or machine
+ * (a stored heavy result's identity, STEW-3); without it, by absolute path, as the store has always keyed. */
+export function closureHash(modules, runtime = NAMESPACE, base = null) {
   const seen = new Set(), queue = modules.map((m) => fileURLToPath(m));
   while (queue.length) {
     const file = queue.pop();
@@ -44,7 +46,8 @@ export function closureHash(modules, runtime = NAMESPACE) {
     }
   }
   const hash = createHash("sha256").update(runtime).update("\0");
-  for (const file of [...seen].sort()) hash.update(file).update("\0").update(readFileSync(file)).update("\0");
+  const name = (file) => (base ? relative(base, file) : file);
+  for (const file of [...seen].sort()) hash.update(name(file)).update("\0").update(readFileSync(file)).update("\0");
   return hash.digest("hex").slice(0, 16);
 }
 
