@@ -1,0 +1,10 @@
+
+heavy-check: 261025-043250-7875 exit 0; queued 3s, ran 14m11s; peak 1218 of 3072 MiB, 1675.4 CPU-s; evidence for 50c9ab9d1b; on RTX 3090 (factory-worker)
+gate: heavy results: stored 67 file rows (node scripts/heavy-results.mjs show --commit 50c9ab9d1b60)
+
+gate at 50c9ab9d1b60:
+  pass  heavy                  855 s  [on RTX 3090 (factory-worker)]
+  not run: fast, bake, build, economy:campaign, economy:m1, economy:m2-a, economy:m2-b1, economy:progression, economy:upgrade, playthrough: this is a partial gate
+partial gate passed at 50c9ab9d1b60
+after pushing the merge: export the shared save library at the merged commit (SAVE-1): scripts/saves-export.sh
+exit 0

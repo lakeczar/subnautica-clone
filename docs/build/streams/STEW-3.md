@@ -71,6 +71,21 @@ Root is merged (SCHED-3 included; no conflicts), at `0338044`.
 - **The pipe tripwire** also rejects `;` and `||` in the scripts the gate runs, since those could hide a failing stage. Sol noted the old regex let `false || true` through. It's still a tripwire, not proof that every exit code propagates.
 - **The 7-day retention gap:** unchanged and disclosed above. Sol and I agree a daily lightweight `ingest` is worth scheduling; that's the coordinator's call.
 
+## R1 evidence
+Everything ran through the queue.
+- **Fast tier, `--machine any`:** 1,703/1,703, none skipped, at `c43e5e1` on factory-worker (`261025-042238-34ef`). It includes the focused files, all passing:
+  - `heavy-results`: eligibility, the canonical full-tier check, controls, alerts, `ingest`/CLI, the gate's heavy step and the pipe tripwire;
+  - `gate`, `gate-routing`, `local-guard` and `tier-guard`.
+- **The real `npm run gate -- --only heavy`** at `50c9ab9` (the last code change is `c43e5e1`; after it, docs only):
+  - ticket `261025-043250-7875`, on factory-worker because alickers was busy, 14m11s, exit 0, evidence bound to `50c9ab9`;
+  - it stored 67 rows, and the gate's eligibility and canonical checks passed (`pass heavy 855 s [on RTX 3090 (factory-worker)]`).
+
+  Output: [`stew3/gate-heavy-r1.txt`](stew3/gate-heavy-r1.txt); rows: [`stew3/stored-rows-50c9ab9.txt`](stew3/stored-rows-50c9ab9.txt).
+  - **The records:** all 67 rows are v2 and **eligible**, each with a closure hash, plus the run's lockfile and harness hashes, and no override.
+  - **The cache:** warm at the start (1,493 entries), where the first run was cold. Per file, 62 rows were `hit`, 4 `none` and 1 `mixed`. That shows why cache use must be per file: the mixed row can't serve as a control.
+  - **`heavy-tier.heavy.test.ts`:** 12/12, including the new `SILTWAKE_HEAVY_BUDGETS` override test under both containments. The 3 OOM kills are again all nested inside it.
+  - **The R0 run** at `f9dcfce` (a v1 record) now reads `NOT ELIGIBLE: a v1 record`, as intended.
+
 ## Files
 - **New:** `scripts/heavy-results.mjs` (record format, store, CLI); `scripts/test-heavy-file.mjs` (each heavy file's process reports its CPU, peak and cache use); `tests/heavy-results.test.ts`.
 - **Changed:**
