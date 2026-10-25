@@ -245,20 +245,27 @@ export function procure(d: Driver, needs: Readonly<Partial<Record<ItemKind | "ta
         .sort((a, b) => dist(p, SOURCES[a].position) - dist(p, SOURCES[b].position));
       // One take at a source: a bundle, or what is left of its stock.
       const take = (c: SourceId): number => Math.min(SOURCES[c].bundle, d.state.world.resources.find((n) => n.id === c)!.stock);
-      const roomy = choices.filter((c) => roomFor(d, SOURCES[c].item, take(c)));
-      // LS-1 1b R1 (approved): don't overshoot, as a player wouldn't fill the hold with
-      // more than the job needs. Prefer the nearest source whose take fits what is still
-      // wanted of its kind; only when none does, the nearest that has room.
-      const id = roomy.find((c) => take(c) <= want[SOURCES[c].item]!) ?? roomy[0];
+      // LS-1 1b R1 (approved): surplus never takes room another need still wants. A take
+      // that would overshoot its kind's need waits while any other kind is open; the last
+      // open kind is gathered as before (its surplus blocks nothing). Nearest first throughout.
+      // A kind waits (never redirected to a farther source) when its nearest source's take
+      // would overshoot.
+      const others = (kind: string): boolean => open.some(([k]) => k !== kind);
+      const nearest = (kind: string): SourceId | undefined => choices.find((c) => SOURCES[c].item === kind);
+      const fits = (c: SourceId): boolean => { const k = SOURCES[c].item, n = nearest(k)!; return take(n) <= want[k]! || !others(k); };
+      const id = choices.find((c) => fits(c) && roomFor(d, SOURCES[c].item, take(c)));
       if (!id) {
         if (!choices.length) throw new Blocked(`No reachable source left for ${open.map(([k, n]) => `${n} ${k}`).join(", ")}`, where(d.state));
+        // Only deferred surplus is left (every source would overshoot): gather it now.
+        const late = choices.find((c) => roomFor(d, SOURCES[c].item, take(c)));
+        if (late && choices.every((c) => !fits(c))) { const k = SOURCES[late].item; want[k] = want[k]! - gather(d, late, want[k]!); eatIfHungry(d); continue; }
         stow();
         if (!locker || options.stow === false) throw new Blocked(`Diver hold full before ${open.map(([k]) => k).join(", ")} was met`, where(d.state));
         continue;
       }
       const kind = SOURCES[id].item, b = take(id);
-      // At a source that fits, whole takes up to the need; the rest from a smaller one.
-      const ask = b <= want[kind]! ? Math.max(b, want[kind]! - (want[kind]! % b)) : want[kind]!;
+      // Whole takes up to the need while other kinds are open; the remainder waits.
+      const ask = others(kind) && b <= want[kind]! ? want[kind]! - (want[kind]! % b) : want[kind]!;
       want[kind] = want[kind]! - gather(d, id, ask);
       eatIfHungry(d);
     }
