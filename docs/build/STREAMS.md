@@ -1329,3 +1329,11 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **R1-3:** one shared eligibility check, with receipt binding.
   - **Checks:** fast 1,703 pass; a real gate `--only heavy` passed with 67 eligible rows.
   - **Review:** Sol R2 dispatched (`siltwake-stew3-review-r2-sol-9b909ed`). Daily ingest: yes in principle; R2 recommends the mechanism.
+- **LS-1 1b R2 (Sol, `b1642944`): REQUEST CHANGES, 3 P2 findings.**
+  - F2 resolved.
+  - **F1:** the planting estimate uses `locationPower`, not `hostPower`.
+  - **F3:** re-ratchet output drops the exception metadata.
+  - **F4:** the benchmark evidence is invalid; the production fix stands.
+  - **Ruling:** withdraw the timing numbers and prove constant work per step with a counting test.
+  - **Confirmed:** determinism, cache equivalence and procure safety.
+  - **Next:** fixes, then R3.
