@@ -29,7 +29,7 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
-import { canonicalAt, fullTierProblems, ingest, storedRun } from "./heavy-results.mjs";
+import { canonicalAt, canonicalEnv, fullTierProblems, ingest, storedRun, workloadSettings } from "./heavy-results.mjs";
 import { admission, localFacts, machineFor } from "./local-guard.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -87,7 +87,9 @@ export function queueOptions(queue, machineOverride = null, env = process.env) {
   return [...out, "--machine", machine];
 }
 let machineOverride = null;
-const command = (s) => s.queue ? [H, "submit", ...queueOptions(s.queue, machineOverride), "--review", "--", ...s.run] : s.run;
+/** The environment a queued step is submitted with: the heavy step's is canonical (R2-2). */
+const envFor = (s) => (s.results === "heavy" ? canonicalEnv(process.env) : process.env);
+const command = (s) => s.queue ? [H, "submit", ...queueOptions(s.queue, machineOverride, envFor(s)), "--review", "--", ...s.run] : s.run;
 const batchCommand = (ids, extra = []) => [H, "submit", ...queueOptions(BATCH_QUEUE, machineOverride), "--review", "--",
   "node", "scripts/gate.mjs", "--batch", ids.join(","), ...extra];
 
@@ -145,8 +147,8 @@ export function parseBatch(lines) {
 const git = (...a) => spawnSync("git", a, { cwd: root, encoding: "utf8" }).stdout.trim();
 
 /** Submits `argv` (`heavy-check submit …`) and waits for its receipt; the job's last lines are printed as it ends. */
-function submitAndWait(argv, label) {
-  const sub = spawnSync(argv[0], argv.slice(1), { cwd: root, encoding: "utf8" });
+function submitAndWait(argv, label, env = process.env) {
+  const sub = spawnSync(argv[0], argv.slice(1), { cwd: root, encoding: "utf8", env });
   const ticket = (sub.stdout ?? "").trim().split("\n").at(-1) ?? "";
   if (sub.status !== 0 || !/^\d{6}-\d{6}-[a-z0-9]{4}$/.test(ticket))
     return { failure: [`submit failed (exit ${sub.status}): ${(sub.stderr || sub.stdout || "").trim().slice(0, 400)}`], lines: [] };
@@ -226,11 +228,17 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
   };
   const queuedStep = (step) => {
     console.log(`\n── gate: ${step.id} · ${step.what}\n$ ${command(step).join(" ")}`);
-    const t0 = Date.now(), r = submitAndWait(command(step), step.id);
+    // The heavy step tests the canonical workload: the caller's workload settings and budget
+    // overrides stay out of its job (R2-2); the record's own settings are checked below too.
+    const dropped = step.results === "heavy" ? Object.keys(workloadSettings(process.env)) : [];
+    if (dropped.length) console.log(`gate: ${step.id} runs the canonical workload, without ${dropped.join(", ")}`);
+    const t0 = Date.now(), r = submitAndWait(command(step), step.id, envFor(step));
     const problems = r.failure ?? [...r.waiter, ...receiptProblems(r.receipt, head)];
     if (step.results === "heavy" && !r.failure) {
-      // Stored with the job's receipt (scripts/heavy-results.mjs), wherever it ran.
-      const [ingested] = ingest([r.ticket]);
+      // Stored with the job's receipt (scripts/heavy-results.mjs), wherever it ran. Another
+      // ingest of the same ticket (the daily sweep) may publish it first: that's fine (R2-4).
+      let ingested;
+      try { [ingested] = ingest([r.ticket]); } catch (e) { ingested = { stored: false, why: `storing it failed: ${e.message}` }; }
       console.log(`gate: ${step.id} results: ${ingested.stored ? `stored ${ingested.files} file rows` : ingested.why} (node scripts/heavy-results.mjs show --commit ${head.slice(0, 12)})`);
       // Eligible (the record agrees with its receipt), the full tier, every file at its
       // canonical budget at the gate's commit: never on the record's own word (R1-1, R1-3).

@@ -34,7 +34,7 @@
 // last, one at a time, in a timing phase of their own. The heavy tier runs only
 // inside scripts/heavy-check.sh (which sets SILTWAKE_HEAVY_LOCK_HELD); `npm run
 // test:heavy` does that.
-import { spawn } from "node:child_process";
+import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { availableParallelism, hostname, tmpdir } from "node:os";
 import { basename, dirname, join, relative, resolve } from "node:path";
@@ -42,7 +42,7 @@ import { fileURLToPath, pathToFileURL } from "node:url";
 import { grantedMemoryMiB, heavyContainment } from "./heavy-containment.mjs";
 import { guardLocalRun } from "./local-guard.mjs";
 import { cacheRoot, closureHash, pruneBuildCache } from "./test-build-cache.mjs";
-import { HARNESS, NEAR_PCT, RECORD_VERSION, cacheState, cacheUse, filesHash, machineLabel, recordLine, treeState } from "./heavy-results.mjs";
+import { HARNESS, NEAR_PCT, RECORD_VERSION, attemptOf, cacheState, fileFacts, filesHash, machineLabel, recordLine, treeState, workloadSettings } from "./heavy-results.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const build = join(root, process.env.SILTWAKE_TEST_BUILD || ".test-build"); // test-build.mjs checks the name
@@ -266,7 +266,16 @@ const heavyRun = {
   override, budgetEvidence: !override,
   // Identity beyond each file's own closure: the dependencies, and the harness that measures.
   lockHash: filesHash(root, ["package-lock.json"]), harnessHash: filesHash(root, HARNESS),
+  // The attempt of the queue ticket this run is (R2-5), and the caller's workload settings (R2-2).
+  attempt: attemptOf(), settings: workloadSettings(),
 };
+const WORKLOAD = Object.keys(heavyRun.settings).length
+  ? `workload settings: ${Object.entries(heavyRun.settings).map(([k, v]) => `${k}=${v}`).join(" ")}; these files may not test what they test by default` : null;
+if (WORKLOAD) console.log(`test-tier: ${WORKLOAD}`);
+// What each file's provenance is judged against (R2-1): the files tracked at the commit,
+// and the inputs a file declares in tests/heavy-inputs.json.
+const tracked = new Set(spawnSync("git", ["-C", root, "ls-files", "-z"], { encoding: "utf8", maxBuffer: 64 * 1024 * 1024 }).stdout?.split("\0").filter(Boolean) ?? []);
+const declaredInputs = (() => { try { return JSON.parse(readFileSync(join(root, "tests", "heavy-inputs.json"), "utf8")).files ?? {}; } catch { return {}; } })();
 /** The file's compiled import closure, named relative to the build (the same in any checkout), with the runtime. */
 const closureOf = (file) => { try { return closureHash([pathToFileURL(file).href], undefined, build); } catch { return null; } };
 let fileSeq = 0;
@@ -287,7 +296,9 @@ function runHeavy(file, phase = "pool") {
   const budget = budgetMiB(file), started = Date.now(), statsFile = join(scratch, `file-stats-${fileSeq++}`);
   const job = containment.start(process.execPath,
     ["--import", cacheModule, "--import", fileStatsModule, "--test", "--test-isolation=none", "--test-reporter=spec", file],
-    { cwd: root, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, SILTWAKE_HEAVY_FILE_STATS: statsFile } }, budget);
+    // NODE_OPTIONS carries the reporting preload to every node process the file starts (R2-1, R2-3).
+    { cwd: root, stdio: ["ignore", "pipe", "pipe"], env: { ...process.env, SILTWAKE_HEAVY_FILE_STATS: statsFile,
+      NODE_OPTIONS: `${process.env.NODE_OPTIONS ?? ""} --import=${fileStatsModule}`.trim() } }, budget);
   const output = [];
   job.child.stdout.on("data", (d) => { output.push(d); heartbeat(); });
   job.child.stderr.on("data", (d) => { output.push(d); heartbeat(); });
@@ -308,11 +319,14 @@ function runHeavy(file, phase = "pool") {
       const { code, signal, seconds } = exited, { peakMiB, killed, cpuS, oomKillsOwn, oomKillsNested } = result;
       const status = killed ? "KILLED (over budget)" : code === 0 ? "ok" : `FAIL (exit ${code ?? signal})`;
       if (status !== "ok") failed = true;
-      let own = null;
-      try { own = JSON.parse(readFileSync(`${statsFile}.${job.child.pid}`, "utf8")); } catch { /* the process died before its exit hook */ }
+      // Every report from this file's processes and workers (its own prefix).
+      const prefix = `${basename(statsFile)}.`, reports = [];
+      for (const n of readdirSync(scratch)) if (n.startsWith(prefix)) try { reports.push(JSON.parse(readFileSync(join(scratch, n), "utf8"))); } catch { /* cut */ }
+      const own = reports.find((r) => r.pid === job.child.pid && r.threadId === 0) ?? null;
+      const facts = fileFacts(reports, job.child.pid, { root, build, cacheRoot, tracked, declared: declaredInputs[tsName(file)], tmp: tmpdir() });
       rows.push({ file: basename(file), phase, status, seconds, cpuS: cpuS ?? (own ? own.cpuMs / 1000 : null), cpuScope: cpuS != null ? "tree" : own ? "process" : null,
         peakMiB, budgetMiB: budget, budgetPct: budget ? Math.round((peakMiB / budget) * 1000) / 10 : null, oomKillsOwn, oomKillsNested,
-        cache: own?.cache ?? null, cacheUse: cacheUse(own?.cache ?? null), closure: closureOf(file) });
+        cache: facts.cache, cacheUse: facts.cacheUse, closure: closureOf(file), provenance: facts.provenance });
       if (killed) console.error(`test-tier: ${basename(file)} went over its ${budget} MiB budget (whole process tree).`);
       done();
     });
@@ -363,11 +377,12 @@ console.log(`\ntest:heavy summary at ${String(heavyRun.commit).slice(0, 12)}${he
   `peak = the file's whole process tree (${containment.kind} containment), against its budget; job memory limit ${heavyRun.jobMemoryMiB ?? "none"} MiB, ` +
   `pool ${poolMiB} MiB, up to ${concurrency} files at once; build cache ${heavyRun.cache.state} at the start (${heavyRun.cache.entries} entries)`);
 if (NOT_EVIDENCE) console.log(`  ${NOT_EVIDENCE}`);
+if (WORKLOAD) console.log(`  ${WORKLOAD}`);
 for (const r of rows) {
   const oom = r.oomKillsOwn || r.oomKillsNested ? `  oom-killed ${r.oomKillsOwn ?? "?"} own + ${r.oomKillsNested ?? "?"} nested` : "";
   const cache = r.cache ? `  cache ${r.cache.hits} hit/${r.cache.fills} fill (${r.cacheUse})` : "";
   console.log(`  ${r.file.padEnd(36)} ${r.seconds.toFixed(1).padStart(6)} s  cpu ${fmt(r.cpuS).padStart(6)} s  peak ${String(r.peakMiB).padStart(5)} MiB / ${r.budgetMiB} MiB` +
-    `${cache}${oom}  ${r.status}` + (r.wait ? `  [timing; CPU wait: job ${r.wait.job ?? "?"}%, host ${r.wait.host ?? "?"}%]` : ""));
+    `${cache}${oom}${r.provenance?.complete === false ? "  inputs not fully known" : ""}  ${r.status}` + (r.wait ? `  [timing; CPU wait: job ${r.wait.job ?? "?"}%, host ${r.wait.host ?? "?"}%]` : ""));
 }
 console.log(`  total ${rows.reduce((t, r) => t + r.seconds, 0).toFixed(1)} s of file time in ${((Date.now() - started) / 1000).toFixed(1)} s ` +
   `(up to ${concurrency} files within ${poolMiB} MiB of budgets at once)`);

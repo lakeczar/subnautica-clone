@@ -36,18 +36,20 @@
 //   node scripts/heavy-results.mjs ingest [TICKET...]   copy new records from the queue's job logs
 //   node scripts/heavy-results.mjs show [--commit SHA] [--machine LABEL] [--file NAME] [--eligible] [--json]
 //   node scripts/heavy-results.mjs near [--pct 85] [--commit SHA]   eligible files at or over pct of budget
+//   node scripts/heavy-results.mjs sweep [--max 200]        the daily sweep (scripts/heavy-results-timer.sh installs it)
+//   node scripts/heavy-results.mjs sweep-status              exit 1 if no sweep succeeded in the last 36 h
 //   node scripts/heavy-results.mjs control --commit SHA --file NAME [--like TICKET]
 //       eligible control rows at that exact commit; with --like, only those comparable to
 //       that stored run's row for the file
 import { createHash } from "node:crypto";
 import { spawnSync } from "node:child_process";
-import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, writeFileSync } from "node:fs";
+import { existsSync, linkSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { hostname } from "node:os";
-import { join, resolve } from "node:path";
+import { join, relative, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
 export const RECORD_LINE = "heavy-results: ";
-export const RECORD_VERSION = 2;
+export const RECORD_VERSION = 3;
 /** The share of a file's budget its peak may reach before it is reported as near. */
 export const NEAR_PCT = 85;
 /** The canonical budgets, relative to the repository root. */
@@ -56,6 +58,49 @@ export const CANONICAL_BUDGETS = "tests/heavy-budgets.json";
 export const HARNESS = ["scripts/test-tier.mjs", "scripts/heavy-containment.mjs", "scripts/test-build-cache.mjs", "scripts/test-heavy-file.mjs"];
 const MACHINES = { "factory-worker": "RTX 3090 (factory-worker)", "siltwake-alickers": "RTX 4070 Laptop (alickers, shared desktop host)" };
 export const machineLabel = (host = hostname()) => MACHINES[host] ?? host;
+/**
+ * Environment that isn't a workload setting: the queue's grants and job variables, the
+ * guard's, the tier's own plumbing and the results store. Budget overrides are their own
+ * thing (`override`). Every other SILTWAKE_* variable, NODE_OPTIONS and the few others a
+ * heavy test reads can change what a file tests (SILTWAKE_TIMELINE_SEQUENCES=0 runs no
+ * sequence at all), so it is a workload setting: recorded, labelled, and part of a
+ * row's conditions (STEW-3 R2-2).
+ */
+const NOT_WORKLOAD = new Set(["SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_HEAVY_SCOPE", "SILTWAKE_HEAVY_CGROUP", "SILTWAKE_HEAVY_CONCURRENCY", "SILTWAKE_HEAVY_POOL_MIB",
+  "SILTWAKE_GPU_LEASE", "SILTWAKE_LANE_TICKET", "SILTWAKE_SOAK_MACHINE", "SILTWAKE_HEAVY_FILE_STATS", "SILTWAKE_HEAVY_CHECK", "SILTWAKE_RESULTS_DIR",
+  "SILTWAKE_LOCAL_OVERRIDE", "SILTWAKE_LOCAL_OVERRIDE_LOGGED", "SILTWAKE_GUARD_STRICT", "SILTWAKE_TEST_BUILD", "SILTWAKE_HEAVY_BUDGET_MIB", "SILTWAKE_HEAVY_BUDGETS"]);
+const NOT_WORKLOAD_PREFIX = /^SILTWAKE_(JOB_|SCHED_)/;
+/** Workload variables outside SILTWAKE_* that heavy tests read. */
+export const OTHER_WORKLOAD = ["NODE_OPTIONS", "JOURNEY_TRACE", "LC_VERBOSE"];
+export const isWorkloadKey = (k) => (k.startsWith("SILTWAKE_") && !NOT_WORKLOAD.has(k) && !NOT_WORKLOAD_PREFIX.test(k)) || OTHER_WORKLOAD.includes(k);
+/** The caller's workload settings, sorted by name ({} for the canonical workload). */
+export function workloadSettings(env = process.env) {
+  const out = {};
+  for (const k of Object.keys(env).sort()) {
+    if (!isWorkloadKey(k) || env[k] == null) continue;
+    // The tier's own reporting preload, carried to a nested run's processes, isn't a setting.
+    const v = k === "NODE_OPTIONS" ? env[k].split(/\s+/).filter((t) => t && !/^--import=\S*\/scripts\/test-heavy-file\.mjs$/.test(t)).join(" ") : env[k];
+    if (v !== "") out[k] = v;
+  }
+  return out;
+}
+/** `env` with every workload setting and budget override removed: what the gate's heavy step runs with. */
+export const canonicalEnv = (env = process.env) =>
+  Object.fromEntries(Object.entries(env).filter(([k]) => !isWorkloadKey(k) && k !== "SILTWAKE_HEAVY_BUDGET_MIB" && k !== "SILTWAKE_HEAVY_BUDGETS"));
+
+/**
+ * Which attempt of a queue ticket this process runs in (STEW-3 R2-5): `local` inside a
+ * job here, `alickers:a<N>` inside attempt N on the second worker (its lane runs the job
+ * with that attempt's own directory: …/jobs/<ticket>/a<N>/heartbeat), null outside the queue.
+ */
+export function attemptOf(env = process.env) {
+  if (env.SILTWAKE_JOB_TICKET) return "local";
+  if (env.SILTWAKE_LANE_TICKET) { const m = /\/a(\d+)\/heartbeat$/.exec(env.SILTWAKE_JOB_HEARTBEAT ?? ""); return m ? `alickers:a${m[1]}` : "alickers:?"; }
+  return null;
+}
+/** The attempt a receipt reports on: the job's terminal attempt. */
+export const terminalAttempt = (rc) => (rc?.remote ? `alickers:a${rc.attempts ?? 1}` : "local");
+
 export const resultsDir = (env = process.env) => join(env.SILTWAKE_RESULTS_DIR || "/work/tmp/siltwake-results", "heavy");
 const schedDir = (env = process.env) => env.SILTWAKE_SCHED_DIR || "/work/tmp/siltwake-sched";
 
@@ -89,24 +134,113 @@ export function cacheUse(cache) {
   return hit && fill ? "mixed" : hit ? "hit" : fill ? "fill" : "none";
 }
 
+/**
+ * One file's facts from the reports of its processes and workers (scripts/test-heavy-file.mjs),
+ * for its stored row (STEW-3 R2-1, R2-3). `rootPid`: the file's own process.
+ * ctx: { root, build, cacheRoot, tracked: Set of repo-relative tracked paths, declared:
+ * { generated: [prefixes], external: [prefixes], programs: [names], workers: bool }, tmp }.
+ * Returns { cache, cacheUse, provenance: { complete, why, inputs, inputsHash, unobserved } }.
+ *
+ * - Cache: summed over the processes that had a build-cache store. A descendant that
+ *   never reported (not node, started without the preload, or a worker thread, which
+ *   preloads don't reach) makes it `unknown`, unless declared.
+ * - Inputs: every module loaded and file read, by any of them. Each is accounted for:
+ *   node_modules (the lockfile), /proc, /sys and /dev, the build cache (cache use), and
+ *   anything the file's own processes created or wrote, aren't inputs; a file tracked at
+ *   the commit, or compiled into the build from one, is bound to the commit; a declared
+ *   generated or external path is hashed as the run found it. Anything else (an ignored
+ *   or generated file, a read outside the repository) makes the provenance incomplete.
+ *   `inputsHash` covers every bound and declared input's path and content.
+ */
+export function fileFacts(reports, rootPid, ctx) {
+  const why = [], declared = ctx.declared ?? {};
+  const root = reports.find((r) => r.pid === rootPid && r.threadId === 0);
+  if (!root) why.push("the file's own process didn't report (it died before its exit hook)");
+  // Descendants: matched by pid (processes) or pid and thread (workers).
+  const reported = new Set(reports.map((r) => `${r.pid}.${r.threadId}`)), unobserved = [];
+  for (const r of reports) {
+    for (const s of r.spawned ?? []) if (!(s.pid && reported.has(`${s.pid}.0`)) && !(declared.programs ?? []).includes(s.cmd)) unobserved.push(s.cmd);
+    for (const t of r.workers ?? []) if (!reported.has(`${r.pid}.${t}`) && !declared.workers) unobserved.push(`worker thread ${t}`);
+  }
+  if (unobserved.length) why.push(`started what never reported: ${[...new Set(unobserved)].slice(0, 4).join(", ")}`);
+  let cache = null;
+  for (const r of reports) if (r.store && r.cache) { cache ??= { hits: 0, misses: 0, fills: 0, fillMs: 0 }; for (const k of Object.keys(cache)) cache[k] += r.cache[k] ?? 0; }
+  const use = !root ? null : unobserved.length ? "unknown" : cacheUse(cache ?? { hits: 0, misses: 0, fills: 0, fillMs: 0 });
+  // Inputs.
+  const under = (p, dir) => dir && (p === dir || p.startsWith(dir.endsWith("/") ? dir : `${dir}/`));
+  const produced = reports.flatMap((r) => r.produced ?? []);
+  const isProduced = (p) => produced.some((d) => under(p, d));
+  const files = new Set();
+  const expand = (p) => {
+    let st; try { st = statSync(p); } catch { files.add(p); return; } // absent now: still an input, hashed as absent
+    if (!st.isDirectory()) { files.add(p); return; }
+    for (const e of readdirSync(p)) expand(join(p, e));
+  };
+  for (const r of reports) for (const p of [...(r.loads ?? []), ...(r.reads ?? [])]) {
+    if (p.split("/").includes("node_modules") || /^\/(proc|sys|dev)(\/|$)/.test(p) || under(p, ctx.cacheRoot) || isProduced(p)) continue;
+    expand(p);
+  }
+  const bound = (p) => {
+    const rel = relative(ctx.root, p);
+    if (rel.startsWith("..")) return false;
+    if (ctx.tracked.has(rel)) return true;
+    const b = relative(ctx.build, p);
+    if (b.startsWith("..")) return false;
+    const m = /^(.*)\.(js|js\.map|json)$/.exec(b);
+    return Boolean(m) && (m[2] === "json" ? [b] : [".ts", ".tsx", ".mts"].map((x) => m[1] + x)).some((src) => ctx.tracked.has(src));
+  };
+  const declaredPath = (p) => (declared.generated ?? []).some((d) => under(p, join(ctx.root, d))) || (declared.external ?? []).some((d) => under(p, d));
+  const hash = createHash("sha256"), unknown = [];
+  let inputs = 0;
+  for (const p of [...files].sort()) {
+    if (under(p, ctx.cacheRoot) || isProduced(p)) continue;
+    if (!bound(p) && !declaredPath(p)) { unknown.push(relative(ctx.root, p).startsWith("..") ? p : relative(ctx.root, p)); continue; }
+    inputs++;
+    hash.update(relative(ctx.root, p)).update("\0");
+    try { hash.update(readFileSync(p)); } catch { hash.update("<absent>"); }
+    hash.update("\0");
+  }
+  if (unknown.length) why.push(`read inputs the commit doesn't determine: ${unknown.slice(0, 3).join(", ")}${unknown.length > 3 ? ` and ${unknown.length - 3} more` : ""}`);
+  return { cache, cacheUse: use, provenance: { complete: why.length === 0, why, inputs, inputsHash: hash.digest("hex").slice(0, 16), unobserved: [...new Set(unobserved)] } };
+}
+
 /** What a row measured: the commit and the code under test. Two arms of an A/B differ here by design. */
-export const identityOf = (run, row) => ({ commit: run.commit, file: row.file, closure: row.closure ?? null, lock: run.lockHash ?? null, harness: run.harnessHash ?? null });
+export const identityOf = (run, row) => ({ commit: run.commit, file: row.file, closure: row.closure ?? null, inputs: row.provenance?.inputsHash ?? null,
+  lock: run.lockHash ?? null, harness: run.harnessHash ?? null });
 
 /** The conditions a row was measured under: equal for any two rows compared. */
 export const conditionsOf = (run, row) => ({
   machine: run.machine, containment: run.containment, jobMemoryMiB: run.jobMemoryMiB, poolMiB: run.poolMiB, concurrency: run.concurrency,
   jobCpus: run.jobCpus ?? null, budgetMiB: row.budgetMiB, phase: row.phase, node: run.node, cacheUse: row.cacheUse ?? cacheUse(row.cache),
+  settings: JSON.stringify(run.settings ?? null),
 });
 
 /** The record's text line. */
 export const recordLine = (record) => `${RECORD_LINE}${JSON.stringify(record)}`;
 
-/** Records in a job's output, oldest first (v1 records are kept for reading, never eligible). */
+/** Why `r` isn't a complete record of its version (empty: it is). Older versions are kept for reading, never eligible. */
+export function schemaProblems(r) {
+  if (!r || typeof r !== "object" || !Array.isArray(r.files)) return ["not a record"];
+  if (r.v !== RECORD_VERSION) return r.v >= 1 && r.v < RECORD_VERSION ? [] : [`unknown record version ${r.v}`];
+  const p = [], str = (k) => typeof r[k] === "string" || r[k] === null, num = (o, k) => typeof o[k] === "number" && Number.isFinite(o[k]);
+  for (const k of ["at", "machine", "containment", "node", "lockHash", "harnessHash"]) if (typeof r[k] !== "string") p.push(`run.${k}`);
+  for (const k of ["commit", "ticket", "attempt"]) if (!str(k)) p.push(`run.${k}`);
+  if (typeof r.dirty !== "boolean" && r.dirty !== null) p.push("run.dirty");
+  if (typeof r.budgetEvidence !== "boolean" || !r.cache || !r.selection || typeof r.settings !== "object" || r.settings === null) p.push("run context");
+  if (r.selection && r.selection.files !== r.files.length) p.push(`the selection names ${r.selection.files} files, the record holds ${r.files.length}`);
+  for (const f of r.files) {
+    if (typeof f?.file !== "string" || typeof f.status !== "string" || !num(f, "seconds") || !num(f, "peakMiB") || !num(f, "budgetMiB") || !f.provenance || typeof f.provenance.complete !== "boolean")
+      { p.push(`row ${f?.file ?? "?"}`); break; }
+  }
+  return p;
+}
+
+/** Complete records in a job's output, oldest first; cut, unknown or incomplete lines are skipped. */
 export function recordsIn(text) {
   const out = [];
   for (const line of String(text).split("\n")) {
     if (!line.startsWith(RECORD_LINE)) continue;
-    try { const r = JSON.parse(line.slice(RECORD_LINE.length)); if ((r?.v === 1 || r?.v === RECORD_VERSION) && Array.isArray(r.files)) out.push(r); } catch { /* a cut line */ }
+    try { const r = JSON.parse(line.slice(RECORD_LINE.length)); if (schemaProblems(r).length === 0) out.push(r); } catch { /* a cut line */ }
   }
   return out;
 }
@@ -142,10 +276,28 @@ export function eligibility(stored, run, row = null) {
     if (rc.machine !== run?.machine) p.push(`its receipt ran on ${rc.machine}, the record claims ${run?.machine}`);
   }
   if (run?.ticket !== stored?.ticket) p.push(`the record is from ticket ${run?.ticket}, stored under ${stored?.ticket}`);
+  // A ticket can run more than once (an any job whose alickers attempt lost its receipt
+  // reruns here); only the attempt the receipt reports on is that receipt's evidence.
+  if (rc && run?.v >= RECORD_VERSION && run.attempt !== terminalAttempt(rc)) p.push(`from attempt ${run.attempt}, not the job's terminal attempt (${terminalAttempt(rc)}): an abandoned attempt`);
   if (run?.dirty !== false) p.push("the tree had uncommitted changes (or its state is unknown)");
   if (!run?.budgetEvidence) p.push(`not budget evidence (${run?.override ? `override: ${JSON.stringify(run.override)}` : "non-canonical budgets"})`);
   if (row && row.status !== "ok") p.push(`${row.file} didn't pass (${row.status})`);
   return p;
+}
+
+/**
+ * Publishes `value` at `target` once (STEW-3 R2-4): written to a temporary file of this
+ * process's own, then hard-linked into place, which fails if `target` exists, so
+ * concurrent ingests (the gate's and a sweep's) never clobber or trip over each other.
+ * Returns true when this call published it, false when it was already there.
+ */
+export function publish(target, value) {
+  mkdirSync(join(target, ".."), { recursive: true });
+  const tmp = `${target}.${process.pid}.${Math.random().toString(36).slice(2)}.tmp`;
+  writeFileSync(tmp, JSON.stringify(value));
+  try { linkSync(tmp, target); return true; }
+  catch (e) { if (e.code === "EEXIST") return false; throw e; }
+  finally { rmSync(tmp, { force: true }); }
 }
 
 /**
@@ -159,18 +311,16 @@ export function ingest(tickets = null, env = process.env) {
   const out = [];
   for (const id of ids) {
     const target = join(runs, `${id}.json`);
-    if (existsSync(target)) { out.push({ ticket: id, stored: false, why: "already stored" }); continue; }
+    if (existsSync(target)) { out.push({ ticket: id, stored: false, already: true, why: "already stored" }); continue; }
     const exit = readJson(join(jobs, id, "exit.json"));
     if (!exit) { out.push({ ticket: id, stored: false, why: "not finished" }); continue; }
     let text = "";
     try { text = readFileSync(join(jobs, id, "output.log"), "utf8"); } catch { /* no output */ }
     const records = recordsIn(text);
     if (!records.length) { out.push({ ticket: id, stored: false, why: "no heavy-results record" }); continue; }
-    mkdirSync(runs, { recursive: true });
     const stored = { v: RECORD_VERSION, ticket: id, ingestedAt: new Date().toISOString(), receipt: receiptOf({ ticket: id, ...exit }), runs: records };
-    writeFileSync(`${target}.tmp`, JSON.stringify(stored));
-    renameSync(`${target}.tmp`, target);
-    out.push({ ticket: id, stored: true, runs: records.length, files: records.reduce((n, r) => n + r.files.length, 0) });
+    out.push(publish(target, stored) ? { ticket: id, stored: true, runs: records.length, files: records.reduce((n, r) => n + r.files.length, 0) }
+      : { ticket: id, stored: false, already: true, why: "already stored" });
   }
   return out;
 }
@@ -197,11 +347,17 @@ export function canonicalAt(root, commit) {
  * every heavy file there, each at its canonical budget.
  */
 export function fullTierProblems(stored, commit, canonical = null) {
-  const runs = stored?.runs ?? [];
-  if (!runs.length) return ["its per-file heavy results weren't recorded (no heavy-results record in the job's output)"];
+  const all = stored?.runs ?? [];
+  if (!all.length) return ["its per-file heavy results weren't recorded (no heavy-results record in the job's output)"];
+  // The record from the attempt the receipt reports on (R2-5): an earlier, abandoned
+  // attempt's records stay in the store as diagnostics and never decide the gate.
+  const terminal = stored.receipt ? terminalAttempt(stored.receipt) : null;
+  const runs = all.filter((r) => r.v >= RECORD_VERSION && r.attempt === terminal).slice(-1);
+  if (!runs.length) return [`no complete v${RECORD_VERSION} record from the job's terminal attempt (${terminal ?? "no receipt"}); records seen from: ${[...new Set(all.map((r) => r.attempt ?? `v${r.v}`))].join(", ")}`];
   const problems = [];
   for (const r of runs) {
     problems.push(...eligibility(stored, r));
+    if (Object.keys(r.settings ?? {}).length) problems.push(`ran with workload settings (${Object.keys(r.settings).join(", ")}): not the canonical workload`);
     if (r.selection?.kind !== "full") problems.push(`ran ${r.selection?.files ?? "?"} chosen files, not the full heavy tier`);
     if (r.commit !== commit) problems.push(`its results are for ${String(r.commit).slice(0, 12)}, not ${commit.slice(0, 12)}`);
     if (canonical) {
@@ -237,8 +393,16 @@ export const nearBudget = (rows, pct = NEAR_PCT) =>
  * (empty: it can). Identity: exactly that commit, the same file, the same harness.
  * Conditions: all equal, and a cache use that isn't mixed.
  */
-export function controlProblems(candidate, control, controlCommit) {
+export function controlProblems(candidate, control, controlCommit, peers = []) {
   const p = eligibility(control.stored, control.run, control.row);
+  // Each arm's provenance must be complete: every input it read is known and hashed (R2-1).
+  for (const [arm, r] of [["control", control.row], ["candidate", candidate.row]])
+    if (!r.provenance?.complete) p.push(`the ${arm}'s inputs aren't fully known${r.provenance?.why?.length ? ` (${r.provenance.why.slice(0, 2).join("; ")})` : ""}`);
+  // Two complete runs of the control commit's file under its code but with different inputs:
+  // its generated inputs aren't a function of the commit.
+  const differ = peers.filter((q) => q.run.commit === controlCommit && q.row.file === control.row.file && q.row.closure === control.row.closure &&
+    q.row.provenance?.complete && q.row.provenance.inputsHash !== control.row.provenance?.inputsHash);
+  if (differ.length) p.push(`other runs of ${control.row.file} at that commit read different inputs (${differ.map((q) => q.ticket).slice(0, 2).join(", ")}): not reproducible`);
   if (control.run.commit !== controlCommit) p.push(`it's for ${String(control.run.commit).slice(0, 12)}, not the intended control ${String(controlCommit).slice(0, 12)}`);
   if (control.row.file !== candidate.row.file) p.push(`it measured ${control.row.file}, not ${candidate.row.file}`);
   if (!control.run.harnessHash || control.run.harnessHash !== candidate.run.harnessHash) p.push("a different measuring harness (or an unknown one)");
@@ -246,8 +410,58 @@ export function controlProblems(candidate, control, controlCommit) {
   if (candidate.row.status !== "ok") p.push(`the candidate's ${candidate.row.file} didn't pass`);
   const a = conditionsOf(control.run, control.row), b = conditionsOf(candidate.run, candidate.row);
   for (const k of Object.keys(a)) if (a[k] !== b[k]) p.push(`${k}: ${a[k]} against ${b[k]}`);
-  if (a.cacheUse === "mixed" || a.cacheUse == null) p.push(`its cache use is ${a.cacheUse ?? "unreported"}: neither a cold nor a warm measurement`);
+  if (!["hit", "fill", "none"].includes(a.cacheUse)) p.push(`its cache use is ${a.cacheUse ?? "unreported"}: neither a cold nor a warm measurement`);
   return p;
+}
+
+/** How long without a successful sweep before `sweep-status` reports it overdue (the queue prunes logs at 7 days). */
+export const SWEEP_OVERDUE_H = 36;
+
+/**
+ * The daily sweep (STEW-3, the coordinator's timer): ingests finished jobs not yet
+ * stored or checked, at most `max` per run, skipping logs over `maxLogBytes`. A job
+ * still running is left for the next sweep; a job checked and holding no record is
+ * remembered in the checkpoint, so its log isn't read again. Records are published only
+ * when terminal and complete (ingest, recordsIn). Writes the last-success record that
+ * `sweepStatus` reads. Returns its summary.
+ */
+export function sweep({ max = 200, maxLogBytes = 64 * 1024 * 1024, env = process.env, now = Date.now() } = {}) {
+  const dir = resultsDir(env), jobs = join(schedDir(env), "jobs"), stateFile = join(dir, "sweep-state.json");
+  const state = readJson(stateFile) ?? { checked: {} };
+  let ids = [];
+  try { ids = readdirSync(jobs).sort(); } catch (e) { throw new Error(`the queue's job logs can't be read (${jobs}): ${e.message}`); }
+  const summary = { at: new Date(now).toISOString(), scanned: 0, stored: 0, noRecord: 0, running: 0, tooLarge: [], failures: [], remaining: 0 };
+  for (const id of ids) {
+    if (state.checked[id] || existsSync(join(dir, "runs", `${id}.json`))) continue;
+    if (!existsSync(join(jobs, id, "exit.json"))) { summary.running++; continue; }
+    if (summary.scanned >= max) { summary.remaining++; continue; }
+    summary.scanned++;
+    try {
+      const size = statSync(join(jobs, id, "output.log")).size;
+      if (size > maxLogBytes) { summary.tooLarge.push(id); state.checked[id] = { at: now, why: `log ${size} bytes` }; continue; }
+    } catch { /* no log: ingest says so */ }
+    try {
+      const [r] = ingest([id], env);
+      if (r.stored) summary.stored++;
+      else if (!r.already) { summary.noRecord++; state.checked[id] = { at: now, why: r.why }; }
+    } catch (e) { summary.failures.push(`${id}: ${e.message}`); }
+  }
+  // The checkpoint forgets tickets the queue has pruned (7 days).
+  for (const id of Object.keys(state.checked)) if (!ids.includes(id)) delete state.checked[id];
+  mkdirSync(dir, { recursive: true });
+  const write = (file, value) => { const tmp = `${file}.${process.pid}.tmp`; writeFileSync(tmp, JSON.stringify(value, null, 1)); renameSync(tmp, file); };
+  write(stateFile, state);
+  if (!summary.failures.length) write(join(dir, "sweep-last.json"), summary);
+  return summary;
+}
+
+/** The last successful sweep, and whether it's overdue: { ok, why, last }. */
+export function sweepStatus(env = process.env, now = Date.now()) {
+  const last = readJson(join(resultsDir(env), "sweep-last.json"));
+  if (!last) return { ok: false, why: "no sweep has succeeded yet", last: null };
+  const ageH = (now - Date.parse(last.at)) / 3600000;
+  return ageH > SWEEP_OVERDUE_H ? { ok: false, why: `the last successful sweep was ${ageH.toFixed(1)} h ago (overdue after ${SWEEP_OVERDUE_H} h; the queue prunes logs at 7 days)`, last }
+    : { ok: true, why: `last successful sweep ${ageH.toFixed(1)} h ago: ${last.stored} stored, ${last.scanned} scanned, ${last.remaining} left for the next`, last };
 }
 
 function describe({ ticket, stored, run, row }) {
@@ -285,6 +499,17 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     print(rows);
     process.exit(0);
   }
+  if (cmd === "sweep") {
+    const s = sweep({ max: Number(value("--max") ?? 200) });
+    console.log(`heavy-results sweep: ${s.scanned} scanned, ${s.stored} stored, ${s.noRecord} without a record, ${s.running} still running, ` +
+      `${s.remaining} left for the next sweep${s.tooLarge.length ? `, ${s.tooLarge.length} logs too large` : ""}${s.failures.length ? `; FAILED: ${s.failures.join("; ")}` : ""}`);
+    process.exit(s.failures.length ? 1 : 0);
+  }
+  if (cmd === "sweep-status") {
+    const s = sweepStatus();
+    console.log(`heavy-results: ${s.ok ? "" : "OVERDUE: "}${s.why}`);
+    process.exit(s.ok ? 0 : 1);
+  }
   if (cmd === "control") {
     const commit = value("--commit"), file = value("--file"), like = value("--like");
     if (!commit || !/^[0-9a-f]{40}$/.test(commit) || !file) { console.error("control needs --commit <the full 40-hex clean control SHA> and --file NAME"); process.exit(2); }
@@ -293,11 +518,11 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const cand = all.find((r) => r.ticket === like && r.row.file.startsWith(file));
     if (!cand) { console.error(`no stored row for ${file} under ticket ${like}`); process.exit(2); }
     for (const c of candidates) {
-      const p = controlProblems(cand, c, commit);
+      const p = controlProblems(cand, c, commit, all);
       console.log(`${c.ticket} ${c.row.file}: ${p.length ? `not a control: ${p.join("; ")}` : "a control"}`);
     }
     process.exit(0);
   }
-  console.error("usage: heavy-results.mjs ingest [TICKET...] | show [--commit SHA] [--machine LABEL] [--file NAME] [--eligible] [--json] | near [--pct 85] [--commit SHA] | control --commit SHA --file NAME [--like TICKET]");
+  console.error("usage: heavy-results.mjs ingest [TICKET...] | sweep [--max N] | sweep-status | show [--commit SHA] [--machine LABEL] [--file NAME] [--eligible] [--json] | near [--pct 85] [--commit SHA] | control --commit SHA --file NAME [--like TICKET]");
   process.exit(2);
 }

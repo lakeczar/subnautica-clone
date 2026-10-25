@@ -11,6 +11,7 @@ import assert from "node:assert/strict";
 import { spawnSync } from "node:child_process";
 import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
+import { pathToFileURL } from "node:url";
 
 const root = resolve(".");
 const probes = mkdtempSync(join(root, ".test-build", "heavy-probes-"));
@@ -46,9 +47,11 @@ function runTier(files: readonly string[], mode: (typeof modes)[number], budgetM
   return spawnSync(process.execPath, ["scripts/test-tier.mjs", "heavy", ...files], { cwd: root, encoding: "utf8", env, timeout: 120_000 });
 }
 interface Row { file: string; status: string; cpuS: number | null; cpuScope: string | null; peakMiB: number; budgetMiB: number; budgetPct: number | null;
-  oomKillsOwn: number | null; oomKillsNested: number | null; cache: { hits: number; misses: number; fills: number } | null; cacheUse: string | null; closure: string | null }
+  oomKillsOwn: number | null; oomKillsNested: number | null; cache: { hits: number; misses: number; fills: number } | null; cacheUse: string | null; closure: string | null;
+  provenance: { complete: boolean; why: string[]; inputs: number; inputsHash: string } }
 interface HeavyRecord { commit: string | null; machine: string; containment: string; jobMemoryMiB: number | null; cache: { state: string }; selection: { kind: string };
-  override: { budgetMiB: number | null; budgetsFile: string | null } | null; budgetEvidence: boolean; lockHash: string; harnessHash: string; files: Row[] }
+  override: { budgetMiB: number | null; budgetsFile: string | null } | null; budgetEvidence: boolean; lockHash: string; harnessHash: string; files: Row[];
+  settings: Record<string, string>; attempt: string | null }
 /** The run's stored-results record (STEW-3), from its output. */
 function recordOf(stdout: string): HeavyRecord {
   const line = stdout.split("\n").filter((l) => l.startsWith("heavy-results: ")).at(-1);
@@ -196,5 +199,66 @@ for (const mode of modes) {
     // Fixed dates aren't clock reads.
     const fixed = write(`fixed-date-${tag}`, `test("a fixed date", () => { assert.equal(new Date(0).getTime(), 0); });`);
     assert.equal(tier([fixed], mode, 256, { exclusive: [] }).out.status, 0);
+  });
+}
+
+// STEW-3 R2: a file's cache use and inputs come from all of its processes, through the real runner.
+const cacheUrl = pathToFileURL(join(root, "scripts", "test-build-cache.mjs")).href;
+for (const mode of modes) {
+  const tag = mode.replace(" ", "-");
+  test(`${mode}: a child's build-cache use counts for its file; a child that never reports makes it unknown (R2-3)`, () => {
+    const store = mkdtempSync(join(probes, `cache-${tag}-`));
+    // The child loads the build cache and fills, then on the next run hits, one entry; the file's own process uses nothing.
+    const user = write(`child-cache-${tag}`, `test("a child uses the build cache", () => {
+  const body = "const s = globalThis.__siltwakeBuildCache; const m = [${JSON.stringify(cacheUrl)}]; if (s.get('k', m) === undefined) s.set('k', m, s.fill(() => 1));";
+  const r = spawnSync(process.execPath, ["--import", ${JSON.stringify(cacheUrl)}, "--input-type=module", "-e", body], { env: { ...process.env, SILTWAKE_BUILD_CACHE_DIR: ${JSON.stringify(store)} } });
+  assert.equal(r.status, 0, String(r.stderr));
+});`);
+    const once = tier([user], mode, 512), twice = tier([user], mode, 512);
+    assert.equal(once.out.status, 0, once.out.stdout + once.out.stderr);
+    const [a, b] = [once, twice].map((t) => rowOf(recordOf(t.out.stdout), `child-cache-${tag}`));
+    assert.deepEqual([a!.cacheUse, a!.cache?.hits, a!.cache?.misses, a!.cache?.fills], ["fill", 0, 1, 1], "the cold run fills in the child");
+    assert.deepEqual([b!.cacheUse, b!.cache?.hits], ["hit", 1], "the warm run hits in the child");
+    const silent = write(`silent-child-${tag}`, `test("a child without the preload", () => {
+  const r = spawnSync(process.execPath, ["-e", "0"], { env: { PATH: process.env.PATH } });
+  assert.equal(r.status, 0);
+});`);
+    const r = rowOf(recordOf(tier([silent], mode, 512).out.stdout), `silent-child-${tag}`);
+    assert.equal(r.cacheUse, "unknown");
+    assert.equal(r.provenance.complete, false);
+    assert.match(r.provenance.why.join(), /started what never reported: node/);
+  });
+
+  test(`${mode}: a computed import of a generated module, or a generated fixture, leaves the inputs not fully known (R2-1)`, () => {
+    const gen = join(probes, `gen-${tag}.mjs`), fixture = join(probes, `fixture-${tag}.json`);
+    writeFileSync(gen, "export default 1;\n"); writeFileSync(fixture, "{}");
+    const probe = write(`inputs-${tag}`, `import { readFileSync } from "node:fs";
+test("reads what the commit doesn't determine", async () => {
+  const name = ${JSON.stringify(gen)}.split("").join("");
+  assert.equal((await import(name)).default, 1);
+  assert.equal(readFileSync(${JSON.stringify(fixture)}, "utf8"), "{}");
+});`);
+    const out = tier([probe], mode, 512).out;
+    assert.equal(out.status, 0, out.stdout + out.stderr);
+    const r = rowOf(recordOf(out.stdout), `inputs-${tag}`);
+    assert.equal(r.provenance.complete, false);
+    const why = r.provenance.why.join();
+    assert.ok(why.includes(`gen-${tag}.mjs`) && why.includes(`fixture-${tag}.json`), why);
+    assert.match(out.stdout, /inputs not fully known/);
+  });
+
+  test(`${mode}: a workload setting is recorded and labelled (R2-2)`, async () => {
+    const probe = allocating(`workload-${tag}`, 8);
+    const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_TIMELINE_SEQUENCES: "0", SILTWAKE_HEAVY_BUDGETS: join(probes, `wl-${tag}.json`) };
+    writeFileSync(env.SILTWAKE_HEAVY_BUDGETS!, JSON.stringify({ defaultMiB: 512 }));
+    delete env.SILTWAKE_HEAVY_BUDGET_MIB; delete env.NODE_TEST_CONTEXT;
+    if (mode === "process group") env.SILTWAKE_HEAVY_CGROUP = "";
+    const out = spawnSync(process.execPath, ["scripts/test-tier.mjs", "heavy", probe], { cwd: root, encoding: "utf8", env, timeout: 120_000 });
+    assert.equal(out.status, 0, out.stdout + out.stderr);
+    const rec = recordOf(out.stdout);
+    assert.deepEqual(rec.settings, { SILTWAKE_TIMELINE_SEQUENCES: "0" }, "the tier's own preload in NODE_OPTIONS isn't one");
+    assert.match(out.stdout, /workload settings: SILTWAKE_TIMELINE_SEQUENCES=0; these files may not test what they test by default/);
+    const { attemptOf } = await import(pathToFileURL(join(root, "scripts", "heavy-results.mjs")).href) as { attemptOf(env: NodeJS.ProcessEnv): string | null };
+    assert.equal(rec.attempt, attemptOf(process.env), "the attempt of this queue job");
   });
 }
