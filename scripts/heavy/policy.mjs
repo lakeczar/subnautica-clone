@@ -54,7 +54,87 @@ export const CLASS_NAMES = Object.keys(CLASSES);
 // outages, never faked here; `soak`: alickers first, here only while alickers
 // is paused or unreachable.
 export const MACHINES = ["any", "3090", "4070", "soak"];
-export const defaultMachine = (cls) => (cls === "playthrough" || cls === "heavy-suite" ? "any" : cls === "soak" ? "soak" : "3090");
+// SCHED-3 (DIRECTION, "Balance the two GPUs"): work goes to whichever machine
+// frees first unless the question needs one. Kept here by default: quick (the
+// express slot; shipping a commit costs more than the job), bake (it writes
+// local artifacts) and exclusive (it measures the 3090). Soak has its own tag.
+const LOCAL_CLASSES = new Set(["quick", "bake", "exclusive"]);
+export const defaultMachine = (cls) => (cls === "soak" ? "soak" : LOCAL_CLASSES.has(cls) ? "3090" : "any");
+
+// Portability is declared, never inferred (SCHED-3 R1-F1): a command's argv
+// can't show what its scripts import, read from the environment or write. An
+// `any` job goes to alickers only if its command is one of ours proven
+// self-contained (it compiles and consumes its builds inside the job, writes
+// nothing the caller needs back, and a suite or the gate runs it there), or
+// its caller asked for `--machine any|4070` and so declares it, with its
+// outputs as --artifact. Add a command here only once a suite proves it.
+// A registered command placed by default runs through the portable runner
+// (portable-run.mjs, R3): `run` is its arguments there, never npm.
+const same = (a, b) => a.length === b.length && a.every((x, i) => x === b[i]);
+const PORTABLE = [
+  { name: "the fast tier", match: (a) => (same(a, ["npm", "test"]) ? ["--script", "test"] : same(a, ["npm", "run", "test:fast"]) ? ["--script", "test:fast"] : null) },
+  // Not the heavy tier: package.json's test:heavy queues its own command with --machine any (R4-F2).
+  // The gate's playthrough (scripts/gate.mjs): it compiles first and writes nothing back.
+  { name: "the playthrough", match: (a) => (same(a.slice(0, 3), ["npm", "run", "playthrough"]) &&
+    (a.length === 3 || (a[3] === "--" && a.slice(4).every((x, i, r) => x === "--quiet" || x === "--jobs" || (r[i - 1] === "--jobs" && /^\d+$/.test(x))))) ? ["--script", "playthrough", ...a.slice(4)] : null) },
+];
+/** The registered portable command `argv` is: { name, run } (the runner's arguments), or null. */
+export function portableCommand(argv) {
+  const a = argv.map(String);
+  for (const p of PORTABLE) { const run = p.match(a); if (run) return { name: p.name, run }; }
+  return null;
+}
+export const UNDECLARED = "portability not declared: pass --machine any and --artifact for its outputs";
+
+// A conservative intent check before the runner (R3): settings in the
+// submitter's environment that the runner would drop. With any, a default
+// `any` runs here as submitted (base behaviour), naming them. Not a list of
+// what changes each command: any SILTWAKE_* the queue doesn't own (a test
+// selector, a cache mode, …), any NODE_*, and any npm_config_* but npm's own
+// descriptive exports. userconfig, globalconfig and prefix select config
+// files, so they always count, inside an `npm run` too (R4-F2): a default
+// submitted from an npm script runs here; a script that means to balance says
+// --machine any, as test:heavy does.
+/** The queue's own variables: its configuration, and what it sets for each job on either machine. */
+export const QUEUE_OWNED = (k) => /^SILTWAKE_(SCHED_|JOB_|LANE_)/.test(k) ||
+  ["SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_HEAVY_CGROUP", "SILTWAKE_HEAVY_CONCURRENCY", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_HEAVY_CHECK",
+    "SILTWAKE_GPU_LEASE", "SILTWAKE_SOAK_MACHINE", "SILTWAKE_TEST_BUILD", "BAKE_WORKERS"].includes(k);
+const NPM_DESCRIPTIVE = new Set(["global_prefix", "local_prefix", "npm_version", "cache", "init_module", "node_gyp", "noproxy", "user_agent", "allow_scripts", "loglevel"]);
+/** The submitter's settings a default `any` must not drop, sorted. */
+export function intentEnv(env) {
+  return Object.keys(env).filter((k) => {
+    if (env[k] == null || env[k] === "") return false;
+    if (k.startsWith("SILTWAKE_")) return !QUEUE_OWNED(k);
+    if (k.startsWith("NODE_")) return true;
+    return k.toLowerCase().startsWith("npm_config_") && !NPM_DESCRIPTIVE.has(k.slice(11).toLowerCase());
+  }).sort();
+}
+
+/**
+ * The machine a request resolves to. `why`: a reason it can't run on alickers
+ * (the lane's eligibility), or null. `explicit`: the caller passed --machine.
+ * `portable`: the registered command (portableCommand). `intent`: the
+ * submitter's settings the runner would drop (intentEnv).
+ * - with a reason, `any` goes to the 3090, recording why (`routed`, on the
+ *   ticket and its result), and `4070` is refused;
+ * - an `any` the caller didn't ask for goes to the 3090 too, as submitted, if
+ *   its command is unregistered (UNDECLARED) or its settings show an intent;
+ * - every other tag stands (`soak` runs here by its own rule).
+ * Returns { machine, routed? } or { error }.
+ */
+export function resolveMachine(machine, why, { explicit, portable, intent = [] }) {
+  if (why) {
+    if (machine === "4070") return { error: `--machine 4070 runs on alickers, but ${why}` };
+    if (machine === "any") return { machine: "3090", routed: { from: "any", reason: why } };
+    return { machine };
+  }
+  if (machine === "any" && !explicit && !portable) return { machine: "3090", routed: { from: "any", reason: UNDECLARED } };
+  if (machine === "any" && !explicit && intent.length)
+    return { machine: "3090", routed: { from: "any", reason: `local configuration ${intent.join(", ")} changes this command; pass --machine any to declare it portable` } };
+  return { machine };
+}
+/** What a ticket that never ran was planned for (its result's `planned`; R1-F3). */
+export const plannedFor = (goal) => ({ any: "any machine", "3090": "RTX 3090 (factory-worker)", "4070": "RTX 4070 Laptop (alickers)", soak: "alickers first (soak)" })[goal?.machine] ?? "RTX 3090 (factory-worker)";
 export const MACHINE_LABELS = Object.freeze({
   local: "RTX 3090 (factory-worker)",
   remote: "RTX 4070 Laptop (alickers, shared desktop host)",

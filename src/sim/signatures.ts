@@ -199,9 +199,13 @@ function tag(s: GameState, v: VehicleState, p: CraftProfile): SignatureOutcome {
 }
 /** Records a finished tag in the journal, as a scan or a visit would. */
 function fileTag(s: GameState, t: Taggable): string {
+  // Seeing is not capturing (LS-1): a tag marks the site; its data is captured only at the logger.
   if (t.what === "site") {
-    const fresh = discoverSite(s.systems, t.key);
-    return fresh.length ? `data captured: ${fresh.map((d) => DECODABLES[d].label).join(", ")}. Decode it at a decoder module.` : "already in the journal.";
+    if (s.systems.found.some((d) => DECODABLES[d].site === t.key)) return "already in the journal.";
+    const id = `tag:${t.key}`;
+    if (s.systems.beacons.some((b) => b.id === id)) return "already marked on the chart.";
+    s.systems.beacons.push({ id, name: t.label.slice(0, BEACON_NAME_MAX), category: "site", position: { ...t.position }, source: "decode" });
+    return "marked on the chart. Reach its logger to capture the data.";
   }
   if (s.knowledge.scans.includes(t.key)) return "already in the journal.";
   s.knowledge.scans.push(t.key);

@@ -1,6 +1,7 @@
 // POI-1 3090 session (copied from ATM-1): one task-owned headless Chrome (ANGLE GL-EGL, RTX 3090), ordinary keys only, driven turn by
 // turn over a loopback control API (after the M2 audit's server). Serves two dists so the same pose can be shot
-// before and after. Run it through scripts/heavy-check.sh with a deadline of at most 25 minutes; POST /quit closes it.
+// before and after. Run it through scripts/heavy-check.sh --class gpu --machine 3090 (it serves prebuilt dists from this machine, so it
+// isn't portable to alickers) with a deadline of at most 25 minutes; POST /quit closes it.
 // usage: node server.mjs <beforeDist> <afterDist> <gamePortBefore> <gamePortAfter> <ctlPort> <outDir>
 import { createRequire } from "node:module";
 import { createServer } from "node:http";

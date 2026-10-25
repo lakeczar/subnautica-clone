@@ -1084,3 +1084,228 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Findings:** P2 the gate still clears frames by VM-wide or CPU-time heuristics, extends stale states and treats a futex as GPU evidence; P2 graphics loss drops entry readiness; P2 light recovery skips the current-actor safe-point recheck. Tour 1's 95.2 ms `regions` (`art.update`) frame may be game work (first-use JIT and the like); its "unsampled" verdict is correct (the sampler runs on the orchestration event loop). Canary: AMEND.
   - **Decisions:** fix R4-1/2/3; a sampler-reliability fix (a dedicated worker, coverage and heartbeat) instead of the co-located canary; one exclusive rerun of tour 1 and deep 2; compose root per Sol's integration section (6 conflicts, hazards into the registered table, rebake and verify, zero shell fallbacks), with the composed gate through the queue.
   - **If still unproven:** provisional integration with open measurement compromises (deep 2: Fleet host pinning; tour 1: the harness, with the `regions` frame left open as possible game work), then R5 on the composed candidate.
+- **PACE-1 plan revision 1 at `11e9c26e`:**
+  - **Evidence, not a shopping list:** a lattice-seal air housing at the Divide dock; empty "works staging power" cradles at the Rift; the Rift plan grant withdrawn; the bot's pre-budget deleted, so it reserves only for known recipes and seen clues.
+  - **Adverse cases:** A1 clue read (one visit), A2 lattice clue missed (one return), A3 core clue missed (one side trip).
+  - **41 min:** scoped as one estimate beside a crown scenario (25–30 min).
+  - **Carrier:** its fabrication is F9 in stage 2.
+  - **Lore rulings (coordinator):** the fixtures approved; the optional decoded line via LS-1; L14's lead moves from C07 to `district_controller` (the pod record becomes a post-reveal optional return), with a provenance check for saves holding L14.
+  - **Review:** a short Sol R2 to follow, after the lore fold-in.
+- **PACE-1 lore rulings folded in at `d9aaa570`:** F10 moves L14 and the pod-buffer plan to `district_controller`, with a `LEGACY_GRANTS` row `{bp_pod_buffer, C07}` at the next schema step; the fixtures and optional line pass the lint; stage 1 measures both return scenarios. Short Sol R2 running (`siltwake-pace1-plan-review-r2-sol-d9aaa57`).
+- **PACE-1 plan R2** (Sol on `d9aaa570`, report on `review/pace-1-r2` `202c3eb6`): R1 F1–F3 resolved.
+  - **One P2 remains:** F10's C07 provenance lives in story discoveries, not scans, and the grant move must land with a schema step.
+  - **Decision:** `LEGACY_GRANTS` rows carry a source kind (scan or discovery); F10 depends on LS-1 1b (compose into 7→8 if 1b is unmerged, else 8→9).
+  - **Next:** the coordinator inspects the one-finding delta.
+- **SCHED-3 R4 fixes done at `7aa88a3d`** (code `d70237bd`): a closed runner grammar (node steps and recursive `npm test`/`npm run`, plain words, executed directly with no shell or npm); the lifecycle exception deleted; `test:heavy` declares `--machine any`; `playthrough` uses `node node_modules/typescript/bin/tsc`. Units 50/50, B28 and B34–B42 10/10, suites 23/27/42 through the queue, and a real runner playthrough on the 4070. Sol R5 (install decision) running (`siltwake-sched3-review-r5-sol-7aa88a3`).
+- **Owner question (2026-10-24):** abandoned buildings with detailed environmental storytelling. Today they are exteriors and shells plus records; there are no dressed interiors. **ENV-1** (explorable dressed interiors) is proposed: plan now, build after COL-1 B and WK-1. Waiting for the owner's tone choice.
+- **PACE-1 plan ACCEPTED** (Sol R2 plus coordinator inspection of the `60c46046` F4 delta: `LEGACY_GRANTS` rows carry a scan or discovery source kind, and F10 lands with a schema step after LS-1 1b). **Stage 1 started:** the bot plays sensibly (`later.ts` plus a stock planner), measured against LS-1's merged baseline once it lands. LS-1 was told the source-kind table shape for 1b.
+- **STEW-2 R1 fixes done at `2136b023`:**
+  - **Guard:** leases removed; the guard runs directly only in a real job (cgroup path components), on positively identified alickers, or with a logged override; otherwise it re-executes via `heavy-check run` in the foreground (local-product commands pinned to the 3090); an unrunnable queue client refuses with 75; package scripts wrap `X:direct`.
+  - **Other fixes:** F3 a guarded launch order; F4 the shared `cgroup-scope.mjs`; F5 full clock coverage.
+  - **Checks:** fast 1,649/1,649; heavy; a 20-command dry run; a real routed typecheck.
+  - **Review:** Sol R2 running (`siltwake-stew2-review-r2-sol-2136b02`), including SCHED-3 `package.json` composition.
+  - **SCHED-3 follow-ups:** adopt `cgroup-scope.mjs`; stop the queued progress flood (once a second in `heavy-check run`).
+- **SCHED-3 R5** (Sol on `7aa88a3d`, report on `review/sched-3-r5` `36018341`, with the exact post-install canary): REQUEST CHANGES, not installed.
+  - **Findings:** P1 committed symlinks to external npm escape the grammar; P2 signal exits are unfaithful (TERM during the final step yields 0); P2 `test:heavy --machine any` breaks the v1 fallback. Also, STEW-2's guard wrappers would bring npm back inside the runner.
+  - **Decisions:** a `realpath` boundary (repo sources and its own `node_modules`); faithful signal handling; the v1 parser accepts `--machine`; adopt `cgroup-scope.mjs`; quiet the queued-progress output.
+  - **Merge order:** STEW-2 first, then SCHED-3 rebases and adds a guard-wrapper alias that expands `X:direct` under the grammar. R6 on the composed candidate is the install decision.
+- **LS-1 stage 1a R1 fixes done at `dd02c0e7`** (code `4593705d`):
+  - **Fixes:** the real Journal renders the shared model; one placement-aware `readableLog`; `waitFor` causes required at all 15 sites; per-gap debt rows with measured bounds, owners and a two-way ratchet; empty legs reported, not failed.
+  - **Vault:** the ridge vault is now a deduction door ("20··" stencilled plus "…9-3" on the slip; the full code is written nowhere).
+  - **New baseline:** Creel 50.6 min; carrier 94.2 min plus 50.8, 29.8 and 26.5 min gaps; 31 and 55 empty legs reported.
+  - **Checks:** fast 168, heavy, economy, build, playthrough 9/9.
+  - **Review:** short Sol R2 running (`siltwake-ls1-1a-review-r2-sol-dd02c0e`).
+- **STEW-2 R2** (Sol on `2136b023`, report on `review/stew-2-r2` `6190b8f0`): REQUEST CHANGES; 52/52 tests and 6/6 economy steps pass.
+  - **Findings:** P1 the SCHED-3 composition reintroduces npm (the wrapper is an opaque node step); P2 ticketless legacy admission trusts a `siltwake-heavy-*.scope` name pattern; P2 the gate batch ignores the guard's settings-based 3090 pinning.
+  - **Decisions:** F1 belongs to SCHED-3's composition alias (STEW-2 supplies explicit `--machine` and grammar-expressible `X:direct` bodies); legacy admission is tied to the exact granting scope, or refused; the gate uses `routeArgs`. STEW-2 still merges before SCHED-3.
+- **LS-1 stage 1a ACCEPTED** (R2, Sol `d5818cc0` on `review/ls-1-1a-r2`: 41 focused tests, 9/9 playthroughs, 139 matching reloads, timelines reproduce exactly). Merged locally at `a3409226`; gate parts through the queue (`d50c`, `1afd`); no bake-relevant files.
+  - **Hygiene note:** use absolute evidence paths outside the checkout in submissions.
+- **LS-1 stage 1a merged to root at `a3409226`:** fast, build and 6 economy pass (`d50c`); playthrough 9/9 with 15 reloads matching (`1afd`), both run in the queue. The saves export is deferred while REC-1's exclusive is queued (its local compile would disturb); the next export covers `a3409226`, which also brings SIM-PERF-1's `a38b951e` up to date.
+- **SCHED-3 R5 part 1 done at `6045fddc`** (code `f361238e`):
+  - **Fixes:** the `stepBoundary` realpath boundary (repo or its own `node_modules`, checked at submit and again in the runner); faithful signals (128+signo; a stop always wins); the v1 parser accepts `--machine` and `--artifact`; queued progress prints only on change, plus every 5 min. B43 added.
+  - **Checks:** units 55/55, B 11/11, suites 23/27/43 through the queue, fast on the 4070.
+  - **Part 2** (the STEW-2 alias, `cgroup-scope.mjs`, `package.json` composition) waits for STEW-2 on root. R6 on the composed candidate is the install decision.
+- **STEW-2 R2 fixes done at `313dc2a1`** (code `14e1ed2`):
+  - **Fixes:** one literal wrapper shape with explicit `--machine`; all `X:direct` bodies are grammar-expressible node steps; v1 admission is tied to the exact `SILTWAKE_HEAVY_SCOPE` unit, and unproven claims refuse with 75; `machineFor` is the one machine policy for the guard and the gate.
+  - **Checks:** fast 1,653/1,653, heavy 67, a dry run.
+  - **Review:** short Sol R3 running (`siltwake-stew2-review-r3-sol-313dc2a`).
+- **Owner (2026-10-24):** the tone of abandoned places depends on the place (early wonder, somewhat eerie and unsettling later; implication, not gore), recorded in GAME-DIRECTION.
+  - **ENV-1 started** (`siltwake-env1-interiors-plan-opus-84d3447`, plan-first): 4–6 dressed explorable interiors, tone-graded; "the room tells you before the log does"; composes with LS-1, PACE-1, OP-1, COL-1 B and WK-1.
+- **Owner question: an asset pipeline (Blender or other tools).** Today everything is procedural TypeScript geometry: no glTF, no loaders, no Blender. A Sol research pass has started (`siltwake-research-asset-pipeline-sol-84d3447`): headless Blender, procedural, hybrid, glTF-Transform, KTX2, CC0 libraries, AI generation; Babylon fit, budgets, a pipeline in the bake, provenance; a recommendation landing before content wave B and the atmosphere pass.
+- **STEW-2 ACCEPTED** (R3, Sol `899db9a1` on `review/stew-2-r3`: 28/28 focused tests, the R2 probes, grammar and boundary checks, and tsc/vite equivalence; `build:direct` refuses by design). Merged locally at `e136beb6`; the new `npm run gate` (queue-batched) is running. Next, SCHED-3 rebases and composes (the alias, `cgroup-scope.mjs`, `package.json`), then R6, the install decision.
+- **Owner (2026-10-24): Opus 5.5 authors the assets** (possibly via a Blender MCP). The pipeline is decided by a **debate**: Sol (`siltwake-research-asset-pipeline-sol-84d3447`, steered to cover MCP and an owner-resource list) and Opus (`siltwake-research-asset-pipeline-opus-84d3447`) research independently; then a cross-critique round; then a coordinator decision with an owner resource ask.
+- **ENV-1 plan done at `c8ffa0f0`:**
+  - **Interiors:** six, tone-graded (field station, pump house, Basin dormitory, Rift station, mirror wreck with no log, district halls), each with a tell, a turn and a keepsake.
+  - **Approach:** light carries the tone; nothing heaped; no remains; no new economy or saves; cave vocabulary reused; one air-room table replacing the literal-coordinate dry rooms; per-interior budgets; a 25 m no-trap validator.
+  - **Stages:** 1 kit and validator now; 2 the dormitory, after CW-1, COL-1 B and WK-1.
+  - **Review:** Sol plan R1 running (`siltwake-env1-plan-review-r1-sol-c8ffa0f`). The coordinator lore check passed (canon-consistent; one nod to the six; no remains).
+  - **Owner:** the deepest district rooms become full interiors in a later stage (yes); interior look waits for the asset research; dry rooms on restoration asked again with context.
+- **Asset debate, Sol side done** (`research/asset-pipeline` `aad21cba`): procedural TypeScript plus Opus-authored Blender `bpy` scripts compiling GLBs into existing recipes and shared cel materials. The community Blender MCP rejects `-b` (it needs a GUI or virtual display), with security, telemetry and recovery risks. First proof: a service cabinet through WK-1, before wave B. Owner resources marked; paid tools optional. Waiting for the Opus side, then the cross-critique.
+- **REC-1 R3b:**
+  - **Telemetry:** about 0.2 → 0.02–0.05 ms/frame (snapshot JPEG moved to the spool worker, the heap read moved to the 4 Hz sample, GPU queries on 1 frame in 8).
+  - **What remains is capture:** about 0.178 ms/frame at 12 fps software (`createImageBitmap` about 0.18 ms per call, plus a general slowdown).
+  - **Decision:** 6 fps on the software rung only, as an explicit ladder property; the owner's hardware path keeps 12 fps. A 15-min exclusive alternation is to confirm it is under 0.167.
+  - **Follow-up:** an OffscreenCanvas renderer as a future root fix (renderer stream).
+  - **Owner-PC check:** to be scheduled once REC-1 gives plain steps.
+- **Owner idea (2026-10-24):** run asset compute on alickers (the 4070 or the integrated GPU, a virtual display inside Linux for Blender or MCP), with agents still on factory-worker and jobs going through the remote lane; build 2–3 asset quality tiers and compare them in game. The Opus asset researcher was steered to cover it; the Sol side covers it in the critique round. Packages on alickers (no sudo) would be a one-time owner install.
+- **ENV-1 plan R1** (Sol on `c8ffa0f0`, report on `review/env-1-r1` `b2f5de12`): REQUEST CHANGES.
+  - **Findings:** P2 air coverage must come from real expedition scenarios (one craft, the suit tier, configuration space, a dry-walk capsule); P2 the drained-room air, refuge and rest contract derives from restoration and retires the Rift's 4 m water refuge; P2 thin-wall lighting (the cave 0.45 m skin assumption breaks); P2 atomic Rift hull replacement; P3 move story rationale to the appendix.
+  - **Decision:** adopt as written. The dry-room contract is scoped to the bigger restored stops, pending the owner's answer.
+- **STEW-2 merged to root at `e136beb6`:** the full `npm run gate` passed through the queue (fast, bake, build, 6 economy, playthrough). Saves exported and verified at `e136beb6` through the queue, which also covers the earlier merges (`a38b951e`, `a3409226`).
+- **Owner question:** where "logins stay on factory-worker" comes from: `WORKER_RESOURCE_LIMITS.md`, from fleet's sandbox handoff (no provider or GitHub credentials on the laptop; a shared commit-only checkout). Options offered: A, agents here drive Blender or MCP on the laptop over an SSH tunnel (a queue session reservation, a separate scratch checkout, an owner install), recommended; B, a full agent on the laptop with its own logins and a second T3 server.
+- **ENV-1 plan R1 fixes at `740eee34`; R2** (Sol, `review/env-1-r2` `a77c186d`): F1, F2, F4 and F5 resolved. Two P2s remain in F3: the 200-step light walk can't reach 32 m on 0.125 m voxels (a step bound or acceleration is needed, with GPU cost measured); a room-ID multiplier can't confine doorway light (portal transmission needs spatial support). Sent; the coordinator inspects the delta if it stays narrow. Still open with the owner: dry rooms and quiet-stretch marking.
+- **Owner: quiet-stretch marking adopted** (GAME-DIRECTION). The kinds are colourful environment, large natural formation (a sea-treader-style path), beautiful view, descent, approach and breather. Marked stretches are reported as intended quiet; something must change along the way; a repeated chore is never excused. Implementation goes to the REC-2 brief, and PACE-1 stage 3 respects the marks.
+- **Rest-station discussion** (owner asked for a multi-agent discussion, up to 6 agents; brief `/work/tmp/rest-debate/BRIEF.md`). Round 1 is six independent positions: `feel`, `systems`, `world` and `narrative` (Opus, the last with spoiler access and a separate spoiler file), and `tech` and `genre` (Sol, genre with online research). Then round 2 rebuttals, then an Opus moderator synthesis for the owner. The ENV-1 dry-room stages wait for the outcome.
+- **ENV-1 plan ACCEPTED** (Sol R2 plus coordinator inspection of the `1f8074f3` F3 delta: the two-level brick walk with a derived bound, and baked per-light reach masks). **Stage 1 started:** the kit, data model and validator (scenario-based air coverage), and the `AirRoom` table with the always-on Canopy lab row. Restoration-derived dry-room activation waits for the rest-station discussion; no CW-1 files.
+- **Correction (owner):** "a subagent discussion" meant **one interactive discussion partner that waits for the owner's replies**, not six autonomous agents. The six were cancelled (only `feel.md` had been written; kept as input).
+  - **New thread:** a top-level Opus discussion thread, "Rest stations and dry rooms: discussion with Alek". It writes `/work/tmp/rest-debate/DECISIONS.md` and reports back here.
+  - **Lesson:** "discussion" with the owner means an interactive thread.
+- **Owner: Option A adopted** for asset work. Agents stay on factory-worker and drive Blender or an MCP on alickers over the SSH lane, under a queue session reservation, with a scratch checkout and a one-time owner install. It goes into the asset debate's resource list.
+- **Owner approved a critical-path priority lane (SCHED-4):** coordinator-owned `priority set|clear`; marked tickets jump normal ones at admission with a starvation guard; never preempts and never touches exclusive draining; honoured by both lanes. Queued for the SCHED builder after SCHED-3 R6 and install. Cause: CW-1's heavy A/B `ce36` waited 13+ min for CPU.
+- **CW-1 status (23:02Z):**
+  - **Done:** the handoff has the R4 response, the r14 table and the provisional-integration compromises.
+  - **The r14 tour rerun:** it found one streaming frame that is ours (`lightPlace` 52 ms).
+  - **Pending:** the composed heavy-peak A/B (`ce36`, queued for CPU). The coordinator is watching it and will wake CW-1 when it finishes.
+- **PACE-1 stage 1 interim at `272d149b`** (code `43645268`): a stock planner (reserves only for held plans and seen clues), routing rules R1–R9 (pre-budgets deleted, ceramic sorted at the Rift lips, C12 read at the dock, the carrier kept forward, the pod buffer early) and the R9 trip-reason log.
+  - **Figures:** Creel play 203.7→163.5 bot-min, longest gap 50.6→23.6; carrier 372.5→290.9, 94.2→61.6.
+  - **Findings:** crown return B isn't cheaper (no glass near the crown); the Divide dock's glass only exists on the isles; diver-only gathering is the carrier's main cost (stage 2's district sources fix it).
+  - **Next:** finish on root (it was built on LS-1's pre-merge head): branch moves, B4, the core pre-budget, and pacing rows rewritten (the carrier gap that grows is disclosed). Then one review.
+- **Owner (2026-10-24): the frame gate is "60 fps on a GPU, not the 3090."** Acceptance evidence may come from either test GPU when its host was quiet (DIRECTION and GAME-DIRECTION updated). Exclusive acceptance stays on the 3090 until the queue supports quiet 4070 runs, which was added to SCHED-4's scope with a quiet-host proof that respects the owner's pause.
+- **Owner: verification is too expensive** (e.g. CW-1's A/B at 3 seats × 30 min). A test-efficiency research debate has started (`siltwake-test-efficiency-debate-coord-opus`). An Opus coordinator runs Sol 6.1 xhigh plus Opus 5.5 high researchers (test impact analysis, caching, stored baselines, sound performance statistics, playthrough checkpoints, right-sized seats, fail-fast), then a rebuttal round, then consolidation to `/work/tmp/test-efficiency/RECOMMENDATION.md`.
+- **SCHED-4b** (quiet 4070 acceptance) is a separate stream after SCHED-4.
+  - **Its limit:** the VM side can prove our own exclusivity, the job's contention, canary stalls, the pause flag and, probably, whole-GPU state. It **can't** see Windows CPU load, owner activity, power source or background work.
+  - **Owner decision pending:** (1) a read-only Windows reader, which needs consent (the coordinator recommends this), or (2) VM-side evidence labelled "Windows host CPU: unmeasured".
+  - **Probe:** a read-only Linux-side probe is queued (`8117`). The coordinator corrected it: no runtime-assembled `/mnt` path to slip past the lane's guard.
+  - **Shaders:** the 4070 gate judges warmed frames and records first-use shader compiles.
+- **Owner (2026-10-24): reading the Windows laptop is allowed, read-only** (SCHED-4b option 1). New **`docs/build/ALICKERS-LEDGER.md`** records every laptop change (fleet's baseline plus ours) with undo and redo steps; the owner decides undos. Rule added to `WORKER_RESOURCE_LIMITS.md`.
+- **CW-1 R4 response done at `42786dc4`** (pushed by the coordinator):
+  - **Fixes:** root `732fe59c` composed (6 conflicts); R4-1/2/3 fixed; a sampler worker; contiguous-block bake workers (2,233→1,365 MiB); a fresh verified rebake `ca0b7fb1` with provenance checks; zero shell fallbacks.
+  - **Composed checks:** fast, economy, playthrough 8/8; heavy assertions pass, with budgets attributed by a root/composed A/B (`col1-art` and `timeline-model` are already over at root because the **root gate doesn't run the heavy tier**; `terrain-borders` and `regions-stream` budgets raised; `regions-bake` is over on the 4070, open for TT-1).
+  - **r14 exclusive:** tour 1 PASS (nothing excused); deep 2 FAIL (49.9 ms `lightPlace`; canary stalled 48.9 ms; renderer 0.2 ms) → carried as a provisional compromise. 8/9 proven. Also a 93 ms on-CPU render frame in deep 2 (game work).
+  - **Review:** Sol R5 running (`siltwake-cw1-review-r5-sol-42786dc`), deciding ACCEPT, provisional or changes.
+- **Process gap found:** `npm run gate` does not run the heavy tier, so root-side budget overruns go unseen. This goes to the test-efficiency debate and the STEW owner (decide whether the gate runs the heavy tier, or a tracked nightly does).
+- **SCHED-3 R5 part 2 (composed with STEW-2) done at `f0d41605`** (code `6c736791`):
+  - **Changes:** the exact STEW-2 npm-wrapper alias expands `X:direct`; other guard shapes run locally; `--require` is a node step; `cgroup-scope.mjs` adopted (installed and hashed); a `v1Scope()` fix for a forged legacy lock inside v2 scopes (stricter v1 GPU lease).
+  - **Checks:** 56/56 units, B 12/12, suites 23/27/44; fast through the guard on alickers; the real runner on the 4070 with no npm.
+  - **Review:** Sol R6 (install decision) running (`siltwake-sched3-review-r6-sol-f0d4160`).
+- **Test-efficiency debate result** (`/work/tmp/test-efficiency/RECOMMENDATION.md`):
+  - **The finding:** the cost is the exclusive lane (70% of 3090 seat-time over 45 h; a 49-min median wait; about 1,270 idle seat-min behind drains; 95 runs under 3 min taking the whole machine; 58 of 113 GPU traversals failing; compiles inside exclusive windows).
+  - **Correction:** "root over heavy budget" was an artefact of CW-1's `SILTWAKE_HEAVY_BUDGET_MIB=8000` override (real-budget peaks pass). The CW-1 R5 reviewer has been told.
+  - **Ranked:** (1) measurement hygiene rules now; (2) exclusive only for acceptance, with microbenchmarks on CPU time and allocations, duet A/Bs, and an exclusive preflight refusing compiles; (3) stored per-file heavy results; (4) the full heavy tier in the root gate on `--machine any`; (5) SCHED-5 drain windows and backfill; (6) caching and affected-test selection later.
+  - **Owner decisions pending:** amend convention 9, approve SCHED-5, accept about +10 min per root gate.
+- **Fleet host reboot (option B) being scheduled:** the owner relays `/work/tmp/fleet-reboot-request.md` to fleet on the mac mini (pinning, any Unraid update, the 3090 passthrough unchanged, the three stopped VMs not started, the alickers tunnel, post-reboot steal and GPU checks, undo steps). The coordinator picks the window: after the CW-1 R5 and SCHED-3 R6 reviews report, and before the SCHED-3 install. Builders commit and push and the queue drains first. Everything on factory-worker (T3 included) stops during the reboot; afterwards, `task_status` every task.
+- **Asset debate, Opus side done** (`research/asset-pipeline-opus` `38d4052c`):
+  - **Pipeline:** Blender 5.2.3 LTS via `bpy` in an Option A session on alickers, over stdin/stdout through SSH (no TCP; MCP optional). The session is a sketchbook; shipped assets are rebuilt by clean queued jobs, deterministic on the same machine.
+  - **Into the game:** glTF is converted in the bake to the cel recipe form (no runtime loader; `@babylonjs/loaders` rejected).
+  - **GPUs:** Cycles CUDA works on the 4070; OpenGL needs `GALLIUM_DRIVER=d3d12`; the integrated GPU crashes Blender.
+  - **Bake-off and proof:** a three-tier bake-off; first proof an ENV-1 room kit.
+  - **Owner asks:** one install (`x11vnc novnc websockify xauth`); no paid tools or AI generation.
+  - **Round 2 cross-critique** dispatched to both sides; the coordinator decides after it.
+- **Owner decisions (2026-10-24):**
+  - **Reader request:** the owner sends it to fleet; it now includes per-process GPU-engine counters (approved).
+  - **Convention 9 amended:** only acceptance numbers are exclusive; microbenchmarks use CPU time and allocations on normal seats; duet A/Bs; no compiling in exclusive windows.
+  - **SCHED-5 approved:** instrument the drain and backfill waste first, build only if it pays; after SCHED-4/4b.
+  - **The full heavy tier goes into the root gate** (`--machine any`), later affected-only plus a nightly run; this is **STEW-3**, together with stored per-file heavy results and the `test-tier` "override is not budget evidence" label.
+- **Asset-pipeline debate decided** (`docs/build/research/ASSET-PIPELINE-DECISION.md`):
+  - **Tooling:** Blender 5.2.3 LTS, portable, driven by Opus `bpy` scripts in an Option A session over SSH stdio (no exposed listener; MCP optional later). Clean queued rebuilds on a pinned canonical builder are authoritative, with exact canonical-pack reproducibility.
+  - **Into the game:** offline bake conversion into a versioned cel-pack extension (asset-local quantisation, classes, rigid parts); no runtime loader; imported art gets a budget share inside 256/256; provenance manifests.
+  - **Ownership:** AP-1 (new) authors and converts; WK-1 the bake integration; the SCHED builder the session reservation (externally enforced).
+  - **Order:** first a single module or prop end to end, then the owner's three-tier bake-off on one ENV-1 room.
+  - **When:** the seam lands after WK-1 and CW-1, before wave B.
+- **REC-1 6 fps acceptance (`692c`):** +0.120 ms/frame (95% CI 0.015–0.224), not a pass; DISTURBED (faults during the build).
+  - **A 300 s periodic slowdown inside the job,** hitting both arms (frames 3.6–4.6 ms against a 2.9 median; job CPU 0.77→0.93 cores). It's probably game-side periodic work, not the recorder.
+  - **Coordinator:** cancelled the requeue `4e09` (reboot coming). Next: (b) diagnose the 300 s source on the 4070 (GC, app timers, harness rotation), routing any game finding to its owner; then one decisive duet acceptance after the reboot, with a pre-declared n, margin and exclusion rule, "inconclusive" allowed.
+  - `owner-check-serve.sh` works (`5803bae3`).
+- **CW-1 R5** (Sol on `42786dc4`, report on `review/cw-1-r5` `6a9d81ad`): REQUEST CHANGES, with exact provisional-integration conditions.
+  - **Passed:** R4 fixes; the composition (168/168); the r14 reclassification exact; the 4070 bake at 1,646/1,920 MiB at real budget.
+  - **Findings:** P2 entry warmup live-builds cave collision before admission (20k boxes, about 0.9 s unsliced); P2 GPU-vCPU credit lacks dependency evidence (disable it); P2 the budget raises and owner debts came from the 8,000 MiB override (revert to 1,024; remove the false debts); P3 summaries; P3 the deep hazard test.
+  - **Open compromises:** deep 2 open (Fleet plus harness); the 93 ms on-CPU render frame (an ATM-2/render debt); tour 1's regions frame open.
+  - **Next:** the fixes, then a fresh affected review and the coordinator gate. The steady-60 acceptance stays withheld.
+- **SCHED-3 R6** (Sol on `f0d41605`, report on `review/sched-3-r6` `03764202`, with STEW-2-aware canary steps): one P1. Equivalent guard-path spellings (`./scripts/…`, `scripts/./…`, `scripts//…`) bypass the alias, so npm is reachable. Fix after the reboot: normalise paths before the guard check, plus regressions; then R7 is the install decision.
+- **Reboot pause started (about 00:00Z):** all builders told to commit, push, cancel tickets and write resume notes. SCHED-3 paused at `f25d89d2`; CW-1 paused at `a68374e7` (R5-2, 3 and 5 done). Coordinator resume note: `/work/tmp/coordinator-resume.md`.
+- **Ready for the reboot (23:59Z):** all six builders paused and pushed (SCHED-3 `f25d89d2`, CW-1 `a68374e7`, ENV-1 `df7371c1`, PACE-1 `54631001`, REC-1 `f7d26fde`, LS-1 `bbd37bd3`); the queue is empty; root is clean.
+  - **REC-1 finding added to the fleet request:** a 5-minute wall-clock host disturbance (hh:m1:55–m2:30, hh:m6:50–m7:30).
+  - **Owner:** sends `/work/tmp/fleet-reboot-request.md` to fleet.
+- **Host reboot done (fleet, 01:16–01:19Z, 2026-10-25):**
+  - **Platform:** Unraid 7.3.4 (kernel 6.18.58); boot line `isolcpus=domain,managed_irq,4-11 rcu_nocbs=4-11 irqaffinity=0-3 nmi_watchdog=0`.
+  - **Pinning unchanged:** vCPUs 0–7 on host CPUs 4–11, the emulator on 0–3. 210 host threads (ZFS writes included) moved to 0–3; only per-CPU kthreads and worker vCPUs run on 4–11.
+  - **Idle steal:** p95 about 1% → 0.00%, max 8.3% → 1.0%; host work on 4–11 median 1.87% → 0.00%. Under-load steal still to be measured.
+  - **Checks:** the 3090 and driver 550.163.01 OK; T3 up; the three other 3090 VMs stayed off; the alickers tunnel reconnected.
+  - **Undo:** restore `syslinux.cfg` and `go` from `/boot/config/fleet/host-isolation-20261025T005940Z/`, then reboot.
+  - **Open:** Hermes `job-matcher` (about 87% of a CPU, bursting every ~4m45s, now on 0–3). It is the likely source of REC-1's 5-minute wall-clock slowdown, via shared cache and memory. Owner decision pending. The fleet reader request needs a thread on alickers (fleet can't reach Windows from the mac). Fleet PR #33 is for the owner's review.
+  - **Coordinator post-reboot check:** the GPU, queue and tunnel are OK; all six builder tasks completed cleanly at their pause SHAs.
+- **Resumed after the reboot (01:50Z):** CW-1, SCHED-3, LS-1, PACE-1, ENV-1 and REC-1 were woken from their resume notes. REC-1 checks whether its 5-minute windows survive isolation and match Hermes `job-matcher`'s ~4m45s bursts. **STEW-3 is held** (it would be a 7th builder); it starts when a slot frees.
+- **REC-1 period check after isolation (`dfd1`):**
+  - **Two kinds of slow window:** host bursts with the VM quiet (+0.9–1.8 ms for 15–25 s, about 280–290 s apart, a phase that moved after the reboot; probably Hermes `job-matcher`), plus in-VM contention from other tickets (correlation 0.65; an exclusive seat removes it).
+  - **Duet declared and committed before running** (`a934d88d`): 108 × 10 s pairs, a paired 95% t interval against 0.167, a symmetric whole-pair exclusion at +0.6 ms over the median, a build on an ordinary seat and the run exclusive. Approved; 4070 rehearsal `dcbb`, then the exclusive run.
+  - **Side note:** "GPU shared outside the lease by `sleep 20`" was sent to the SCHED builder.
+- **Windows reader installed on alickers** by a fleet thread there (ledger row 1 done; undo and redo via its `Set-Reader.ps1`). It samples only while an acceptance ticket's `active` marker exists (CPU, idle, AC, power scheme, top-5 GPU processes), with JSONL written via `\\wsl.localhost`. The supervisor restart interrupted PACE-1's alickers playthrough `e49b`; the queue confirmed it stopped and reran it with no duplicate. For SCHED-4b: create `active` before measured frames and wait for the first row (1–2 s of priming).
+- **LS-1 stage 1b done at `0337c127`** (code `17f4520a`):
+  - **Delivered:** rewards (locker extension per module, grow bed with heater billing, caches with no reserve cells); keypad model and command (the `app.ts` wiring waits for CW-1); coded doors (straight hatch, deduction vault); schema 8 via `bridge7` (`systems.opened`, `legacyGrants` with source kinds); the planter move to the keeper's racks; pacing rows rewritten from measured timelines (carrier works stretch +0.55 min, PACE-1's).
+  - **Design change, coordinator-approved in principle:** caches are found on first reach instead of stocked at New Game (stocking broke inventory invariants).
+  - **Checks:** fast 169, heavy 67 (3 OOM-killed subprocesses inside passing files), economy, build, playthrough 9/9.
+  - **Review:** Sol R1 running (`siltwake-ls1-1b-review-r1-sol-0337c12`).
+  - **PACE-1's pod-buffer legacy row** goes in the next transition (8→9), not this bridge, since LS-1 1b merges first.
+- **LS-1 1b R1** (Sol on `0337c127`, report on `review/ls-1-1b-r1` `04e91b0f`): REQUEST CHANGES.
+  - **Passed:** persistence, power billing and packing; found-on-reach caches; the OOM kills are intentional probes.
+  - **Four P2s:** Base omits the new module upgrades and crop disclosure; the keypad never gets the post-command outcome or closes; the carrier ceiling was raised by 32.85 s (not allowed; remove the haul-order cost instead); content-proportional fixed-step work (bounded cache candidates; reuse the per-host power answer).
+- **SCHED-3 R6 fix done at `8063bec4`** (code `dc369039`): `isGuard` normalises spellings plus root-relative symlinks; guard steps are the exact alias, `--require`, or local with a reason. B45. S11/S20 GPU fixtures run only under the suite job's own lease. All suites pass through a GPU-leased queue job. Sol R7 (install decision) running (`siltwake-sched3-review-r7-sol-8063bec`).
+- **CW-1 checks:** 4070 sweep, fast and heavy (real budgets) pass; the 3090 sweep `363b` was OOM-killed at the gpu class's 3,072 MiB after 14m39s (segment 5). Rerun with a larger `--mem` sized from the observed peak, plus a check on whether the memory growth is expected.
+- **ENV-1 stage 1 done at `18df71f3`** (code `b125ace3`):
+  - **Delivered:** the air-room table (Canopy lab only; sim and shader identical); the interior model, a 37-recipe procedural kit and four definitions; the validator (connectivity for swim and walk capsules, per-route air proofs from real saves, rejection fixtures with controls).
+  - **Fork:** `FORK(interior-swim-speed)` until stage 2.
+  - **Compromises:** the pump-house terrain gap (≤0.3 m, root fix stage-2 masking); island interiors on flat stand-ins until OP-1.
+  - **Checks:** fast 176/176; heavy library-save 4/4.
+  - **Review:** Sol R1 running (`siltwake-env1-stage1-review-r1-sol-18df71f`).
+- **Rest stations decided** (owner discussion; `docs/build/design/REST-AND-AIR-DECISIONS.md`, visual `rest-air-map-v2.html`; GAME-DIRECTION updated):
+  - **Air and rest:** no free air (the 4 m spheres retired at all stops); "power is air"; moorings and outposts give power only.
+  - **Big stops:** four (crown, Rift station, Divide dock, a district big stop), each earned through its own scenario and ending in a dry room, with restoration steps kept.
+  - **Rest and wake:** homes, the Canopy lab, restored dry rooms, and the Creel and carrier cabins (the last two are coordinator calls). The staging office loses rest.
+  - **Moorings:** sparse, at long-journey starts, never near a big stop (spots set in the owner's map-layout session).
+  - **Difficulty:** a pressure-not-grind ramp. Dry-room feel conditions adopted (floor-well entry, a sensory change, never unsafe).
+  - **District big stop:** confirmed at ENV-1's upper hall row (lore owner).
+  - **Routing:** ENV-1 (plan update: rows, air proof without moorings, restoration steps as staged facility facts, scenarios designed per place); the air and rest code (stops, bases, recovery, retiring the spheres) folds into ENV-1 stage 3a after CW-1; moorings, rescue tows and bot logistics go to PACE-1 stage 2 after the map session.
+  - **Owner sessions to schedule:** map layout (requested), creatures and danger (proposed).
+- **SCHED-3 ACCEPTED** (R7, Sol `fc1e1149` on `review/sched-3-r7`): safe to install at an idle point with the R6/R7 canary. Merged locally at `81990507` (a DIRECTION wording conflict was resolved, keeping the owner's "60 fps on a GPU" line and SCHED-3's portability sentence). Root gate running. Next: push, then the SCHED builder installs at an idle point and runs canary steps 1–7, the coordinator checks the receipts, and rollback to `baf9369c3418` if any step fails.
+- **ENV-1 stage 1 R1** (Sol on `18df71f3`, report on `review/env-1-s1-r1` `dad0f28f`): REQUEST CHANGES, four validator P2s: outside the shell isn't an escape; the composed sweep drops exterior obstacles; exits need capsule-sized directed crossings; per-doorway seeding bypasses the round trip from the parked craft. Checks passed. Fixes adopted as written.
+- **LS-1 1b F3 decision:** the +0.55 min carrier regression is bundle-rounding overshoot in `actions.ts` `procure`, not removable haul order. Approved: a small, general, deterministic fix that avoids overshooting bundles when the remaining need is smaller; all rows regenerated; any worse row is reported, never raised. Whichever of LS-1 1b and PACE-1 stage 1 merges second rebases and regenerates the pacing rows.
+- **Map-layout grill session opened** (owner request): an interactive Opus thread `mcp:4bc3f1ba-5e6c-4440-a61d-c27d8948caa3`, "Map layout and biomes". Goal: an organic, non-uniform, never-straight "natural alien ocean"; biomes and transitions; the depth and pressure ramp; mooring placement; where caves, sites, interiors and big stops sit. Output: `/work/tmp/map-session/DECISIONS.md`, reported back here.
+- **SCHED-3 merged to root at `81990507`, pushed.** Every gate step passed at the merge commit (fast, bake, build, 6 economy, and playthrough 9/9 `c249` with 15 reloads matching). The gate printed "void" only because the coordinator committed docs (`ef177d46`, docs-only diff, verified) while the playthrough ran; slip recorded. Next: the SCHED builder installs at an idle point and runs the R6/R7 canary (rollback to `baf9369c3418` if any step fails).
+- **STEW-3 done at `1b5d99d7`** (code `f9dcfce`):
+  - **The gate's heavy step:** queued `--machine any`; passes only on a stored full real-budget result for the clean commit; machine shown per row.
+  - **Stored per-file heavy results:** `heavy-results.mjs` ingest, show and near, with `matchKey` for control-arm reuse, stored in `/work/tmp/siltwake-results/heavy/`. Gap: job logs are pruned after 7 days; there's no nightly ingest yet.
+  - **Override label** "NOT BUDGET EVIDENCE"; hygiene headers; a pipe-free test.
+  - **The 3 OOM kills** come from the deliberate over-budget probe.
+  - **Checks:** fast 1,689; a real gate `--only heavy` passed (67 files, about 16 min on the 3090); highest peak 78.4%.
+  - **Review:** Sol R1 running (`siltwake-stew3-review-r1-sol-1b5d99d`). The branch predates SCHED-3's merge and needs to compose with root.
+- **STEW-3 R1** (Sol on `1b5d99d7`, report on `review/stew-3-r1` `2a8420fe`): REQUEST CHANGES; 100 checks pass; it merges cleanly with root.
+  - **P1:** alternate budget sources bypass the real-budget gate.
+  - **P2:** `matchKey` can't establish an equivalent control (needs identity vs conditions, and per-file cache state).
+  - **P2:** stored-result eligibility ignores the receipt.
+  - **Decision:** fixes adopted as written.
+- **CW-1 R5 response done at `811f0867`** (frozen):
+  - **Fixes:** R5-1 warmup after admission, with a `withoutQueryBuilds` scope and 4/4 entry tests; R5-2 GPU credit off (diagnostic only); R5-3 budgets reverted; R5-4 summaries regenerated; R5-5 the hazard reference restored.
+  - **Checks:** fast 1,669; heavy 71/71 at real budgets.
+  - **Composed seven-segment functional sweep:** 34/34 stops, 0 holds, unsliced builds, fallbacks or unlit frames. The surf approach shows 12 stalls at 89% hull.
+  - **3090 OOM:** an end-of-run clone spike, now sliced (`6d9c2d19`).
+  - **Adjacent gap:** `flowHere` `inside()` for parked craft during an in-flight pack.
+  - **Review:** Sol R6 (the affected review for provisional integration) running (`siltwake-cw1-review-r6-sol-811f086`).
+- **CW-1 `flowHere`: withdrawn by the author.**
+  - **Why:** `flowHere` samples only the controlled craft and the diver, and admission covers both. Probe: `/work/tmp/cw1/flowhere/`.
+  - **Ruling (b):** no entry wait, since it would add decode-only waits, which are a hard pacing gate.
+  - **Residual:** a long-reach, non-player query meeting an unbuilt cluster while the pack is pending, recorded as a counted theoretical open item. It trips the gate as a `query` unsliced build. Owner: BIO-1, whose long-reach queries must go through `withoutQueryBuilds` or admission.
+  - **R6** was steered to verify this independently.
+- **LS-1 1b, F3 closed at `3aeac541`** (the procure overshoot deferral):
+  - 8 of 10 pacing rows ratcheted down; the carrier works row −9.5 min.
+  - The 2 no-optional-carrier rows (+0.51 min works, +0.3 s at C12) are recorded as a named exception, not a pass. Ceilings are at their measured values with the causes, and PACE-1 owns the re-ratchet at the second merge.
+  - Determinism check requested on the C12 +0.3 s.
+  - Next: R2.
+- **CW-1 R6 (Sol, `e6cf1abe` on `review/cw-1-r6`): accept for provisional integration.**
+  - No new P1 or P2 findings; steady-60 withheld.
+  - The `flowHere` parked-craft claim is independently disproved. The residual long-reach query class is owned by BIO-1, with load-phase diagnostics owned by the harness successor; the tripwire covers travel only.
+  - **Follow-ups:**
+    - R6-1 (P3): surface the deferral and live-record counters;
+    - R6-2 (P3): memory evidence qualified;
+    - one commit-bound 3090 tour 5 export check at the default limit;
+    - the authored surf approach route.
+  - **Next:** CW-1 merges root into the candidate, resolving `bake-terrain` conflicts against STEW-2's guard, makes the docs-only handoff, and runs fast, bake-store and heavy. Then the coordinator gate, then the merge.

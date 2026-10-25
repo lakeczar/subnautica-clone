@@ -2,6 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import { SOURCES } from "../src/content/registry.js";
 import { CHART_CELL, PLAYER_BEACON_LIMIT } from "../src/content/systems/navigation.js";
+import { placedReveals } from "../src/content/systems/decodes.js";
 import { advanceDecodes, discoverSite, startDecode } from "../src/sim/systems/decoder.js";
 import { installModule } from "../src/sim/systems/hosts.js";
 import { beaconViews, categoryCounts, cellOf, chartView, collectBeacon, placeBeacon, renameBeacon, setBeaconOn, setCategoryOn, visitChart } from "../src/sim/systems/navigation.js";
@@ -48,21 +49,24 @@ test("decoded landmarks and hints become beacons, switched individually or by ca
   swimTo(s, SPOTS.a);
   deployOutpost(s, sys, id, SPOTS.a, siteTable({ ventDistance: 3 }));
   installModule(s, sys, id, "s0", give(s, "mod_decoder"));
-  discoverSite(sys, "demo_relay_hut");
-  startDecode(s, sys, id, "demo_hut_fragment");
-  advanceDecodes(s, sys, 180);
+  discoverSite(sys, "reef_pumphouse_site");
+  startDecode(s, sys, id, "reef_pumphouse_log");
+  advanceDecodes(s, sys, 360);
   const views = beaconViews(s, sys);
+  // The pump house's placed reveals (a cave mouth joins once its cave is in the world).
+  const revealed = placedReveals("reef_pumphouse_log").map((r) => [r.id, r.category, true, false]);
   assert.deepEqual(views.map((v) => [v.id, v.category, v.on, v.removable]), [
     [`outpost:${id}`, "outpost", true, false],
     ["stop:home_pod", "stop", true, false],
-    ["demo_cairn_hint", "hint", true, false],
+    ...revealed,
   ]);
+  assert.ok(revealed.some(([rid]) => rid === "site:hub.crown"), "the spur crown bearing is a hint");
   assert.equal(categoryCounts(views).hint, 1);
-  setBeaconOn(sys, "demo_cairn_hint", false);
-  assert.equal(beaconViews(s, sys).find((v) => v.id === "demo_cairn_hint")!.on, false);
-  setBeaconOn(sys, "demo_cairn_hint", true);
+  setBeaconOn(sys, "site:hub.crown", false);
+  assert.equal(beaconViews(s, sys).find((v) => v.id === "site:hub.crown")!.on, false);
+  setBeaconOn(sys, "site:hub.crown", true);
   setCategoryOn(sys, "hint", false);
-  assert.equal(beaconViews(s, sys).find((v) => v.id === "demo_cairn_hint")!.on, false);
+  assert.equal(beaconViews(s, sys).find((v) => v.id === "site:hub.crown")!.on, false);
   setCategoryOn(sys, "hint", true);
   setBeaconOn(sys, `outpost:${id}`, false);
   assert.equal(beaconViews(s, sys).find((v) => v.id === `outpost:${id}`)!.on, false);
@@ -85,8 +89,8 @@ test("the chart shows only what was explored, scanned or decoded; live position 
   assert.deepEqual(view.cells.find((c) => c.key === cellOf(p.x, p.z))?.reveal, ["scanned"]);
   assert.ok(view.markers.some((m) => m.id === "canopy_grounding_fins_lower" && m.kind === "source"));
   assert.ok(!view.markers.some((m) => m.id === "canopy_grounding_fins_upper"), "unscanned sources stay off the chart");
-  sys.found.push("demo_cairn_survey");
-  sys.decoded.push("demo_cairn_survey");
+  sys.found.push("hub_beacon_archive");
+  sys.decoded.push("hub_beacon_archive");
   const decoded = chartView(s, sys).cells.filter((c) => c.reveal.includes("decoded"));
   assert.ok(decoded.length >= 4, "the decoded map reveals an area");
   assert.ok(decoded.every((c) => c.size === CHART_CELL));

@@ -1,0 +1,152 @@
+<!doctype html>
+<html><head><meta charset="utf-8">
+<style>
+.viz{--s1:#2a78d6;--s2:#eb6834;--s3:#1baf7a;--surf:var(--background,#fcfcfb);--ink:var(--foreground,#0b0b0b);--ink2:var(--muted-foreground,#52514e);--line:var(--border,#d8d7d2);--card:var(--card,#f4f4f2);font-family:var(--font-sans,system-ui);color:var(--ink);}
+@media (prefers-color-scheme:dark){:root:where(:not([data-theme="light"])) .viz{--s1:#3987e5;--s2:#d95926;--s3:#199e70;}}
+:root[data-theme="dark"] .viz{--s1:#3987e5;--s2:#d95926;--s3:#199e70;}
+h3{font-size:15px;margin:0 0 4px;font-weight:600}
+p.sub{margin:0 0 10px;font-size:12.5px;color:var(--ink2);line-height:1.45}
+.legend{display:flex;flex-wrap:wrap;gap:14px;font-size:12.5px;margin:0 0 6px}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend svg{flex:none}
+#map,#tl{display:block;width:100%}
+.reg{stroke:var(--line);stroke-width:1}
+.rl{font-size:12px;fill:var(--ink2);font-style:italic}
+.lbl{font-size:12px;fill:var(--ink);paint-order:stroke;stroke:var(--surf);stroke-width:3.5px;stroke-linejoin:round}
+.lbl2{font-size:10.5px;fill:var(--ink2);paint-order:stroke;stroke:var(--surf);stroke-width:3px}
+.hit{fill:transparent}
+#tip{position:absolute;pointer-events:none;max-width:260px;background:var(--popover,#fff);color:var(--popover-foreground,#111);border:1px solid var(--line);border-radius:var(--radius,8px);padding:8px 10px;font-size:12px;line-height:1.4;box-shadow:0 4px 14px rgba(0,0,0,.18);display:none;z-index:5}
+#tip b{display:block;margin-bottom:2px}
+.wrap{position:relative}
+.sec{margin-top:24px}
+.flow{display:grid;grid-template-columns:repeat(auto-fit,minmax(118px,1fr));gap:6px}
+.step{border:1px solid var(--line);border-radius:var(--radius,8px);padding:10px 10px 9px;font-size:12px;line-height:1.4}
+.step b{display:block;font-size:12.5px;margin-bottom:3px}
+.step .n{display:inline-block;width:18px;height:18px;border-radius:50%;background:var(--s1);color:#fff;font-size:11px;text-align:center;line-height:18px;margin-bottom:5px}
+.step.last{border-color:var(--s1)}
+.arrow{align-self:center;color:var(--ink2);font-size:14px}
+.cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px}
+.card{border:1px solid var(--line);border-radius:var(--radius,8px);padding:12px;font-size:12px;line-height:1.45}
+.card h4{margin:0 0 2px;font-size:13px}
+.card .meta{color:var(--ink2);font-size:11.5px;margin-bottom:6px}
+.card .lvl{display:flex;gap:3px;margin:0 0 7px}
+.card .lvl i{display:block;width:22px;height:6px;border-radius:3px;background:var(--line)}
+.card .lvl i.on{background:var(--s1)}
+.card dl{margin:0}.card dt{font-weight:600;margin-top:5px}.card dd{margin:0;color:var(--ink2)}
+table{border-collapse:collapse;width:100%;font-size:12.5px;margin-top:6px}
+th,td{text-align:left;padding:6px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.4}
+th{font-weight:600;color:var(--ink2);font-size:11.5px;text-transform:uppercase;letter-spacing:.03em}
+td.k{white-space:nowrap}
+.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:5px;vertical-align:1px}
+</style></head>
+<body><div class="viz">
+
+<h3>Every big stop follows the same shape</h3>
+<p class="sub">Each place gets its own scenario. What stays the same is the arc, and the challenge grows the deeper you go.</p>
+<div class="flow">
+ <div class="step"><span class="n">1</span><b>Arrive</b>Dark, flooded, dead. You breathe from your own craft, parked close by.</div>
+ <div class="step"><span class="n">2</span><b>Read the place</b>The building, the creatures around it and what was left behind show what broke and what it needs.</div>
+ <div class="step"><span class="n">3</span><b>Earn it</b>That place's own scenario: a hands-on puzzle, a build, a material you work out from clues.</div>
+ <div class="step"><span class="n">4</span><b>It comes alive</b>Lights come on room by room, power returns and one room drains.</div>
+ <div class="step last"><span class="n">5</span><b>Sanctuary</b>Stand up, breathe and rest. You wake here from now on. Charging, repairs and fabrication open, and the place's story fills in.</div>
+</div>
+
+<div class="sec">
+<h3>Where air comes from</h3>
+<p class="sub">Power is air: your cockpit and your air line both run on the craft's battery. Service points give power. Only homes, big stops you've earned and the vessels you bring give you a place to stand up and rest. Hover a place for details.</p>
+<div class="legend">
+<span><svg width="16" height="16"><rect x="2" y="2" width="12" height="12" rx="2" fill="var(--s3)"/></svg>Home: always air</span>
+<span><svg width="16" height="16"><circle cx="8" cy="8" r="6.5" fill="var(--s1)"/></svg>Big stop: earned dry room, power, rest and wake</span>
+<span><svg width="16" height="16"><path d="M8 1.5 14.5 8 8 14.5 1.5 8Z" fill="var(--s2)"/></svg>Service point: power only</span>
+</div>
+<div class="wrap"><svg id="map" height="600" viewBox="0 0 900 790" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Map of homes, big stops and service points"></svg><div id="tip"></div></div>
+</div>
+
+<div class="sec">
+<h3>The big stops, getting harder</h3>
+<p class="sub">These are kinds of challenge, not final designs. Each place's scenario gets designed with you; the story stays out of this view.</p>
+<div class="cards" id="cards"></div>
+</div>
+
+<div class="sec">
+<h3>Breaths along a first playthrough</h3>
+<p class="sub">Rough arrival windows (uncalibrated estimates) against depth. Each blue mark is a place you earn. Orange diamonds are service points you pass between them, and with power they keep you breathing.</p>
+<div class="wrap"><svg id="tl" height="250" viewBox="0 0 900 250" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Big stop arrival time versus depth"></svg></div>
+</div>
+
+<div class="sec">
+<h3>What changes, place by place</h3>
+<table><thead><tr><th>Place</th><th>Today</th><th>Proposed</th></tr></thead><tbody id="rows"></tbody></table>
+</div>
+</div>
+<script>
+const S=0.41,X0=-620,Z0=175,P=10,px=x=>P+(x-X0)*S,pz=z=>P+(Z0-z)*S,NS="http://www.w3.org/2000/svg";
+const el=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p&&p.appendChild(e);return e;};
+const map=document.getElementById("map");
+const R=[
+ ["Meridian district",800,[[960,1472,-1632,-1000],[1088,1472,-1000,-352]],[1215,-1600]],
+ ["Mirror Divide",450,[[180,960,-1632,-1000]],[560,-1600]],
+ ["Hearth Reef",60,[[-576,64,-230,160]],[-480,140]],
+ ["Lantern Canopy",150,[[64,1472,-352,160]],[1150,-300]],
+ ["Pale Basin",180,[[98,272,-352,-184],[64,1088,-1000,-352],[-576,64,-640,-230]],[820,-960]],
+ ["Ember Rift",350,[[-576,180,-1632,-640],[40,230,-640,-570]],[-470,-1600]],
+ ["Splitspine Isles",60,[[-32,44,-100,-20],[300,640,-60,160],[880,1220,-80,160]],[910,140]],
+];
+const tint=d=>0.10+0.32*(d-60)/740;
+for(const [,d,rects] of R)for(const [a,b,c,e] of rects)el("rect",{x:px(a),y:pz(e),width:(b-a)*S,height:(e-c)*S,class:"reg",fill:"#3d6f9e","fill-opacity":tint(d).toFixed(3)},map);
+for(const [n,d,,lp] of R){const t=el("text",{x:px(lp[0]),y:pz(lp[1]),class:"rl"},map);t.textContent=`${n} · to ${d} m`;}
+
+const PL=[
+ {k:"home",n:"Home pod",x:0,z:14,d:"surface",dx:-62,dy:-10,today:"Air, rest, wake",prop:"Unchanged: always air, rest and wake, never stranded."},
+ {k:"home",n:"Island workshop",x:-205,z:-5,d:"surface",dx:-40,dy:20,today:"Air, rest, wake",prop:"Unchanged: dry land."},
+ {k:"big",n:"Upper Canopy lab",x:116,z:-126,d:"−118 m",dx:12,dy:-8,lvl:0,today:"Dry room, heals, not a wake point",prop:"Early taste of a sanctuary: already dry, add rest and wake. No restoration."},
+ {k:"big",n:"Crown station",x:319,z:-542,d:"−56 m",dx:12,dy:4,lvl:1,today:"Invisible 4 m air bubble once powered",prop:"Big stop 1: the first stage drains the room and the bubble goes. Home you move into."},
+ {k:"big",n:"Rift materials station",x:136,z:-913,d:"−262 m",dx:14,dy:-12,lvl:2,today:"Invisible 4 m air bubble in open water",prop:"Big stop 2: restored through its own scenario, the room drains and the bubble goes."},
+ {k:"big",n:"Divide upper service dock",x:632,z:-1224,d:"−364 m",dx:12,dy:16,lvl:3,today:"Invisible 4 m air bubble, rest, wake",prop:"Big stop 3: restored through its own scenario, the room drains and the bubble goes."},
+ {k:"big",n:"District big stop",x:1250,z:-1330,d:"≈ −600 m",dx:-40,dy:24,lvl:4,today:"Not built (position approximate)",prop:"Big stop 4: the hardest scenario, the last sanctuary."},
+ {k:"svc",n:"District staging office",x:1132,z:-1116,d:"−520 m",dx:-150,dy:-22,today:"Invisible 4 m air bubble, rest, wake, free from New Game",prop:"Power only: charge and repair. The free air goes."},
+ {k:"svc",n:"Splitspine yard",x:470,z:21,d:"surface",today:"Service",prop:"Unchanged."},
+ {k:"svc",n:"Canopy east mooring",x:620,z:-200,d:"−160 m",today:"Charge, repair",prop:"Unchanged: power only."},
+ {k:"svc",n:"Basin anchorage",x:360,z:-430,d:"−240 m",today:"Charge, repair",prop:"Unchanged: power only."},
+ {k:"svc",n:"Rift cool-flank mooring",x:91,z:-887,d:"−300 m",today:"Charge, repair",prop:"Unchanged: power only."},
+ {k:"svc",n:"Divide lee mooring",x:560,z:-1120,d:"−390 m",today:"Charge, repair",prop:"Unchanged: power only."},
+ {k:"svc",n:"District staging shelf",x:1080,z:-1160,d:"−520 m",today:"Charge, repair",prop:"Unchanged: power only."},
+ {k:"svc",n:"Your field outposts",x:null,today:"Charge, locker, sockets",prop:"Unchanged: power only, wherever you place them."},
+];
+const col={home:"var(--s3)",big:"var(--s1)",svc:"var(--s2)"};
+const tip=document.getElementById("tip");
+const show=(e,p)=>{tip.innerHTML=`<b>${p.n} · ${p.d}</b><i>Today:</i> ${p.today}<br><i>Proposed:</i> ${p.prop}`;tip.style.display="block";const r=tip.parentElement.getBoundingClientRect();let l=e.clientX-r.left+14;if(l+270>r.width)l=e.clientX-r.left-274;tip.style.left=l+"px";tip.style.top=(e.clientY-r.top+14)+"px";};
+for(const p of PL){
+ if(p.x===null)continue;
+ const cx=px(p.x),cy=pz(p.z),g=el("g",{},map);
+ if(p.k==="home")el("rect",{x:cx-7,y:cy-7,width:14,height:14,rx:2,fill:col.home,stroke:"var(--surf)","stroke-width":2},g);
+ else if(p.k==="big"){el("circle",{cx,cy,r:13,fill:"none",stroke:col.big,"stroke-width":2,"stroke-opacity":.45},g);el("circle",{cx,cy,r:8,fill:col.big,stroke:"var(--surf)","stroke-width":2},g);}
+ else el("path",{d:`M${cx} ${cy-6}L${cx+6} ${cy}L${cx} ${cy+6}L${cx-6} ${cy}Z`,fill:col.svc,stroke:"var(--surf)","stroke-width":1.5},g);
+ if(p.dx!==undefined){const t=el("text",{x:cx+p.dx,y:cy+p.dy,class:"lbl"},g);t.textContent=p.n;const t2=el("text",{x:cx+p.dx,y:cy+p.dy+13,class:"lbl2"},g);t2.textContent=p.d+(p.lvl?` · big stop ${p.lvl}`:"");}
+ const h=el("circle",{cx,cy,r:16,class:"hit"},g);h.addEventListener("mousemove",e=>show(e,p));h.addEventListener("mouseleave",()=>tip.style.display="none");
+}
+el("line",{x1:20,y1:775,x2:20+200*S,y2:775,stroke:"var(--ink2)","stroke-width":2},map);{const t=el("text",{x:20+200*S+6,y:779,class:"lbl2"},map);t.textContent="200 m";}
+
+// Cards: general and spoiler-free.
+const C=[
+ {n:"Crown station",m:"Pale Basin · −56 m · 2.5–4 h",l:1,c:"Teaching the shape: rebuild in stages and get the power running up the pinnacle. It's mostly gathering and building, with a light hands-on step.",g:"The first dry room: home you move into. Each stage adds the dock, the full fabricator, sockets and the survey station."},
+ {n:"Rift materials station",m:"Ember Rift · −262 m · 5–6.5 h",l:2,c:"Work with the place's hazard instead of around it. Timing and observation matter as much as materials.",g:"A dry room deep in hostile water, plus power, charging, repairs and the station's fabrication."},
+ {n:"Divide upper service dock",m:"Mirror Divide · −364 m · 6.5–8 h",l:3,c:"A multi-step scenario that asks you to combine what you've learned, with the need worked out from clues rather than a list.",g:"A dry room, power, charging, repairs, mount changes and fabrication."},
+ {n:"District big stop",m:"Meridian district · ≈ −600 m · 8–10 h",l:4,c:"The hardest and most layered scenario. It brings together the skills, tools and craft of the whole game.",g:"The last sanctuary and the last place you wake."},
+];
+const cards=document.getElementById("cards");
+for(const c of C){const d=document.createElement("div");d.className="card";d.innerHTML=`<h4>${c.n}</h4><div class="meta">${c.m}</div><div class="lvl" aria-label="challenge ${c.l} of 4">${[1,2,3,4].map(i=>`<i class="${i<=c.l?"on":""}"></i>`).join("")}</div><dl><dt>Kind of challenge (example)</dt><dd>${c.c}</dd><dt>What you earn</dt><dd>${c.g}</dd></dl>`;cards.appendChild(d);}
+
+// Timeline
+const tl=document.getElementById("tl"),TX=h=>60+h*80,TY=d=>22+d*0.33;
+for(const d of [0,200,400,600]){el("line",{x1:60,x2:880,y1:TY(d),y2:TY(d),stroke:"var(--line)"},tl);const t=el("text",{x:52,y:TY(d)+4,"text-anchor":"end",class:"lbl2"},tl);t.textContent=d?`−${d} m`:"surface";}
+for(let h=0;h<=10;h+=2){const t=el("text",{x:TX(h),y:242,"text-anchor":"middle",class:"lbl2"},tl);t.textContent=h+" h";}
+const T=[["big","Canopy lab",1.8,2.2,118],["big","Crown",2.5,4,56],["big","Rift station",5,6.5,262],["big","Divide dock",6.5,8,364],["big","District stop",8,10,600],
+ ["svc","",3.5,3.5,160],["svc","",4,4,240],["svc","",5,5,300],["svc","",7,7,390],["svc","",7.8,7.8,520]];
+for(const [k,n,a,b,d] of T){const y=TY(d),c=col[k],m=TX((a+b)/2);
+ if(k==="big"){el("line",{x1:TX(a),x2:TX(b),y1:y,y2:y,stroke:c,"stroke-width":4,"stroke-linecap":"round","stroke-opacity":.55},tl);el("circle",{cx:m,cy:y,r:7,fill:c,stroke:"var(--surf)","stroke-width":2},tl);const t=el("text",{x:m,y:y-12,"text-anchor":"middle",class:"lbl"},tl);t.textContent=n;}
+ else el("path",{d:`M${m} ${y-5}L${m+5} ${y}L${m} ${y+5}L${m-5} ${y}Z`,fill:c,stroke:"var(--surf)","stroke-width":1.5},tl);}
+
+const rows=document.getElementById("rows"),order=["home","big","svc"];
+for(const p of [...PL].sort((a,b)=>order.indexOf(a.k)-order.indexOf(b.k))){const tr=document.createElement("tr");tr.innerHTML=`<td class="k"><span class="dot" style="background:${col[p.k]}"></span>${p.n}</td><td>${p.today}</td><td>${p.prop}</td>`;rows.appendChild(tr);}
+</script></body></html>

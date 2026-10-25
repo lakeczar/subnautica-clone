@@ -29,10 +29,9 @@
 import { spawn, spawnSync } from "node:child_process";
 import { randomBytes } from "node:crypto";
 import { fstatSync, readFileSync, renameSync, rmSync, mkdirSync, statSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
 import { join } from "node:path";
 import { sliceLimits } from "./policy.mjs";
-import { alive, ensureDirs, loadConfig, self, systemctlBounded, transaction, unitPopulation } from "./state.mjs";
+import { alive, ensureDirs, loadConfig, machineCpus, self, systemctlBounded, transaction, unitPopulation } from "./state.mjs";
 
 const QUERY_MS = 10000, GRACE_MS = 5000, RECOVER = "Recover: rerun scripts/heavy/install.sh";
 const [action, slice, dir] = process.argv.slice(2);
@@ -41,7 +40,7 @@ const cfg = loadConfig(), file = `${dir}/${slice}`, verb = action === "write" ? 
 // The reload's deadline; private state (tests) may shorten it.
 const RELOAD_MS = !cfg.production && process.env.SILTWAKE_EXCLUSIVE_RELOAD_MS ? Number(process.env.SILTWAKE_EXCLUSIVE_RELOAD_MS) : 120000;
 
-const w = sliceLimits(availableParallelism(), cfg);
+const w = sliceLimits(machineCpus(cfg), cfg);
 const want = action === "remove" ? null : ["[Unit]", "Description=Siltwake heavy-check exclusive jobs (TST-16): CPU priority while one runs", "",
   "[Slice]", "CPUAccounting=yes", "CPUWeight=10000", `CPUQuota=${w.cpuQuotaPct}%`, "MemoryAccounting=yes", `MemoryMax=${w.memoryMaxMiB}M`, "MemorySwapMax=0", ""].join("\n");
 const expected = action === "remove"

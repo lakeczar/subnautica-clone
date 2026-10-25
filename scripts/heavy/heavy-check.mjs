@@ -25,14 +25,15 @@
 // request that can never fit.
 import { spawn, spawnSync } from "node:child_process";
 import { closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readSync, rmSync, statSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
-import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, parseMiB, plan, resolveRequest, tokensFor } from "./policy.mjs";
+import { CLASS_NAMES, MACHINE_LABELS, classInfo, classifyCommand, coalesceKey, intentEnv, parseMiB, plan, portableCommand, resolveMachine, resolveRequest, tokensFor } from "./policy.mjs";
+import { resolveScript, stepBoundary } from "./portable-run.mjs";
+import { hasScopeComponent, ownCgroupPath } from "./cgroup-scope.mjs";
 import { makeSnapshot, snapshotStatus } from "./snapshot.mjs";
-import { builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
+import { buildOnly, builtOutputs, externalPaths, readHealth, remoteConfig } from "./remote.mjs";
 import {
-  alive, ensureDirs, flockFd, gitTree, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState,
+  alive, ensureDirs, flockFd, gitTree, v1Scope, gpuUsers, hostFor, jobDir, ledger, loadConfig, readJson, readMode, readState, terminalRecord,
   reconcile, scopePopulated, sliceCheck, systemctl, transaction, worktreeOf, writeJsonAtomic,
 } from "./state.mjs";
 
@@ -86,15 +87,15 @@ function parseJob(args) {
 async function nested(opts, command) {
   const ticket = process.env.SILTWAKE_JOB_TICKET, legacy = process.env.SILTWAKE_HEAVY_LOCK_HELD;
   if (!ticket && !legacy) return null;
-  const cgroup = readFileSync("/proc/self/cgroup", "utf8");
+  const cgroup = ownCgroupPath() ?? "";
   const cls = classInfo(opts.class ?? classifyCommand(command));
   if (ticket) {
     const grant = readJson(join(jobDir(cfg, ticket), "grant.json"));
-    if (!grant || !cgroup.includes(`/${grant.unit}.scope`))
+    if (!grant || !hasScopeComponent(cgroup, grant.unit))
       fail(`SILTWAKE_JOB_TICKET=${ticket}, but this process is not inside that ticket's scope; refusing. Unset it, or run inside the job.`);
     if (cls.gpu && !grant.gpu) fail(`nested ${opts.class ?? "exclusive"} call inside ${grant.class} ticket ${ticket}, which has no GPU lease; submit the GPU work as its own --class gpu job`);
     if (cls.exclusive && !grant.exclusive) fail(`nested exclusive call inside ${grant.class} ticket ${ticket}; submit it as its own --class exclusive job`);
-  } else if (!/\/siltwake-heavy-[^/]*\.scope$/m.test(cgroup) && !cgroup.includes(`/${cfg.unitPrefix}-`)) {
+  } else if (!v1Scope(cgroup, cfg.unitPrefix)) {
     fail("SILTWAKE_HEAVY_LOCK_HELD is set, but this process is not inside a heavy-check scope; refusing");
   }
   // The outer job's own stall window and limit govern; this only bounds a runaway.
@@ -123,16 +124,41 @@ async function submit(opts, command, { quiet = false } = {}) {
   if (opts.snapshot && !tree.head) fail("--snapshot needs a git worktree");
   // The second worker runs a commit (SCHED-2b): only a clean tree can go, and
   // only a command that names nothing outside it but its declared --artifact
-  // outputs. An `any` or `soak` job that can't go runs here; a `4070` job is refused.
-  const machine = req.goal.machine, lane = remoteConfig(cfg);
-  const external = externalPaths(command, worktree, opts.artifacts ?? []), built = builtOutputs(command);
+  // outputs, and doesn't only build an output that wouldn't come back. Then
+  // (SCHED-3) an `any` job goes there only if it's declared portable: a
+  // registered command, or the caller's own --machine. Otherwise it is routed
+  // to the 3090 with the reason (a --snapshot is a clean tree's commit, so it
+  // needs no rule of its own); a `soak` job runs here; a `4070` job is refused.
+  const lane = remoteConfig(cfg);
+  const external = externalPaths(command, worktree, opts.artifacts ?? []), built = builtOutputs(command), builds = buildOnly(command, opts.artifacts ?? []);
   const why = !lane.enabled ? `the remote lane is off (${readHealth(cfg).detail})` : !tree.head ? "not a git tree"
     : tree.dirty !== "clean" ? "uncommitted changes (alickers runs a commit)" : external.length ? `it names local paths alickers lacks: ${external.slice(0, 3).join(", ")} (declare outputs with --artifact)`
-    : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …` : null;
+    : built.length ? `it reads build output a commit lacks (${built.join(", ")}); compile inside the job, e.g. npm run playthrough, or npm run build && …`
+    : builds ? `it only builds (${builds.command}) and declares no --artifact ${builds.output ?? "for its output"}: build output must stay here` : null;
+  const portable = portableCommand(command);
+  const routed = resolveMachine(req.goal.machine, why, { explicit: opts.machine != null, portable, intent: intentEnv(process.env) });
+  if (routed.error) fail(`refused: ${routed.error}`);
+  // A registered command placed by default runs through this commit's portable
+  // runner (R3), on whichever machine takes it: the same command line and
+  // environment on both, and never npm. A commit without one runs here as submitted.
+  let run = command;
+  if (routed.machine === "any" && opts.machine == null && portable) {
+    const show = (path) => spawnSync("git", ["-C", worktree, "show", `${tree.head}:${path}`], { encoding: "utf8", maxBuffer: 16 * 1048576 });
+    let r = show("scripts/heavy/portable-run.mjs").status !== 0 ? { error: "this commit has no portable runner (scripts/heavy/portable-run.mjs)" } : {};
+    if (!r.error) {
+      try { r = resolveScript(JSON.parse(show("package.json").stdout).scripts, portable.run[1], portable.run.slice(2), 0, worktree); } catch { r = { error: "its package.json can't be read" }; }
+    }
+    // Every step's file, through its symlinks, inside the repository or its node_modules (R5-F1); the tree is clean, so this is the commit.
+    if (!r.error) { const outside = r.steps.map(([, path]) => stepBoundary(worktree, path)).find(Boolean); if (outside) r = { error: outside }; }
+    if (r.error) Object.assign(routed, { machine: "3090", routed: { from: "any", reason: `${r.error}; pass --machine any to declare it portable` } });
+    else { run = ["node", relative(cwd, join(worktree, "scripts", "heavy", "portable-run.mjs")), ...portable.run]; req.goal.portable = { name: portable.name, command }; }
+  }
+  const machine = req.goal.machine = routed.machine;
+  if (routed.routed) req.goal.routed = routed.routed;
   req.goal.remoteOk = machine !== "3090" && !why;
-  if (machine === "4070" && why) fail(`refused: --machine 4070 runs on alickers, but ${why}`);
-  if (why && machine !== "3090" && !(machine === "any" && !opts.machine)) say(`runs here (factory-worker), not on alickers: ${why}`);
-  for (const a of opts.artifacts ?? []) if (machine === "3090" || !req.goal.remoteOk) { if (!a.startsWith("/")) fail(`--artifact ${a}: a job running here needs an absolute path`); }
+  if (routed.routed || (why && machine === "soak")) say(`runs here (factory-worker), not on alickers: ${routed.routed?.reason ?? why}`);
+  // A routed job's relative --artifact is where it writes it here, as for an `any` job run here.
+  for (const a of opts.artifacts ?? []) if ((machine === "3090" && !routed.routed) || (machine !== "3090" && !req.goal.remoteOk)) { if (!a.startsWith("/")) fail(`--artifact ${a}: a job running here needs an absolute path`); }
   const id = newTicket();
   const key = coalesceKey({ worktree, cwd, argv: command, class: cls, cpus: opts.cpus, memMiB: opts.memMiB, review: opts.review, head: tree.head, dirty: tree.dirty, snapshot: opts.snapshot, gpu: opts.gpu, machine: opts.machine, artifacts: opts.artifacts });
   const dir = jobDir(cfg, id);
@@ -148,7 +174,7 @@ async function submit(opts, command, { quiet = false } = {}) {
   const testBuild = process.env.SILTWAKE_TEST_BUILD || ".test-build";
   if (!/^\.test-build(-[A-Za-z0-9_.]+)?$/.test(testBuild)) fail(`SILTWAKE_TEST_BUILD=${testBuild}: use .test-build-<name>`);
   writeJsonAtomic(join(dir, "request.json"), {
-    id, key, worktree, cwd, argv: command, opts: { ...opts, class: cls }, req, tree, snapshot, testBuild,
+    id, key, worktree, cwd, argv: run, opts: { ...opts, class: cls }, req, tree, snapshot, testBuild,
     submittedAt: Date.now(), queueTimeoutS: opts.queueTimeoutS ?? cfg.queueTimeoutS,
   });
   writeFileSync(join(dir, "output.log"), "");
@@ -251,8 +277,10 @@ async function follow(id, { stream, maxS = null, json = false }) {
     const line = positionLine(id);
     if (line == null) { if (++missing > 4) fail(`ticket ${id} is not queued or running and has no result`); }
     else missing = 0;
-    if (line && (line !== lastLine || Date.now() - lastPrinted > 300000) && !(stream && line.startsWith("running"))) {
-      say(`${id} ${line}`); lastLine = line; lastPrinted = Date.now();
+    // Printed when the position or blocker changes (not the clock), and every 5 minutes (SCHED-3 R5).
+    const key = line?.replace(/(, waited| for) \S+$/, "");
+    if (line && (key !== lastLine || Date.now() - lastPrinted > 300000) && !(stream && line.startsWith("running"))) {
+      say(`${id} ${line}`); lastLine = key; lastPrinted = Date.now();
     }
     if (maxS != null && Date.now() - started >= maxS * 1000) {
       say(`${id} still pending (${line ?? "unknown"}); call wait again`);
@@ -297,7 +325,9 @@ function finalLine(e) {
       ? `WARNING tree changed: submitted ${tr(e.head, e.dirty)}, tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`
       : `tested ${tr(e.headAtAdmit, e.dirtyAtAdmit)}`);
   }
-  parts.push(`on ${e.machine ?? MACHINE_LABELS.local}`);
+  const route = e.goal?.routed ? ` (any, routed here: ${e.goal.routed.reason})` : "";
+  parts.push(e.ran === false ? `never ran; planned for ${e.planned}${route}`
+    : `on ${e.machine ?? MACHINE_LABELS.local}${e.ran === "unknown" ? " (whether its command started there is unknown)" : ""}${route}`);
   if (e.artifacts?.length) parts.push(`artifacts: ${e.artifacts.map((a) => a.local ?? `${a.remote ?? a.path} (${a.error ?? "here"})`).join(", ")}`);
   if (e.gpuShared) parts.push(`GPU shared outside the lease with pid ${e.gpuShared.map((u) => u.pid).join(", ")}`);
   if (e.context?.v === 2) {
@@ -346,7 +376,8 @@ function statusCmd(args) {
   const unleased = gpuUsers(cfg, state).filter((u) => !u.leased);
   if (unleased.length) process.stdout.write(`GPU in use outside the lease: ${unleased.map((u) => `pid ${u.pid} (${u.cmd.slice(0, 60)})`).join("; ")}\n`);
   const rows = [["TICKET", "WORKTREE", "CLASS", "MACHINE", "STATE", "TIME", "BLOCKED-BY", "COMMAND"]];
-  const mach = (t) => (t.state === "running" ? (t.remote ? "alickers" : "here") : t.goal?.machine ?? "3090") + (t.fellBack ? "*" : "");
+  // `^`: an `any` job routed to the 3090 at submit (SCHED-3), with why below.
+  const mach = (t) => (t.state === "running" ? (t.remote ? "alickers" : "here") : t.goal?.machine ?? "3090") + (t.fellBack ? "*" : "") + (t.goal?.routed ? "^" : "");
   for (const t of running) rows.push([t.id, wt(t), cls(t), mach(t), t.express ? "running*" : "running", dur(now - t.admittedAt), "", cmd(t)]);
   for (const id of p.order) {
     const t = state.tickets[id];
@@ -355,6 +386,8 @@ function statusCmd(args) {
   const widths = rows[0].map((_, c) => Math.max(...rows.map((r) => r[c].length)));
   for (const r of rows) process.stdout.write(`${r.map((v, c) => (c === r.length - 1 ? v : v.padEnd(widths[c]))).join("  ")}\n`);
   if (running.some((t) => t.express)) process.stdout.write("* express slot\n");
+  for (const t of [...running, ...p.order.map((id) => state.tickets[id])].filter((x) => x.goal?.routed))
+    process.stdout.write(`^ ${t.id}: any, routed here: ${t.goal.routed.reason}\n`);
   return 0;
 }
 const wt = (t) => t.worktree.split("/").at(-1);
@@ -378,7 +411,7 @@ async function cancelCmd(args) {
     if (!t) return { result: existsSync(join(jobDir(cfg, id), "exit.json")) ? "finished" : "unknown" };
     if (t.state === "running") { writeFileSync(join(jobDir(cfg, id), "cancelled"), ""); return { result: { running: t.unit } }; }
     delete state.tickets[id];
-    writeJsonAtomic(join(jobDir(cfg, id), "exit.json"), { ticket: id, code: 75, label: "cancelled while queued", endedAt: Date.now() });
+    writeJsonAtomic(join(jobDir(cfg, id), "exit.json"), terminalRecord(t, { code: 75, label: "cancelled while queued" }));
     ledger(cfg, { event: "cancelled", ticket: id, worktree: t.worktree, class: t.req.class, waitedS: Math.round((Date.now() - t.submittedAt) / 1000) });
     if (alive(t.supervisor)) process.kill(t.supervisor.pid, "SIGTERM");
     return { changed: true, result: "removed" };
@@ -425,12 +458,13 @@ function releaseRemoteCmd(args) {
     if (!t) return { result: existsSync(join(jobDir(cfg, id), "exit.json")) ? "finished" : "unknown" };
     if (!t.remote || t.state !== "running") return { result: "not-remote" };
     const request = readJson(join(jobDir(cfg, id), "request.json"));
-    const result = {
-      ticket: id, code: 75, stopReason: "released", class: t.req.class, remote: true, machine: MACHINE_LABELS.remote, machineTag: t.goal?.machine, attempts: t.attempts,
+    // Whether the attempt on alickers started is exactly what nobody could confirm.
+    const result = terminalRecord(t, {
+      code: 75, stopReason: "released", attempts: t.attempts,
       label: `released by the coordinator: ${reason}. The attempt on alickers was never confirmed stopped; the job was not run here`,
-      released: { reason, by, at: Date.now() }, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), head: request?.tree?.head ?? null,
+      released: { reason, by, at: Date.now() }, head: request?.tree?.head ?? null,
       evidence: { commit: request?.tree?.head ?? null, bound: false, why: `released by the coordinator: ${reason}`, snapshot: false },
-    };
+    }, { ran: "unknown", remote: true });
     writeJsonAtomic(join(jobDir(cfg, id), "exit.json"), result);
     ledger(cfg, { event: "remote-released", ...result, holder: t.holder ?? null, recovering: t.recovering ?? null });
     delete state.tickets[id];

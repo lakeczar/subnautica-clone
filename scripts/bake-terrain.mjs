@@ -20,7 +20,6 @@
 // tools) is ever published or restored.
 // --force and --verify never use the store; the composed gate's --verify still
 // compares the restored files with the live recipe.
-import { build, version as esbuildVersion } from "esbuild";
 import { createHash } from "node:crypto";
 import { copyFileSync, existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { availableParallelism, tmpdir } from "node:os";
@@ -28,7 +27,7 @@ import { dirname, join, resolve } from "node:path";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import { Worker, isMainThread, parentPort, workerData } from "node:worker_threads";
 import { deflateSync, inflateSync } from "node:zlib";
-import { BAKE_ENTRY, sourceHashOf } from "./bake-source-hash.mjs";
+import { guardLocalRun } from "./local-guard.mjs";
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 
@@ -47,6 +46,11 @@ if (!isMainThread) {
   process.exit(0);
 }
 
+// On factory-worker, only inside a heavy-check job (STEW-2); here, because public/terrain is its product.
+guardLocalRun({ cls: "bake", machine: "3090" });
+const { build, version: esbuildVersion } = await import("esbuild");
+// After the guard: the source-hash helper imports esbuild too (STR-13).
+const { BAKE_ENTRY, sourceHashOf } = await import("./bake-source-hash.mjs");
 const args = new Set(process.argv.slice(2));
 const pub = join(root, "public"), out = join(pub, "terrain"), caveOut = join(pub, "caves");
 const work = join(process.env.TMPDIR ?? tmpdir(), `siltwake-bake-${process.pid}`);

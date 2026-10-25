@@ -22,20 +22,39 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - both routes can be finished;
   - the bot's structural checks pass;
   - the owner's playtest says it's full, atmospheric and unpadded at 10+ hours;
-  - a steady 60 fps on the 3090;
+  - a steady 60 fps on a dedicated GPU (owner, 2026-10-24: the gate is "60 fps on GPU, not 3090"; either test GPU, the 3090 or the 4070 laptop, can give acceptance evidence);
   - no progress-breaking bugs.
 - **The bigger interleaved map** (Option B) is re-evaluated once the game is finished.
 
 ## Pacing rules for builders
 - **Something new** (a tool, area, craft, discovery or story beat) every **15–20 minutes** of efficient play. Tune from playtests.
+- **Difficulty rises through pressure and combining, never grind** (owner, 2026-10-24). The levers:
+  - fewer resources;
+  - places where you can't surface to refill;
+  - craft that can't fit, or that sit at the edge of their maximum depth, so you leave them and explore exposed;
+  - places farther from the start that are deeper and take longer to explore and to find things in;
+  - **nothing in a straight line**.
+
+  The 15–20 minute "something new" rule stops "farther" becoming "emptier".
 - **Empty travel** is no more than **about 90 seconds between points of interest, at the speed of the best craft you'd normally have on that leg.**
   - **A spacing guide, not the letter of the law** (owner, 2026-10-24). As you progress, longer journeys may take longer. The rule keeps things well spaced out.
   - **For checks:** the empty-travel limit may grow with progression and journey length, and a long leg is reported for judgement rather than auto-failed. The 15–20 minute new-content rule and "no decode-only waiting" stay the hard gates.
+  - **Deliberate quiet stretches** (owner, 2026-10-24):
+    - **Marking:** designers may mark a journey as deliberately atmospheric, giving its kind and purpose. The kinds include:
+      - a colourful environment;
+      - a large natural formation, such as a sea-treader-style path later in the game;
+      - something beautiful to look at;
+      - a descent;
+      - an approach to a silhouette;
+      - a breather after a big moment.
+    - **Reporting:** marked stretches are reported as intended quiet, not as empty travel. The owner's playtest tags judge them.
+    - **Limits:** something must change along the way (light, depth, sound, silhouette, current, creatures). A repeated chore is never excused by a mark.
   - **Tension counts while it's live:** sneaking past a predator you can hear counts as something happening only while its warning cue plays.
 - **Late-game needs are inferred from evidence, not handed over** (owner, 2026-10-24).
   - **How:** a player can work out what a late task needs from what they've seen: machines visibly built from a material, a rare decoded log, cryptic messages.
   - **No shopping list:** no explicit list is required.
   - **Fair in hindsight:** the clue must exist and be reachable before the point where missing it costs a trip. A player who misses it pays one return trip, never a dead end.
+- **Tone of abandoned places** (owner, 2026-10-24): it depends on the place. Early places lean towards wonder and curiosity; it turns **somewhat eerie and unsettling** the further into the game you get. Fear comes from implication, not gore.
 - **Carrier hold-course** (owner, 2026-10-24): on long journeys in the slow carrier, it can hold a course along lanes you've already sailed, so you can craft, tend planters or decode aboard. Otherwise you always steer.
 - **Gathering:** no single gathering trip for one recipe takes more than about 5 minutes. Tune from playtests.
 - **Waiting** is only allowed when it's part of the gameplay: decoding, growing, cycles with alternatives. No idle charging bars.
@@ -70,7 +89,8 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 
 ## Fleet, power and outposts
 - **Power sources:**
-  - restored service stops;
+  - restored **big stops**, once earned (see below);
+  - **sparse charging moorings**, placed at the start of long, hard journeys and **never near a big stop** (owner, 2026-10-24). Exact spots are set in the owner's map-layout session;
   - field outposts;
   - the carrier's charging dock;
   - crafted reserve cells;
@@ -80,6 +100,9 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - an optional **current turbine**, prototyped in the sandbox.
 
   No perpetual generator.
+- **Power is air** (owner, 2026-10-24). **No place gives free air.**
+  - **Where everyday air comes from:** the surface, your cockpit (it breathes while the craft has charge), the air line from a parked powered craft (which draws on its battery), the registered Creel cabin and the carrier.
+  - **Service points give power only:** moorings, small posts and player outposts give charge, repair, lockers, sockets and fabrication where they have them, but **no air and no rest**.
 - **Upgrades in two layers:**
   - **Common pool,** wherever it physically fits: depth refits (not the Spindle), hull plating, heat and brine protection, bigger cells and efficiency, lights, **silent running**, **flare launcher**, **emergency ballast**.
   - **Signature upgrades,** 2–3 per craft, which give each craft a distinct use:
@@ -102,7 +125,15 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - **Moving them:** they can be packed up and redeployed with a small material loss, so you **leapfrog toward the frontier**.
   - **Limit:** about **3 at once**, with an upgrade for more.
   - **Early access:** a basic kit with charging, a locker and one socket comes **early**, as the stopgap before the carrier.
-  - **Restored service stops** stay **larger, fixed and story-rich**, each with a unique service outposts can't offer.
+  - **Big stops are earned** (owner, 2026-10-24; replaces "restored service stops"). There are four: the **crown station**, the **Rift materials station**, the **Divide upper service dock** and **one district big stop**. Each follows the same arc:
+    1. **Arrive** at a dark, flooded, dead place, breathing from your own parked craft.
+    2. **Read** what broke and what it needs.
+    3. **Earn it** through that place's **own unique scenario**: a hands-on puzzle, building, or a material inferred from clues.
+    4. **It comes alive:** lights return room by room and **one room drains into a dry room**.
+    5. **Sanctuary:** you stand, breathe, rest and wake there, and its charging, repair and fabrication open.
+  - **Each big stop is its own place:** its own architecture, surroundings and creatures, the facility's purpose and its group, and logs and environmental storytelling about what happened there. The room tells you before the log does.
+  - **Restoration progress is kept:** completed steps stay completed if you're knocked out mid-restoration. Failing costs the trip back and the dropped cargo, never redoing finished work.
+  - **Dry rooms feel like arriving** (coordinator, from the designer's recommendation): a quick repeat entry, surfacing straight up through a floor well, with the two-door lock used on the first entry and for the deeper rooms. Leaving the water always changes what you sense (the sound shifts, water runs off the lens, footsteps, room tone, a window onto the water). **A dry room is never unsafe:** no threat enters, and eeriness stays in what you see and read.
 - **Route identity:**
   - **independent:** leapfrog with outposts, anchored by restored stops;
   - **carrier:** bring your base along, carrying the systems.
@@ -150,7 +181,13 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
   - about **6 module sockets**;
   - a built-in survey station covering the Basin, the Rift head and the Canopy edge;
   - a far-visible beacon.
-- **Waking up:** after being incapacitated you **wake at the last restored base you rested at** (the pod or the crown).
+- **Waking up** (owner, 2026-10-24): after being incapacitated you wake at the **last rest point you rested at, while it still works**, otherwise at the pod. **Rest points:**
+  - the homes (the pod, the workshop);
+  - the Canopy lab, which is already dry (coordinator call);
+  - each **restored big stop's dry room**;
+  - the registered **Creel cabin** and the registered **carrier** cabin (coordinator call).
+
+  Moorings, outposts and the district staging office are **not** rest points.
 - **The pod keeps its guaranteed role:** air, healing, storage and basic fabrication, and it's never stranded by crown power loss.
 - **The carrier anchorage** is about 130 m from the crown.
 
@@ -184,7 +221,7 @@ Agreed with the owner, Alek, through a structured design interview. Where it con
 - **Seeing far stays intact:** an always-resident **far layer** of cheap landmark silhouettes plus their lights, so distant landmarks show while detail streams in.
 
 ## Backtracking (owner, 2026-10-22)
-- **Hubs and service points** (pod, workshop cove, crown station, outposts) stay easy to reach, at the waterline or a dock.
+- **Homes and restored big stops** (pod, workshop cove, the restored crown and other big stops) stay easy to reach, at the waterline or a dock. Service points are sparse by design (owner, 2026-10-24).
 - **Purposeful backtracking is wanted.** Gates you see before you can open them (a sealed hatch, a mountaintop secret, a jammed mechanism) are resolved by a key item, resource or knowledge found later. The player connects the dots from what they saw and read: "what does this mean?… aha!" Gates must be noticeable when first met and legible in hindsight, never arbitrary or empty-travel padding.
 - **Don't overdo it.** Use a few, spaced out, never back-to-back backtracking. The general principle: place **key elements that make the player wonder "what is this for?"**, then let the threads and logs lead them to discover what to use there. Pacing comes first.
 

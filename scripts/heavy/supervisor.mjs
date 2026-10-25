@@ -17,7 +17,7 @@ import { plan, resolveRequest, tokensFor } from "./policy.mjs";
 import { refreshHealth } from "./remote.mjs";
 import {
   flockFd, gpuUsers, hostFor, jobDir, ledger, loadConfig, readFileSafe, readJson, readState,
-  readMode, reconcile, self, transaction, writeJsonAtomic,
+  readMode, reconcile, self, terminalRecord, transaction, writeJsonAtomic,
 } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -114,7 +114,7 @@ function tryAdmit() {
     if (now - t.submittedAt > t.queueTimeoutS * 1000) {
       delete state.tickets[id];
       const waited = Math.round((now - t.submittedAt) / 1000);
-      writeJsonAtomic(join(dir, "exit.json"), { ticket: id, code: 75, label: `expired: not admitted within ${t.queueTimeoutS}s`, endedAt: now });
+      writeJsonAtomic(join(dir, "exit.json"), terminalRecord(t, { code: 75, label: `expired: not admitted within ${t.queueTimeoutS}s` }));
       ledger(cfg, { event: "expired", ticket: id, worktree: t.worktree, class: t.req.class, waitedS: waited });
       return { changed: true, result: "gone" };
     }

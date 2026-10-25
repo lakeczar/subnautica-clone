@@ -127,14 +127,30 @@ export class Driver {
   /** Story reads skipped because the build has not placed their hosts (pending C3). */
   deferred: string[] = [];
 
-  idle(seconds: number): void {
-    for (let i = 0; i < Math.round(seconds * STEPS_PER_SECOND); i++) this.tick([IDLE]);
+  /** Hold still for `seconds`, declaring why (as `waitFor`). */
+  idle(seconds: number, cause: string): void {
+    this.waitFor(`idle: ${cause}`, seconds, () => false, cause, true);
   }
-  /** Idle until `done` holds, up to `seconds`. */
-  waitFor(label: string, seconds: number, done: (s: GameState) => boolean): void {
-    for (let i = 0; i < Math.round(seconds * STEPS_PER_SECOND) && !done(this.state); i++) this.tick([IDLE]);
-    if (!done(this.state)) throw new Blocked(`Timed out waiting for ${label}: ${this.state.feedback}`, where(this.state));
+  /** The declared cause of the wait in progress (LS-1), e.g. `decode:<id>`: the play
+   * timeline records why the bot is idle from what it says it waits on, never from
+   * which background systems happen to exist. */
+  waitCause: string | null = null;
+  /** Idle until `done` holds, up to `seconds`. `cause` (required, LS-1) says what the
+   * bot waits on (`decode:<id>`, `growth:<seed>`, `action:sort`, …): the play timeline
+   * records the wait as idle from its first tick, never as play. `untilEnd`: hold the
+   * full time (`idle`). */
+  waitFor(label: string, seconds: number, done: (s: GameState) => boolean, cause: string, untilEnd = false): void {
+    if (!cause) throw new Error(`waitFor(${label}): a wait must declare its cause`);
+    this.waitCause = cause;
+    try {
+      for (let i = 0; i < Math.round(seconds * STEPS_PER_SECOND) && !done(this.state); i++) this.tick([IDLE]);
+    } finally { this.waitCause = null; }
+    if (!untilEnd && !done(this.state)) throw new Blocked(`Timed out waiting for ${label}: ${this.state.feedback}`, where(this.state));
   }
+  /** Off for a decode-free run (LS-1): any `start-decode` is then a finding. */
+  decodesAllowed = true;
+  /** Called after each milestone save (the play timeline keeps a branch point there). */
+  readonly milestones: ((d: Driver, label: string) => void)[] = [];
 
   /** The command entry point: the game's executeCommand. Tests may substitute a
    * faulty one to prove that a success response without its effect blocks. */
@@ -143,6 +159,7 @@ export class Driver {
    * allowed, and on an accepted command whose effect is missing from the state. */
   command(command: GameCommand, options: { allowRefusal?: boolean } = {}): { ok: boolean; message: string; events: GameEvent[] } {
     const before = this.state;
+    if (command.type === "start-decode" && !this.decodesAllowed) throw new Blocked("A decode-free run started a decode", where(before));
     const result = this.exec(before, command, this.world);
     const error = result.events.find((e): e is Extract<GameEvent, { type: "notice" }> => e.type === "notice" && e.error === true);
     if (error) {

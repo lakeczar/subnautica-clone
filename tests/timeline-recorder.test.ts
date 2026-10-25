@@ -131,7 +131,7 @@ test("feedback notes carry time and location; decodes from SYS-2 are new things"
   assert.ok(Math.abs(note.play - 121 / 60) < 0.02);
   addNote(rec, s, "x".repeat(NOTE_MAX + 50));
   assert.equal(rec.events.at(-1)!.text!.length, NOTE_MAX);
-  recordSystemsEvents(rec, s, [{ type: "decoded", completion: { decodable: "demo_hut_fragment", blueprints: [], readable: [], beacons: [] } },
+  recordSystemsEvents(rec, s, [{ type: "decoded", completion: { decodable: "reef_pumphouse_log", blueprints: [], fresh: [], readable: [], beacons: [] } },
     { type: "crop-ready", seed: "seed_staple_cup" }, { type: "chart-explored", cells: ["0:0"] }]);
   assert.deepEqual(kinds(rec).slice(-2), ["new:decode", "system:crop-ready"]);
 });

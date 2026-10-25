@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import { resolve } from "node:path";
+import { readFileSync } from "node:fs";
 import { pathToFileURL } from "node:url";
 
 // heavy-check v2 admission policy (scripts/heavy/policy.mjs), pure: classes,
@@ -363,12 +364,164 @@ test("lane eligibility: local paths outside the tree and uncommitted build outpu
   assert.deepEqual(R.builtOutputs(["npm", "run", "playthrough", "--", "--jobs", "3"]), []);
 });
 
-test("machine tags: defaults by class; exclusive is the 3090's; unknown tags refused", () => {
+test("machine tags (SCHED-3): any by default, except quick, bake and exclusive (here) and soak; an explicit tag wins; unknown tags refused", () => {
   const m = (cls: string, extra = {}) => P.resolveRequest({ class: cls, ...extra }, { T: 4, M: 6144 }).goal?.machine;
-  assert.deepEqual([m("playthrough"), m("heavy-suite"), m("soak"), m("gpu"), m("quick"), m("exclusive")], ["any", "any", "soak", "3090", "3090", "3090"]);
+  const classes = ["standard", "gpu", "playthrough", "heavy-suite", "quick", "bake", "exclusive", "soak"];
+  assert.deepEqual(classes.map((c) => m(c)), ["any", "any", "any", "any", "3090", "3090", "3090", "soak"]);
+  assert.deepEqual(classes.map((c) => P.defaultMachine(c)), classes.map((c) => m(c)), "the request uses the table");
   assert.equal(m("gpu", { machine: "4070" }), "4070");
+  assert.equal(m("standard", { machine: "3090" }), "3090", "explicit --machine 3090 wins");
+  assert.equal(m("quick", { machine: "any" }), "any", "explicit --machine any wins for a local class");
   assert.match(P.resolveRequest({ class: "exclusive", machine: "4070" }, { T: 4, M: 6144 }).error, /exclusive measures the RTX 3090/);
   assert.match(P.resolveRequest({ class: "quick", machine: "mars" }, { T: 4, M: 6144 }).error, /unknown machine/);
+});
+
+test("routing (SCHED-3): an any request that can't run on alickers goes to the 3090 with the reason; 4070 is refused; 3090 and soak stand", () => {
+  const why = "uncommitted changes (alickers runs a commit)", declared = { explicit: true, portable: null };
+  assert.deepEqual(P.resolveMachine("any", null, declared), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("any", why, declared), { machine: "3090", routed: { from: "any", reason: why } });
+  assert.deepEqual(P.resolveMachine("3090", why, declared), { machine: "3090" }, "no routing record for a job that asked for here");
+  assert.deepEqual(P.resolveMachine("soak", why, declared), { machine: "soak" }, "soak keeps its own rule");
+  assert.match(P.resolveMachine("4070", why, declared).error, /--machine 4070 runs on alickers, but uncommitted changes/);
+  assert.deepEqual(P.resolveMachine("4070", null, declared), { machine: "4070" });
+});
+
+test("portability is declared (SCHED-3 R1-F1): a default any goes to alickers only for a registered command; an explicit --machine is the caller's declaration", () => {
+  const und = { explicit: false, portable: null };
+  assert.deepEqual(P.resolveMachine("any", null, und), { machine: "3090", routed: { from: "any", reason: P.UNDECLARED } });
+  assert.match(P.UNDECLARED, /portability not declared: pass --machine any and --artifact for its outputs/);
+  assert.deepEqual(P.resolveMachine("any", null, { explicit: false, portable: "the fast tier" }), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("any", null, { explicit: true, portable: null }), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("soak", null, und), { machine: "soak" });
+  // The registry: exact commands only (Sol R1's R6 commands included).
+  for (const argv of [["npm", "test"], ["npm", "run", "test:fast"], ["npm", "run", "playthrough"], ["npm", "run", "playthrough", "--", "--jobs", "3", "--quiet"]])
+    assert.ok(P.portableCommand(argv), argv.join(" "));
+  for (const argv of [["node", "scripts/write-local.mjs"], ["node", "tools/cave-gpu-check.mjs"], ["node", "tools/cave-deep-shots.mjs"], ["node", "tools/large-cave-lab.gpu.mjs"],
+    ["node", "scripts/build-wrapper.mjs"], ["sh", "-c", 'cat "$REVIEW_INPUT"'], ["sh", "-c", 'printf done > "$REVIEW_OUTPUT"'], ["npm", "run", "test:build"],
+    ["npm", "run", "build"], ["sh", "-c", "npm run build && true"], ["sh", "-c", "npm test && cp x /tmp"],
+    ["npm", "run", "playthrough", "--", "--jobs", "3", "--json", "pt.json"], ["npm", "run", "test:heavy"], ["node", "scripts/check-m1-economy.mjs"]])
+    assert.equal(P.portableCommand(argv), null, argv.join(" "));
+});
+
+test("intent check (SCHED-3 R3, R4): SILTWAKE_* the queue doesn't own, any NODE_*, and npm_config_* beyond npm's descriptive exports route a default any here, as submitted", () => {
+  assert.deepEqual(P.intentEnv({ npm_config_script_shell: "/x/sh", NODE_OPTIONS: "--require x", NODE_ENV: "test", SILTWAKE_BUILD_CACHE: "off", SILTWAKE_BUILD_CACHE_DIR: "/c",
+    SILTWAKE_FAST_FILE_BUDGET_S: "30", SILTWAKE_SOMETHING_NEW: "1", NPM_CONFIG_REGISTRY: "http://x" }),
+  ["NODE_ENV", "NODE_OPTIONS", "NPM_CONFIG_REGISTRY", "SILTWAKE_BUILD_CACHE", "SILTWAKE_BUILD_CACHE_DIR", "SILTWAKE_FAST_FILE_BUDGET_S", "SILTWAKE_SOMETHING_NEW", "npm_config_script_shell"]);
+  // The config-file selectors always count (R4-F2): a spoofed npm_lifecycle_event changes nothing.
+  const files = { npm_config_userconfig: "/x/npmrc", npm_config_globalconfig: "/x/etc/npmrc", npm_config_prefix: "/x" };
+  assert.deepEqual(P.intentEnv(files), ["npm_config_globalconfig", "npm_config_prefix", "npm_config_userconfig"]);
+  assert.deepEqual(P.intentEnv({ ...files, npm_lifecycle_event: "test:heavy" }), ["npm_config_globalconfig", "npm_config_prefix", "npm_config_userconfig"]);
+  // Descriptive npm exports, the queue's own variables, an empty value, and NODE (npm's path to node, not NODE_*): no intent.
+  const quiet = Object.fromEntries(["global_prefix", "local_prefix", "npm_version", "cache", "init_module", "node_gyp", "noproxy", "user_agent", "allow_scripts", "loglevel"].map((k) => [`npm_config_${k}`, "x"]));
+  Object.assign(quiet, { SILTWAKE_JOB_CPUS: "2", SILTWAKE_HEAVY_CONCURRENCY: "2", SILTWAKE_SCHED_DIR: "/x", SILTWAKE_TEST_BUILD: ".test-build-2", SILTWAKE_GPU_LEASE: "t", SILTWAKE_HEAVY_CHECK: "/x", NODE_OPTIONS: "", NODE: "/usr/bin/node", PATH: "/bin", npm_lifecycle_event: "x" });
+  assert.deepEqual(P.intentEnv(quiet), []);
+  const reg = { explicit: false, portable: { name: "the fast tier", run: ["--script", "test"] } };
+  assert.deepEqual(P.resolveMachine("any", null, { ...reg, intent: ["SILTWAKE_BUILD_CACHE"] }),
+    { machine: "3090", routed: { from: "any", reason: "local configuration SILTWAKE_BUILD_CACHE changes this command; pass --machine any to declare it portable" } });
+  assert.deepEqual(P.resolveMachine("any", null, { ...reg, intent: [] }), { machine: "any" });
+  assert.deepEqual(P.resolveMachine("any", null, { explicit: true, portable: null, intent: ["npm_config_userconfig"] }), { machine: "any" }, "an explicit --machine any stays the caller's declaration");
+});
+
+test("test:heavy declares its own command portable (SCHED-3 R4-F2): --machine any, and that command has no npm", () => {
+  const heavy = JSON.parse(readFileSync("package.json", "utf8")).scripts["test:heavy"];
+  assert.match(heavy, /^scripts\/heavy-check\.sh --class heavy-suite --machine any -- sh -c '([^']*)'$/);
+  assert.doesNotMatch(heavy.match(/sh -c '([^']*)'/)![1], /\bnpm\b|\bnpx\b/);
+  assert.equal(P.portableCommand(["sh", "-c", "node scripts/test-build.mjs && node scripts/test-tier.mjs heavy"]), null, "not registered: it's declared");
+});
+
+test("the portable runner (SCHED-3 R3, R4): registered spellings map to its arguments; scripts resolve in a closed grammar without npm; the environment is an allowlist", async () => {
+  const R = await import(pathToFileURL(resolve("scripts/heavy/portable-run.mjs")).href);
+  assert.deepEqual(P.portableCommand(["npm", "test"]), { name: "the fast tier", run: ["--script", "test"] });
+  assert.deepEqual(P.portableCommand(["npm", "run", "playthrough", "--", "--jobs", "3", "--quiet"]), { name: "the playthrough", run: ["--script", "playthrough", "--jobs", "3", "--quiet"] });
+  // This repository's own registered scripts, step by step: STEW-2's guard wrappers expanded to their
+  // :direct bodies (SCHED-3 R5), whose --require head is a plain node step; never npm, never the guard routing.
+  const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+  const require_ = (hint: string) => ["node", "scripts/local-guard.mjs", "--require", "npm", "run", hint];
+  const fast = [require_("test:fast"), ["node", "scripts/guard-architecture.mjs", "--quiet"], ["node", "scripts/test-build.mjs", "--typecheck"], ["node", "scripts/test-tier.mjs", "fast"]];
+  assert.deepEqual(R.resolveScript(scripts, "test").steps, fast, "npm test → npm run test:fast → its guard alias → test:fast:direct");
+  assert.deepEqual(R.resolveScript(scripts, "test:fast").steps, fast);
+  assert.deepEqual(R.resolveScript(scripts, "playthrough", ["--jobs", "3", "--quiet"]).steps,
+    [require_("playthrough"), ["node", "node_modules/typescript/bin/tsc", "-p", "scripts/playthrough/tsconfig.json"], ["node", ".test-build/scripts/playthrough/run.js", "--jobs", "3", "--quiet"]]);
+  assert.equal(R.resolveScript(scripts, "test").command,
+    "node scripts/local-guard.mjs --require npm run test:fast && node scripts/guard-architecture.mjs --quiet && node scripts/test-build.mjs --typecheck && node scripts/test-tier.mjs fast");
+  // The closed grammar (R4-F1): Sol's accepted forms, and the rest of what it excludes, all refused.
+  const inner = "node scripts/case.mjs";
+  for (const body of ["npx --no-install tsc --version", "CHECK=1 npm run inner", "env npm run inner", "/usr/bin/npm run inner", "node scripts/a.mjs\nnode scripts/b.mjs",
+    "npm run inner --silent", "npm --silent run inner", "npm run-script inner", "npm test --if-present", "tsc -p x", "sh scripts/x.sh", "node --require x scripts/a.mjs",
+    "node /abs/a.mjs", "node ../a.mjs", "node scripts/../../a.mjs", "node scripts/a.mjs $npm_package_name", "node scripts/a.mjs 'a b'", "node scripts/a.mjs; node b.mjs",
+    "node scripts/a.mjs || true", "node scripts/a.mjs & node b.mjs", "node scripts/a.mjs  && node scripts/b.mjs", "node scripts/a.mjs\tx", "node", ""])
+    assert.ok(R.resolveScript({ test: body, inner }, "test").error, JSON.stringify(body));
+  assert.ok(R.resolveScript({ test: inner, pretest: inner }, "test").error, "a pre script");
+  assert.ok(R.resolveScript({ test: inner, posttest: inner }, "test").error, "a post script");
+  assert.ok(R.resolveScript({ test: "npm run inner" , inner }, "test", ["--x"]).error, "args after an npm step without -- are npm's options");
+  assert.ok(R.resolveScript({ test: inner }, "test", ["a b"]).error, "args must be plain words");
+  // What the grammar accepts: node steps, npm steps expanded, args after -- forwarded as npm forwards them.
+  assert.deepEqual(R.resolveScript({ test: "npm run inner -- --x && node scripts/b.mjs", inner }, "test", ["o"]).steps, [["node", "scripts/case.mjs", "--x"], ["node", "scripts/b.mjs", "o"]]);
+  assert.deepEqual(R.resolveScript({ test: "npm run inner -- --x", inner }, "test", ["o"]).steps, [["node", "scripts/case.mjs", "--x", "o"]]);
+  assert.match(R.resolveScript({}, "t").error, /no script t/);
+  const env = R.portableEnv({ PATH: "/bin", HOME: "/h", LC_ALL: "C", NODE_OPTIONS: "x", npm_config_script_shell: "/s", SILTWAKE_BUILD_CACHE: "off", SILTWAKE_SCHED_DIR: "/q",
+    SILTWAKE_JOB_CPUS: "2", SILTWAKE_HEAVY_POOL_MIB: "9", SILTWAKE_GPU_LEASE: "t", SILTWAKE_TEST_BUILD: ".test-build-2", BAKE_WORKERS: "2", TERM: "xterm" }, "/r");
+  // Of the queue's configuration, only SILTWAKE_SCHED_DIR: STEW-2's --require finds its job there (R5).
+  assert.deepEqual(Object.keys(env).sort(), ["BAKE_WORKERS", "HOME", "LC_ALL", "PATH", "SILTWAKE_GPU_LEASE", "SILTWAKE_HEAVY_POOL_MIB", "SILTWAKE_JOB_CPUS", "SILTWAKE_SCHED_DIR", "SILTWAKE_TEST_BUILD"]);
+  assert.equal(env.PATH, "/r/node_modules/.bin:/bin");
+});
+
+test("STEW-2's guard wrappers (SCHED-3 R5): the three public expansions are npm-free node steps; only the --machine any npm alias expands; every other guard shape isn't portable", async () => {
+  const R = await import(pathToFileURL(resolve("scripts/heavy/portable-run.mjs")).href);
+  const scripts = JSON.parse(readFileSync("package.json", "utf8")).scripts;
+  for (const [name, args] of [["test", []], ["test:fast", []], ["playthrough", ["--jobs", "3", "--quiet"]]] as const) {
+    const r = R.resolveScript(scripts, name, [...args]);
+    assert.equal(r.error, undefined, name);
+    for (const step of r.steps) {
+      assert.equal(step[0], "node", `${name}: ${step.join(" ")}`);
+      assert.ok(!step.includes("npm") || (step[1] === "scripts/local-guard.mjs" && step[2] === "--require"), `${name}: npm only as the --require hint's words: ${step.join(" ")}`);
+      assert.ok(step[1] !== "scripts/local-guard.mjs" || step[2] === "--require", `${name}: the guard only as its admission check`);
+    }
+    assert.match(scripts[name === "test" ? "test:fast" : name], /^node scripts\/local-guard\.mjs --class \S+ --machine any -- npm run \S+:direct --$/, "the wrapper this expands");
+  }
+  // build is --machine 3090: work for factory-worker, so it runs here as submitted.
+  assert.match(R.resolveScript(scripts, "build").error, /local-guard wrapper with --machine 3090/);
+  const direct = { "x:direct": "node scripts/local-guard.mjs --require npm run x && node scripts/a.mjs" };
+  const wrap = (body: string, args: string[] = []) => R.resolveScript({ ...direct, t: body }, "t", args);
+  assert.deepEqual(wrap("node scripts/local-guard.mjs --class standard --machine any -- npm run x:direct --", ["o"]).steps,
+    [["node", "scripts/local-guard.mjs", "--require", "npm", "run", "x"], ["node", "scripts/a.mjs", "o"]], "caller args land last");
+  for (const body of [
+    "node scripts/local-guard.mjs --class standard --machine 3090 -- npm run x:direct --",
+    "node scripts/local-guard.mjs --class standard --machine 3090 -- bash scripts/saves-build-at.sh",
+    "node scripts/local-guard.mjs --class standard -- npm run x:direct --",
+    "node scripts/local-guard.mjs --class standard --machine any -- npm run x --",
+    "node scripts/local-guard.mjs --class standard --machine any -- npm run x:direct",
+    "node scripts/local-guard.mjs --class standard --machine any -- node scripts/a.mjs",
+    "node scripts/local-guard.mjs --status",
+    "node scripts/local-guard.mjs -- npm run x:direct --",
+  ]) assert.ok(wrap(body).error, body);
+  // Every spelling of the guard's path is the guard (R6-F1): the alias expands the same; any other shape isn't portable.
+  const expanded = wrap("node scripts/local-guard.mjs --class standard --machine any -- npm run x:direct --").steps;
+  for (const g of ["./scripts/local-guard.mjs", "scripts/./local-guard.mjs", "scripts//local-guard.mjs", "tools/../scripts/local-guard.mjs"]) {
+    assert.deepEqual(wrap(`node ${g} --class standard --machine any -- npm run x:direct --`).steps, expanded, g);
+    for (const tail of ["--class standard --machine 3090 -- npm run x:direct --", "--class standard --machine any -- node scripts/a.mjs", "--status"])
+      assert.match(wrap(`node ${g} ${tail}`).error, /local-guard/, `${g} ${tail}`);
+  }
+  assert.equal(R.isGuard("scripts/other.mjs"), false);
+});
+
+test("build-only commands stay here unless an --artifact brings their output back (SCHED-3 R1-F2); one command line only", async () => {
+  const R = await import(pathToFileURL(resolve("scripts/heavy/remote.mjs")).href);
+  assert.deepEqual(R.buildOnly(["npm", "run", "build"]), { command: "npm run build", output: "dist" });
+  assert.deepEqual(R.buildOnly(["npm", "run", "test:build"]), { command: "npm run test:build", output: ".test-build" });
+  for (const argv of [["sh", "-c", "npm run build"], ["npx", "vite", "build", "--mode", "production"], ["node", "scripts/test-build.mjs", "--typecheck"]])
+    assert.ok(R.buildOnly(argv), argv.join(" "));
+  for (const art of [["dist"], ["./dist/"], ["."]]) assert.equal(R.buildOnly(["npm", "run", "build"], art), null, `--artifact ${art}`);
+  assert.ok(R.buildOnly(["npm", "run", "build"], ["dist/sub"]), "part of the output doesn't bring it back");
+  assert.ok(R.buildOnly(["npm", "run", "test:build"], ["dist"]), "another output doesn't either");
+  // With options after the command, the declared --artifact is the output contract (R2-F2): any declared one will do.
+  const custom = ["npm", "run", "build", "--", "--outDir", "custom-dist"];
+  assert.equal(R.buildOnly(custom, ["custom-dist"]), null);
+  assert.equal(R.buildOnly(["sh", "-c", "npm run build -- --outDir custom-dist"], ["custom-dist"]), null);
+  assert.deepEqual(R.buildOnly(custom), { command: "npm run build", output: null }, "with no artifact it stays here");
+  for (const argv of [["npm", "test"], ["sh", "-c", "npm run build && node scripts/check-dist.mjs"], ["sh", "-c", "npm run build\nnode scripts/use-build.mjs"],
+    ["sh", "-c", "node scripts/test-build.mjs; node scripts/test-tier.mjs heavy"], ["npm", "run", "build:terrain"], ["npm", "run", "playthrough"]])
+    assert.equal(R.buildOnly(argv), null, JSON.stringify(argv));
 });
 
 const remote = (state: string) => idle({ remote: { state } });

@@ -4,6 +4,8 @@ These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.m
 
 **Game design (owner, 2026-10-20):** [GAME-DIRECTION](GAME-DIRECTION.md) holds the owner-confirmed target, pacing rules, systems, fleet, caves and order of work. The length target is a **floor**: a skilled player on a first, blind, non-stop playthrough takes about 10 hours or more, organically and without padding. There is no ceiling, and playtests never trim good content.
 
+**Root branch:** root is **`feat/siltwake-first-expedition`**. Every stream branches from it and merges into it, and `npm run gate` runs on it. `main` is only the owner's initial skeleton; the owner controls `main` and the public deployment.
+
 ## Priorities
 1. **A rough, complete campaign from start to ending comes first.** Polish follows once the whole chain is playable. Stop re-polishing the opening.
 2. **Prove the world can scale before mass content.** Run one representative scale test first: more than four regions resident or evicted, dense instanced vegetation, three hulls and the carrier, with measured memory and frame budgets. Then author the regions through that pipeline.
@@ -32,7 +34,7 @@ These decisions follow the [direction audit](reviews/DIRECTION-AUDIT-SOL-XHIGH.m
 - **Builder briefs:** about a page plus links, covering the player outcome, owned modules, shared interfaces, acceptance behaviors including one adverse case, checks and resource limits.
 
 ## Concurrency (owner, 2026-10-20)
-- **At most 5 Opus builder threads run at once.** The coordinator is not counted. Sol reviewers are separate and don't count toward the 5.
+- **At most 6 Opus builder threads run at once** (owner, 2026-10-24; was 5). The coordinator is not counted. Sol reviewers, short research agents and the owner's own discussion threads are separate and don't count toward the 6.
 - **Paused streams queue.** They commit, stop cleanly, and resume in priority order as slots free up.
 - **Priority:** the critical path (B1 and its composition), then GPU, then the world foundation (S1 → S2), then fixes that block finishing the game (S5), then the rest.
 
@@ -66,7 +68,7 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
 
 ## Two test machines: how work is planned (owner grill, 2026-10-23)
 
-- **factory-worker (RTX 3090):** builds, fast tests, focused heavy tests, reviewers' quick checks, every 3090 session and every **exclusive** performance measurement (the 60 fps target).
+- **factory-worker (RTX 3090):** builds, fast tests, focused heavy tests, reviewers' quick checks, every 3090 session and exclusive performance measurements on it (the 60 fps target).
 - **siltwake-alickers (RTX 4070 Laptop, best-effort):**
   - whole playthroughs, the full heavy tier and soaks;
   - 4070 "player-class" sessions.
@@ -79,11 +81,12 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - `soak`: alickers first.
 
   Until the lane exists, builders may call `scripts/alickers-job.sh` directly.
-- **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive` on the 3090.
-  - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. Results from the 4070 are labelled indicative.
+- **The frame gate is 60 fps on a GPU, not specifically the 3090** (owner, 2026-10-24). Acceptance evidence may come from either test GPU (the RTX 3090 or the RTX 4070 laptop). A run counts when its host was quiet for that machine, judged by the same disturbance rules. Until the queue supports quiet acceptance runs on the 4070 (SCHED-4 follow-up), exclusive acceptance runs stay on the 3090.
+- **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive`.
+  - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. That declares the job portable: its outputs come back with `--artifact` (SCHED-3). An undeclared job runs on the 3090. Results from the 4070 are labelled indicative.
   - Pin a job to one machine only when the question needs that machine (e.g. factory-worker's host pauses, or a 4070 player-floor check).
 - **Graphics first; integrated graphics later** (owner, 2026-10-24):
-  - **Order:** build for the best graphics first; the dedicated-GPU gates stay (3090 at 60 fps, the 4070 laptop as the player floor). Integrated-graphics laptops come later, through a settings change (a lower preset), not as a target now.
+  - **Order:** build for the best graphics first; the dedicated-GPU gate stays (60 fps on a dedicated GPU; the 4070 laptop is the player floor). Integrated-graphics laptops come later, through a settings change (a lower preset), not as a target now.
   - **The low preset, when it comes:** a steady **30 fps at a reduced internal resolution**, keeping readable exits, warning poses, lamp reach and landmark silhouettes.
   - **Keep it reachable:** don't make choices that rule it out. Quality must stay scalable through settings (resolution scale, draw distance, effects), and memory and streaming budgets must stay parameterised rather than hard-wired to the 3090.
   - **Still open:** the representative integrated-GPU device is chosen later.
@@ -92,7 +95,7 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - **The gap today:** the simulation steps at a fixed 60 Hz and the renderer draws the latest step without interpolation, so above 60 Hz frames repeat (and 144 Hz judders).
   - **Fix:** render interpolation between the last two fixed steps (camera, craft, creatures, particles), with the simulation unchanged and deterministic.
   - **When:** a small stream after CW-1 merges (CW-1 owns `renderer.ts` and `app.ts`).
-  - **Acceptance:** the 60 fps gate on the 3090 stays. Measure at 120 Hz (8.3 ms budget) as indicative, not a gate.
+  - **Acceptance:** the 60 fps GPU gate stays. Measure at 120 Hz (8.3 ms budget) as indicative, not a gate.
 - **Evidence:**
   - Functional results count from either machine, bound to the exact SHA tested.
   - 3090 exclusive numbers are the target.
@@ -106,7 +109,7 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   - **Stopping:** both stop early, with a report, on a broken rule. Stall detection applies; the numbers get tuned from MEM-1.
   - **When:** after each root merge that touches streaming, memory or saves, and a full soak before each playtest.
 - **Planning:**
-  - **Builders:** at most 5 Opus builders until the owner upgrades the subscription.
+  - **Builders:** at most 6 Opus builders (owner, 2026-10-24).
   - **Slots:** filled from the compromise verdict's priority list by dependencies.
   - **Owner updates:** at decisions, finished streams, problems, and with a roadmap update when each wave of work completes.
 - **Usage limits:**
@@ -163,5 +166,10 @@ From the [steward verdict](https://github.com/lakeczar/subnautica-clone/blob/res
    - never keep a `GameState` or hull reference across frames or yields; snapshot explicitly, as the corridor search does;
    - memoize derived data only for a measured hot consumer, and only under an explicit revision, never under object identity.
 8. **Every cache has an owner, a byte bound, an eviction rule and a ledger registration.** `geometryCache.ts` is the model. A `WeakMap` hung off a long-lived root is not a budget.
-9. **Perf claims come from `--class exclusive` on the 3090, plus a 4070 check.** A hot-path change reports µs per call and allocations per call on a SAVE-1 save, bound to its SHA. Shared-host numbers are labelled indicative.
+9. **Only acceptance numbers need an exclusive quiet run** (owner, 2026-10-24; replaces "perf claims come from exclusive on the 3090").
+   - **Exclusive:** frame-time gates ("60 fps on a GPU") and budget confirmations run `--class exclusive` on a quiet test GPU.
+   - **Hot-path microbenchmarks:** report **thread CPU time and allocations per call** on a SAVE-1 save, bound to its SHA, on an ordinary `quick` or `standard` seat on any machine.
+   - **Before/after comparisons run as one duet job:** both arms in the same job, interleaved, with a fixed run count, a margin declared in advance and an "inconclusive" outcome.
+   - **Exclusive windows never compile:** the build is ready before the run starts.
+   - Wall-clock numbers from a shared host are labelled indicative.
 10. **A preview reuses the authority, it doesn't copy the rule.** A UI answer either calls a pure plan shared with execution (`planSpend`/`applySpend`, `servicePreview`) or dry-runs the real command on a clone. It never re-derives the rule in UI code. A dry run on a clone is fine on a click, but not every frame.

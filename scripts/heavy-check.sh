@@ -20,7 +20,8 @@ if [[ -z "${SILTWAKE_SCHED_V1:-}" && -f "$v2" ]] && command -v node >/dev/null; 
 fi
 
 # v1 accepts v2's job options so v2-era callers (package.json) still work:
-# --mem and --queue-timeout map to the v1 variables; the rest mean nothing here.
+# --mem and --queue-timeout map to the v1 variables; the rest mean nothing here
+# (--machine and --artifact too: v1 runs everything here, its outputs where it wrote them).
 deadline=900
 case "${1:-}" in
   submit|wait|status|log|cancel) echo "heavy-check: '$1' needs heavy-check v2 (scripts/heavy/install.sh); this is the v1 fallback" >&2; exit 2 ;;
@@ -29,7 +30,7 @@ esac
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --deadline) deadline="$2"; shift 2 ;;
-    --class|--cpus) shift 2 ;;
+    --class|--cpus|--machine|--artifact) shift 2 ;;
     --mem) [[ "$2" == *G ]] && HEAVY_MEMORY_MAX="$2"; shift 2 ;;
     --queue-timeout) HEAVY_LOCK_WAIT="$2"; shift 2 ;;
     --review) shift ;;
@@ -63,9 +64,11 @@ echo "$unit pid=$$ cwd=$PWD started=$(date -u +%FT%TZ) cmd=$*" >"$lock.owner"
 
 # v1 is exclusive, so the job holds the one GPU too. Delegate=yes lets the heavy
 # test runner give each test file its own child cgroup inside this scope
-# (scripts/heavy-containment.mjs, TT-1).
+# (scripts/heavy-containment.mjs, TT-1). SILTWAKE_HEAVY_SCOPE names this exact
+# scope: the local-run guard (scripts/local-guard.mjs) admits a guarded command
+# under this lock only inside it (STEW-2).
 status=0
-SILTWAKE_HEAVY_LOCK_HELD=1 SILTWAKE_HEAVY_CGROUP=delegated SILTWAKE_GPU_LEASE="v1-$$" systemd-run --user --scope --quiet --unit="$unit" \
+SILTWAKE_HEAVY_LOCK_HELD=1 SILTWAKE_HEAVY_SCOPE="$unit" SILTWAKE_HEAVY_CGROUP=delegated SILTWAKE_GPU_LEASE="v1-$$" systemd-run --user --scope --quiet --unit="$unit" \
   -p MemoryHigh="$(( ${max%G} * 1024 * 85 / 100 ))M" -p MemoryMax="$max" -p MemorySwapMax=0 -p Delegate=yes \
   timeout --kill-after=10s "${deadline}s" "$@" || status=$?
 : >"$lock.owner"

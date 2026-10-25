@@ -11,7 +11,7 @@
  *   system bay (SYS-1); SYS-2's socket map is checked against that.
  * - **Lost sites**: the content bible's sites are found by swimming up to them.
  * - **Commands** call SYS-2's rules directly; each refusal changes nothing. */
-import { DECODABLES, DECODE_LOGS, DECODER_LOCAL_RANGE, LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
+import { DECODABLES, decodeLog, DECODER_LOCAL_RANGE, LOST_SITES, WORLD_LOST_SITES } from "../content/systems/decodes.js";
 import type { DecodableId } from "../content/systems/decodes.js";
 import { isSeed } from "../content/systems/cultivation.js";
 import { FIXED_HOSTS, MODULES, OUTPOST_SITING } from "../content/systems/hosts.js";
@@ -31,7 +31,7 @@ import { surveyModuleTier } from "./hostUpgrades.js";
 import { RADIO_MAST } from "./upgrades/tools.js";
 import {
   advanceSystems, collectBeacon, deployOutpost, discoverSite, handheldPing, harvest, hostById, installModule, listHosts,
-  packOutpost, placeBeacon, plant, removeModule, setBeaconOn, setCategoryOn, startDecode, stationSurvey, upgradeOutpost,
+  packOutpost, placeBeacon, plant, readableLog, removeModule, setBeaconOn, setCategoryOn, startDecode, stationSurvey, upgradeOutpost,
 } from "./systems/index.js";
 import type { HostPower, OutpostSiteQuery, SiteSample, SocketHost, SystemsEvent } from "./systems/index.js";
 import type { DecoderContext } from "./systems/decoder.js";
@@ -293,9 +293,9 @@ export function stepSystems(s: GameState, events: GameEvent[]): void {
 function systemsNotice(e: SystemsEvent): GameEvent[] {
   if (e.type === "decoded") {
     const d = DECODABLES[e.completion.decodable], extra = [
-      ...(e.completion.blueprints.length ? ["new plans in your notebook"] : []),
+      ...(e.completion.fresh.length ? ["new plans in your notebook"] : []),
       ...(e.completion.beacons.length ? [`${e.completion.beacons.length} new beacon${e.completion.beacons.length === 1 ? "" : "s"} on the chart`] : []),
-      ...(DECODE_LOGS[e.completion.decodable]?.length ? ["logs readable in the journal"] : []),
+      ...(decodeLog(e.completion.decodable).length ? ["logs readable in the journal"] : []),
     ];
     return [{ type: "notice", channel: "action", message: `Decode complete · ${d.label}${extra.length ? ` · ${extra.join(", ")}` : ""}.` }, { type: "sound", cue: "scan" }];
   }
@@ -310,10 +310,11 @@ export function readLostSite(s: GameState, siteId: string): string {
   discoverSite(s.systems, siteId);
   const mine = (Object.keys(DECODABLES) as DecodableId[]).filter((d) => DECODABLES[d].site === siteId);
   const open = mine.filter((d) => !s.systems.decoded.includes(d));
-  const see = "see" in site ? `${site.see} ` : "";
+  // The plate (a sign, a stencil, a board) reads without a decoder (LS-1).
+  const see = `${site.see} “${site.plate}” `;
   return open.length
     ? `${site.label} · ${see}Its records are unreadable until decoded: ${open.map((d) => DECODABLES[d].label).join(", ")}. Start the decode at any powered decoder module.`
-    : `${site.label} · decoded. ${mine.flatMap((d) => DECODE_LOGS[d] ?? []).join(" ")}`;
+    : `${site.label} · decoded. ${mine.flatMap((d) => readableLog(s.systems, d)).join(" ")}`;
 }
 /** For the HUD and depth warnings: a hull's effective rating. */
 export { effectiveRating };

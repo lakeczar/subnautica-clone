@@ -37,7 +37,18 @@ Heavy jobs are **admitted through the queue**, not run one at a time. `scripts/h
 H=/home/worker/.t3/projects/subnautica-clone/scripts/heavy-check.sh
 ```
 
-**Heavy** means render/NullEngine tests, `npm run test:heavy`, playthroughs, terrain bake or `--verify`, GPU browser sessions, and anything that needs more than about 1 GiB or 2 cores. **Light** work runs directly, outside the queue: `npm test`, typecheck, compiles (`npm run test:build`, `npx tsc -p scripts/playthrough/tsconfig.json`), a warm `npm run build` and focused non-render tests. Never wrap `npm run test:heavy`, `build` or a typecheck in `$H`: `test:heavy` already queues itself.
+**Heavy** means render/NullEngine tests, `npm run test:heavy`, playthroughs, terrain bake or `--verify`, GPU browser sessions, and anything that needs more than about 1 GiB or 2 cores. Never wrap `npm run test:heavy` in `$H`: it queues itself.
+
+**On factory-worker, the repo's CPU work runs only through the queue (STEW-2).** The CPU-heavy entry points never run here outside a heavy-check job: started from an agent's shell, each runs the same command again through `heavy-check run`, in the foreground, and exits with its code, so it reads like a local run. The queue then knows every sanctioned CPU job, and an exclusive run drains them like any other job. Nothing to check first.
+- **Guarded:** `npm test`/`test:fast`, `build`, `typecheck`, `playthrough`, `check`, `test:build`, `bake:terrain`, and `scripts/test-tier.mjs`, `test-build.mjs`, `guard-architecture.mjs`, `bake-terrain.mjs`, the six economy scripts, `sim-bench.mjs`, `timeline-save-bench.mjs`, `saves-build-at.sh` and `sim-differential.sh`. Each has its class (`quick` for a typecheck or a single compile, `standard` for the fast tier or the build, `bake`, `playthrough`, `heavy-suite`).
+- **Where it runs:** `--machine any` (alickers when its slot is free, else here) for tests and checks. Here (`3090`) for what leaves its product in your worktree (`.test-build`, `dist`, baked terrain), for commands naming local paths, and whenever your environment carries a setting such as `SILTWAKE_TEST_BUILD` or `NODE_OPTIONS`, since alickers receives only the command line. A guarded consumer of compiled output (the economy scripts, the tiers) compiles inside its job.
+- **Commit first** (a WIP commit is fine) so a `--machine any` command can go to alickers; with uncommitted changes it runs here, and if the tree changes while it waits, the queue rejects it (exit 3). One job per worktree runs at a time, so a guarded command waits behind your own running job in the same worktree.
+- **Runs directly** inside a heavy-check job (the job's own cgroup, not just its variables; under v1's lock, its exact scope), on the alickers sandbox (identified by its hostname and its `siltwake-job` tool), or with the override.
+- **Override:** `SILTWAKE_LOCAL_OVERRIDE="<why>" npm test` runs it here and logs who, what and why to `/work/tmp/siltwake-sched/local-overrides.jsonl`; if the log can't be written it refuses. If `heavy-check status` shows an exclusive ticket, tell the coordinator its id and the time.
+- **If heavy-check can't be run,** a guarded command refuses (exit 75) with the reason; it never falls back to running locally.
+- **`node scripts/local-guard.mjs --status`** says what happens here.
+- **Not prevented, a convention only:** bare `npx tsc`, `npx vite build`, `vite dev`, `node --test <file>`, compiled runners started directly (`node .test-build/…`), the `:direct` package scripts' commands typed by hand, and SCHED's acceptance suites run directly. Use the npm scripts, or `$H` yourself.
+- **`npm run gate`** sends its local steps (fast, build, economy) as one `--machine any` job (the 3090 when your environment carries settings, as for a guarded command), and **`scripts/saves-export.sh`** compiles nothing outside the queue.
 
 **A job has a goal, not a time limit** (owner, 2026-10-23; SCHED-2). It runs until its command ends. The queue stops it only when:
 - it **stalls**: nothing written to its output, and no touch of `$SILTWAKE_JOB_HEARTBEAT`, for the stall window (exit **123**, `stalled: no output for N min`, with what its processes were doing). A job that is legitimately quiet for long stretches touches the heartbeat file or passes `--stall S`;
@@ -86,11 +97,30 @@ Options:
 
 | Tag | Default for | Where it runs |
 | --- | --- | --- |
-| `any` | `playthrough`, `heavy-suite` | alickers when its one slot is free; otherwise here at once (never waits for it) |
-| `3090` | every other class | here only. `exclusive` is always 3090 |
+| `any` | `standard`, `gpu`, `playthrough`, `heavy-suite` (SCHED-3) | alickers when its one slot is free; otherwise here at once (never waits for it). Only a job declared portable goes to alickers; any other is routed to `3090` at submit, with the reason (below) |
+| `3090` | `quick` (the express slot), `bake` (local artifacts), `exclusive` (always 3090) | here only |
 | `4070` | (ask for it) | alickers only. It waits through pauses and outages until its queue timeout, and is never faked here |
 | `soak` | `soak` | alickers first. It runs here only while alickers is paused or unreachable |
 
+- **Balance (SCHED-3; DIRECTION, "Balance the two GPUs"):** only acceptance numbers are `--class exclusive` on the 3090. Everything else may run on either machine, but **portability is declared, never inferred**: a command line can't show what a script imports, reads from the environment or writes.
+  - **Declared portable:** a registered command we own that compiles and consumes its builds inside the job and writes nothing the caller needs back (`npm test`, `npm run test:fast`, the heavy tier's own queued command, `npm run playthrough [-- --jobs N --quiet]`), or a caller's explicit `--machine any|4070`. With an explicit machine, the caller vouches for the job: it must be self-contained (no local inputs, no build output from outside the job), and everything it writes that's needed afterwards must be an `--artifact`; a remote artifact lands in `/work/tmp/<ticket>/<name>` (the result's `artifacts[].local`), never back in the worktree. **To balance your own driver:** `$H --class gpu --machine any --artifact <outdir> -- node <driver> <outdir>`, and read the outputs from the returned location.
+  - **The portable runner:** a registered command placed by default runs through `scripts/heavy/portable-run.mjs` from the commit itself, on whichever machine takes it. It reads the commit's `package.json` script in a closed grammar: steps joined by ` && `, each `node <repo-relative path> [plain args]` or `npm test` / `npm run <script> [-- plain args]`, expanded the same way. It runs the resulting `node` steps directly, without npm or a shell, with an environment rebuilt from a fixed allowlist: `PATH` (with `node_modules/.bin` first), home, user, locale, temp and session variables, and the queue's own job variables. So npm configuration (`.npmrc`, prefixes, `script-shell`) and the rest of your environment can't make the two machines differ.
+    - **STEW-2's guarded entry points:** `npm test`, `npm run test:fast` and `npm run playthrough` are `node scripts/local-guard.mjs --class <C> --machine any -- npm run <X>:direct --` wrappers. The runner treats exactly that form as an alias: it runs the `<X>:direct` body under the same grammar (its `local-guard.mjs --require …` head is an ordinary node step, admitted inside the job and on alickers) and never runs the guard's routing or npm. A wrapper with `--machine 3090` (`npm run build`), the guard's `bash scripts/<name>.sh` form, or any other guard step runs here as submitted, with the reason.
+    - **A step's file must stay inside the repository**, every symlink followed (a dangling one too), or inside the repository's own `node_modules` wherever that links (a worktree's shared install, a snapshot's link). A committed link to a program elsewhere on the machine runs the job here as submitted: `<path> resolves outside the repository and its node_modules (<target>)`. The runner checks this again before running anything.
+    - **Exit codes:** a step a signal ended gives 128 + the signal's own number, as `sh` reports it. A stop the runner receives (TERM, INT, HUP) goes to the running step and always ends the run with that code, even if the step then exits 0.
+    - **Anything outside the grammar** runs here as submitted, with the reason: another program, an assignment, `env`, a path to npm, `npx`, an npm option, quoting, a newline or other separator, or pre/post scripts. So does a commit without the runner.
+    - **What's shown:** `status` shows the runner's command line, and the result's `goal.portable` holds what you typed.
+  - **Your intent first:** a default `any` runs here as submitted (with npm, as before) if your environment carries any of:
+    - a `SILTWAKE_*` the queue doesn't own (a test selector, `SILTWAKE_BUILD_CACHE=off`, …);
+    - any `NODE_*`;
+    - an `npm_config_*` beyond npm's descriptive exports. The config-file selectors (`npm_config_userconfig`, `npm_config_globalconfig`, `npm_config_prefix`) always count, so a default submitted from inside an `npm run` runs here.
+
+    The reason reads `local configuration <names> changes this command; pass --machine any to declare it portable`. A script that means to balance declares it: `npm run test:heavy` queues its command with `--machine any`. The environment is never forwarded.
+  - **Everything else is routed to the 3090** at submit, with the reason printed once (`runs here (factory-worker), not on alickers: <reason>`), kept on the ticket and the result (`goal.routed`), shown by `status` (`3090^`, `here^` once running, and a `^ <ticket>: any, routed here: <reason>` line) and in the final line. Reasons: `portability not declared: pass --machine any and --artifact for its outputs`; the remote lane is off; not a git tree; uncommitted changes; a local path outside the worktree; reading `.test-build*` or `dist`; or a command that only builds (`npm run build`, `npm run test:build`, `vite build`, `node scripts/test-build.mjs`) with no `--artifact` for its output (`dist`, `.test-build`): `build output must stay here`. With `--artifact dist`, `--machine any|4070 -- npm run build` runs there and `dist` comes back whole. With options after the build (`-- --outDir custom-dist`), your declared `--artifact` is its output: `--artifact custom-dist` lets it go. An explicit `--machine 4070` is refused for any of these reasons. An `--artifact` alone isn't a declaration; on a job routed here, a relative one is where it wrote it.
+  - **A fast tier through the queue may run on alickers:** it doesn't refresh this worktree's `.test-build`, so compile here before running anything that reads it (the economy scripts do).
+  - **Pinned 3090 drivers:** the GPU tools that load Playwright and Chrome from this machine's paths (`tools/large-cave-lab.gpu.mjs`, `tools/cave-deep-shots.mjs`, `tools/cave-gpu-check.mjs`) and the stream drivers that use local servers or prebuilt dists (CA-2, POI-1, W2, ATM-1) say `--machine 3090` in their headers.
+  - **Every result says whether its command ran** (`ran`), from the payload's actual start, not from admission: `true` with `machine`; `false` with `planned` (cancelled or expired while queued, lost before admission, rejected because the tree changed, cancelled before start), and the final line `never ran; planned for …`; or `unknown` when a start on alickers can't be established (a released ticket, an invalid receipt). The frozen goal and route are always kept.
+  - **`--snapshot`** needs no rule of its own: alickers runs the submit-time commit, which is the snapshot of a clean tree; a dirty tree is routed here.
 - **Only a commit goes to alickers.** A dirty tree, or a command that names a local path outside the worktree (`/work/...`, `/tmp/...`; inputs would be missing, outputs left behind), runs here, and `--machine 4070` is refused with the reason. Put inputs in the commit. Declare outputs with `--artifact`:
   - a relative path is in the job's directory in the sandbox checkout; an absolute path is on the sandbox;
   - each one comes back **whole**, an evidence pack directory included, into `/work/tmp/<ticket>/<name>`, also when the job failed. Outputs are staged inside the sandbox's job lock, so another job can never replace them. The transfer is bounded and cancellable; a failed one is reported with where the staged copy waits on alickers;
@@ -126,7 +156,7 @@ The output streams as it runs. You are woken when the job ends, so keep working 
 **Codex agents** (no background wake-ups):
 
 ```sh
-T=$($H submit --class gpu -- node my-play.mjs)   # prints a ticket at once
+T=$($H submit --class gpu --machine any --artifact out -- node my-play.mjs out)   # prints a ticket at once; out comes back to the result's artifacts[].local
 $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
 ```
 
@@ -147,12 +177,7 @@ $H wait "$T" --max 540                            # tool timeout_ms ≥ 570000
   - submit jobs that never read `.test-build`, such as GPU play from `dist`, with `--no-test-build`, or use `--snapshot`: neither takes the worktree's `.test-build`.
 
   The job itself may rebuild.
-- **Playthroughs:** compile first, then queue only the run:
-
-  ```sh
-  npx tsc -p scripts/playthrough/tsconfig.json
-  $H --class playthrough -- node .test-build/scripts/playthrough/run.js --scenario …
-  ```
+- **Playthroughs:** `npm run playthrough -- --scenario …` queues itself (class `playthrough`, `--machine any`) and compiles inside its job. A compiled runner started directly (`node .test-build/scripts/playthrough/run.js`) isn't guarded: queue it yourself, `$H --class playthrough -- node .test-build/scripts/playthrough/run.js --scenario …`, after a compile that ran in a job (`npm run test:build`, here).
 
   While iterating, run only the affected scenarios (a branch alone with `--from-library`); run them all at handoff.
 - **The GPU guard is installed** (2026-10-23 10:12Z, guard `073e8b0da3da`). Rerun `scripts/heavy/install.sh --gpu-guard` after any `npx playwright install`.
@@ -177,6 +202,15 @@ State lives in `/work/tmp/siltwake-sched/` (the queue, `ledger.jsonl` and per-jo
   - **If the update is incomplete** (a reload failed or overran, systemd didn't answer, the slice held processes, the file couldn't be read or written, or the installer was killed), maintenance stays, with the reason, so nothing runs on stale settings. The recovery is to rerun `scripts/heavy/install.sh` once the cause is gone; it takes over a dead installer's mark and checks systemd from scratch. Older versions never use the exclusive slice, so neither needs any cleanup. Never delete or recreate `/work/tmp/siltwake-heavy-check.lock`: each v2 job holds it shared, through its holder and an anchor inside the job's own scope, until that cgroup is gone, so old v1 copies of the script still exclude them. During the cut-over, v1 goes first: any v1 holder or waiter pauses all v2 admissions. A finite v1 backlog drains, but a continuous one can hold v2 tickets until their queue timeout, so move callers to the shim promptly. Tuning lives in `/work/tmp/siltwake-sched/config.json` (read on every admission): `ceilings` (`{"playthrough": 21600}`), `stalls` (a class's default stall window, e.g. `{"playthrough": 2700}` while worktrees without the playthrough heartbeat remain), `soakYieldS` (300), `soakSlots` (1) and `poolMiB`. The GPU guard is `scripts/heavy/install.sh --gpu-guard` (re-run after `npx playwright install`; `--gpu-guard-remove` undoes it).
 
 Light checks of the scheduler itself (no systemd) are in `tests/heavy-sched-policy.test.ts`. Its acceptance tests use private state only: `node --test --test-concurrency=1 scripts/heavy/acceptance.test.mjs` (SCHED-1) and `scripts/heavy/acceptance-sched2.test.mjs` (SCHED-2).
+
+## Measurement hygiene (coordinator, 2026-10-24, from the test-efficiency study)
+
+- **Never measure with the heavy budget override.** Runs with `SILTWAKE_HEAVY_BUDGET_MIB` set are not budget evidence, because the override inflates peaks and makes every file run alone.
+- **Check existing logs before running anything new.** Many questions (a root baseline, a file's usual peak) are already answered in the queue's job logs under `/work/tmp/siltwake-sched/jobs/`.
+- **Size jobs to what they use.** Request the seats and memory the job needs, and send non-GPU work with `--machine any`.
+- **Run both sides of a comparison together.** An A/B runs both arms in one job, interleaved, with a fixed run count, a margin declared in advance and an "inconclusive" outcome. Don't run two separate whole-tier jobs.
+- **Keep exit codes honest.** Use `set -o pipefail`, and never pipe into `grep` or `tail` in a way that hides a failure.
+- **Record the context with every number:** the memory limit, the cache state, the machine and the commit.
 
 ## Second worker: siltwake-alickers (best-effort, added 2026-10-23)
 
@@ -213,17 +247,18 @@ scripts/alickers-job.sh --deadline 1800 -- npm run test:heavy
 - **Performance numbers** from the sandbox are labelled **"RTX 4070 Laptop (alickers, shared desktop host)"**. The Windows host can be in use, so treat them as indicative, never as the 3090's exclusive-mode evidence. Functional evidence (play, screenshots, passes) counts like any other run at the recorded SHA.
 - **One job at a time** on the sandbox, and the checkout is shared. Don't leave long interactive sessions holding it, and don't edit files there; everything comes from commits.
 - **Coordination, provider logins and GitHub pushes stay on factory-worker.** The sandbox has no logins.
+- **Reading Windows is allowed, read-only** (owner, 2026-10-24): CPU load, idle time, power source and power mode, for 4070 quiet-run proof (SCHED-4b). Never change a Windows setting, never use the desktop. **Every change on the laptop, Windows or Linux side, is recorded in [ALICKERS-LEDGER.md](ALICKERS-LEDGER.md) with its undo and redo, before it's made.** Windows-side changes are made by fleet or the owner.
 
 ## Shared save library (SAVE-1, 2026-10-23)
 
 Don't derive late saves in your own job. After each root merge the coordinator runs `scripts/saves-export.sh` on root: the whole playthrough runs on siltwake-alickers (factory-worker's queue if it is paused), and every bot-earned save lands, read-only, in **`/work/tmp/siltwake-saves/<sha>/`** on factory-worker, shared by every worktree. Kinds include pod start, the Dart, the Creel at 350 m, the Rift at 450 m, the 800 m Creel, the carrier fit-out, the pre-ending of both routes, low air, a damaged hull, a lost craft, a depleted battery, minimum gear and over-geared in the Canopy, and the tour-ready Dart. The details are in [the playthrough README](../../scripts/playthrough/README.md#save-library-save-1).
 
 ```sh
-npx tsc -p scripts/playthrough/tsconfig.json                 # light; from your checkout
+npm run test:build                                            # through the queue, here (its .test-build is the product)
 node .test-build/scripts/playthrough/saves.js pick creel-350  # prints the save's path
 npm run playthrough -- --scenario carrier --from-library      # a branch without its parent's replay
 ```
 
-- **Light:** `pick`, `list` and `verify` are light work; run them directly. `verify` and `import` compile a build of the commit when needed, which takes about 5 s. Exporting is a playthrough: only through `scripts/saves-export.sh`, which runs it from an archive build of the pinned SHA, on the second worker or through the queue.
+- **Light:** `pick` and `list` are light work; run them directly. `verify` and `import` compile a build of the commit when needed (about 5 s), so on factory-worker run those in a job (`$H --class quick -- node .test-build/scripts/playthrough/saves.js verify …`). Exporting is a playthrough: only through `scripts/saves-export.sh`, which runs it from an archive build of the pinned SHA, on the second worker or through the queue.
 - **Compatibility:** the newest export at your commit or one of its ancestors, with this build's schema and content versions (or the schema 5 bridge), that this build decodes. Anything else is refused with the reason (exit 3), never swapped for another save. Record the save's commit (stderr, or `--json`) with your evidence.
 - **On the second worker:** exports run there keep their copy in the same place, `/work/tmp/siltwake-saves`, so a job there finds every commit exported there. A commit exported on factory-worker isn't there; `pick` then refuses, and you copy the save you need in with the job.

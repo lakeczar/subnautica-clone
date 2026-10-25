@@ -75,6 +75,7 @@ test("the gate fails when the tree changes under it, and refuses to start on unc
   const git = (...a: string[]) => execFileSync("git", ["-C", dir, ...a], { encoding: "utf8" });
   fs.mkdirSync(join(dir, "scripts"));
   fs.copyFileSync("scripts/gate.mjs", join(dir, "scripts/gate.mjs"));
+  for (const f of ["local-guard.mjs", "cgroup-scope.mjs"]) fs.copyFileSync(`scripts/${f}`, join(dir, "scripts", f));
   fs.writeFileSync(join(dir, "tracked.txt"), "before\n");
   git("init", "-q"); git("add", "-A"); git("-c", "user.email=gate@test", "-c", "user.name=gate", "commit", "-qm", "gate fixture");
   const pinned = git("rev-parse", "HEAD").trim();

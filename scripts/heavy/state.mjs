@@ -11,11 +11,12 @@
 import { spawn, spawnSync } from "node:child_process";
 import { appendFileSync, closeSync, existsSync, mkdirSync, openSync, readdirSync, readFileSync, readlinkSync, renameSync, rmSync, statSync, writeFileSync } from "node:fs";
 import { createHash } from "node:crypto";
-import { availableParallelism } from "node:os";
+import { cpus } from "node:os";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { cgroupPathOf, hasScopeComponent } from "./cgroup-scope.mjs";
 import { unmeasuredContext } from "./contention.mjs";
-import { DEFAULTS, PROTOCOL, sliceLimits } from "./policy.mjs";
+import { DEFAULTS, MACHINE_LABELS, PROTOCOL, plannedFor, sliceLimits } from "./policy.mjs";
 import { dropSnapshot } from "./snapshot.mjs";
 
 export const PRODUCTION_DIR = "/work/tmp/siltwake-sched";
@@ -280,10 +281,20 @@ export function cgroupRead(cgroup, file) {
   try { return readFileSync(join(cgroup, file), "utf8").trim(); } catch { return null; }
 }
 
+/**
+ * This machine's vCPUs, the same from every cgroup (SCHED-3 R2-F4):
+ * config.json `nproc` if set, else the kernel's CPU count. Not
+ * availableParallelism(), which follows the caller's own cgroup quota, so a
+ * caller inside a quota-limited scope (a queue job running the suites, an
+ * install from a capped shell) would size tokens and slices differently from
+ * the holder in its own scope.
+ */
+export const machineCpus = (cfg) => (Number.isInteger(cfg?.nproc) && cfg.nproc > 0 ? cfg.nproc : cpus().length);
+
 /** Host facts for plan(). In a private (test) state directory,
  * host-override.json may replace nproc, memAvailableMiB and memFullAvg10. */
 export function sampleHost(cfg, state) {
-  const host = { nproc: availableParallelism(), ...meminfo(), memFullAvg10: psi("memory", "full"), charges: {} };
+  const host = { nproc: machineCpus(cfg), ...meminfo(), memFullAvg10: psi("memory", "full"), charges: {} };
   for (const t of Object.values(state.tickets)) {
     if (t.state !== "running") continue;
     const cg = readFileSafe(join(jobDir(cfg, t.id), "cgroup"));
@@ -401,8 +412,10 @@ export function reconcile(cfg, state) {
       ...(request.snapshot ? { snapshot: { root: request.snapshot.root, kept: Boolean(dropSnapshot(request.snapshot.root, request.snapshot.status)) } } : {}),
     };
     const exitFile = join(dir, "exit.json");
-    if (!existsSync(exitFile)) writeJsonAtomic(exitFile, { ticket: t.id, class: t.req.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ...identity, ...result });
-    ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...result });
+    const { notRun, ...outcome } = result;
+    // Ran: the payload's own start marker (scope-run.sh), as the holder reads it; a claimed holder isn't one (R3-F3).
+    if (!existsSync(exitFile)) writeJsonAtomic(exitFile, terminalRecord(t, { ...identity, ...outcome }, { ran: t.state === "running" && !notRun && existsSync(join(dir, "started")) }));
+    ledger(cfg, { event: "reconciled", ticket: t.id, state: t.state, worktree: t.worktree, class: t.req.class, ...outcome });
     if (t.state === "running" && t.req.exclusive) state.lastExclusiveEnd = Date.now();
     delete state.tickets[t.id];
     changed = true;
@@ -410,11 +423,31 @@ export function reconcile(cfg, state) {
   return changed;
 }
 
+/**
+ * Every ticket's result record starts here (SCHED-3 R1-F3, R2-F3): holders,
+ * remote holders, recovery, cancellation, expiry and release. It keeps the
+ * frozen goal (machine tag and route) and says what was observed of the
+ * payload: `ran` true once its command was launched (not when the ticket was
+ * admitted), false if it never was, "unknown" if a remote start can't be
+ * established. A ticket that ran or may have gets `machine` (where); one that
+ * never ran gets `planned`, never `machine`. `fields` are the rest (code,
+ * label, measurements), and win.
+ */
+export function terminalRecord(t, fields, { ran = false, remote = false } = {}) {
+  const goal = t.goal ?? null;
+  return {
+    ticket: t.id, class: t.req?.class, submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), goal,
+    ...(remote ? { remote: true } : {}),
+    ...(ran === false ? { ran: false, planned: plannedFor(goal) } : { ran, machine: remote ? MACHINE_LABELS.remote : MACHINE_LABELS.local, machineTag: goal?.machine ?? null }),
+    ...fields,
+  };
+}
+
 /** The result of a job whose supervisor died, from what the in-scope wrapper
  * left. Counters nobody could read are null with a reason in `unavailable`,
  * never 0: a missing count is not proof that no OOM happened (R5 P3). */
 function orphanResult(dir, t) {
-  if (existsSync(join(dir, "not-started"))) return { code: 75, label: "cancelled before start; the command did not run" };
+  if (existsSync(join(dir, "not-started"))) return { code: 75, label: "cancelled before start; the command did not run", notRun: true };
   if (existsSync(join(dir, "cancelled"))) return { code: 75, label: "cancelled", stopReason: "cancelled" };
   const stats = readStats(dir);
   const facts = t.unit ? unitFacts(t.unit) : {};
@@ -424,8 +457,9 @@ function orphanResult(dir, t) {
   if (stats.rc == null) {
     const unavailable = { oomKills: "the in-scope wrapper recorded no stats (killed with the job)", ...(oomLocal ? {} : { reservationOom: "no observer saw the scope's memory.events.local" }) };
     if (oomLocal) return { code: 137, label: oomLabel, stopReason: "oom", reservationOom: true, oomEvidence: "memory.events.local (holder watch, before it died)", oomKills: null, peakMiB, unavailable };
-    return { code: 137, label: t.holder ? "killed: its holder died and the job did not finish" : "not started: its supervisor died during the handoff",
-      stopReason: "killed", reservationOom: null, oomKills: null, peakMiB, unavailable };
+    const begun = existsSync(join(dir, "started"));
+    return { code: 137, label: !t.holder ? "not started: its supervisor died during the handoff" : begun ? "killed: its holder died and the job did not finish" : "not started: its holder died before the command started",
+      ...(begun ? {} : { notRun: true }), stopReason: "killed", reservationOom: null, oomKills: null, peakMiB, unavailable };
   }
   const code = Number(stats.rc), oom = Number(stats.oom_local ?? 0) > 0 && code !== 0;
   // The wrapper records whether the scope was stopped around it (BindsTo= after
@@ -444,15 +478,29 @@ export function readStats(dir) {
   return Object.fromEntries((readFileSafe(join(dir, "stats")) ?? "").split("\n").filter(Boolean).map((l) => l.split("=")));
 }
 
+/** Whether a complete component of the cgroup path `path` matches `re` (anchored), never a substring (SCHED-3 R5). */
+export const componentMatches = (path, re) => String(path ?? "").split("/").some((c) => re.test(c));
+
+/**
+ * Whether a component of the cgroup path `path` is a v1 scope: scripts/heavy-check.sh v1's
+ * siltwake-heavy-<dir>-<pid>.scope (or `prefix`-<dir>-<pid>, a private state's), and not a
+ * v2 job's scope, which ends in a ticket id (any queue's: e.g. the job running these suites).
+ */
+export function v1Scope(path, prefix = "siltwake-heavy") {
+  const p = String(prefix).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+  const v1 = new RegExp(`^(siltwake-heavy|${p})-.+-\\d+\\.scope$`);
+  return componentMatches(path, { test: (c) => v1.test(c) && !/-\d{6}-\d{6}-[0-9a-f]{4}\.scope$/.test(c) });
+}
+
 /**
  * Processes with an NVIDIA device open (/dev/nvidia0 …), which is what a GPU
  * Chrome (ANGLE GL-EGL) or any other GPU client does; SwiftShader does not.
  * Each is matched to the running ticket whose job scope contains it: `leased`
- * when that ticket holds the GPU. A v1 scope (siltwake-heavy-*) is exclusive,
+ * when that ticket holds the GPU. A v1 scope (siltwake-heavy-<dir>-<pid>) is exclusive,
  * so it counts as leased. Only this user's processes are readable. ~10 ms.
  */
 export function gpuUsers(cfg, state) {
-  const scopes = Object.values(state?.tickets ?? {}).filter((t) => t.state === "running" && t.unit).map((t) => [`/${t.unit}.scope`, t]);
+  const scopes = Object.values(state?.tickets ?? {}).filter((t) => t.state === "running" && t.unit).map((t) => [t.unit, t]);
   const users = [];
   let pids = [];
   try { pids = readdirSync("/proc").filter((p) => /^\d+$/.test(p)); } catch { return users; }
@@ -460,9 +508,12 @@ export function gpuUsers(cfg, state) {
     let fds;
     try { fds = readdirSync(`/proc/${pid}/fd`); } catch { continue; }
     if (!fds.some((fd) => { try { return /^\/dev\/nvidia\d/.test(readlinkSync(`/proc/${pid}/fd/${fd}`)); } catch { return false; } })) continue;
-    const cgroup = readFileSafe(`/proc/${pid}/cgroup`) ?? "";
-    const owner = scopes.find(([s]) => cgroup.includes(s))?.[1];
-    const v1 = !owner && /\/siltwake-heavy-[^/]*\.scope/.test(cgroup) && !scopes.some(([s]) => cgroup.includes(s));
+    // Membership by whole cgroup path components (cgroup-scope.mjs), never a substring (SCHED-3 R5).
+    const cgroup = cgroupPathOf(readFileSafe(`/proc/${pid}/cgroup`)) ?? "";
+    const owner = scopes.find(([unit]) => hasScopeComponent(cgroup, unit))?.[1];
+    // A v1 scope is siltwake-heavy-<dir>-<pid>; a v2 job scope of any queue
+    // (another state's, e.g. the queue job running these suites) ends in a ticket id, and isn't one (R2-F4).
+    const v1 = !owner && v1Scope(cgroup);
     users.push({ pid: Number(pid), cmd: (readFileSafe(`/proc/${pid}/cmdline`) ?? "").replace(/\0/g, " ").trim().slice(0, 160),
       ticket: owner?.id ?? null, leased: Boolean(owner?.req.gpu) || v1 });
   }

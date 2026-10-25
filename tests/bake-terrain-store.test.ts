@@ -34,6 +34,8 @@ function worktree(add: number): string {
   writeFileSync(join(dir, "src", "render", "biomes", "bake.ts"), recipe);
   writeFileSync(join(dir, "scripts", "bake-terrain.mjs"), version(add));
   writeFileSync(join(dir, "scripts", "bake-source-hash.mjs"), readFileSync(join(root, "scripts", "bake-source-hash.mjs")));
+  // The bake asks the local-run guard (STEW-2) first.
+  for (const f of ["local-guard.mjs", "cgroup-scope.mjs"]) writeFileSync(join(dir, "scripts", f), readFileSync(join(root, "scripts", f)));
   symlinkSync(join(root, "node_modules"), join(dir, "node_modules"), "dir");
   return dir;
 }

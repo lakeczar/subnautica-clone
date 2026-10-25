@@ -50,7 +50,7 @@ import { dirname, join, relative } from "node:path";
 import { fileURLToPath } from "node:url";
 import { MACHINE_LABELS, plan } from "./policy.mjs";
 import { attemptDir, fetchStage, parseReceipt, receiptDir, refreshHealth, remoteAbandon, remoteConfig, remoteRead, remoteStop, remoteYield, removeAttempt, setCurrent, uploadWrapper, writeHealth } from "./remote.mjs";
-import { alive, hostFor, jobDir, ledger, loadConfig, readJson, readState, self, systemctl, transaction } from "./state.mjs";
+import { alive, hostFor, jobDir, ledger, loadConfig, readJson, readState, self, systemctl, terminalRecord, transaction } from "./state.mjs";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const recover = process.argv[2] === "--recover";
@@ -303,14 +303,16 @@ await finish({ code, label, stopReason }, {
 async function finish(outcome, evidence, fetchedArtifacts = []) {
   ended = true;
   clearInterval(dog); clearTimeout(backstop);
-  const result = {
-    ticket: id, ...outcome, class: req.class, review: req.review, tokens: 0, memMiB: req.memMiB, gpu: req.gpu, express: false, exclusive: false,
-    machine: MACHINE_LABELS.remote, machineTag: goal.machine, remote: true, attempts: attempt, mode: t.mode, worktree: t.worktree, cwd: t.cwd, argv: t.argv,
-    submittedAt: t.submittedAt, admittedAt: t.admittedAt, endedAt: Date.now(), ranS: Math.round((Date.now() - started) / 100) / 10, peakMiB: null, cpuS: null,
+  // Started is the receipt's own phase; without a valid receipt that says it didn't, a start can't be ruled out.
+  const ran = phase.started ? true : rc?.valid ? false : "unknown";
+  const result = terminalRecord(t, {
+    ...outcome, review: req.review, tokens: 0, memMiB: req.memMiB, gpu: req.gpu, express: false, exclusive: false,
+    attempts: attempt, mode: t.mode, worktree: t.worktree, cwd: t.cwd, argv: t.argv,
+    ranS: Math.round((Date.now() - started) / 100) / 10, peakMiB: null, cpuS: null,
     unavailable: { peakMiB: "measured by the sandbox's siltwake-job, not reported over the lane", cpuS: "the same" },
-    goal, head: request.tree.head, dirty: request.tree.dirty, headAtAdmit: sha, dirtyAtAdmit: evidence?.dirtyAtAdmit ?? null, changedTree: false, changedDuringRun: evidence?.changedDuringRun ?? null,
+    head: request.tree.head, dirty: request.tree.dirty, headAtAdmit: sha, dirtyAtAdmit: evidence?.dirtyAtAdmit ?? null, changedTree: false, changedDuringRun: evidence?.changedDuringRun ?? null,
     evidence, artifacts: artifacts.length ? (fetchedArtifacts.length ? fetchedArtifacts : artifacts.map((p) => ({ remote: p, error: "the job did not run" }))) : undefined,
-  };
+  }, { ran, remote: true });
   transaction(cfg, (state) => {
     if (!state.tickets[id] || released()) return {}; // released by the coordinator meanwhile: its record stands
     writeFileSync(join(dir, "exit.json"), JSON.stringify(result, null, 1));
@@ -398,7 +400,7 @@ async function recoverTicket() {
   // Not waited for: the sandbox stop below is what ends the job; the old
   // scope (its transport) goes when its processes do.
   if (tk?.holderUnit) systemctl("stop", "--no-block", `${tk.holderUnit}.scope`);
-  let rc = null;
+  let rc = null, payloadStarted = false; // a valid receipt showed the payload's start
   if (lane && at) {
     // The receipt first: an exit recorded before our stop is the job's own;
     // one after it would be our TERM's. Then the attempt is stopped, and the
@@ -406,6 +408,7 @@ async function recoverTicket() {
     for (let i = 0; ; i++) {
       if (released()) process.exit(0);
       const before = await remoteRead(lane, id, at.attempt, at.nonce);
+      if (before?.receipt.valid && before.receipt.started) payloadStarted = true;
       if (before && rc == null && before.receipt.valid && before.receipt.exit != null) rc = before.receipt;
       const s = before ? await remoteStop(cfg, id, { attempt: at.attempt, r: lane }) : { reached: false };
       if (s.reached && s.stopped) break;
@@ -419,9 +422,9 @@ async function recoverTicket() {
   transaction(cfg, (state) => {
     const tt = state.tickets[id];
     if (!tt) return {};
-    const res = { ticket: id, class: tt.req.class, submittedAt: tt.submittedAt, admittedAt: tt.admittedAt, endedAt: Date.now(), remote: true, machine: MACHINE_LABELS.remote,
-      machineTag: tt.goal?.machine, attempts: tt.attempts, head: request?.tree?.head ?? null,
-      evidence: { commit: request?.tree?.head ?? null, bound: false, why: "recovered: its holder did not see the job end", snapshot: false }, ...result };
+    const res = terminalRecord(tt, { attempts: tt.attempts, head: request?.tree?.head ?? null,
+      evidence: { commit: request?.tree?.head ?? null, bound: false, why: "recovered: its holder did not see the job end", snapshot: false }, ...result },
+      { ran: payloadStarted || rc?.started ? true : "unknown", remote: true });
     writeFileSync(join(dir, "exit.json"), JSON.stringify(res, null, 1));
     ledger(cfg, { event: "reconciled", ticket: id, state: "running", worktree: tt.worktree, class: tt.req.class, ...res });
     delete state.tickets[id];
