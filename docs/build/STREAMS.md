@@ -1312,3 +1312,8 @@ The owner prioritised the recorder, testing, scheduling and the save library.
 - **REC-1:**
   - Rehearsal `5fd5` clean. The 4070's indicative result, NOT MET, +0.205 ms [0.186, 0.224], came from the laptop running slow (about 42 fps, against 56 in `f4fb`).
   - The acceptance run is the exclusive 3090 duet, `261025-043054-e104` at `a934d88d`, about 38 min. No compiling on factory-worker during it.
+- **LS-1 1b R1 fixes done at `53d054e7`** (code `cb2b00bf`):
+  - F1 Base upgrades and crop disclosure; F2 keypad reads committed state; F4 cell-local cache discovery and per-host power, cheaper per step; F3 procure deferral with the named exception for the 2 rows.
+  - The C12 +0.3 s is deterministic and attributed to 1b content.
+  - **Checks:** fast, heavy, economy, build and playthrough 9/9 all pass.
+  - **Review:** Sol R2 dispatched (`siltwake-ls1-1b-review-r2-sol-53d054e`).
