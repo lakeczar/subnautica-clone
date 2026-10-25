@@ -359,7 +359,7 @@ No owner questions are open.
 
 ## Stage 1 handoff
 
-Code at **`481d4f3f`** on `t3/pace-1-stage-1`, merged with root (LS-1 1a at `a3409226`, STEW-2). This section is the docs-only commit after it. Spoiler-safe.
+Code at **`6230b1d2`** on `t3/pace-1-stage-1`, merged with root (LS-1 1a at `a3409226`, STEW-2). This section is the docs-only commit after it. Spoiler-safe.
 
 **What a player gets:** nothing yet. Stage 1 changes only the bot. The bot now plays the late game as a sensible player would, so the pacing figures measure the game rather than the bot's ordering.
 
@@ -384,14 +384,14 @@ Code at **`481d4f3f`** on `t3/pace-1-stage-1`, merged with root (LS-1 1a at `a34
 - **The tour** fetches its own core (`libraryplay.ts`, `coreFromRift`).
 - **`pacing-debt.ts`** is rewritten against the merged baseline (below).
 
-**Checks at `481d4f3f`** (queue, `--machine any`):
+**Checks at `6230b1d2`** (queue, `--machine any`):
 
 | Check | Ticket | Result |
 | --- | --- | --- |
-| Fast tier | `261025-021659-6e32` | 1,688 tests, 172 files pass |
-| Heavy tier | `261025-021700-dcec` | Pass, 0 failures |
-| Six economy steps | `261025-021700-0463` | All pass |
-| Playthrough | `261025-021700-722a` | **Exit 0.** 9/9 complete, every milestone reload matches, and the pacing acceptance passes on all four judged routes ("gaps exactly the recorded pacing debt") |
+| Fast tier | `261025-035343-9bbb` | 1,688 tests pass |
+| Heavy tier | `261025-035352-3ded` | Pass, 0 failures |
+| Six economy steps | `261025-035352-e05b` | All pass |
+| Playthrough | `261025-035343-0a6d` | **Exit 0.** 9/9 complete, every milestone reload matches, and the pacing acceptance passes on all four judged routes ("gaps exactly the recorded pacing debt") |
 
 **Final figures** (works beats uncounted until REC-2's F5):
 
@@ -399,18 +399,18 @@ Code at **`481d4f3f`** on `t3/pace-1-stage-1`, merged with root (LS-1 1a at `a34
 | --- | --- | --- | --- | --- |
 | Creel | 203.7 → **151.5** | 50.6 → **26.2** | 1 → 2 (21.4, 26.2) | 31 (850 s) → 30 (850 s) |
 | No-optional | 200.2 → **149.8** | 50.9 → **26.2** | 1 → 2 (23.7, 26.2) | 31 → 30 |
-| Carrier | 372.5 → **285.5** | 94.2 → **51.8** | 4 → 3 (30.6, 44.4, 51.8) | 55 (753 s) → 46 (753 s) |
-| No-optional carrier | 362.3 → **281.6** | 87.1 → **51.6** | 4 → 3 | 55 → 46 |
+| Carrier | 372.5 → **295.6** | 94.2 → **61.2** | 4 → 3 (30.6, 45.1, 61.2) | 55 (753 s) → 46 (753 s) |
+| No-optional carrier | 362.3 → **292.1** | 87.1 → **63.4** | 4 → 3 (30.6, 40.1, 63.4) | 55 → 46 |
 
 **Reading the figures:**
 - **Creel's 26.2:** the works and ending after the visit home, whose steps aren't counted yet.
 - **Creel's 21.4:** the forced return, now including the honest core detour into the Rift. The pre-budget had hidden it.
-- **Carrier:** the gaps are home gathering of commons the carrier route has spent near home, done by diver, plus the forced return's sailing. Its controller → power-assembly gap is 44.4 against LS-1's 26.5. **That is a disclosed re-measurement, not a regression** (coordinator, 2026-10-24): the 26.5 began with the carrier already home, because the bot pre-budgeted the air assembly's lattice.
+- **Carrier:** the gaps are home gathering of commons the carrier route has spent near home, done by diver, plus the forced return's sailing. Its controller → power-assembly gap is 45.1 against LS-1's 26.5. **That is a disclosed re-measurement, not a regression** (coordinator, 2026-10-24): the 26.5 began with the carrier already home, because the bot pre-budgeted the air assembly's lattice.
 - **Every gap row** in `pacing-debt.ts` names its cause and owner. PACE-1 stage 2 covers the forced returns and the carrier's home gathering; REC-2's F5 with stage 2 covers the uncounted works.
 
 **Scenarios A and B** (the bot's clock, from the last district record to the first works step):
 - **A, Creel:** 46.8 min (no-optional 49.4, reverse 50.4). That is 37.8 for the return itself plus the core detour into the Rift, which the pre-budget used to hide.
-- **A, by carrier:** 85.4 min (no-optional 82.2).
+- **A, by carrier:** 92.5 min (no-optional 95.3).
 - **B, crown:** not a cheaper loop on today's map. The works need 8 glass and none is left near the crown. The isles' glass is beyond a full Mantle charge from the Basin anchorage (113%), or in shallows. So the carrier's forced return goes home.
 
 **The R9 log:**
@@ -426,5 +426,5 @@ Code at **`481d4f3f`** on `t3/pace-1-stage-1`, merged with root (LS-1 1a at `a34
 2. **Scenario B isn't played to the end by the bot** (glass geography). Root fix: stage 2 makes it moot.
 
 **Known limits:**
-- **Food:** the carrier route's lowest reading is 13.7, in carrier-deep (28 at LS-1's head). There's no incapacity.
+- **Food:** the carrier route's lowest reading is 13.7, in carrier-deep (28 at LS-1's head). There's no incapacity. The works return eats at home before gathering, which an earlier candidate missed (it ran down to 4.5).
 - **Longest stretch:** the Creel's 850 s (home → gate) stays until stage 2.
