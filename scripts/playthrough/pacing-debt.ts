@@ -28,7 +28,7 @@ export const WORKS_BEATS = "REC-2 (works beats, F5) with PACE-1 stage 2";
 
 
 export const PACING_DEBT: Readonly<Record<string, RouteDebt>> = {
-  // Measured at PACE-1 stage 1 on root a3409226 + STEW-2 (playthrough ticket 261025-015854-e49b), every wait declared.
+  // Measured at PACE-1 stage 1 on root a3409226 + STEW-2 (playthrough ticket 261025-030847-cef9), every wait declared.
   "creel": {
     gaps: {
       // PACE-1 stage 1 (forced return, scenario A): home from the district for the two assemblies, with the air assembly's lattice from the Divide flank and the power assembly's core from the Rift on the way (their plans read past them).
@@ -52,9 +52,9 @@ export const PACING_DEBT: Readonly<Record<string, RouteDebt>> = {
       // The yard's stock for the 550 m refit and the Mantle gathered at home by diver from near-home commons the carrier route has spent, then the sail to the Divide (the seam trip is gone: R6).
       "hull: hearthline → region: brine_divide": { bounds: [30.622], owner: PACE_1 },
       // Re-measured, not regressed (coordinator, 2026-10-24): LS-1's 26.5 began with the carrier already home, because the bot pre-budgeted the air assembly's lattice. Now the forced return starts in the district: lattice from the flank, the carrier home by the lanes with a Mantle detour into the Rift for core, then gathering.
-      "discovery: district_controller → craft: service_power_assembly": { bounds: [44.397], owner: PACE_1_STAGE_2 },
+      "discovery: district_controller → craft: service_power_assembly": { bounds: [45.105], owner: PACE_1_STAGE_2 },
       // The hall and food stock gathered at home by diver (the near-home glass is spent), the ferry and the sail back, then the works and the ending, whose steps are not counted as beats yet.
-      "craft: service_air_assembly → end": { bounds: [51.776], owner: PACE_1_STAGE_2 },
+      "craft: service_air_assembly → end": { bounds: [61.198], owner: PACE_1_STAGE_2 },
     },
     legs: {
       "hearthline in deep_district": { bounds: [753.35, 207.333], owner: REC_2 },
@@ -94,9 +94,9 @@ export const PACING_DEBT: Readonly<Record<string, RouteDebt>> = {
       // The yard's stock for the 550 m refit and the Mantle gathered at home by diver from near-home commons the carrier route has spent, then the sail to the Divide (the seam trip is gone: R6).
       "hull: hearthline → region: brine_divide": { bounds: [30.62], owner: PACE_1 },
       // Re-measured, not regressed (coordinator, 2026-10-24): LS-1's 26.5 began with the carrier already home, because the bot pre-budgeted the air assembly's lattice. Now the forced return starts in the district: lattice from the flank, the carrier home by the lanes with a Mantle detour into the Rift for core, then gathering.
-      "discovery: district_controller → craft: service_power_assembly": { bounds: [41.372], owner: PACE_1_STAGE_2 },
+      "discovery: district_controller → craft: service_power_assembly": { bounds: [40.11], owner: PACE_1_STAGE_2 },
       // The hall and food stock gathered at home by diver (the near-home glass is spent), the ferry and the sail back, then the works and the ending, whose steps are not counted as beats yet.
-      "craft: service_air_assembly → end": { bounds: [51.606], owner: PACE_1_STAGE_2 },
+      "craft: service_air_assembly → end": { bounds: [63.415], owner: PACE_1_STAGE_2 },
     },
     legs: {
       "hearthline in deep_district": { bounds: [753.35, 207.333], owner: REC_2 },
