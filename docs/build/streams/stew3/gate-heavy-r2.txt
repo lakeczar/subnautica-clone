@@ -1,0 +1,10 @@
+
+heavy-check: 261025-055450-807e exit 0; queued 22m43s, ran 9m30s; unavailable: peakMiB, cpuS (measured by the sandbox's siltwake-job, not reported over the lane); evidence for 1fb0e42883; on RTX 4070 Laptop (alickers, shared desktop host)
+gate: heavy results: stored 67 file rows (node scripts/heavy-results.mjs show --commit 1fb0e4288397)
+
+gate at 1fb0e4288397:
+  pass  heavy                 1933 s  [on RTX 4070 Laptop (alickers, shared desktop host)]
+  not run: fast, bake, build, economy:campaign, economy:m1, economy:m2-a, economy:m2-b1, economy:progression, economy:upgrade, playthrough: this is a partial gate
+partial gate passed at 1fb0e4288397
+after pushing the merge: export the shared save library at the merged commit (SAVE-1): scripts/saves-export.sh
+exit 0

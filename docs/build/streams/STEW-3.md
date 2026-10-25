@@ -120,8 +120,37 @@ Root merged again (`e7028cb`). The coordinator's rulings, as built:
   - **Tested** with `--dry-run`. **The coordinator installs it after merge.**
 - **Records are v3.** v1 and v2 records stay readable as diagnostics and are never eligible.
 
+## R2 evidence
+Everything ran through the queue, `--machine any`, with no exclusive time. The last code change is `1fb0e42`; after it, only docs and saved evidence.
+- **Fast tier:** 1,712/1,712, none skipped, at `1fb0e42` on alickers (`261025-054427-c1f5`). It includes the focused files and the regressions:
+  - schema;
+  - attempts, including the fallback through the gate;
+  - workload, including the gate's canonical submission and every variable a heavy test reads being classified;
+  - file facts (computed import, generated fixture, declared inputs, children, workers);
+  - six concurrent ingests;
+  - the gate passing while a sweep stores its ticket first;
+  - the bounded, checkpointed sweep and its overdue signal;
+  - the timer installer (dry run).
+- **Earlier attempts:** two found my own test bugs (a probe's quoting, a wrong expectation, the harness's own test in the env scan). All are fixed.
+- **The real `npm run gate -- --only heavy`** at `1fb0e42` (`261025-055450-807e`): it waited 22m43s behind REC-1's exclusive series, then ran on **alickers** in 9m30s, exit 0, bound. The gate stored 67 rows and passed: `pass heavy 1933 s [on RTX 4070 Laptop …]`. Output: [`stew3/gate-heavy-r2.txt`](stew3/gate-heavy-r2.txt); rows: [`stew3/stored-rows-1fb0e42.txt`](stew3/stored-rows-1fb0e42.txt).
+  - **Attempt binding, end to end:** the record says `attempt: alickers:a1`, the receipt is remote attempt 1, and all 67 rows are eligible. `settings: {}` (the canonical workload); the build cache was cold at the start.
+  - **Provenance:** 65 of 67 files are complete.
+    - `timeline-model` reads 712 inputs, all accounted for, with no declaration.
+    - `regions-bake` is complete through its declaration (280 inputs).
+    - Two are incomplete, and so are never a control (both stay gate evidence):
+      - `save-library-build` starts `git`, `bash`, `flock` and `chmod`, and reads an archive build's `.siltwake-source-commit`;
+      - `heavy-tier`, the harness's own self-test, starts nested runners and `git`.
+  - **`heavy-tier.heavy.test.ts`:** 18/18, including the new real-runner regressions under both containments:
+    - a child's fill-then-hit;
+    - a silent child, recorded as `unknown`;
+    - a computed import and a generated fixture, left incomplete;
+    - `SILTWAKE_TIMELINE_SEQUENCES=0`, recorded and labelled.
+  - **Cache use across a cold tier:** per file it's a mix of `hit`, `fill`, `mixed` and two `unknown`. That's why reuse needs each file's own cache use.
+  - **OOM kills:** only the 3 nested ones inside `heavy-tier`. **`near`:** nothing at 85% (the top file is `timeline-model` at 75.3%).
+- **Not done:** the timer isn't installed; that's the coordinator's step after merge. No local CPU work, apart from one 50 ms `node` probe of worker-thread preloading while REC-1's exclusive was running. I chained the status check and the probe in one call, so the check didn't actually gate it; disclosed here.
+
 ## Files
-- **New:** `scripts/heavy-results.mjs` (record format, store, CLI); `scripts/test-heavy-file.mjs` (each heavy file's process reports its CPU, peak and cache use); `tests/heavy-results.test.ts`.
+- **New:** `scripts/heavy-results.mjs` (record format, store, CLI, the sweep); `scripts/heavy-results-timer.sh` (the timer's installer); `tests/heavy-inputs.json` (declared inputs); `scripts/test-heavy-file.mjs` (each heavy file's process reports its CPU, peak and cache use); `tests/heavy-results.test.ts`.
 - **Changed:**
   - `scripts/test-tier.mjs`: records, context, the override label, near-budget warnings and the fast-tier context;
   - `scripts/heavy-containment.mjs`: tree CPU and own/nested OOM kills from each file's cgroup;
