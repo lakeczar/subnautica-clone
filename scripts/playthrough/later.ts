@@ -1019,6 +1019,8 @@ const works = (strategy: Strategy): Phase => ({
     for (const k of ["brine_lattice", "thermal_core"] as const)
       move(d, k, Math.min(aboard[k] ?? 0, d.count(k, [stores])), stores, "diver");
     ashoreFromCarrier(d);
+    // R1: home now, so eat and carry meals from home's crops before the long gathering.
+    provision(d);
     const cargo = stageWorksCargo(d);
     boardCraft(d, "creel");
     fly(d, "creel_out");
