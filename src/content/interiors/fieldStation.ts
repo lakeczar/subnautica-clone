@@ -68,7 +68,8 @@ export const FIELD_STATION: InteriorDef = {
   lights: [],
   sounds: [{ id: "shutter", at: v(9.7, 1.5, 0), cue: "station_shutter_knock", caption: "A loose shutter knocking in the wind, to the east" }],
   hosts: [],
-  firstAccess: [{ route: "creel", milestone: "opening", craft: null, staging: null }],
+  // On foot from the beach path: the ground outside hut A's west door.
+  firstAccess: [{ route: "creel", milestone: "opening", craft: null, staging: null, origin: v(-5, 0, 1.6) }],
   replaces: [],
 };
 
@@ -116,6 +117,6 @@ export const COLD_STORE: InteriorDef = {
   sounds: [{ id: "breath", at: v(0, 0.4, 8.2), cue: "cold_store_shaft_breath", caption: "A slow, cold breath of air from a shaft ahead" }],
   hosts: [],
   // The code comes from the gauge line, after the Dart.
-  firstAccess: [{ route: "creel", milestone: "isles", craft: null, staging: null }],
+  firstAccess: [{ route: "creel", milestone: "isles", craft: null, staging: null, origin: v(0, 0, -2) }],
   replaces: [],
 };

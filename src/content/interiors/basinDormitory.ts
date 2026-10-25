@@ -86,5 +86,6 @@ export const BASIN_DORMITORY: InteriorDef = {
     { route: "creel", milestone: "basin-survey", craft: "dart", staging: "landing" },
     { route: "no-optional", milestone: "basin-survey", craft: "dart", staging: "landing" },
   ],
-  replaces: [],
+  // S2's five placeholder boxes for the dormitory (content/routes.ts BASIN_GEOMETRY); stage 2 retires them.
+  replaces: ["basin.dormitory.floor", "basin.dormitory.back", "basin.dormitory.beds.west", "basin.dormitory.beds.east", "basin.dormitory.bundles"],
 };

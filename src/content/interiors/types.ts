@@ -89,12 +89,16 @@ export interface InteriorStaging extends CaveStaging {
 
 /** One route's first visit, for the air proof: the SAVE-1 milestone whose fleet
  * and suit the route has here, the one craft it brings (null: swimming from
- * shore or the surface) and where that craft parks. */
+ * shore or the surface) and where that craft parks. The visit is a round trip
+ * from where the diver starts back to where they're safe: the craft's exit pose
+ * and boarding, or, with no craft, `origin` (local): a pose on dry ground (the
+ * shore), or in the water below a clear rise to the surface. */
 export interface FirstAccess {
   readonly route: string;
   readonly milestone: string;
   readonly craft: HullId | null;
   readonly staging: string | null;
+  readonly origin?: Vec3;
 }
 
 export interface InteriorDef {
@@ -116,7 +120,7 @@ export interface InteriorDef {
   readonly sounds: readonly SoundTell[];
   readonly hosts: readonly HostRef[];
   readonly firstAccess: readonly FirstAccess[];
-  /** Structure ids this interior takes over (ENV-1 §3.7). */
+  /** Structure or placeholder solid ids this interior takes over (ENV-1 §3.7). */
   readonly replaces: readonly string[];
 }
 

@@ -6,11 +6,11 @@ import assert from "node:assert/strict";
 import { JUMP, ORDINARY_SWIM_SPEED } from "../src/sim/interiors/validate.js";
 import { FIXED_SECONDS as DT } from "../src/sim/clock.js";
 import { at } from "./b1-support.js";
-import { fixtureState, flatWorld } from "./interiors-support.js";
+import { fixtureState, openWater } from "./interiors-support.js";
 import { play } from "./step-support.js";
 
 test("the ordinary swim speed is the step's: a level, unsprinted swim covers 3.4 m/s", () => {
-  const world = flatWorld(-400), s = fixtureState("suit_350");
+  const world = openWater(-400), s = fixtureState("suit_350");
   at(s, { x: 0, y: -100, z: 0 }, "swimming");
   s.player.pose.yaw = 0; s.player.pose.pitch = 0;
   const warm = play(s, 30, [{ type: "move", forward: 1, right: 0, vertical: 0, sprint: false }], world);
@@ -21,7 +21,7 @@ test("the ordinary swim speed is the step's: a level, unsprinted swim covers 3.4
 });
 
 test("a walker's jump clears the validator's jump height, and not by much", () => {
-  const world = flatWorld(5), s = fixtureState("suit_150");
+  const world = openWater(5), s = fixtureState("suit_150");
   at(s, { x: 0, y: 5, z: 0 }, "walking");
   let top = 5;
   play(s, 60, [{ type: "move", forward: 0, right: 0, vertical: 1, sprint: false }], world, (_e, st) => { top = Math.max(top, st.player.pose.position.y); });

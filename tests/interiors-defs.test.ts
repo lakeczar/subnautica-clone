@@ -9,28 +9,27 @@ import assert from "node:assert/strict";
 import { BASIN_DORMITORY, COLD_STORE, FIELD_STATION, PUMP_HOUSE } from "../src/content/interiors/index.js";
 import { worldFloor } from "../src/content/regions/worldFloor.js";
 import { validateInterior } from "../src/sim/interiors/validate.js";
-import { createWorldQueries } from "../src/sim/world.js";
-import { fixtureState, flatWorld } from "./interiors-support.js";
+import { coldStoreHill, fixtureState, flatExterior, realExterior } from "./interiors-support.js";
 
-const terrain = createWorldQueries([], worldFloor);
 
-test("the Basin dormitory passes on the shelf's terrain, from the Dart above the landing", () => {
+test("the Basin dormitory passes on the shelf's terrain and solids, from the Dart above the landing", () => {
   const state = fixtureState("suit_350", "dart");
-  assert.deepEqual(validateInterior({ def: BASIN_DORMITORY, exterior: terrain, scenarios: BASIN_DORMITORY.firstAccess.map((access) => ({ access, state })) }), []);
+  assert.deepEqual(validateInterior({ def: BASIN_DORMITORY, exterior: realExterior(BASIN_DORMITORY), scenarios: BASIN_DORMITORY.firstAccess.map((access) => ({ access, state })) }), []);
 });
 
-test("the pump house passes on the reef's terrain, swimming from the surface and from a parked Dart", () => {
+test("the pump house is refused, honestly, until stage 2: the reef's undercut cave owns the ground beside it", () => {
+  // CA-1's reef_pumphouse_undercut starts 1.35 m east of the building. The exterior
+  // contract (terrain and box solids) can't represent a cave, so the validator
+  // says so rather than prove it without the cave. Everything else passes.
   const swimmer = fixtureState("suit_150"), withDart = fixtureState("suit_350", "dart");
   const scenarios = PUMP_HOUSE.firstAccess.map((access) => ({ access, state: access.craft ? withDart : swimmer }));
-  assert.deepEqual(validateInterior({ def: PUMP_HOUSE, exterior: terrain, scenarios }), []);
+  assert.deepEqual(validateInterior({ def: PUMP_HOUSE, exterior: realExterior(PUMP_HOUSE), scenarios }).map((p) => p.code), ["exterior"]);
 });
 
 test("the field station and the cold store pass walked on a flat stand-in for the island", () => {
   const walker = fixtureState("suit_150");
-  assert.deepEqual(validateInterior({ def: FIELD_STATION, exterior: flatWorld(28), scenarios: FIELD_STATION.firstAccess.map((access) => ({ access, state: walker })) }), []);
-  // The store is cut into the hill: ground at its floor, and the shaft open below.
-  const hill = createWorldQueries([], (x, z) => Math.abs(x + 232) < 0.6 && z > 3 + 7.6 && z < 3 + 8.8 ? 0 : 24);
-  assert.deepEqual(validateInterior({ def: COLD_STORE, exterior: hill, scenarios: COLD_STORE.firstAccess.map((access) => ({ access, state: walker })) }), []);
+  assert.deepEqual(validateInterior({ def: FIELD_STATION, exterior: flatExterior(28), scenarios: FIELD_STATION.firstAccess.map((access) => ({ access, state: walker })) }), []);
+  assert.deepEqual(validateInterior({ def: COLD_STORE, exterior: coldStoreHill, scenarios: COLD_STORE.firstAccess.map((access) => ({ access, state: walker })) }), []);
 });
 
 test("terrain under the real-terrain interiors: at most 0.3 m above the floor (stage 2 masks it, as caves' footprints do)", () => {

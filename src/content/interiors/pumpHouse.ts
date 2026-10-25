@@ -52,7 +52,8 @@ export const PUMP_HOUSE: InteriorDef = {
   hosts: [{ kind: "lost_site", id: "reef_pumphouse_site" }],
   // A swimmer can reach it before any craft; the bot decodes it after the Dart.
   firstAccess: [
-    { route: "creel", milestone: "reef", craft: null, staging: null },
+    // Swum down from the surface: open water above the door, under a clear rise.
+    { route: "creel", milestone: "reef", craft: null, staging: null, origin: v(0, 21, -6) },
     { route: "creel", milestone: "systems", craft: "dart", staging: "above_door" },
   ],
   replaces: [],
