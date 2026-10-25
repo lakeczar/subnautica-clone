@@ -7,10 +7,9 @@ import { after } from "node:test";
 import assert from "node:assert/strict";
 import { spawn, spawnSync } from "node:child_process";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
-import { availableParallelism } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { alive } from "./state.mjs";
+import { alive, machineCpus } from "./state.mjs";
 
 export const here = dirname(fileURLToPath(import.meta.url));
 export const CLI = join(here, "heavy-check.mjs");
@@ -47,7 +46,9 @@ export function context(name, { mode = "normal", host = {}, config = null, slice
   const env = { ...process.env, SILTWAKE_SCHED_DIR: sched, SILTWAKE_SCHED_LEGACY_LOCK: join(dir, "legacy.lock"),
     SILTWAKE_SCHED_SLICE: slice, SILTWAKE_SCHED_UNIT_PREFIX: `sched1test-heavy-${n}`, SILTWAKE_SCHED_SUPERVISOR_PREFIX: `sched1test-sched-${n}`,
     SILTWAKE_SCHED_EXCLUSIVE_SLICE: `sched1testexcl${process.pid}x${n}.slice` }; // a private top-level exclusive slice (TST-16; set up by exclusiveSlice())
-  for (const k of ["SILTWAKE_JOB_TICKET", "SILTWAKE_HEAVY_LOCK_HELD", "SILTWAKE_GPU_LEASE", "HEAVY_MEMORY_MAX", "HEAVY_LOCK_WAIT"]) delete env[k];
+  // Nothing of an enclosing queue job leaks in (the suites run inside one, SCHED-3 R2-F4): its ticket, lease, reservation and heartbeat.
+  // Nor do the test runner's own NODE_TEST_* (its context, worker id), which a submit would take for the submitter's intent (SCHED-3 R3).
+  for (const k of Object.keys(env)) if (/^(SILTWAKE_JOB_|SILTWAKE_HEAVY_|NODE_TEST_)/.test(k) || ["SILTWAKE_GPU_LEASE", "SILTWAKE_TEST_BUILD", "BAKE_WORKERS", "HEAVY_MEMORY_MAX", "HEAVY_LOCK_WAIT"].includes(k)) delete env[k];
   const c = { dir, sched, env, legacy: join(dir, "legacy.lock"), n };
   c.wt = (w) => { const p = join(dir, `wt-${w}`); mkdirSync(p, { recursive: true }); return p; };
   /** A git worktree with one committed file, file.txt = "v1". */
@@ -206,7 +207,7 @@ export async function exclusiveSlice(c, { weight = 10000, memoryMiB = null } = {
   const name = c.env.SILTWAKE_SCHED_EXCLUSIVE_SLICE;
   const { sliceLimits } = await import("./policy.mjs");
   const { loadConfig } = await import("./state.mjs");
-  const w = sliceLimits(availableParallelism(), loadConfig(c.env)); // as install.sh writes the unit
+  const cfg = loadConfig(c.env), w = sliceLimits(machineCpus(cfg), cfg); // as install.sh writes the unit
   const r = spawnSync("systemctl", ["--user", "set-property", "--runtime", name, `CPUWeight=${weight}`, `CPUQuota=${w.cpuQuotaPct}%`, `MemoryMax=${memoryMiB ?? w.memoryMaxMiB}M`, "MemorySwapMax=0"], { encoding: "utf8" });
   assert.equal(r.status, 0, r.stderr);
   return name;

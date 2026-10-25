@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // CA-3 deep caves on a real GPU (run through scripts/heavy-check.sh):
 //
-//   scripts/heavy-check.sh --deadline 1500 node tools/cave-deep-shots.mjs [port] [outDir]
+//   scripts/heavy-check.sh --class gpu --machine 3090 --deadline 1500 node tools/cave-deep-shots.mjs [port] [outDir]
+//
+// Pinned to the 3090 (SCHED-3): it loads Playwright and Chrome from this machine's paths and needs the GPU lease, so it isn't portable to alickers.
 //
 // Serves the repo with Vite on a task-owned loopback port, launches a
 // task-owned headless Chrome on ANGLE GL-EGL (the RTX 3090 on factory-worker)

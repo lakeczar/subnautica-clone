@@ -2,7 +2,8 @@
 // Canopy/Basin cave lab under the caller's Vite dev server. For every cave group: a daylight view
 // from outside a mouth, and a lamp-off view from inside its deepest-reaching room looking at the
 // way out. Basin caves get their swim-in wake seeded first, so the glowing trail shows lamp-off.
-// Run through scripts/heavy-check.sh (one GPU job at a time); the browser is closed at the end.
+// Run through scripts/heavy-check.sh --class gpu --machine 3090 (one GPU job at a time; it uses the caller's Vite server and compiled
+// files, so it isn't portable to alickers); the browser is closed at the end.
 // usage: node shots.mjs <repo> <port> <outdir>
 import { createRequire } from "node:module";
 import { mkdirSync, writeFileSync } from "node:fs";

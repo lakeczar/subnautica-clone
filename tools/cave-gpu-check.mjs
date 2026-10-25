@@ -1,7 +1,9 @@
 #!/usr/bin/env node
 // W1 cave lamp check on a real GPU (run through scripts/heavy-check.sh).
 //
-//   scripts/heavy-check.sh --deadline 600 node tools/cave-gpu-check.mjs [port] [out.json]
+//   scripts/heavy-check.sh --class gpu --machine 3090 --deadline 600 node tools/cave-gpu-check.mjs [port] [out.json]
+//
+// Pinned to the 3090 (SCHED-3): it loads Playwright and Chrome from this machine's paths and needs the GPU lease, so it isn't portable to alickers.
 //
 // Serves the repo with Vite on a task-owned loopback port, launches a
 // task-owned headless Chrome on ANGLE GL-EGL (the RTX 3090 on factory-worker),

@@ -83,7 +83,7 @@ Adopted from the compromise verdict (`research/compromise-audit:docs/build/audit
   Until the lane exists, builders may call `scripts/alickers-job.sh` directly.
 - **The frame gate is 60 fps on a GPU, not specifically the 3090** (owner, 2026-10-24). Acceptance evidence may come from either test GPU (the RTX 3090 or the RTX 4070 laptop). A run counts when its host was quiet for that machine, judged by the same disturbance rules. Until the queue supports quiet acceptance runs on the 4070 (SCHED-4 follow-up), exclusive acceptance runs stay on the 3090.
 - **Balance the two GPUs** (owner, 2026-10-24): only acceptance numbers (frame-time gates, budget confirmations) are `--class exclusive`.
-  - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. Results from the 4070 are labelled indicative.
+  - Investigations, diagnostics, attribution, tests and playthroughs are submitted `--machine any`, so the queue sends them to whichever machine frees first. That declares the job portable: its outputs come back with `--artifact` (SCHED-3). An undeclared job runs on the 3090. Results from the 4070 are labelled indicative.
   - Pin a job to one machine only when the question needs that machine (e.g. factory-worker's host pauses, or a 4070 player-floor check).
 - **Graphics first; integrated graphics later** (owner, 2026-10-24):
   - **Order:** build for the best graphics first; the dedicated-GPU gate stays (60 fps on a dedicated GPU; the 4070 laptop is the player floor). Integrated-graphics laptops come later, through a settings change (a lower preset), not as a target now.
