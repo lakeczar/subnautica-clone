@@ -1,0 +1,62 @@
+{
+ "ticket": "261025-043313-019c",
+ "code": 0,
+ "label": null,
+ "class": "bake",
+ "review": false,
+ "tokens": 2,
+ "memMiB": 3072,
+ "gpu": false,
+ "express": false,
+ "exclusive": false,
+ "mode": "normal",
+ "worktree": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "cwd": "/home/worker/.t3/worktrees/subnautica-clone/t3-e42dee05",
+ "argv": [
+  "bash",
+  "-c",
+  "set -eo pipefail; node scripts/bake-terrain.mjs --force 2>&1 | tee /work/tmp/cw1/r16/bake.log; node scripts/bake-terrain.mjs --verify 2>&1 | tee -a /work/tmp/cw1/r16/bake.log; npm run build > /work/tmp/cw1/r16/build.log 2>&1; node docs/build/streams/cw1/check-provenance.mjs dist 2>&1 | tee /work/tmp/cw1/r16/provenance.log"
+ ],
+ "submittedAt": 1792902793660,
+ "admittedAt": 1792905616170,
+ "endedAt": 1792905792703,
+ "ranS": 175.9,
+ "peakMiB": 1837,
+ "cpuS": 365,
+ "oomKills": 0,
+ "reservationOom": false,
+ "oomGroupKill": false,
+ "oomEvidence": null,
+ "leftovers": false,
+ "stopReason": null,
+ "goal": {
+  "v": 2,
+  "limitS": 7200,
+  "explicitDeadline": false,
+  "ceilingS": 7200,
+  "stallS": 900,
+  "soak": false,
+  "snapshot": true,
+  "machine": "3090",
+  "remoteOk": false
+ },
+ "head": "4ba5134e4f13d3036cfd9239be86d0743d4b1341",
+ "dirty": "clean",
+ "headAtAdmit": "4ba5134e4f13d3036cfd9239be86d0743d4b1341",
+ "dirtyAtAdmit": "clean",
+ "changedTree": false,
+ "changedDuringRun": false,
+ "evidence": {
+  "commit": "4ba5134e4f13d3036cfd9239be86d0743d4b1341",
+  "bound": true,
+  "why": null,
+  "snapshot": true
+ },
+ "snapshot": {
+  "root": "/work/tmp/siltwake-sched/jobs/261025-043313-019c/tree",
+  "kept": false
+ },
+ "context": null,
+ "machine": "RTX 3090 (factory-worker)",
+ "machineTag": "3090"
+}

@@ -1,7 +1,7 @@
 # CW-1: every authored cave in the game, streamed without pauses (handoff)
 
 
-Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Root merged again at `21a1652` (SIM-1a, TST-16, SIG-1 stage 0, STEW-1) and, after review R4, at **`9029963e`** (SIM-1b, COL-1 A, SIM-PERF-1; root `732fe59c`). Code after R4: the R4-2/R4-3 fixes `6ee7bff3`, R4-1 and the sampler worker `8ba62f09`, evidence tooling `fc5059ff`, the bake's worker blocks `f9525447`. After R5: GPU credit off, budgets reverted and the hazard reference restored `a68374e7`, the entry warm-up `1aaf66d7`, the regenerated diagnostics `c7fe6a56`, the sweep `9b5cee2c`; the evidence commits and this handoff follow. Runs:
+Opus 5.5 high. Branch `t3/enable-authored-cave-streaming`, from root `3650e6b`; root merged at `c649b11` (CA-3, CB-2, POI-1), `0a4539d` (TT-1), `ba7d5fa` (SCHED-1, the shared terrain store), `a536775` (SCHED-2a, CR-1, UX-1) and `91dc1ab` (SCHED-2b, SAVE-1). Root merged again at `21a1652` (SIM-1a, TST-16, SIG-1 stage 0, STEW-1) and, after review R4, at **`9029963e`** (SIM-1b, COL-1 A, SIM-PERF-1; root `732fe59c`). Code after R4: the R4-2/R4-3 fixes `6ee7bff3`, R4-1 and the sampler worker `8ba62f09`, evidence tooling `fc5059ff`, the bake's worker blocks `f9525447`. After R5: GPU credit off, budgets reverted and the hazard reference restored `a68374e7`, the entry warm-up `1aaf66d7`, the regenerated diagnostics `c7fe6a56`, the sweep `9b5cee2c`, the harness's sliced export `6d9c2d19`; the R6-reviewed candidate `811f0867`. Root merged for integration at **`4ba5134e`** (root `a391cbb7`); this handoff is the docs-only commit after it. Runs:
 - the clean remeasure at `3779f59c` (r10);
 - the targeted remeasure of its failures at `6ca73311` (r12);
 - R3's single rerun at `64bf2565` (r13), with tour 1 at harness `da1c83b0` on the same build;
@@ -12,7 +12,8 @@ Reviews:
 - R2 `review/cw-1-r2` (`docs/build/reviews/CW-1-SOL-XHIGH-R2.md`);
 - R3 `review/cw-1-r3` (`docs/build/reviews/CW-1-SOL-XHIGH-R3.md`);
 - R4 `review/cw-1-r4` (REQUEST CHANGES on `a431d253`; *R4 response*);
-- R5 `review/cw-1-r5` (`docs/build/reviews/CW-1-SOL-XHIGH-R5.md`; REQUEST CHANGES on `42786dc4` with a path to provisional integration; *R5 response*).
+- R5 `review/cw-1-r5` (`docs/build/reviews/CW-1-SOL-XHIGH-R5.md`; REQUEST CHANGES on `42786dc4` with a path to provisional integration; *R5 response*);
+- R6 `review/cw-1-r6` (`docs/build/reviews/CW-1-SOL-XHIGH-R6.md`, `e6cf1abe`): **accept for provisional integration only** on `811f0867`, no new P1/P2; steady-60 and full CW-1 acceptance withheld (*R6 and integration*).
 
 ## Outcome
 All **55** authored small and medium caves are in the real game: the Fanvault and W2's four hub caves, CA-1's 18 Reef and Isles caves, CA-2's 12 Canopy and Basin groups, and CA-3's 20 Rift, Divide and Meridian sources. The browser never generates a cave: collision and light are baked, streamed ahead by proximity and heading, built in time slices and evicted behind and far first. At 1920×1080 on the RTX 3090, the driving ran from earned library saves by ordinary keys: an 8-segment Dart tour from `tour-ready`, and the 800 m Creel from `canopy-over-geared`, with service calls and reserve cells.
@@ -38,7 +39,34 @@ All **55** authored small and medium caves are in the real game: the Fanvault an
 - **Tour 1: pass, nothing excused.** 12/12 caves, 0 streaming frames over 34 ms, all three re-entries revealed with the cave's own light bound (0.39–0.40 s cover, 0 pending frames behind it), 0 terrain or shell fallbacks; not DISTURBED. Region activation peaked at 1.0 ms: r13's 95.2 ms frame didn't recur, and stays open as possible game work (*R4 response*).
 - **Deep 2: fail on one frame.** 7/7 caves; one 49.9 ms streaming frame (`lightPlace` 52.2 ms by the page clock) has no provable credit: the renderer moved vCPU 5 → 1 inside it and part of its state is unobserved. Carried as a **failed/open measurement** (*Compromises*).
 
-**Proven per segment, the strict rule throughout:** 8 of the 9 measured segments pass, across versions (not 8 on the composed build) (tours 0, 1, 3, 4, 5 and 7, hop 2, the surf hop); deep 2 fails. The other seven passes were measured on CW-1's own builds (r12, r13) before the root composition; on the composed build, tour 1 and deep 2 were run (the coordinator's one rerun). This handoff asks for **provisional integration** with deep 2 recorded as an explicit failed/open measurement, not acceptance or a performance waiver. **Steady-60 acceptance is withheld:** deep 2, a 93 ms on-CPU render frame and tour 1's r13 region frame stay open with named owners, and composed timing for the seven other segments and cold-interior first-revealed pixels are missing (*Compromises*, *Missing evidence*). The seven segments' composed **functional** sweep is under *R5 response*.
+**Proven per segment, the strict rule throughout:** 8 of the 9 measured segments pass, across versions (not 8 on the composed build) (tours 0, 1, 3, 4, 5 and 7, hop 2, the surf hop); deep 2 fails. The other seven passes were measured on CW-1's own builds (r12, r13) before the root composition; on the composed build, tour 1 and deep 2 were run (the coordinator's one rerun). This handoff asks for **provisional integration** with deep 2 recorded as an explicit failed/open measurement, not acceptance or a performance waiver. **R6 accepted it for provisional integration only**; the integration candidate is root merged at `4ba5134e`. **Steady-60 acceptance is withheld:** deep 2, a 93 ms on-CPU render frame and tour 1's r13 region frame stay open with named owners, and composed timing for the seven other segments and cold-interior first-revealed pixels are missing (*Compromises*, *Missing evidence*). The seven segments' composed **functional** sweep is under *R5 response*.
+
+## R6 and integration
+Review R6 (Sol 6.1 xhigh on `811f0867`): **accept for provisional integration only**, no new P1 or P2. Steady-60 and full CW-1 acceptance stay withheld. It verified R5-1 to R5-5, the seven-segment functional sweep (34/34) and the withdrawal of the parked-craft claim. Its two P3 findings are recorded, not fixed, by the coordinator's plan (follow-ups after the merge, scheduled with wave A).
+
+**Follow-ups, with owners:**
+- **R6-1 (P3), browser observability:** surface `kitCaves.stats.deferredQueries` and `liveKitRecordsMade()` through the existing on-demand `siltwakeCaveStream()` hook, so a browser run can show zero live record generation; the terrain/shell fallback counter alone can't. Owner: **CW-1/harness successor**. Small; no per-frame DOM work, no second authority.
+- **R6-2 (P3), default-limit export check:** one commit-bound 3090 export check of **tour 5** at the final SHA and the gpu class's **default 3,072 MiB**, before the OOM/default-limit item is closed. Owner: **CW-1/harness successor**. Non-exclusive.
+- **Surf approach:** the authored approach-route fix for the traversal driver and planner, now an explicit follow-up rather than waiting for another recurrence. Tour 3's 31 corner stalls are the same limitation. Owner: **CW-1 traversal/planner**. Small.
+- **The rest of R6's ownership table stands as given** (*Compromises*).
+
+**Integration merge** (`4ba5134e`, root `a391cbb7` = `0fa80f9a` plus a docs commit). Two conflicts, resolved to keep both sides:
+- **`scripts/bake-terrain.mjs`:** STEW-2's `guardLocalRun({ cls: "bake", machine: "3090" })` stays a static import and runs before any expensive import. CW-1's source-hash helper (`bake-source-hash.mjs`, STR-13) imports esbuild itself, so it's now imported dynamically right after the guard, beside root's dynamic esbuild import. Nothing else in the file changes.
+- **`tests/bake-terrain-store.test.ts`:** the store test's temporary worktree gets both CW-1's `bake-source-hash.mjs` and STEW-2's `local-guard.mjs` and `cgroup-scope.mjs`.
+
+No other file needed resolution. The merge doesn't change the bake's inputs: `6483e073…` before and after.
+
+**Checks on the integration candidate** (`4ba5134e`, through the queue):
+- **Fast tier** (`261025-043310-ec90`, 3090, `4ba5134e`, bound snapshot, 3,072 MiB default, a cold test build in the snapshot): **1,736 / 1,736**.
+- **`tests/bake-terrain-store.test.ts`** (`261025-043311-372f`, same conditions): **4 / 4**, the merged guard-first bake included.
+- **Bake and provenance** (`261025-043313-019c`, 3090, bake class, 3,072 MiB, `--force`, no shared-store restore):
+  - the fresh bake verifies **276 / 276**;
+  - `npm run build` succeeds;
+  - `check-provenance.mjs`: the manifests, the KCP1 pack header, the bundle and all 276 listed sha-256s carry **`6483e073…`**, with 55 light fields.
+- **Heavy tier at real budgets**, every file at its own budget and no override:
+  - **The first run** (`261025-043312-9eb6`) stopped before any file. Root's STEW-2 test-tier rule refuses an unclassified heavy file that reads a clock, and CW-1's `cw1-caves.heavy` reads one only to report a build time and to give the streamer its step clock. It's now listed under `clockWithoutBound` (`c64f5bfb`), the one change beyond the merge.
+  - **The rerun** (`261025-052404-0ac7`, 3090, 3,072 MiB job limit): **71 / 71 files pass within their budgets**, the five timing files alone. Peaks: `regions-bake` 1,375 / 1,920, `cw1-bake` 1,132 / 1,536, `col1-art` 918 / 1,024.
+  - **The rerun's receipt isn't commit-bound:** its snapshot carried this handoff's uncommitted text. The tested code is `c64f5bfb`. A bound rerun at this handoff's commit is reported to the coordinator with the integration candidate.
 
 ## R5 response
 Review R5 (Sol 6.1 xhigh on `42786dc4`): REQUEST CHANGES, with the conditions for provisional integration in its "Integration decision and conditions". Each is below. **The candidate is for provisional integration only; steady-60 acceptance is withheld** (*Compromises*).
@@ -51,11 +79,18 @@ Review R5 (Sol 6.1 xhigh on `42786dc4`): REQUEST CHANGES, with the conditions fo
 | **R5-4 (P3)** r14's saved state summaries came from before the coverage correction. | Regenerated from the retained raw states (`rejudge.mjs`), and the prose corrected. Raw inputs and run outcomes are unchanged. | At 364,500 ms: runnable 31.8, futex 1.4, 16.7 ms unobserved. At 662,355 ms: futex 2.8, 97.2 ms unobserved, no observed runnable time. Both match Sol's audit; the r14 tables regenerate byte-identically. |
 | **R5-5 (P3)** The composed hazard reference test had lost `74f51bc6`'s deep-cave extension. | Restored: byte-identical to Sol's R4 fixture. | Passes against the candidate (cave contributions over cave positions and cycle phases). |
 
-**Adjacent, found while fixing R5-1, for the coordinator to decide:**
-- **Where:** live play, not the warm-up. `flowHere` samples every unberthed vehicle's current through `kitCaves.inside()`, which reads the cave's records.
-- **The case:** an expedition entered in open water (no hold) while the pack is still downloading, with a craft parked inside a cave's footprint. Its step would generate that cave's records live, on the main thread, uncounted.
-- **Not changed:** making live `inside()` depend on streaming would break the world's contract that answers never depend on it.
-- **Candidate root fix:** entry waits for the collision pack to settle before reveal, bounded like admission. It costs nothing when the pack has landed, which is the case from the title.
+**Residual, theoretical (the coordinator's ruling after R5; R6 verified):** a long-reach query that isn't the player's (an ecology sight line, a hunter sweep) meeting an unbuilt cluster while the collision pack is pending would generate that cave's records live.
+- **No ordinary-play reproduction. The R5 parked-craft case was wrong and is withdrawn.** `stepGameInPlace` steps only the controlled craft (`src/sim/step.ts:717`), and `flowHere`'s other callers are the player's own pose. `kitCaves.inside` has that one consumer, and admission covers the controlled actor before every step. Two independent checks:
+  - **R6, a codec-valid composed tour save** with its Dart parked at R5's interior pose, entering swimming with the pack pending: 118 live ticks, 354 `inside` queries, all at the player; 0 at the craft; 0 live records, built clusters or unsliced builds.
+  - **The near-entry probe** (`/work/tmp/cw1/flowhere/`, uncommitted; R6 repeated it independently), Continue with the pack in flight from open water outside 10 caves:
+    - at 6 m every entry holds;
+    - at 15 m, **8 of 10 play** for 238 ticks and **2 stay held** (Fanvault and the reef archlet: cluster and admission geometry make an offset from one footprint an imperfect proxy);
+    - all 20 cases had 0 live records and 0 builds.
+- **The tripwire covers travel, not load:** such a query goes through `ready → finishNow("query")`, which keeps collision correct, then counts and logs the build. The traversal gate fails on it **in travel**. A query before the travel starts is kept as `loadSync` but doesn't fail the gate; load-time admission builds are deliberately allowed. The seven-segment sweep shows `loadSync` 0 as well as `travelSync` 0.
+- **Owners:**
+  - **BIO-1**, which adds the first long-reach simulation queries (sight lines, hunter sweeps). Route them through admission or `withoutQueryBuilds`, keep live answers authoritative, test a pending pack, and keep the query cause at load and in travel.
+  - **The harness successor**, for load-phase query diagnostics and regression coverage.
+- **Not built:** a global wait for the pack at entry. Nothing reproducible needs it, and it would add the decode-only waits the pacing gate rules out.
 
 ### Composed functional sweep
 **The seven segments not rerun on the composed build, driven by ordinary input from saves and plans derived at the composed commit** (`runs/r15/plans`; `sweep.sh`, which builds the candidate in the job). Function only; frame times are recorded, never judged (non-exclusive). Two jobs:
@@ -76,14 +111,19 @@ Review R5 (Sol 6.1 xhigh on `42786dc4`): REQUEST CHANGES, with the conditions fo
 - **Driver stalls are the keyboard driver's**, as before (*Compromises*, "Coverage by keyboard driver"). Tour 3's 31 at the Isles cove undercut, ending at 71% hull, repeat r13 exactly.
 - **The surf approach got rougher:** 12 stalls and 89% hull, against r13's 4 and 96%. The composed plan's derivation replanned three legs and dropped two unreachable corners, so its legs differ. It still arrives. The approach-route root fix stays as listed.
 - **Not timing evidence:** no timing verdict is given or implied; their composed timing stays missing.
-- **The first 3090 attempt** (`261025-020523-363b`) was OOM-killed at the gpu class's default 3,072 MiB, at tour 5's end. It wasn't a leak. A memory trace of the rerun (`mem-trace.sh`, `runs/r15/sweep-3090-mem.jsonl`) shows each segment flat at 1.1–1.4 GiB during travel, then a spike of about 1.5 GB in the page's renderer process at the segment's end, where the harness pulled every frame's record in one structured clone. The harness now pulls them in slices (`6d9c2d19`). Tour 7 again under the trace (`261025-034638-c653`, `--mem 5G`): job peak **2,056 MiB** (was a 2.6 GiB spike), the renderer process 956 MiB at the end (was 2,125); the same functional result. That receipt is a diagnostic, not commit-bound (the snapshot carried uncommitted handoff text; the measured harness is `6d9c2d19`). With the fix, the gpu class's default 3,072 MiB covers a segment; the limit used is recorded with each result above.
+- **The first 3090 attempt** (`261025-020523-363b`) was OOM-killed at the gpu class's default 3,072 MiB, at tour 5's end. It wasn't a leak. A memory trace of the rerun (`mem-trace.sh`, `runs/r15/sweep-3090-mem.jsonl`) shows each segment flat at 1.1–1.4 GiB during travel, then a spike of about 1.5 GB in the page's renderer process at the segment's end, where the harness pulled every frame's record in one structured clone. The harness now pulls them in slices (`6d9c2d19`). Tour 7 again under the trace (`261025-034638-c653`): job peak 2,056 MiB (was a 2.6 GiB spike); the same functional result. **Corrected by R6-2:**
+  - **Unbound, and not at the default limit:** that receipt is unbound (the snapshot carried uncommitted handoff text) and ran at **5,120 MiB**, not the default 3,072. It's a diagnostic, not proof that every segment fits the default; tour 5, which failed, is the longer export.
+  - **Wrong process:** the 956 MiB process at its end is **Node's traversal controller**, not the page renderer. The largest Chrome process in that sample is 825 MiB.
+  - **Not yet measured at the default:** the fix removes the single whole-array clone (R6 checked the slicing at 0 / 3,999 / 4,000 / 4,001 / 120,003 rows), but **its effect at the default limit isn't measured yet**. Follow-up below. The arrays are still kept in the page and the controller, so this isn't a general memory bound.
+  - **Stays attached:** the bound 3090 sweep result keeps its 5 GiB reservation and 3,301 MiB peak.
 
 ### Checks after R5
 At the candidate after R5's code changes, through the queue (receipts in `runs/r15/receipts/`):
 - **Fast tier** (`261025-020534-5d2f`, 3090, bound to `9b5cee2c`): **1,669 / 1,669**. That includes `cw1-entry-warmup` (R5-1), `cw1-entry`, `hazard-sampling` (R5-5), `warmup` and `app`.
 - **Heavy tier at real budgets** (`261025-020535-baf6`, 3090, bound to `9b5cee2c`): **all 71 files pass within their budgets** (`runs/r15/heavy-real-9b5cee2c.txt`): `regions-bake` 1,385 / 1,920, `col1-art` 921 / 1,024, `terrain-borders` 811 / 1,024, `cw1-bake` 1,124 / 1,536.
 - **Harness units:** `frame-class.test.mjs` 23/23, `step-class.test.mjs` 9/9.
-- **Unchanged since R4's composed checks:** economy 6/6, playthrough 8/8, and the bake and build. R5 changed no bake input or packaging. The coordinator's `npm run gate` reruns them on root.
+- **Economy 6/6 and playthrough 8/8** are R4's composed results; the coordinator's `npm run gate` reruns them on root.
+- **Correction:** this handoff said R5 changed no bake input, and R6 repeated it. **R5-1 did:** `src/sim/world.ts` is in the bake's input graph, so the bake source hash moved from `ca0b7fb1…` (r14's verified build) to **`6483e073…`** at `1aaf66d7`. The change adds a scoped query mode and a counter, not baked content. In-job builds at the new hash loaded their own pack with 0 fallbacks: the 3090 sweep, plus the heavy bake verifies, which regenerate all 276 files from the live recipe. Provenance is re-verified on the integration candidate (*R6 and integration*).
 
 
 ## R4 response
@@ -508,6 +548,8 @@ Screenshots (`docs/build/streams/cw1/shots/`):
 - **A 93 ms render frame on CPU: a render debt** (provisional/open; it blocks full steady-60 acceptance).
   - **What happened:** r14 deep 2, at 662,355 ms near (1168, −580, −1406), outside the streaming gate. `scene.render` took 93.1 ms in a 100 ms gap with about 87.7 ms or more of renderer CPU inside it (*Traversal*). Real game work; Fleet can't own it away.
   - **Owner: ATM-2 / render.** Retain a trace on a run that shows it, determine the cause and fix it. Attribution is a small task; the fix's cost is unknown until then. First-use shader or pipeline compilation is a hypothesis, not a finding.
+- **Long-reach non-player queries while the pack is pending: theoretical, counted** (*R5 response*, "Residual"). No ordinary-play reproduction. The traversal gate's tripwire covers travel, not load. Owners: **BIO-1**, with the **harness successor** for load and query diagnostics.
+- **Browser counters, the default-limit export check, and the surf approach route:** follow-ups for the CW-1 harness and traversal/planner successors (*R6 and integration*).
 - **Tour 1's r13 region frame: open as possible game work** (provisional/open).
   - **What happened:** 95.2 ms in `regions` (`art.update()`) at r13, unsampled. It didn't recur at r14 (pass, `regions` max 1.0 ms), and that absence doesn't explain it.
   - **Owner: the region/render update owner, with CW-1.** A focused retained trace of `art.update()` on a justified later run (owner retire/resume, owner updates, actors) tells reattachment or first-use compilation from host delay. Attribution is a small diagnostic task; the root implementation cost is unknown. No new exclusive rerun is needed for provisional integration. Not blamed on the host.
