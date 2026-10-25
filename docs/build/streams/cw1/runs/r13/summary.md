@@ -1,4 +1,4 @@
-| Run | Commit | Caves reached | Minutes | Frames | p50 / p95 / p99 / max ms | Gaps > 33 ms | Streaming > 34 ms (GC-shaped) | Over 34 ms: host / host-stopped (GPU unknown) / mixed / clean (streaming ours) | Holds | Unsliced in travel (at load) | Dark cave frames | Gate |
+| Run | Commit | Caves reached | Minutes | Frames | p50 / p95 / p99 / max ms | Gaps > 33 ms | Streaming > 34 ms (GC-shaped) | Over 34 ms: host / host-stopped label / mixed / clean (streaming ours; labels are ours, R4-1) | Holds | Unsliced in travel (at load) | Dark cave frames | Gate |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|
 | deep #2 | 64bf2565 | 7/7 | 14.4 | 51954 | 16.7 / 16.8 / 16.8 / 100 | 18 | 2 (0) | 0 / 2 / 12 / 0 (+3 unsampled) (2) | 0 | 0 (0) | 0 | **fail** |
 | rerun #1 | 64bf2565 | 12/12 | 10.4 | 37356 | 16.7 / 16.7 / 16.8 / 116.7 | 16 | 1 (0) | 0 / 2 / 9 / 0 (+4 unsampled) (1) | 0 | 0 (0) | 0 | **fail** |

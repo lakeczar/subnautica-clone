@@ -354,7 +354,7 @@
      27.96
     ],
     "states": {
-     "S:futex": 45.8,
+     "S:futex": 18.9,
      "R": 4.2,
      "?": 26.9
     }
@@ -733,8 +733,7 @@
      62.61
     ],
     "states": {
-     "S:futex": 25.4,
-     "R": 41.2,
+     "R": 0.7,
      "?": 65.9
     }
    },
@@ -1384,8 +1383,8 @@
      12.01
     ],
     "states": {
-     "R": 25.7,
-     "S:futex": 74.2,
+     "S:futex": 46.9,
+     "R": 4.1,
      "?": 49
     }
    },
@@ -1955,8 +1954,8 @@
      6.05
     ],
     "states": {
-     "S:futex": 112.2,
-     "R": 4.5,
+     "S:futex": 5,
+     "R": 4.4,
      "?": 107.2
     }
    },
@@ -2041,6 +2040,7 @@
    "migrations": 0,
    "gaps": 2,
    "unknownState": 1,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -2611,6 +2611,7 @@
    "migrations": 0,
    "gaps": 0,
    "unknownState": 0,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -3092,8 +3093,8 @@
      32.54
     ],
     "states": {
-     "S:futex": 73.2,
-     "R": 26.8,
+     "S:futex": 13.1,
+     "R": 9.6,
      "?": 77.3
     }
    },
@@ -3178,6 +3179,7 @@
    "migrations": 1,
    "gaps": 1,
    "unknownState": 1,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -3582,7 +3584,7 @@
      35.15
     ],
     "states": {
-     "R": 21.8,
+     "R": 12.4,
      "S:futex": 11.6,
      "?": 9.4
     }
@@ -3671,6 +3673,7 @@
    "migrations": 0,
    "gaps": 1,
    "unknownState": 0,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -4258,8 +4261,7 @@
      30.05
     ],
     "states": {
-     "S:futex": 87.3,
-     "R": 12.7,
+     "S:futex": 28.5,
      "?": 71.5
     }
    },
@@ -4345,6 +4347,7 @@
    "migrations": 1,
    "gaps": 1,
    "unknownState": 3,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -4591,7 +4594,6 @@
      113.96
     ],
     "states": {
-     "S:futex": 83.3,
      "?": 83.3
     }
    },
@@ -5041,7 +5043,7 @@
      20.19
     ],
     "states": {
-     "S:futex": 100,
+     "S:futex": 1.1,
      "?": 98.9
     }
    },
@@ -5520,7 +5522,7 @@
      15.56
     ],
     "states": {
-     "S:futex": 48,
+     "S:futex": 35,
      "R": 2,
      "?": 13
     }
@@ -6109,7 +6111,7 @@
     ],
     "states": {
      "S:futex": 1.4,
-     "R": 48.5,
+     "R": 31.8,
      "?": 16.7
     }
    },
@@ -6194,6 +6196,7 @@
    "migrations": 1,
    "gaps": 0,
    "unknownState": 2,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -6512,7 +6515,7 @@
      67.44
     ],
     "states": {
-     "S:futex": 29.2,
+     "S:futex": 17.6,
      "R": 4.1,
      "?": 11.7
     }
@@ -7135,6 +7138,7 @@
    "migrations": 0,
    "gaps": 0,
    "unknownState": 0,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -7467,7 +7471,6 @@
      6.97
     ],
     "states": {
-     "S:futex": 49.7,
      "R": 0.3,
      "?": 49.7
     }
@@ -7991,8 +7994,7 @@
      3.93
     ],
     "states": {
-     "S:futex": 16.1,
-     "R": 83.9,
+     "S:futex": 2.8,
      "?": 97.2
     }
    },
@@ -8077,6 +8079,7 @@
    "migrations": 0,
    "gaps": 2,
    "unknownState": 0,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -8578,6 +8581,7 @@
    "migrations": 0,
    "gaps": 0,
    "unknownState": 0,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -9091,8 +9095,7 @@
      39.3
     ],
     "states": {
-     "S:futex": 21.6,
-     "R": 61.6,
+     "S:futex": 9.6,
      "?": 73.7
     }
    },
@@ -9177,6 +9180,7 @@
    "migrations": 1,
    "gaps": 3,
    "unknownState": 2,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   },
   {
@@ -9606,7 +9610,7 @@
     ],
     "states": {
      "S:futex": 3.5,
-     "R": 46.5,
+     "R": 14.4,
      "?": 32.2
     }
    },
@@ -9691,6 +9695,7 @@
    "migrations": 0,
    "gaps": 1,
    "unknownState": 0,
+   "gpuCandidateMs": 0,
    "rule": "provable"
   }
  ],
@@ -11015,5 +11020,9 @@
   "regionMiB": 12.7,
   "budgetMiB": 256,
   "heapMiB": 291.8
+ },
+ "rejudged": {
+  "by": "rejudge.mjs (CW-1 R5: state summaries observed-only, GPU-vCPU credit off)",
+  "changes": 27
  }
 }
