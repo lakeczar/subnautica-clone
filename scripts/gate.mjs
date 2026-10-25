@@ -29,6 +29,7 @@
 import { spawnSync } from "node:child_process";
 import { dirname, join, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import { fullTierProblems, ingest, storedRun } from "./heavy-results.mjs";
 import { admission, localFacts, machineFor } from "./local-guard.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
@@ -53,6 +54,13 @@ export const GATE = [
   { id: "build", what: "typecheck and production build", run: ["npm", "run", "build"] },
   // The fast tier compiles .test-build, which these read.
   ...ECONOMY.map(([id, file, why]) => ({ id: `economy:${id}`, what: why, run: ["node", `scripts/${file}`] })),
+  // The whole heavy tier at its real budgets (STEW-3; the owner accepted about 10 minutes
+  // per root merge), mostly on alickers. Its per-file results are stored with their
+  // context (scripts/heavy-results.mjs), and the step counts only with a record of the
+  // full tier for the gate's commit. Later: affected files only here, plus a nightly
+  // full run that alerts at 85% of a budget; a selection would change `run` alone.
+  { id: "heavy", what: "the full heavy tier at its real budgets, per-file results stored (queued, any machine)",
+    queue: ["--class", "heavy-suite", "--machine", "any"], run: ["npm", "run", "test:heavy"], results: "heavy" },
   { id: "playthrough", what: "every playthrough scenario, both fleet routes included (queued, any machine)",
     queue: ["--class", "playthrough", "--machine", "any"], run: ["npm", "run", "playthrough", "--", "--jobs", "3", "--quiet"] },
 ];
@@ -153,7 +161,7 @@ function submitAndWait(argv, label) {
   // failed or was killed is no result.
   const waiter = w.error ? [`the queue waiter failed: ${w.error.message}`] : w.signal ? [`the queue waiter was killed (${w.signal})`]
     : w.status !== 0 && !(receipt && !receipt.pending && w.status === receipt.code) ? [`the queue waiter exited ${w.status}`] : [];
-  return { receipt, lines, waiter };
+  return { ticket, receipt, lines, waiter };
 }
 
 /** Runs a local step here. */
@@ -211,14 +219,22 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     process.exit(2);
   }
   const results = [];
-  const record = (id, problems, s) => {
+  // `on`: where the step ran (a queued step's receipt names its machine), with its time.
+  const record = (id, problems, s, on = null) => {
     if (tree() !== start) problems.push("the tree or HEAD changed while this step ran: the gate's results are void");
-    results.push({ id, problems, s });
+    results.push({ id, problems, s, on });
   };
   const queuedStep = (step) => {
     console.log(`\n── gate: ${step.id} · ${step.what}\n$ ${command(step).join(" ")}`);
     const t0 = Date.now(), r = submitAndWait(command(step), step.id);
-    record(step.id, r.failure ?? [...r.waiter, ...receiptProblems(r.receipt, head)], Math.round((Date.now() - t0) / 1000));
+    const problems = r.failure ?? [...r.waiter, ...receiptProblems(r.receipt, head)];
+    if (step.results === "heavy" && !r.failure) {
+      // Stored with the job's receipt (scripts/heavy-results.mjs), wherever it ran.
+      const [ingested] = ingest([r.ticket]);
+      console.log(`gate: ${step.id} results: ${ingested.stored ? `stored ${ingested.files} file rows` : ingested.why} (node scripts/heavy-results.mjs show --commit ${head.slice(0, 12)})`);
+      problems.push(...fullTierProblems(storedRun(r.ticket), head));
+    }
+    record(step.id, problems, Math.round((Date.now() - t0) / 1000), r.receipt?.machine);
   };
   // Admission doesn't change while the gate runs: decided once.
   const here = admission(localFacts());
@@ -228,7 +244,7 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
       const step = unit.step;
       console.log(`\n── gate: ${step.id} · ${step.what} (directly: ${here.why})\n$ ${step.run.join(" ")}`);
       const t0 = Date.now();
-      record(step.id, local(step), Math.round((Date.now() - t0) / 1000));
+      record(step.id, local(step), Math.round((Date.now() - t0) / 1000), "here");
       continue;
     }
     const ids = unit.batch.map((s) => s.id), argv = batchCommand(ids, args.includes("--allow-dirty") ? ["--allow-dirty"] : []);
@@ -237,11 +253,12 @@ if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.ur
     const s = Math.round((Date.now() - t0) / 1000);
     const each = r.failure ? ids.map((id) => ({ id, problems: r.failure, s: 0 })) : batchResults(ids, parseBatch(r.lines), r.receipt, head)
       .map((x) => ({ ...x, problems: [...r.waiter, ...x.problems] }));
-    for (const x of each) record(x.id, x.problems, x.s || (ids.length === 1 ? s : 0));
+    for (const x of each) record(x.id, x.problems, x.s || (ids.length === 1 ? s : 0), r.receipt?.machine);
   }
   results.sort((a, b) => GATE.findIndex((s) => s.id === a.id) - GATE.findIndex((s) => s.id === b.id));
   console.log(`\ngate at ${head.slice(0, 12)}${dirty ? " (dirty: not evidence)" : ""}:`);
-  for (const r of results) console.log(`  ${r.problems.length ? "FAIL" : "pass"}  ${r.id.padEnd(20)} ${String(r.s).padStart(5)} s${r.problems.length ? `  ${r.problems.join("; ")}` : ""}`);
+  for (const r of results) console.log(`  ${r.problems.length ? "FAIL" : "pass"}  ${r.id.padEnd(20)} ${String(r.s).padStart(5)} s${r.problems.length ? `  ${r.problems.join("; ")}` : ""}` +
+    (r.on ? `  [on ${r.on}]` : ""));
   const skipped = GATE.filter((s) => !steps.includes(s));
   if (skipped.length) console.log(`  not run: ${skipped.map((s) => s.id).join(", ")}: this is a partial gate`);
   const failed = results.filter((r) => r.problems.length);

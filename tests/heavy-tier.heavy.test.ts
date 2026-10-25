@@ -30,10 +30,12 @@ const allocating = (name: string, mib: number): string => write(name, `test("${n
   assert.equal(r.status, 0, "the child finished");
 });`);
 
-/** The nested heavy runner over `files` with one adapter, as it ran; `budgets` replaces tests/heavy-budgets.json. */
-function runTier(files: readonly string[], mode: (typeof modes)[number], budgetMiB: number, budgets?: object) {
+/** The nested heavy runner over `files` with one adapter, as it ran; `budgets` replaces tests/heavy-budgets.json.
+ * `budgetMiB` is applied through the override (not budget evidence) unless `real`, when it is the budgets file's default. */
+function runTier(files: readonly string[], mode: (typeof modes)[number], budgetMiB: number, budgets?: object, real = false) {
   const env: NodeJS.ProcessEnv = { ...process.env, SILTWAKE_HEAVY_BUDGET_MIB: String(budgetMiB) };
-  if (budgets) {
+  if (real) delete env.SILTWAKE_HEAVY_BUDGET_MIB;
+  if (budgets || real) {
     env.SILTWAKE_HEAVY_BUDGETS = join(probes, `budgets-${Math.random().toString(36).slice(2)}.json`);
     writeFileSync(env.SILTWAKE_HEAVY_BUDGETS, JSON.stringify({ defaultMiB: budgetMiB, ...budgets }));
   }
@@ -41,6 +43,17 @@ function runTier(files: readonly string[], mode: (typeof modes)[number], budgetM
   delete env.NODE_TEST_CONTEXT;
   return spawnSync(process.execPath, ["scripts/test-tier.mjs", "heavy", ...files], { cwd: root, encoding: "utf8", env, timeout: 120_000 });
 }
+interface Row { file: string; status: string; cpuS: number | null; cpuScope: string | null; peakMiB: number; budgetMiB: number; budgetPct: number | null;
+  oomKillsOwn: number | null; oomKillsNested: number | null; cache: { hits: number; misses: number; fills: number } | null; matchKey: string }
+interface HeavyRecord { commit: string | null; machine: string; containment: string; jobMemoryMiB: number | null; cache: { state: string }; selection: { kind: string };
+  override: number | null; budgetEvidence: boolean; files: Row[] }
+/** The run's stored-results record (STEW-3), from its output. */
+function recordOf(stdout: string): HeavyRecord {
+  const line = stdout.split("\n").findLast((l) => l.startsWith("heavy-results: "));
+  assert.ok(line, "the run printed its record");
+  return JSON.parse(line.slice("heavy-results: ".length)) as HeavyRecord;
+}
+const rowOf = (rec: HeavyRecord, name: string) => rec.files.find((f) => f.file === `${name}.heavy.test.js`)!;
 /** The same, required to have run; its summary rows by probe name. */
 function tier(files: readonly string[], mode: (typeof modes)[number], budgetMiB: number, budgets?: object) {
   const started = Date.now();
@@ -60,6 +73,35 @@ for (const mode of modes) {
     assert.match(row(name(light)), /\bok$/, out.stdout);
     const peak = Number(/peak\s+(\d+) MiB/.exec(row(name(light)))?.[1]);
     assert.ok(peak >= 48, `the light file's peak (${peak} MiB) includes its child's 48 MiB`);
+    // STEW-3: the stored record says what each number was measured under.
+    const rec = recordOf(out.stdout);
+    assert.deepEqual([rec.override, rec.budgetEvidence, rec.containment, rec.selection.kind], [192, false, mode, "subset"]);
+    assert.match(out.stdout, /NOT BUDGET EVIDENCE: SILTWAKE_HEAVY_BUDGET_MIB=192 replaced every file's budget/);
+    const h = rowOf(rec, name(hog)), l = rowOf(rec, name(light));
+    assert.equal(l.peakMiB, peak);
+    assert.equal(l.budgetMiB, 192);
+    assert.equal(l.budgetPct, Math.round((l.peakMiB / 192) * 1000) / 10);
+    assert.ok(l.cpuS != null && l.cpuS > 0, `the light file's CPU was measured (${l.cpuS})`);
+    assert.equal(l.cpuScope, mode === "cgroup" ? "tree" : "process");
+    assert.ok(l.cache && l.cache.hits >= 0, "the file reported its build-cache use");
+    if (mode === "cgroup") {
+      assert.ok((h.oomKillsOwn ?? 0) >= 1, `the hog's own budget OOM-killed its tree (${h.oomKillsOwn})`);
+      assert.deepEqual([l.oomKillsOwn, l.oomKillsNested], [0, 0]);
+    } else assert.deepEqual([h.oomKillsOwn, l.oomKillsNested], [null, null], "a process group can't count OOM kills: null, never 0");
+  });
+
+  test(`${mode}: at real budgets a run is budget evidence, with its commit, machine and limits recorded`, () => {
+    const tag = mode.replace(" ", "-"), light = allocating(`real-${tag}`, 32);
+    const out = runTier([light], mode, 512, undefined, true);
+    assert.equal(out.status, 0, out.stdout + out.stderr);
+    assert.doesNotMatch(out.stdout, /NOT BUDGET EVIDENCE/);
+    const rec = recordOf(out.stdout), r = rowOf(rec, `real-${tag}`);
+    assert.deepEqual([rec.override, rec.budgetEvidence], [null, true]);
+    assert.equal(rec.commit, spawnSync("git", ["rev-parse", "HEAD"], { cwd: root, encoding: "utf8" }).stdout.trim());
+    assert.ok(rec.machine && ["cold", "warm", "off"].includes(rec.cache.state), JSON.stringify(rec));
+    assert.equal(r.budgetMiB, 512);
+    assert.match(r.matchKey, new RegExp(`\\|${mode}\\|512\\|${rec.cache.state}\\|`));
+    assert.match(out.stdout, new RegExp(`job memory limit (\\d+|none) MiB, pool \\d+ MiB.*build cache ${rec.cache.state} at the start`));
   });
 
   test(`${mode}: a child left holding the file's stdout and stderr is removed when the file exits; a sibling's child is untouched`, () => {

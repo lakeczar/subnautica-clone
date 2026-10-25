@@ -14,6 +14,8 @@
 // reads, once even when fills nest, and reported to scripts/test-file-timing.mjs
 // so a cold cache does not count against a fast file's budget.
 // SILTWAKE_BUILD_CACHE=off disables the store; SILTWAKE_BUILD_CACHE_DIR moves it.
+// Hits, misses and fills are counted per process (globalThis.__siltwakeBuildCacheStats),
+// so a stored heavy result says whether its numbers came from a warm or a cold cache.
 import { createHash } from "node:crypto";
 import { mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, utimesSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve } from "node:path";
@@ -64,6 +66,7 @@ const threadCpuMs = () => { const u = process.threadCpuUsage?.() ?? process.cpuU
 /** A store over `root`: entries filed under the closure hash of their modules. */
 export function createStore(root) {
   const dirs = new Map();
+  const stats = globalThis.__siltwakeBuildCacheStats ??= { hits: 0, misses: 0, fills: 0 };
   let depth = 0;
   const fileOf = (key, modules) => {
     const scope = [...modules].sort().join("\n");
@@ -79,11 +82,14 @@ export function createStore(root) {
     get(key, modules) {
       try {
         const entry = deserialize(readFileSync(fileOf(key, modules)));
-        return entry.key === key ? entry.value : undefined;
-      } catch { return undefined; }
+        if (entry.key === key) { stats.hits++; return entry.value; }
+      } catch { /* absent or unreadable: a miss */ }
+      stats.misses++;
+      return undefined;
     },
     fill(build) {
       if (depth++) try { return build(); } finally { depth--; }
+      stats.fills++;
       const before = threadCpuMs();
       try { return build(); } finally {
         depth--;

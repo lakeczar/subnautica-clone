@@ -40,7 +40,7 @@ test("a queued step's receipt counts only when it succeeded, undisturbed, as evi
 
 test("every heavy step of the manifest is queued with --review, so the gate judges its receipt", () => {
   const queued = G.GATE.filter((s) => s.queue).map((s) => s.id);
-  assert.deepEqual(queued, ["bake", "playthrough"]);
+  assert.deepEqual(queued, ["bake", "heavy", "playthrough"]);
   const list = spawnSync(process.execPath, ["scripts/gate.mjs", "--list"], { encoding: "utf8" }).stdout;
   for (const id of queued) assert.match(list, new RegExp(`${id}[\\s\\S]*?heavy-check\\.sh submit .*--review --`), id);
 });

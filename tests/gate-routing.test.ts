@@ -32,7 +32,7 @@ const shape = (units: ReturnType<Gate["routeSteps"]>) => units.map((u) => "step"
 
 test("routing: the batch follows the queued steps a batched step comes after; the rest keep their order", () => {
   const economy = G.GATE.filter((s) => s.id.startsWith("economy:")).map((s) => s.id);
-  assert.deepEqual(shape(G.routeSteps(G.GATE, true)), ["bake", `[fast,build,${economy.join(",")}]`, "playthrough"]);
+  assert.deepEqual(shape(G.routeSteps(G.GATE, true)), ["bake", `[fast,build,${economy.join(",")}]`, "heavy", "playthrough"]);
   assert.deepEqual(shape(G.routeSteps(G.GATE, false)), G.GATE.map((s) => s.id), "not batched: the manifest's own order");
   assert.deepEqual(shape(G.routeSteps(ids(["bake", "build"]), true)), ["bake", "[build]"]);
   assert.deepEqual(shape(G.routeSteps(ids(["fast", "playthrough"]), true)), ["[fast]", "playthrough"]);

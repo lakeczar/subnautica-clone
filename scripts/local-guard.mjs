@@ -52,7 +52,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), "..");
 const LOGGED = "SILTWAKE_LOCAL_OVERRIDE_LOGGED";
 /** Not settings: the guard's own variables, and those every heavy-check job sets afresh. */
 const ROUTING_ENV = new Set(["SILTWAKE_HEAVY_CHECK", "SILTWAKE_GUARD_STRICT", "SILTWAKE_LOCAL_OVERRIDE", LOGGED, "SILTWAKE_LANE_TICKET", "SILTWAKE_GPU_LEASE",
-  "SILTWAKE_SOAK_MACHINE", "SILTWAKE_SCHED_DIR"]);
+  "SILTWAKE_SOAK_MACHINE", "SILTWAKE_SCHED_DIR", "SILTWAKE_RESULTS_DIR"]);
 const JOB_ENV = /^SILTWAKE_(JOB_|HEAVY_(LOCK_HELD|SCOPE|CGROUP|CONCURRENCY|POOL_MIB)$)/;
 
 /**

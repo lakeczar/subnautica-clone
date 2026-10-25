@@ -79,10 +79,18 @@ function cgroupMode() {
             const events = readFileSync(join(dir, "memory.events.local"), "utf8");
             const ooms = Number(/^oom (\d+)/m.exec(events)?.[1] ?? 0);
             const peakMiB = Math.round(readNumber(join(dir, "memory.peak")) / 1048576);
+            // For the stored result (STEW-3): the whole tree's CPU, and processes the OOM
+            // killer took, at this file's own budget and in nested cgroups below it.
+            const count = (text, key) => Number(new RegExp(`^${key} (\\d+)`, "m").exec(text)?.[1] ?? NaN);
+            let all = "", cpu = "";
+            try { all = readFileSync(join(dir, "memory.events"), "utf8"); } catch { /* unmeasured */ }
+            try { cpu = readFileSync(join(dir, "cpu.stat"), "utf8"); } catch { /* unmeasured */ }
+            const own = count(events, "oom_kill"), total = count(all, "oom_kill"), usec = count(cpu, "usage_usec");
             try { writeFileSync(join(dir, "cgroup.kill"), "1"); } catch { /* already empty */ }
             for (let i = 0; i < 50 && readFileSync(join(dir, "cgroup.procs"), "utf8").trim(); i++) Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 20);
             removeTree(dir);
-            return ended = { peakMiB, killed: ooms > 0 };
+            return ended = { peakMiB, killed: ooms > 0, cpuS: Number.isFinite(usec) ? usec / 1e6 : null,
+              oomKillsOwn: Number.isFinite(own) ? own : null, oomKillsNested: Number.isFinite(total - own) ? total - own : null };
           },
         };
       },
@@ -117,7 +125,8 @@ function processGroupMode() {
       }, 100);
       return {
         child,
-        finish() { clearInterval(timer); kill(); return { peakMiB: Math.round(peakKiB / 1024), killed }; }, // idempotent
+        // CPU and OOM kills aren't measurable for a process group: null, never 0.
+        finish() { clearInterval(timer); kill(); return { peakMiB: Math.round(peakKiB / 1024), killed, cpuS: null, oomKillsOwn: null, oomKillsNested: null }; }, // idempotent
       };
     },
   };
