@@ -11,16 +11,20 @@ import { addItem } from "../src/sim/inventory.js";
 import { executeCommand } from "../src/sim/step.js";
 import { growthRate, harvestQuantity, plant } from "../src/sim/systems/cultivation.js";
 import { enterCode } from "../src/sim/systems/doors.js";
-import { installModule } from "../src/sim/systems/hosts.js";
+import { carrierHostId, installModule } from "../src/sim/systems/hosts.js";
+import { fixtureGame } from "../src/sim/carrier.js";
 import { deployOutpost, packOutpost } from "../src/sim/systems/outposts.js";
 import { handheldPing } from "../src/sim/systems/survey.js";
-import { SITE_CACHE_IDS, siteCacheCandidates, siteCacheOf } from "../src/sim/systems/siteCaches.js";
+import { SITE_CACHE_IDS, siteCacheCandidates, siteCacheIndex, siteCacheOf } from "../src/sim/systems/siteCaches.js";
+import { listHosts } from "../src/sim/systems/hosts.js";
+import type { HostPower } from "../src/sim/systems/hosts.js";
+import { advanceSystems } from "../src/sim/systems/step.js";
 import { interactions } from "../src/sim/progression.js";
 import { createWorldQueries } from "../src/sim/world.js";
 import type { GameCommand, GameEvent, GameState } from "../src/sim/types.js";
 import { PanelProbe } from "../src/ui/panelProbe.js";
 import { buildJournal } from "../src/sim/systems/journal.js";
-import { stepSystems, systemsContext } from "../src/sim/systemsLink.js";
+import { hostPowerAnswers, stepSystems, systemsContext } from "../src/sim/systemsLink.js";
 import { KeypadPanel, keypadKey, keypadModel, renderKeypad } from "../src/ui/keypad.js";
 import type { KeypadSeam, KeypadState } from "../src/ui/keypad.js";
 import { give, opened, siteTable, SPOTS, swimTo } from "./systems-support.js";
@@ -179,6 +183,75 @@ test("fixed-step work stays bounded: cache discovery looks up the diver's chart 
   }
   assert.ok(fast > 0 && fast < 240, `twice as fast until the cell ran dry (${fast} steps)`);
   assert.equal(s.inventory.items.find((i) => i.id === cell)!.charge, 0, "the heater drained it");
+});
+
+test("R2: planting on a carrier quotes the composed host power: the reserve, above it, and across depletion", () => {
+  const plantAt = (charge: number): { s: GameState; planter: string; hostId: string; socket: string } => {
+    const s = fixtureGame(), h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!;
+    s.player.interiorId = h.id; s.player.controlledVehicleId = null;
+    const hostId = carrierHostId(h.id), socket = "hl.socket.galley.wall", planter = give(s, "mod_planter");
+    assert.equal(installModule(s, s.systems, hostId, socket, planter), null);
+    s.systems.moduleUpgrades[planter] = "grow_bed_1";
+    h.charge = charge;
+    give(s, "seed_staple_cup", 1);
+    const out = executeCommand(s, { type: "plant", hostId, socket, seed: "seed_staple_cup" }, world);
+    assert.ok(!out.events.some((e) => e.type === "notice" && e.error), JSON.stringify(out.events));
+    return { s: out.state, planter, hostId, socket };
+  };
+  for (const charge of [20, 10]) {
+    const { s } = plantAt(charge);
+    assert.match(s.feedback, /ready in about 6 min of play · 3 per harvest\.$/, `at ${charge}%: the carrier keeps its reserve, so the base time`);
+  }
+  const { s } = plantAt(25);
+  assert.match(s.feedback, /ready in about 3 min of play \(heated grow bed, while the host has power\) · 3 per harvest\./, "above the reserve");
+  // Across depletion: the step's growth, the Base row and a fresh planting all agree.
+  s.scenario = "expedition";
+  const h = s.fleet.vehicles.find((v) => v.hull === "hearthline")!, probe = new PanelProbe(world);
+  h.charge = 20.001;
+  let fast = 0;
+  for (let n = 0; n < 600 && h.charge > 20; n++) {
+    const before = s.systems.planters[0]!.progress;
+    stepSystems(s, []);
+    if (s.systems.planters[0]!.progress - before > 1.5 / 60) fast++;
+  }
+  assert.ok(fast > 0 && h.charge <= 20, `fast while above the reserve (${fast} steps), then at the reserve`);
+  const before = s.systems.planters[0]!.progress;
+  stepSystems(s, []);
+  assert.ok(Math.abs(s.systems.planters[0]!.progress - before - 1 / 60) < 1e-9, "at the reserve: the base rate");
+  assert.match(probe.text("systems", s), /heated grow bed: needs host power to speed growth/);
+});
+
+test("R2 F4: the step's work per call stays constant as content grows: cache checks per diver cell, power queries per host", () => {
+  // Cache predicate checks per step are the candidates of the diver's one cell. With 1, 10
+  // and 100 caches laid 100 m apart, a diver at one cache checks one, a diver at home none.
+  const checks: number[][] = [];
+  for (const n of [1, 10, 100]) {
+    const points = Array.from({ length: n }, (_, i) => [`c${i}`, { x: 100 * (i % 10) + 25, y: -20, z: 100 * Math.floor(i / 10) + 25 }] as const);
+    const look = siteCacheIndex(points);
+    checks.push([look({ x: 25, y: -20, z: 25 }).length, look({ x: -500, y: 0, z: -500 }).length, look({ x: 27, y: -20, z: 23 }).length]);
+  }
+  assert.deepEqual(checks, [[1, 0, 1], [1, 0, 1], [1, 0, 1]], "constant in the number of caches");
+  // Host power queries per step: one per host that holds a bed crop, however many crops.
+  const queries = (crops: number, hosts: number): number => {
+    const s = readyState(), sys = s.systems;
+    const ids = Array.from({ length: hosts }, (_, k) => `outpost_h${k}`);
+    for (const [k, hostId] of ids.entries()) {
+      sys.outposts.push({ id: hostId, tier: "basic", name: `H${k}`, position: { x: 10 * k, y: -8, z: 0 }, region: null, power: "cells" });
+      for (let c = 0; c < crops; c++) {
+        const itemId = `${hostId}_planter_${c}`;
+        sys.sockets.push({ hostId, socket: `s${c}`, kind: "mod_planter", itemId });
+        sys.moduleUpgrades[itemId] = "grow_bed_1";
+        sys.planters.push({ moduleId: itemId, seed: "seed_staple_cup", progress: 0 });
+      }
+    }
+    let n = 0;
+    const counting: HostPower = () => { n++; return true; };
+    const answers = hostPowerAnswers(s, listHosts(s, sys, { occupied: true }), counting);
+    advanceSystems(s, sys, { hostPowered: answers });
+    assert.ok(sys.planters.every((p) => Math.abs(p.progress - 2 / 60) < 1e-9), "every bed crop grew at the bed's rate");
+    return n;
+  };
+  assert.deepEqual([queries(1, 1), queries(20, 1), queries(1, 3), queries(20, 3)], [1, 1, 3, 3], "constant in the number of crops");
 });
 
 test("kiln tubers need warmth: refused in a plain planter on a cell outpost, grown in a grow bed or on a thermal outpost", () => {

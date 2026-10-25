@@ -80,7 +80,9 @@ function planterAt(s: GameState, sys: SystemsState, hostId: string, socketId: st
 }
 
 /** Plants one seed from the diver hold or this host's lockers. */
-export function plant(s: GameState, sys: SystemsState, hostId: string, socketId: string, seed: SeedKind): string | null {
+/** `power` is the composed host-power authority (SYS-1's `hostPower`, passed by the
+ * command seam), so the quoted time is the rate the fixed step will grow at. */
+export function plant(s: GameState, sys: SystemsState, hostId: string, socketId: string, seed: SeedKind, power: HostPower = locationPower): string | null {
   if (!isSeed(seed)) return "Choose a seed or cutting.";
   const at = planterAt(s, sys, hostId, socketId);
   if ("refusal" in at) return at.refusal;
@@ -94,7 +96,7 @@ export function plant(s: GameState, sys: SystemsState, hostId: string, socketId:
   applySpend(s, pay);
   sys.planters.push({ moduleId: at.moduleId, seed, progress: 0 });
   // LS-1: the quoted time and yield are the bed's modified ones, from the same authorities.
-  const planted = sys.planters.at(-1)!, rate = growthRate(s, sys, planted), quantity = harvestQuantity(sys, at.moduleId, seed);
+  const planted = sys.planters.at(-1)!, rate = growthRate(s, sys, planted, power), quantity = harvestQuantity(sys, at.moduleId, seed);
   s.feedback = `${SEEDS[seed].label} planted · ready in about ${Math.max(1, Math.round(SEEDS[seed].growSeconds / rate / 60))} min of play` +
     `${rate > 1 ? " (heated grow bed, while the host has power)" : ""} · ${quantity} per harvest.`;
   return null;

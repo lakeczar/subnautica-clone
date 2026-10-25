@@ -25,24 +25,25 @@ const within = (p: Vec3, q: Vec3): boolean => Math.hypot(p.x - q.x, p.y - q.y, p
 export const siteCacheFound = (s: GameState, id: LostSiteCacheId): boolean =>
   s.inventory.containers.some((c) => c.id === siteCacheContainerId(id));
 
-/** The chart's cells (`CHART_CELL`, the spatial key exploration already uses) each
- * cache's reach touches, built once: the fixed step looks up only the diver's own cell,
- * so its work is one lookup however many caches are authored. Candidates keep
- * `SITE_CACHE_IDS` order. */
+// The fixed step looks up only the diver's own chart cell (`CHART_CELL`, the spatial key
+// exploration already uses), so its work does not grow with the authored caches.
 const cellKey = (i: number, k: number): number => (i + 1000) * 4096 + (k + 1000);
-const BY_CELL = new Map<number, LostSiteCacheId[]>();
-for (const id of SITE_CACHE_IDS) {
-  const { x, z } = LOST_SITE_CACHES[id].position;
-  for (let i = Math.floor((x - SITE_CACHE_REACH) / CHART_CELL); i <= Math.floor((x + SITE_CACHE_REACH) / CHART_CELL); i++)
-    for (let k = Math.floor((z - SITE_CACHE_REACH) / CHART_CELL); k <= Math.floor((z + SITE_CACHE_REACH) / CHART_CELL); k++) {
-      const key = cellKey(i, k), list = BY_CELL.get(key);
-      if (list) list.push(id); else BY_CELL.set(key, [id]);
-    }
+/** An index of `points` by every chart cell their reach touches: a lookup returns the IDs
+ * whose reach touches the cell at `p`, in the order given (shared; never mutated). Its
+ * cost per lookup is one map read, whatever the number of points. */
+export function siteCacheIndex<Id extends string>(points: readonly (readonly [Id, Vec3])[]): (p: Vec3) => readonly Id[] {
+  const byCell = new Map<number, Id[]>(), none: readonly Id[] = [];
+  for (const [id, { x, z }] of points)
+    for (let i = Math.floor((x - SITE_CACHE_REACH) / CHART_CELL); i <= Math.floor((x + SITE_CACHE_REACH) / CHART_CELL); i++)
+      for (let k = Math.floor((z - SITE_CACHE_REACH) / CHART_CELL); k <= Math.floor((z + SITE_CACHE_REACH) / CHART_CELL); k++) {
+        const key = cellKey(i, k), list = byCell.get(key);
+        if (list) list.push(id); else byCell.set(key, [id]);
+      }
+  return (p) => byCell.get(cellKey(Math.floor(p.x / CHART_CELL), Math.floor(p.z / CHART_CELL))) ?? none;
 }
+/** The caches whose reach touches the chart cell at `p`: the only ones the step checks. */
+export const siteCacheCandidates = siteCacheIndex(SITE_CACHE_IDS.map((id) => [id, LOST_SITE_CACHES[id].position] as const));
 const NONE: readonly LostSiteCacheId[] = [];
-/** The caches whose reach touches the chart cell at `p` (shared; never mutated). */
-export const siteCacheCandidates = (p: Vec3): readonly LostSiteCacheId[] =>
-  BY_CELL.get(cellKey(Math.floor(p.x / CHART_CELL), Math.floor(p.z / CHART_CELL))) ?? NONE;
 
 /** Finds every cache within reach of the diver that is not found yet: its container and
  * authored contents appear. Returns the caches found this step (a shared empty list

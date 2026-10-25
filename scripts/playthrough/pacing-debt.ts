@@ -86,7 +86,7 @@ export const PACING_DEBT: Readonly<Record<string, RouteDebt>> = {
   "no-optional-carrier": {
     gaps: {
       "hull: hearthline → region: brine_divide": { bounds: [50.061], owner: PACE_1 },
-      "discovery: C12 → blueprint: bp_service_air": { bounds: [29.761], owner: PACE_1_STAGE_1, exception: "over the accepted 1a ceiling (29.756): from plain 1b, the Mantle's return leg to the carrier after C12 takes 0.23 s longer from a shifted starting pose (deterministic)" },
+      "discovery: C12 → blueprint: bp_service_air": { bounds: [29.761], owner: PACE_1_STAGE_1, exception: "over the accepted 1a ceiling (29.756): the first Mantle travel after C12 is 38.683 s at 1a, 38.900 s in plain 1b, 38.917 s now (deterministic; a shifted start is a hypothesis)" },
       "discovery: district_controller → craft: service_power_assembly": { bounds: [24.133], owner: PACE_1 },
       "craft: service_air_assembly → craft: pod_buffer": { bounds: [87.631], owner: PACE_1_STAGE_1, exception: "over the accepted 1a ceiling (87.12): procure's surplus rule reorders this route's first works trip and adds a later Canopy dive" },
     },

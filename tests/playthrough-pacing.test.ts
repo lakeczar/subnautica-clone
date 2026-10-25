@@ -79,6 +79,40 @@ test("a coordinator's named exception passes the ratchet but every verdict names
   assert.equal(judge(worse, excepted).ok, false, "an excepted row may never rise again");
 });
 
+test("R2: lowering an excepted row by its printed figures keeps both exceptions, named on every verdict", () => {
+  // Two droughts, each a named exception over its accepted ceiling (40 min).
+  const two = (y: number, idle: TimelineEvent[] = []): TimelineExport => ({ format: "siltwake.timeline", version: 2, dropped: 0,
+    events: [beat(0, "a"), beat(50, "x"), beat(y, "y"), ...idle].sort((p, q) => p.tick - q.tick),
+    session: { id: "exceptions", started: "2026-10-25T00:00:00.000Z", end: { tick: 100 * 3600, play: 100 * MIN, idle: 0 } } });
+  const measured = debtOf(two(100), "PACE-1 stage 1"), ids = Object.keys(measured.gaps);
+  assert.deepEqual(ids, ["discovery: a → discovery: x", "discovery: x → discovery: y"]);
+  const excepted: RouteDebt = { ...measured, gaps: Object.fromEntries(ids.map((id) => [id, { ...measured.gaps[id]!, exception: `over the accepted ceiling (40): cause of ${id}` }])) };
+  const both = (detail: string) => ids.every((id) => detail.includes(`${id} (over the accepted ceiling (40): cause of ${id})`));
+  // 0.1 min better, still above the accepted ceiling: the improvement verdict names both.
+  const better = judge(two(99.9), excepted);
+  assert.equal(better.ok, false);
+  assert.ok(both(better.detail), better.detail);
+  // Apply the printed rows exactly as printed.
+  const at = better.detail.indexOf("gaps to ") + "gaps to ".length;
+  let depth = 0, end = at;
+  for (; end < better.detail.length; end++) { if (better.detail[end] === "{") depth++; if (better.detail[end] === "}" && --depth === 0) break; }
+  const printed = JSON.parse(better.detail.slice(at, end + 1)) as RouteDebt["gaps"];
+  assert.deepEqual(printed["discovery: x → discovery: y"]!.bounds, [49.9]);
+  assert.ok(ids.every((id) => printed[id]!.exception && printed[id]!.owner === "PACE-1 stage 1"), "the rows keep exception and owner");
+  const lowered: RouteDebt = { ...excepted, gaps: printed };
+  const pass = judge(two(99.9), lowered);
+  assert.ok(pass.ok, pass.detail);
+  assert.ok(both(pass.detail), "still named once lowered");
+  // A regression and a decode failure name them too.
+  const worse = judge(two(100), lowered);
+  assert.equal(worse.ok, false);
+  assert.ok(both(worse.detail), worse.detail);
+  const wait: TimelineEvent = { kind: "idle", tick: 60 * 3600, play: 60 * MIN, seconds: 1, waiting: [], cause: "decode:reef_pumphouse_log" };
+  const decode = judge(two(99.9, [wait]), lowered);
+  assert.match(decode.detail, /decode waits are never debt/);
+  assert.ok(both(decode.detail), decode.detail);
+});
+
 test("a one-tick decode wait fails before any debt is considered", () => {
   const tick: TimelineEvent = { kind: "idle", tick: 40 * 3600, play: 40 * MIN, seconds: 1 / 60, waiting: [], cause: "decode:reef_pumphouse_log" };
   const v = judge(route({ idle: [tick] }), debtOf(route()));

@@ -240,7 +240,7 @@ export function systemsCommand(s: GameState, c: GameCommand, world: WorldQueries
       if (host && !hostPower(host, s)) return `${host.label} has no power for a decoder: ${hostPowerReason(s, host) ?? ""}`.trim();
       return startDecode(s, sys, c.hostId, c.decodable as DecodableId);
     }
-    case "plant": return seedOf(c.seed) ? plant(s, sys, c.hostId, c.socket, c.seed) : "Choose a seed or cutting.";
+    case "plant": return seedOf(c.seed) ? plant(s, sys, c.hostId, c.socket, c.seed, hostPower) : "Choose a seed or cutting.";
     case "harvest": return harvest(s, sys, c.hostId, c.socket, { ...(c.to ? { to: c.to } : {}), ...(c.replant !== undefined ? { replant: c.replant } : {}) });
     case "place-beacon": return placeBeacon(s, sys, c.name);
     case "collect-beacon": return collectBeacon(s, sys, c.beaconId);
@@ -299,16 +299,19 @@ export function stepSystems(s: GameState, events: GameEvent[]): void {
   }
   // Chart cells are state the chart redraws from; only decodes and crops are
   // events (notices, sound and the play timeline read them).
-  // LS-1: growth asks for host power after the drain, as before, from these same host
-  // views: each host answered once per step, and only when a bed crop asks.
+  // LS-1: growth asks for host power after the drain, as before, from these same host views.
+  for (const e of advanceSystems(s, sys, { ...systemsContext(s), hostPowered: hostPowerAnswers(s, hosts) }))
+    events.push(...systemsNotice(e), ...(e.type === "chart-explored" ? [] : [{ type: "systems" as const, event: e }]));
+}
+/** One step's power answer per host ID, from the step's own host views: each host's power
+ * is computed at most once, and only when a bed crop asks, however many crops it holds. */
+export function hostPowerAnswers(s: GameState, hosts: readonly SocketHost[], power: HostPower = hostPower): (hostId: string) => boolean {
   let answers: Map<string, boolean> | null = null;
-  const hostPowered = (hostId: string): boolean => {
+  return (hostId) => {
     let v = (answers ??= new Map()).get(hostId);
-    if (v === undefined) { const h = hosts.find((x) => x.id === hostId); v = !!h && hostPower(h, s); answers.set(hostId, v); }
+    if (v === undefined) { const h = hosts.find((x) => x.id === hostId); v = !!h && power(h, s); answers.set(hostId, v); }
     return v;
   };
-  for (const e of advanceSystems(s, sys, { ...systemsContext(s), hostPowered }))
-    events.push(...systemsNotice(e), ...(e.type === "chart-explored" ? [] : [{ type: "systems" as const, event: e }]));
 }
 function systemsNotice(e: SystemsEvent): GameEvent[] {
   if (e.type === "decoded") {
