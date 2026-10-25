@@ -9,13 +9,18 @@ Our Linux machines can't answer any of this, because their Chrome exposes no har
 
 Use your ordinary Chrome (or Edge), with no extra flags. Nothing is installed or changed.
 
-1. **Start the game** at the build you're given, with this added to its address:
+**Before you start** (the coordinator does this): the build is served from the Linux sandbox on your own laptop, for 60 minutes, with
+`heavy-check submit --machine 4070 --deadline 4200 --stall 600 -- bash scripts/rec/owner-check-serve.sh 60`.
+That job also keeps other test jobs off your laptop while you measure. You'll get a message when it says "serving". Then close other heavy programs and keep the laptop on mains power.
+
+1. **Open the game** in Windows Chrome at this address:
 
    ```
-   ?rec=playtest&recmeasure=1&reccheck=300
+   http://localhost:4173/?rec=playtest&recmeasure=1&reccheck=300
    ```
 
-   Then continue your expedition and stop somewhere quiet in open water.
+   This address is new to your browser, so your usual saves aren't there. Begin a new expedition, or use "Import save" with a save you exported. Then swim somewhere quiet in open water and stop.
+   If the page doesn't open, tell the coordinator: the sandbox's localhost may not be forwarded to Windows.
 2. **Hold still.** About 20 s after you're in the world, a message says "Recorder check running for 5 min". Don't touch the controls for those 5 minutes. The recorder pauses and resumes itself every 10 s; the game looks the same either way.
 3. **Before the 5 minutes end,** open a second tab at `chrome://media-internals`. Find the entry whose properties include `kVideoEncoderName`. Copy its `kVideoEncoderName` and `kIsPlatformVideoEncoder` lines (a screenshot is fine).
 4. **When it finishes,** the message says the file was downloaded: `siltwake-recorder-check.json`.

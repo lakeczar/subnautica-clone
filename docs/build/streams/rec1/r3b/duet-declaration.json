@@ -1,13 +1,19 @@
 {
  "what": "REC-1 R3b acceptance: the recorder's inclusive main-thread cost, software VP9 960x540 at 6 fps (the test machines' rung), recorder on minus paused in place, at a fixed pose, as a duet (both arms in one run, interleaved on/off/off/on)",
+ "amended": "2026-10-25, coordinator ruling (1) after 261025-043054-e104 met the exclusive class's 30-minute ceiling: the same 108 pairs, as two exclusive tickets of 54 pairs, pooled. e104's partial windows are incomplete, never read and excluded",
  "budgetMs": 0.167,
  "pairs": 108,
+ "tickets": 2,
+ "pairsPerTicket": 54,
  "windowS": 10,
  "confidence": 0.95,
  "save": "docs/build/streams/rec1/fixtures/hold-refuge-reef.json",
- "exclusion": { "kind": "level", "overMs": 0.6 },
- "verdict": "met if the paired 95% interval's upper end is under budgetMs; not met if its lower end is over it; otherwise inconclusive. Exactly the first 108 pairs are judged; the unexcluded interval is reported beside the verdict",
+ "exclusion": { "kind": "level", "overMs": 0.6, "median": "each ticket's own: the median of that ticket's judged windows, both arms pooled" },
+ "verdict": "met if the pooled paired 95% interval's upper end is under budgetMs; not met if its lower end is over it; otherwise inconclusive. Exactly the first 54 pairs of each ticket are judged; the unexcluded interval and each ticket's own estimate are reported beside the pooled one. Pooled regardless of agreement between the tickets: no consistency gate",
+ "pooling": "only when both tickets are complete (54 pairs each) and neither was stopped; both at the same commit, the same prebuilt build (its content hash) and the same machine, submitted back to back",
+ "rerun": "a ticket that ends incomplete, or that heavy-check labels DISTURBED, is rerun once, alone, under this declaration; if the rerun fails too, the result is 'no verdict'. No third try, and no change of design after seeing data",
+ "ceiling": { "class": "exclusive", "ceilingS": 1800, "startupS": 180, "marginPct": 10, "rule": "duet.sh refuses a declaration whose ticket time, (pairsPerTicket x 2 x windowS + startupS) x (1 + marginPct/100), exceeds ceilingS" },
  "power": "planned for a true cost of 0.10 ms/frame with a pair-difference sd of 0.20 ms (measured: 0.159-0.176 recorder off in both arms after the host's CPU isolation, run 261025-014714-dfd1; 0.184 and 0.205 on/off before it): 96 pairs give about 90% chance of 'met'; 108 leave room for about 10% of pairs excluded",
- "exclusionReason": "slow windows (+0.6 to +1.8 ms for 10-25 s) recur with no recorder at all (261025-014714-dfd1: recorder off throughout, the VM otherwise quiet, about 280-290 s apart, matching the host's job-matcher bursts of about 4 min 45 s) and hit paused windows as often as recording ones (261024-231132-692c, 261024-203711-5c1c). A pair is dropped as a whole when either of its windows is more than 0.6 ms over the median of every judged window, both arms pooled, so both arms lose the same time",
- "seat": "exclusive on the RTX 3090 (factory-worker), from a build made beforehand by another job (exclusive windows never compile); rehearsed first on the RTX 4070 Laptop (indicative)"
+ "exclusionReason": "slow windows (+0.6 to +1.8 ms for 10-25 s) recur with no recorder at all (261025-014714-dfd1: recorder off throughout, the VM otherwise quiet, about 280-290 s apart, matching the host's job-matcher bursts of about 4 min 45 s) and hit paused windows as often as recording ones (261024-231132-692c, 261024-203711-5c1c). A pair is dropped as a whole when either of its windows is more than 0.6 ms over its ticket's median of every judged window, both arms pooled, so both arms lose the same time",
+ "seat": "exclusive on the RTX 3090 (factory-worker), from a build made beforehand by another job (exclusive windows never compile); the single-ticket form was rehearsed on the RTX 4070 Laptop (261025-033553-5fd5, indicative)"
 }
