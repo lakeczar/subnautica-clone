@@ -245,14 +245,22 @@ export function procure(d: Driver, needs: Readonly<Partial<Record<ItemKind | "ta
         .sort((a, b) => dist(p, SOURCES[a].position) - dist(p, SOURCES[b].position));
       // One take at a source: a bundle, or what is left of its stock.
       const take = (c: SourceId): number => Math.min(SOURCES[c].bundle, d.state.world.resources.find((n) => n.id === c)!.stock);
-      // LS-1 1b R1 (approved): surplus never takes room another need still wants. A take
-      // that would overshoot its kind's need waits while any other kind is open; the last
-      // open kind is gathered as before (its surplus blocks nothing). Nearest first throughout.
-      // A kind waits (never redirected to a farther source) when its nearest source's take
-      // would overshoot.
+      // LS-1 1b R1 (approved): surplus never takes room another need still wants. When the
+      // nearest source of a kind would overshoot its need, and the hold could then no longer
+      // fit the other open kinds' takes, that kind waits (never redirected to a farther
+      // source); otherwise, and for the last open kind, it is gathered as before.
       const others = (kind: string): boolean => open.some(([k]) => k !== kind);
       const nearest = (kind: string): SourceId | undefined => choices.find((c) => SOURCES[c].item === kind);
-      const fits = (c: SourceId): boolean => { const k = SOURCES[c].item, n = nearest(k)!; return take(n) <= want[k]! || !others(k); };
+      const otherCu = (kind: string): number => open.filter(([k]) => k !== kind).reduce((n, [k, w]) => {
+        const s = nearest(k);
+        return s ? n + Math.ceil(w / take(s)) * take(s) * ITEMS[k as ItemKind].cu : n;
+      }, 0);
+      const crowds = (kind: string): boolean => {
+        const b = take(nearest(kind)!), w = want[kind]!;
+        if (!others(kind) || w % b === 0) return false;
+        return d.freeCu("diver") - Math.ceil(w / b) * b * ITEMS[kind as ItemKind].cu < otherCu(kind);
+      };
+      const fits = (c: SourceId): boolean => !crowds(SOURCES[c].item) || take(nearest(SOURCES[c].item)!) <= want[SOURCES[c].item]!;
       const id = choices.find((c) => fits(c) && roomFor(d, SOURCES[c].item, take(c)));
       if (!id) {
         if (!choices.length) throw new Blocked(`No reachable source left for ${open.map(([k, n]) => `${n} ${k}`).join(", ")}`, where(d.state));
@@ -264,8 +272,8 @@ export function procure(d: Driver, needs: Readonly<Partial<Record<ItemKind | "ta
         continue;
       }
       const kind = SOURCES[id].item, b = take(id);
-      // Whole takes up to the need while other kinds are open; the remainder waits.
-      const ask = others(kind) && b <= want[kind]! ? want[kind]! - (want[kind]! % b) : want[kind]!;
+      // Whole takes up to the need when its surplus would crowd the others; the remainder waits.
+      const ask = crowds(kind) && b <= want[kind]! ? want[kind]! - (want[kind]! % b) : want[kind]!;
       want[kind] = want[kind]! - gather(d, id, ask);
       eatIfHungry(d);
     }
