@@ -1337,3 +1337,17 @@ The owner prioritised the recorder, testing, scheduling and the save library.
   - **Ruling:** withdraw the timing numbers and prove constant work per step with a counting test.
   - **Confirmed:** determinism, cache equivalence and procure safety.
   - **Next:** fixes, then R3.
+- **STEW-3 R2 (Sol, `ddf2bad9`): REQUEST CHANGES.**
+  - R1-1 and R1-3 fixed; R1-2 partial.
+  - **Five P2 findings:**
+    - R2-1 runtime identity misses computed imports and generated inputs;
+    - R2-2 workload variables can curtail a run;
+    - R2-3 child-process cache use is lost;
+    - R2-4 concurrent ingest race;
+    - R2-5 a fallback ticket is poisoned by its abandoned attempt.
+  - **Rulings:**
+    - unknown inputs make a file ineligible for control reuse (it's still gate evidence);
+    - a canonical workload environment in the gate;
+    - per-attempt records;
+    - a no-clobber publish.
+  - **Daily ingest approved:** a user systemd timer on factory-worker, via `quick --review --machine 3090`, installed by the coordinator after the merge.
